@@ -1,19 +1,29 @@
-# Architecture
+# 系统架构
 
 ```text
-WeCom H5 ─┐
-Android ──┼── HTTPS / Nginx ── FastAPI ── PostgreSQL
-iOS ──────┘                         │          │
-Admin web ──────────────────────────┘          └─ leased CPU jobs
-                                                │
-                                      per-user file storage
-                                                │
-                                      optional AI gateway (off)
+企业微信 H5 ─┐
+Android ─────┼── HTTPS / Nginx ── FastAPI ── PostgreSQL
+iOS ─────────┘                         │          │
+管理后台 ──────────────────────────────┘          └─ 带租约的 CPU 任务
+                                                    │
+                                            用户隔离文件存储
+                                                    │
+                                            可选 AI 网关（关闭）
 ```
 
-Authorization is evaluated against the current role of the immutable data owner. Administrative reads never change ownership and generate an audit event. User-facing project lists always constrain by the current user's owner ID, even for administrators.
+## 权限与所有权
 
-The worker acquires tasks with row locking and a lease. Client disconnects therefore do not cancel accepted work; expired leases can be reclaimed. Originals are retained and processed outputs are separate artifacts.
+权限判断以不可变数据所有者的当前角色为依据。管理员读取数据不会改变所有权，并且会写入审计事件。即使当前账号是管理员，用户端项目列表仍始终使用当前用户的所有者 ID 进行限制；跨用户访问只允许通过管理后台接口进行。
 
-External AI is an enhancement boundary, not a dependency. Provider URLs must use HTTPS and resolve only to public addresses. Production must additionally enforce DNS rebinding protection, egress allowlists, redirect rejection, request size limits, timeouts, output schemas, cost quotas and circuit breakers.
+## 任务处理
+
+Worker 使用数据库行锁和租约获取任务。客户端断开不会取消已经受理的任务；租约过期后，其他 Worker 可以重新接管任务。原图始终保留，处理结果作为独立文件保存。
+
+## 外部 AI 边界
+
+外部 AI 是增强能力，而不是基础流程的依赖。供应商 URL 必须使用 HTTPS，并且只能解析到公网地址。生产环境还需要加入 DNS 重绑定防护、出口白名单、禁止重定向、请求大小限制、超时、输出结构校验、费用配额和熔断器。
+
+## 单机部署基线
+
+首版部署由 Nginx、API 服务组、CPU Worker 组、PostgreSQL 和用户隔离文件目录组成。上传受理与 CPU 处理解耦，保证重任务排队时登录、查询和下载鉴权仍能响应。后续只有在实际容量指标超过单机边界后，才引入独立 Worker 或高可用组件。
 

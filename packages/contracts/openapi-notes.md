@@ -1,9 +1,9 @@
-# API contract notes
+# API 接口约定说明
 
-The FastAPI service publishes the canonical OpenAPI document at `/openapi.json`.
+FastAPI 服务在 `/openapi.json` 发布规范的 OpenAPI 文档。
 
-- User-facing clients only call `/v1/projects`, `/v1/pages`, and `/v1/jobs` for the authenticated user.
-- Cross-user access is confined to `/v1/admin/*` and always audited.
-- Unknown and unauthorized object identifiers both return `404`.
-- Processing succeeds without an external AI provider; AI is an optional enhancement.
+- 用户端只通过 `/v1/projects`、`/v1/pages` 和 `/v1/jobs` 访问当前登录用户的数据。
+- 跨用户访问仅允许通过 `/v1/admin/*`，并且必须写入审计日志。
+- 不存在和无权访问的对象标识统一返回 `404`。
+- 未配置外部 AI 供应商时，基础处理流程仍可成功完成；AI 仅作为可选增强能力。
 

@@ -1,43 +1,43 @@
-# Implementation status
+# 实施状态
 
-Updated: 2026-10-19
+更新日期：2026-10-19
 
-The v1.4 plan describes a multi-stage product program, including external credentials, physical devices, model evaluation, a target Ubuntu host, WeCom tenant configuration, Android signing, and Apple review. This repository intentionally distinguishes implemented behavior from placeholders.
+v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、真实设备、模型评估、目标 Ubuntu 主机、企业微信租户配置、Android 签名以及 Apple 审核。本仓库明确区分已经实现的能力和仍处于占位或规划阶段的能力。
 
-## Implemented baseline
+## 已实现基线
 
-| Area | Status | Notes |
+| 领域 | 状态 | 说明 |
 |---|---|---|
-| Repository structure | Implemented | H5, admin, Android, iOS, API, worker, AI gateway, contracts, deploy and docs |
-| Local identity | Implemented | Verified development-code registration, username/password login, Argon2id and opaque sessions |
-| Phone handling | Implemented | E.164 normalization, masked display and peppered HMAC matching |
-| Role visibility | Implemented | User self-only; admin self + users; super admin all |
-| Admin account actions | Partial | Role and active/disabled changes with session revocation; deletion/cooling-off remains |
-| Unique super admin | Implemented baseline | API bootstrapping plus PostgreSQL unique index and protective trigger |
-| Audit | Implemented baseline | Login, cross-user reads, role/status actions; production retention/export remains |
-| Scan projects/uploads | Implemented | Owner IDs, generated paths, MIME/size checks, hashes and original retention |
-| Job queue | Implemented baseline | PostgreSQL locking/leases and retry state |
-| CPU processing | Implemented baseline | EXIF orientation, autocontrast, sharpening and basic quality warnings |
-| H5 | Implemented baseline | Responsive bilingual authentication, mode/project creation and upload |
-| Admin web | Implemented baseline | Account metrics/list and audit display |
-| Optional AI gateway | Safety skeleton | Public HTTPS validation; no provider is enabled or called |
-| Android | UI scaffold | Compose shell and declared CameraX/Room/WorkManager/ML Kit dependencies |
-| iOS | UI scaffold | SwiftUI shell; Xcode target and signing still required |
-| CI/deployment | Implemented baseline | GitHub/GitLab checks and single-host Compose layout |
+| 仓库结构 | 已实现 | 包含 H5、管理后台、Android、iOS、API、Worker、AI 网关、接口约定、部署和文档目录 |
+| 本地身份 | 已实现 | 开发验证码注册、用户名/密码登录、Argon2id 和随机会话令牌 |
+| 手机号处理 | 已实现 | E.164 规范化、掩码显示和带 Pepper 的 HMAC 匹配 |
+| 角色可见范围 | 已实现 | 普通用户仅本人；管理员为本人及普通用户；超级管理员为全部用户 |
+| 管理员账号操作 | 部分实现 | 支持角色和启用/停用变更并撤销会话；删除与冷静期尚未完成 |
+| 唯一超级管理员 | 基线已实现 | API 初始化、PostgreSQL 唯一索引和保护触发器 |
+| 审计 | 基线已实现 | 登录、跨用户读取、角色与状态操作；生产保留和导出策略尚未完成 |
+| 扫描项目与上传 | 已实现 | 所有者 ID、服务端生成路径、MIME/大小检查、哈希和原图保留 |
+| 任务队列 | 基线已实现 | PostgreSQL 行锁、租约和重试状态 |
+| CPU 处理 | 基线已实现 | EXIF 方向修正、自动对比度、锐化和基础质量警告 |
+| H5 | 基线已实现 | 响应式双语登录、模式/项目创建和上传 |
+| 管理后台 | 基线已实现 | 账号指标、账号列表和审计日志展示 |
+| 可选 AI 网关 | 安全骨架 | 校验公网 HTTPS 地址；未启用或调用任何供应商 |
+| Android | 界面骨架 | Compose 页面和 CameraX、Room、WorkManager、ML Kit 依赖声明 |
+| iOS | 界面骨架 | SwiftUI 页面；仍需创建 Xcode Target 和配置签名 |
+| CI 与部署 | 基线已实现 | GitHub/GitLab 检查和单机 Compose 布局 |
 
-## Not represented as complete
+## 尚未完成的内容
 
-- Real SMS provider, WeCom OAuth/address-book permissions and safe identity conflict resolution.
-- Resumable chunk upload with idempotency and weak-network recovery.
-- OpenCV document-edge/perspective correction, OCR/orientation fusion, template exam cleaning, book dewarping, spread splitting, page-number/repeat/gap detection and PDF/JPG exports.
-- CameraX/AVFoundation capture state machines, encrypted local caches, offline queues, share sheets and complete account deletion UI.
-- Production database migrations, encrypted phone storage, backup/restore drills, monitoring, quotas and 16-user mixed-load validation.
-- Model datasets, acceptance metrics, real device matrix, WeCom verification, Android signed distribution, TestFlight/App Store materials and review.
+- 真实短信供应商、企业微信 OAuth/通讯录权限和安全的身份冲突处理。
+- 带幂等性的分片续传与弱网恢复。
+- OpenCV 文档边缘/透视校正、OCR/方向融合、模板试卷净化、书籍去弯曲、双页拆分、页码/重复/缺页检测，以及 PDF/JPG 导出。
+- CameraX/AVFoundation 拍摄状态机、加密本地缓存、离线队列、系统分享和完整账号删除界面。
+- 生产数据库迁移、手机号加密存储、备份恢复演练、监控、配额及 16 用户混合负载验收。
+- 模型数据集、验收指标、真机矩阵、企业微信验证、Android 签名分发、TestFlight/App Store 材料和审核。
 
-## Recommended next milestones
+## 建议的后续里程碑
 
-1. Freeze domain, SMS, WeCom, package/Bundle IDs, storage limits, deletion window and production host parameters.
-2. Complete the stage-0 rejection POC: WeCom phone trust, H5 resumable uploads, document perspective correction, basic exam cleaning, book split/dewarp and a 16-user load test.
-3. Add versioned PostgreSQL migrations and expand authorization/IDOR integration tests before any real user data is accepted.
-4. Wire Android and iOS camera/upload flows on physical devices, then proceed through the plan's acceptance gates in order.
+1. 冻结域名、短信、企业微信、包名/Bundle ID、存储上限、删除等待期和生产主机参数。
+2. 完成阶段 0 否决性 POC：企业微信手机号可信来源、H5 分片续传、文档透视校正、基础试卷净化、双页拆分/去弯曲和 16 用户负载测试。
+3. 在接收真实用户数据前加入版本化 PostgreSQL 迁移，并扩展权限与 IDOR 集成测试。
+4. 在真实设备上接通 Android 和 iOS 相机/上传流程，再按实施方案顺序通过各项验收闸门。
 

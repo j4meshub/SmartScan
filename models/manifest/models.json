@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "models": [],
-  "note": "Core scanning does not require an AI model. Add reviewed artifacts with source, license, version and SHA-256."
+  "note": "核心扫描不依赖 AI 模型。新增模型文件前必须完成审核，并记录来源、许可证、版本和 SHA-256。"
 }
 
