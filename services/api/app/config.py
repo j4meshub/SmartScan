@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     dev_sms_code: str = "246810"
     session_hours: int = 24
     max_upload_bytes: int = 25 * 1024 * 1024
+    upload_chunk_bytes: int = 4 * 1024 * 1024
+    upload_expiry_hours: int = 24
 
     @field_validator("cors_origins", mode="before")
     @classmethod

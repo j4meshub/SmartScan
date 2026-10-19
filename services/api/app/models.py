@@ -39,6 +39,12 @@ class JobStatus(str, enum.Enum):
     needs_review = "needs_review"
 
 
+class UploadStatus(str, enum.Enum):
+    pending = "pending"
+    completed = "completed"
+    expired = "expired"
+
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (UniqueConstraint("username", name="uq_users_username"),)
@@ -128,6 +134,58 @@ class ScanPage(Base):
     ocr_text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     project: Mapped[ScanProject] = relationship(back_populates="pages")
+
+
+class UploadSession(Base):
+    __tablename__ = "upload_sessions"
+    __table_args__ = (
+        UniqueConstraint("owner_user_id", "idempotency_key", name="uq_upload_owner_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    expected_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    chunk_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_chunks: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[UploadStatus] = mapped_column(
+        Enum(UploadStatus), default=UploadStatus.pending, nullable=False, index=True
+    )
+    page_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scan_pages.id", ondelete="SET NULL"), nullable=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    chunks: Mapped[list[UploadChunk]] = relationship(
+        back_populates="upload", cascade="all, delete-orphan"
+    )
+
+
+class UploadChunk(Base):
+    __tablename__ = "upload_chunks"
+    __table_args__ = (UniqueConstraint("upload_id", "chunk_index", name="uq_upload_chunk"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    upload_id: Mapped[str] = mapped_column(
+        ForeignKey("upload_sessions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    relative_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    upload: Mapped[UploadSession] = relationship(back_populates="chunks")
 
 
 class ProcessingJob(Base):

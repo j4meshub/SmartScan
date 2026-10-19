@@ -9,11 +9,12 @@ from services.api.app import main
 
 def test_register_create_project_and_upload_page():
     suffix = uuid.uuid4().hex[:10]
+    phone_suffix = str(uuid.uuid4().int % 10_000_000).zfill(7)
     with TestClient(main.app) as client:
         registered = client.post(
             "/v1/auth/register",
             json={
-                "phone": f"+1555{suffix[:7]}",
+                "phone": f"+1555{phone_suffix}",
                 "sms_code": main.settings.dev_sms_code,
                 "username": f"user_{suffix}",
                 "password": "correct-horse-battery-staple",

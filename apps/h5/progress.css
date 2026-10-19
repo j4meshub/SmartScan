@@ -1,0 +1,30 @@
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upload-progress > div {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.upload-progress progress {
+  width: 100%;
+  height: 8px;
+  appearance: none;
+}
+
+.upload-progress progress::-webkit-progress-bar {
+  background: #ddd8cf;
+  border-radius: 999px;
+}
+
+.upload-progress progress::-webkit-progress-value,
+.upload-progress progress::-moz-progress-bar {
+  background: var(--ink);
+  border-radius: 999px;
+}

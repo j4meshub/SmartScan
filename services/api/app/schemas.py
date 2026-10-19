@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import JobStatus, Role, UserStatus
+from .models import JobStatus, Role, UploadStatus, UserStatus
 
 
 class RegisterRequest(BaseModel):
@@ -69,6 +69,36 @@ class PageView(BaseModel):
     mime_type: str
     quality_warning: str | None
     created_at: datetime
+
+
+class UploadCreate(BaseModel):
+    project_id: str
+    file_name: str = Field(min_length=1, max_length=255)
+    mime_type: str = Field(pattern=r"^image/(jpeg|png|webp|heic)$")
+    size_bytes: int = Field(gt=15)
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    idempotency_key: str = Field(min_length=8, max_length=100, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class UploadView(BaseModel):
+    id: str
+    project_id: str
+    file_name: str
+    mime_type: str
+    size_bytes: int
+    chunk_size: int
+    total_chunks: int
+    received_chunks: list[int]
+    status: UploadStatus
+    page_id: str | None
+    expires_at: datetime
+
+
+class ChunkReceipt(BaseModel):
+    upload_id: str
+    chunk_index: int
+    size_bytes: int
+    sha256: str
 
 
 class JobView(BaseModel):

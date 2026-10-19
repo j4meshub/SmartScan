@@ -7,6 +7,7 @@
   <meta name="description" content="SmartScan mobile document scanner">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="progress.css">
   <title>SmartScan</title>
 </head>
 <body>
@@ -85,6 +86,10 @@
       <div class="dialog-head"><div><p class="eyebrow" data-i18n="newProject">新建项目</p><h2 id="captureTitle">智能扫描</h2></div><button value="cancel" aria-label="Close">×</button></div>
       <label><span data-i18n="projectTitle">项目名称</span><input id="projectTitle" required maxlength="160"></label>
       <label class="file-drop"><input id="pageFile" type="file" accept="image/jpeg,image/png,image/webp,image/heic" capture="environment"><span>＋</span><b data-i18n="selectPage">拍摄或选择页面</b><small id="fileName" data-i18n="originalKept">原图会一直保留到你删除项目</small></label>
+      <div id="uploadProgressWrap" class="upload-progress hidden" aria-live="polite">
+        <div><span data-i18n="uploading">正在上传</span><b id="uploadPercent">0%</b></div>
+        <progress id="uploadProgress" max="100" value="0"></progress>
+      </div>
       <button id="submitCapture" class="primary" type="submit" value="default" data-i18n="createUpload">创建并上传</button>
       <p id="captureMessage" class="message" role="status"></p>
     </form>
