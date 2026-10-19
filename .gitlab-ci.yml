@@ -1,0 +1,20 @@
+stages: [lint, unit-test, build]
+default: {interruptible: true}
+python-lint:
+  stage: lint
+  image: python:3.12
+  script: ["pip install -e .[dev]", "ruff check services"]
+unit-test:
+  stage: unit-test
+  image: python:3.12
+  script: ["pip install -e .[dev]", "pytest"]
+web-check:
+  stage: lint
+  image: node:22
+  script: ["node --check apps/h5/app.js", "node --check apps/admin-web/app.js"]
+container-build:
+  stage: build
+  image: docker:27
+  services: [docker:27-dind]
+  script: ["docker build -f services/api/Dockerfile -t smartscan-api:$CI_COMMIT_SHA .", "docker build -f services/worker/Dockerfile -t smartscan-worker:$CI_COMMIT_SHA ."]
+

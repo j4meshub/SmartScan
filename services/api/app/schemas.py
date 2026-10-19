@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from .models import JobStatus, Role, UserStatus
+
+
+class RegisterRequest(BaseModel):
+    phone: str
+    sms_code: str = Field(min_length=4, max_length=8)
+    username: str = Field(pattern=r"^[A-Za-z0-9_.-]{3,32}$")
+    password: str = Field(min_length=10, max_length=128)
+    locale: str = "zh-CN"
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=10, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_at: datetime
+
+
+class UserView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    username: str
+    phone_masked: str
+    role: Role
+    status: UserStatus
+    locale: str
+    must_change_password: bool
+    created_at: datetime
+
+
+class ProjectCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    mode: str = Field(default="document", pattern=r"^(document|exam|book)$")
+    reading_order: str = Field(default="ltr", pattern=r"^(ltr|rtl)$")
+
+
+class ProjectView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    owner_user_id: str
+    title: str
+    mode: str
+    reading_order: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PageView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    page_number: int
+    size_bytes: int
+    mime_type: str
+    quality_warning: str | None
+    created_at: datetime
+
+
+class JobView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    page_id: str | None
+    kind: str
+    status: JobStatus
+    attempts: int
+    error: str | None
+    created_at: datetime
+
+
+class RoleChange(BaseModel):
+    role: Role
+
+
+class StatusChange(BaseModel):
+    status: UserStatus

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="SmartScan mobile document scanner">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+  <title>SmartScan</title>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="SmartScan home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span>SmartScan</span>
+      </a>
+      <button id="languageButton" class="language" type="button" aria-label="Switch language">中 / EN</button>
+    </header>
+
+    <main>
+      <section id="authView" class="auth-view hidden">
+        <div class="auth-copy">
+          <p class="eyebrow" data-i18n="eyebrow">让纸张重新变得清晰</p>
+          <h1 data-i18n="authTitle">扫描、整理，一气呵成。</h1>
+          <p data-i18n="authText">一套账号连接企微、Android 与 iOS，原图始终由你掌控。</p>
+        </div>
+        <form id="loginForm" class="panel form-panel">
+          <label><span data-i18n="username">用户名</span><input name="username" autocomplete="username" required value="demo"></label>
+          <label><span data-i18n="password">密码</span><input name="password" type="password" autocomplete="current-password" required></label>
+          <button class="primary" data-i18n="login" type="submit">登录</button>
+          <p id="authMessage" class="message" role="status"></p>
+        </form>
+      </section>
+
+      <section id="homeView">
+        <div class="hero">
+          <div>
+            <p class="eyebrow" data-i18n="welcome">下午好</p>
+            <h1><span data-i18n="capture">捕捉纸上的</span><br><em data-i18n="clarity">每一分清晰。</em></h1>
+          </div>
+          <div class="status-pill"><span></span><b data-i18n="localCore">基础能力可用</b></div>
+        </div>
+
+        <div class="mode-grid" aria-label="Scan modes">
+          <button class="mode-card mode-card--hero" data-mode="document">
+            <span class="mode-icon">⌗</span>
+            <span class="mode-copy"><b data-i18n="smartScan">智能扫描</b><small data-i18n="smartScanDesc">自动裁边 · 文字转正 · 清晰增强</small></span>
+            <span class="arrow">↗</span>
+          </button>
+          <button class="mode-card" data-mode="exam">
+            <span class="mode-icon violet">✦</span>
+            <span class="mode-copy"><b data-i18n="exam">试卷净化</b><small data-i18n="examDesc">保留印刷内容，标记低置信区域</small></span>
+            <span class="arrow">›</span>
+          </button>
+          <button class="mode-card" data-mode="book">
+            <span class="mode-icon amber">◫</span>
+            <span class="mode-copy"><b data-i18n="book">连续扫书</b><small data-i18n="bookDesc">双页拆分 · 页码检查 · 快速成册</small></span>
+            <span class="arrow">›</span>
+          </button>
+        </div>
+
+        <div class="section-heading">
+          <div><p class="eyebrow" data-i18n="library">资料库</p><h2 data-i18n="recent">最近项目</h2></div>
+          <button id="refreshButton" class="text-button" data-i18n="refresh">刷新</button>
+        </div>
+        <div id="projectList" class="project-list">
+          <div class="empty-state">
+            <span>⌁</span><b data-i18n="empty">还没有扫描项目</b><small data-i18n="emptyHint">选择上方模式开始第一份扫描</small>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Main navigation">
+      <a class="active" href="#home"><span>⌂</span><small data-i18n="home">首页</small></a>
+      <button id="quickScan"><span class="scan-button">＋</span><small data-i18n="scan">扫描</small></button>
+      <a href="#files"><span>▱</span><small data-i18n="files">文件</small></a>
+    </nav>
+  </div>
+
+  <dialog id="captureDialog">
+    <form method="dialog" class="capture-card" id="captureForm">
+      <div class="dialog-head"><div><p class="eyebrow" data-i18n="newProject">新建项目</p><h2 id="captureTitle">智能扫描</h2></div><button value="cancel" aria-label="Close">×</button></div>
+      <label><span data-i18n="projectTitle">项目名称</span><input id="projectTitle" required maxlength="160"></label>
+      <label class="file-drop"><input id="pageFile" type="file" accept="image/jpeg,image/png,image/webp,image/heic" capture="environment"><span>＋</span><b data-i18n="selectPage">拍摄或选择页面</b><small id="fileName" data-i18n="originalKept">原图会一直保留到你删除项目</small></label>
+      <button id="submitCapture" class="primary" type="submit" value="default" data-i18n="createUpload">创建并上传</button>
+      <p id="captureMessage" class="message" role="status"></p>
+    </form>
+  </dialog>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
+

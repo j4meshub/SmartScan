@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="styles.css"><title>SmartScan Console</title></head>
+<body>
+  <aside>
+    <div class="brand"><span class="mark">⌗</span><div><b>SmartScan</b><small>管理控制台</small></div></div>
+    <nav><button class="active" data-view="overview">◫ <span>概览</span></button><button data-view="users">♙ <span>账号管理</span></button><button data-view="audit">≡ <span>审计日志</span></button></nav>
+    <div class="safe"><span></span><div><b>基础模式</b><small>外部 AI 已关闭</small></div></div>
+  </aside>
+  <main>
+    <header><div><p>2026 / SMARTSCAN</p><h1 id="pageTitle">运行概览</h1></div><div class="account"><span>A</span><div><b id="accountName">未登录</b><small id="accountRole">—</small></div></div></header>
+    <section id="loginPanel" class="login panel"><h2>管理员登录</h2><form id="loginForm"><input name="username" placeholder="用户名" autocomplete="username" required><input name="password" type="password" placeholder="密码" autocomplete="current-password" required><button>进入控制台</button></form><p id="message"></p></section>
+    <div id="app" class="hidden">
+      <section id="overviewView">
+        <div class="metrics"><article><small>账号总数</small><strong id="totalUsers">0</strong><i>实时</i></article><article><small>活跃账号</small><strong id="activeUsers">0</strong><i class="mint">正常</i></article><article><small>管理员</small><strong id="adminUsers">0</strong><i>受审计</i></article></div>
+        <div class="split"><article class="panel"><div class="panel-title"><div><p>权限边界</p><h2>数据可见范围</h2></div><span>服务端策略</span></div><div class="role-row"><b>普通用户</b><span>仅本人数据</span></div><div class="role-row"><b>普通管理员</b><span>本人 + 普通用户</span></div><div class="role-row"><b>超级管理员</b><span>全部账号</span></div></article><article class="panel dark"><p>系统状态</p><h2>无需外部 AI，<br>核心流程仍可完成。</h2><ul><li>账号与权限 <b>正常</b></li><li>任务队列 <b>就绪</b></li><li>文件隔离 <b>启用</b></li></ul></article></div>
+      </section>
+      <section id="usersView" class="hidden"><article class="panel table-panel"><div class="panel-title"><div><p>账户</p><h2>用户与角色</h2></div><button id="refreshUsers">刷新</button></div><div class="table-scroll"><table><thead><tr><th>用户</th><th>手机号</th><th>角色</th><th>状态</th><th>创建时间</th></tr></thead><tbody id="userRows"></tbody></table></div></article></section>
+      <section id="auditView" class="hidden"><article class="panel table-panel"><div class="panel-title"><div><p>不可变事件</p><h2>最近审计日志</h2></div></div><div class="table-scroll"><table><thead><tr><th>时间</th><th>动作</th><th>操作者</th><th>目标</th><th>结果</th></tr></thead><tbody id="auditRows"></tbody></table></div></article></section>
+    </div>
+  </main>
+  <script src="app.js" defer></script>
+</body></html>
+
