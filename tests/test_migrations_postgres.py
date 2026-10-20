@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from alembic import command
@@ -16,7 +19,15 @@ from services.api.app.migrations import (
     head_revision,
     upgrade_database,
 )
-from services.api.app.models import PhoneEncryptionStatus, User, UserIdentity, VerifiedPhone
+from services.api.app.models import (
+    PhoneEncryptionStatus,
+    RefreshToken,
+    SessionToken,
+    User,
+    UserIdentity,
+    VerifiedPhone,
+)
+from services.api.app.session_service import SessionFlowError, rotate_refresh_token
 
 POSTGRES_URL = os.getenv("SMARTSCAN_TEST_POSTGRES_URL")
 pytestmark = pytest.mark.skipif(not POSTGRES_URL, reason="未配置隔离 PostgreSQL 测试库")
@@ -121,3 +132,63 @@ def test_postgresql_legacy_baseline_is_adopted_and_guarded() -> None:
     assert phone.phone_ciphertext is None
     assert current_revision(url) == head_revision(url)
     assert_postgresql_guards_installed()
+
+
+def test_postgresql_concurrent_refresh_detects_replay_and_revokes_family() -> None:
+    url = isolated_postgres_url()
+    upgrade_database(url)
+    engine = create_engine(url)
+    raw_refresh = "postgres-concurrent-refresh-" + "x" * 64
+    now = datetime.now(UTC)
+    with Session(engine) as session:
+        user = User(
+            id="refresh-race-user",
+            username="refresh-race",
+            password_hash="hash",
+            phone_hmac="9" * 64,
+            phone_masked="+86******0009",
+        )
+        session.add(user)
+        session.flush()
+        device_session = SessionToken(
+            id="refresh-race-session",
+            user_id=user.id,
+            token_hash="8" * 64,
+            device_id="postgres-race-device",
+            device_name="PostgreSQL 并发设备",
+            platform="test",
+            expires_at=now + timedelta(minutes=15),
+            last_seen_at=now,
+        )
+        session.add(device_session)
+        session.flush()
+        session.add(
+            RefreshToken(
+                session_id=device_session.id,
+                token_hash=hashlib.sha256(raw_refresh.encode()).hexdigest(),
+                expires_at=now + timedelta(days=1),
+            )
+        )
+        session.commit()
+
+    def rotate_once() -> str:
+        with Session(engine) as session:
+            try:
+                rotate_refresh_token(session, raw_refresh)
+            except SessionFlowError as exc:
+                return exc.code
+            return "success"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = sorted(executor.map(lambda _: rotate_once(), range(2)))
+
+    assert outcomes == ["refresh_token_replayed", "success"]
+    with Session(engine) as session:
+        device_session = session.get(SessionToken, "refresh-race-session")
+        refresh_rows = session.scalars(
+            select(RefreshToken).where(RefreshToken.session_id == "refresh-race-session")
+        ).all()
+        assert device_session is not None and device_session.revoked_at is not None
+        assert len(refresh_rows) == 2
+        assert all(item.revoked_at is not None for item in refresh_rows)
+    engine.dispose()

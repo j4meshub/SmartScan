@@ -69,11 +69,24 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def new_session() -> tuple[str, str, datetime]:
+def new_session(*, legacy: bool = False) -> tuple[str, str, datetime]:
     settings = get_settings()
     raw = secrets.token_urlsafe(48)
     digest = hashlib.sha256(raw.encode()).hexdigest()
-    expires = datetime.now(UTC) + timedelta(hours=settings.session_hours)
+    lifetime = (
+        timedelta(hours=settings.session_hours)
+        if legacy
+        else timedelta(minutes=settings.access_token_minutes)
+    )
+    expires = datetime.now(UTC) + lifetime
+    return raw, digest, expires
+
+
+def new_refresh_token() -> tuple[str, str, datetime]:
+    settings = get_settings()
+    raw = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(raw.encode()).hexdigest()
+    expires = datetime.now(UTC) + timedelta(days=settings.refresh_token_days)
     return raw, digest, expires
 
 

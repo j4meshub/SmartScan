@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -8,9 +9,10 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .identity_services import add_local_identity
-from .models import Role, SessionToken, UploadSession, User
+from .models import Role, UploadSession, User
 from .schemas import TokenResponse, UploadCreate
-from .security import hash_password, new_session
+from .security import hash_password
+from .session_service import DeviceMetadata, issue_device_session
 
 settings = get_settings()
 
@@ -41,11 +43,18 @@ def ensure_superadmin(db: Session) -> None:
     db.commit()
 
 
-def issue_session(db: Session, user: User) -> TokenResponse:
-    raw, digest, expires = new_session()
-    db.add(SessionToken(user_id=user.id, token_hash=digest, expires_at=expires))
-    db.commit()
-    return TokenResponse(access_token=raw, expires_at=expires)
+def issue_session(
+    db: Session,
+    user: User,
+    metadata: DeviceMetadata | None = None,
+) -> TokenResponse:
+    metadata = metadata or DeviceMetadata(
+        device_id=f"legacy:{uuid.uuid4()}",
+        device_name="旧版客户端",
+        platform="legacy",
+        legacy=True,
+    )
+    return issue_device_session(db, user, metadata)
 
 
 def upload_has_expired(upload: UploadSession) -> bool:

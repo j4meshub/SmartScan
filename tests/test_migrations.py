@@ -259,3 +259,66 @@ def test_phone_protection_migration_marks_unrecoverable_rows_and_can_downgrade(
         assert "encryption_status" not in columns
     finally:
         downgraded.dispose()
+
+
+def test_device_session_migration_backfills_legacy_tokens_and_can_downgrade(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "device-sessions.db")
+    command.upgrade(alembic_config(url), "20261020_0008")
+    engine = create_engine(url)
+    with Session(engine) as session:
+        session.add(
+            User(
+                id="legacy-session-user",
+                username="legacy-session",
+                password_hash="hash",
+                phone_hmac="f" * 64,
+                phone_masked="+86******0005",
+            )
+        )
+        session.commit()
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO sessions "
+                "(id, user_id, token_hash, expires_at, revoked_at, created_at) VALUES "
+                "('legacy-session-id', 'legacy-session-user', :token_hash, "
+                "CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP)"
+            ),
+            {"token_hash": "1" * 64},
+        )
+    engine.dispose()
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        with migrated.connect() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        "SELECT device_id, device_name, platform, last_seen_at "
+                        "FROM sessions WHERE id = 'legacy-session-id'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        assert row["device_id"] == "legacy:legacy-session-id"
+        assert row["device_name"] == "旧版客户端"
+        assert row["platform"] == "legacy"
+        assert row["last_seen_at"] is not None
+        assert "refresh_tokens" in inspect(migrated).get_table_names()
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0008")
+    downgraded = create_engine(url)
+    try:
+        schema = inspect(downgraded)
+        assert "refresh_tokens" not in schema.get_table_names()
+        session_columns = {item["name"] for item in schema.get_columns("sessions")}
+        assert "device_id" not in session_columns
+        assert "last_seen_at" not in session_columns
+    finally:
+        downgraded.dispose()
