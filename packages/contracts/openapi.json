@@ -1205,6 +1205,250 @@
         }
       }
     },
+    "/v1/pages/{page_id}": {
+      "get": {
+        "summary": "Get Page",
+        "operationId": "get_page_v1_pages__page_id__get",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pages/{page_id}/results": {
+      "get": {
+        "summary": "Page Results",
+        "operationId": "page_results_v1_pages__page_id__results_get",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PageResultView"
+                  },
+                  "title": "Response Page Results V1 Pages  Page Id  Results Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pages/{page_id}/rotations": {
+      "post": {
+        "summary": "Create Page Rotation",
+        "operationId": "create_page_rotation_v1_pages__page_id__rotations_post",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageRotationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pages/{page_id}/review": {
+      "patch": {
+        "summary": "Change Page Review",
+        "operationId": "change_page_review_v1_pages__page_id__review_patch",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageReviewUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/pages/{page_id}/content": {
       "get": {
         "summary": "Page Content",
@@ -1217,6 +1461,34 @@
             "schema": {
               "type": "string",
               "title": "Page Id"
+            }
+          },
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(active|original)$",
+              "default": "active",
+              "title": "Variant"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
             }
           },
           {
@@ -2712,6 +2984,130 @@
         ],
         "title": "LoginRequest"
       },
+      "PageResultView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "result_type": {
+            "type": "string",
+            "title": "Result Type"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "rotation_degrees": {
+            "type": "integer",
+            "title": "Rotation Degrees"
+          },
+          "processor_version": {
+            "type": "string",
+            "title": "Processor Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "result_type",
+          "mime_type",
+          "sha256",
+          "size_bytes",
+          "rotation_degrees",
+          "processor_version",
+          "created_at"
+        ],
+        "title": "PageResultView"
+      },
+      "PageReviewStatus": {
+        "type": "string",
+        "enum": [
+          "not_required",
+          "pending",
+          "confirmed"
+        ],
+        "title": "PageReviewStatus"
+      },
+      "PageReviewUpdate": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed"
+            ],
+            "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "PageReviewUpdate"
+      },
+      "PageRotationRequest": {
+        "properties": {
+          "degrees": {
+            "type": "integer",
+            "enum": [
+              90,
+              180,
+              270
+            ],
+            "title": "Degrees"
+          }
+        },
+        "type": "object",
+        "required": [
+          "degrees"
+        ],
+        "title": "PageRotationRequest"
+      },
       "PageView": {
         "properties": {
           "id": {
@@ -2734,6 +3130,10 @@
             "type": "string",
             "title": "Mime Type"
           },
+          "original_mime_type": {
+            "type": "string",
+            "title": "Original Mime Type"
+          },
           "quality_warning": {
             "anyOf": [
               {
@@ -2745,10 +3145,93 @@
             ],
             "title": "Quality Warning"
           },
+          "quality_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Score"
+          },
+          "quality_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Details"
+          },
+          "rotation_degrees": {
+            "type": "integer",
+            "title": "Rotation Degrees"
+          },
+          "active_result_version": {
+            "type": "integer",
+            "title": "Active Result Version"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/PageReviewStatus"
+          },
+          "review_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Reason"
+          },
+          "reviewed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By User Id"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "active_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageResultView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
           }
         },
         "type": "object",
@@ -2758,8 +3241,19 @@
           "page_number",
           "size_bytes",
           "mime_type",
+          "original_mime_type",
           "quality_warning",
-          "created_at"
+          "quality_score",
+          "quality_details",
+          "rotation_degrees",
+          "active_result_version",
+          "review_status",
+          "review_reason",
+          "reviewed_by_user_id",
+          "reviewed_at",
+          "active_result",
+          "created_at",
+          "updated_at"
         ],
         "title": "PageView"
       },

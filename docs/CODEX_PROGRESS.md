@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `SCAN-001` 页面版本与复核 |
-| 工作包状态 | 进行中，正在盘点页面、任务、文件与旧复核状态 |
+| 工作包状态 | 进行中，本地实现与门禁已通过，等待提交、PR 与 CI |
 | 当前分支 | `codex/scan-001-page-review` |
 | 最后验证基线 | `5d73afa`（ADMIN-001 PR #19 已合并） |
 | 工作包提交 | 待创建 |
@@ -17,10 +17,30 @@
 
 ## 当前工作包进展
 
-- 正在盘点 `ScanPage`、图像任务和文件路径的现有耦合，确认原图与处理结果的不可覆盖边界。
-- 将新增独立复核状态、旋转角度、质量指标与处理版本，旧 `needs_review` 数据迁移为“基础结果可用且页面需要复核”。
-- 将补充页面元数据读取与受控编辑接口、迁移回滚和 IDOR 测试，并保持现有上传与内容读取兼容。
-- ADMIN-001 已由 PR #19 合并到主线，合并提交为 `5d73afa`。
+- 已新增追加式 `page_results`、原图类型、结构化质量、累计旋转、活动版本和独立复核状态；旧 `processed_path` 与 `mime_type` 继续作为兼容指针。
+- Worker 将处理图写入 `results/<项目>/<页面>/vNNNN.jpg`，作业成功统一为 `completed`；低质量页面改为 `review_status=pending`，不再混入作业生命周期。
+- 已新增页面详情、版本列表、原图/活动/指定版本读取、所有者旋转和复核接口；管理员保持只读，越权与不存在统一 `404`，成功及拒绝修改均审计。
+- `0013` 会把旧处理图登记为 `legacy-baseline`，把旧 `needs_review` 迁移成“作业完成、页面待复核”，并提供降级恢复旧语义。
+- 账号合并已覆盖每个结果版本的所有权与文件补偿；账号删除显式计数并清理页面结果。
+
+`SCAN-001` 提交前全量检查：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`121 passed, 4 skipped`，应用代码覆盖率 `88.57%`；104 个 Python 文件格式、Ruff、`0013` 空库/旧版本升级与降级测试、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法和差异检查均通过。4 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。
 
 `ADMIN-001` 提交前全量检查：
 
@@ -240,6 +260,6 @@ git diff --check
 
 ## 下一步
 
-1. 盘点页面、任务与文件字段，冻结 SCAN-001 的增量数据模型和兼容响应。
-2. 实现页面旋转、质量、处理版本和独立复核状态迁移，确保原图不可覆盖。
-3. 补充 API、迁移、IDOR 与 Worker 回归测试后执行全量门禁。
+1. 提交 `SCAN-001`，创建中文 PR 并等待 PostgreSQL 17 CI 完成全部门禁。
+2. CI 通过后合并，并将页面版本与复核证据压缩写入已完成表。
+3. 从 `JOB-001` 开始扩展完整任务状态机、心跳和租约恢复。

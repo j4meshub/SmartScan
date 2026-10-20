@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+import json
 import signal
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps, ImageStat
 from sqlalchemy import or_, select
 
 from services.api.app.account_deletion import process_next_due_account_deletion
 from services.api.app.config import get_settings
 from services.api.app.database import SessionLocal
 from services.api.app.migrations import ensure_database_current
-from services.api.app.models import JobStatus, ProcessingJob, ScanPage
+from services.api.app.models import JobStatus, PageReviewStatus, ProcessingJob, ScanPage
+from services.api.app.page_service import save_page_result
 from services.worker.app.vision import correct_document_perspective
 
 settings = get_settings()
@@ -52,16 +54,41 @@ def quality_warning(
     document_edges_required: bool = False,
     document_edges_detected: bool = True,
 ) -> str | None:
-    width, height = image.size
-    if width * height < 1_000_000:
-        return "low_resolution"
+    return quality_assessment(
+        image,
+        document_edges_required=document_edges_required,
+        document_edges_detected=document_edges_detected,
+    )[1]
+
+
+def quality_assessment(
+    image: Image.Image,
+    *,
+    document_edges_required: bool = False,
+    document_edges_detected: bool = True,
+) -> tuple[float, str | None, dict[str, object]]:
     gray = ImageOps.grayscale(image).resize((256, 256))
     extrema = gray.getextrema()
-    if extrema[1] - extrema[0] < 45:
-        return "low_contrast"
+    brightness = float(ImageStat.Stat(gray).mean[0])
+    contrast_range = int(extrema[1] - extrema[0])
+    warnings: list[str] = []
+    if image.width * image.height < 1_000_000:
+        warnings.append("low_resolution")
+    if contrast_range < 45:
+        warnings.append("low_contrast")
     if document_edges_required and not document_edges_detected:
-        return "document_edges_not_found"
-    return None
+        warnings.append("document_edges_not_found")
+    score = max(0.0, 100.0 - len(warnings) * 30.0)
+    details: dict[str, object] = {
+        "width": image.width,
+        "height": image.height,
+        "pixel_count": image.width * image.height,
+        "brightness": round(brightness, 2),
+        "contrast_range": contrast_range,
+        "document_edges_detected": document_edges_detected,
+        "warnings": warnings,
+    }
+    return score, warnings[0] if warnings else None, details
 
 
 def process(job_id: str) -> None:
@@ -71,11 +98,7 @@ def process(job_id: str) -> None:
         if not job or not page:
             return
         source = settings.storage_root / page.original_path
-        output_relative = (
-            Path("users") / page.owner_user_id / "processed" / page.project_id / f"{page.id}.jpg"
-        )
-        output = settings.storage_root / output_relative
-        output.parent.mkdir(parents=True, exist_ok=True)
+        output: Path | None = None
         try:
             with Image.open(source) as raw:
                 image = ImageOps.exif_transpose(raw).convert("RGB")
@@ -89,23 +112,42 @@ def process(job_id: str) -> None:
                     )
                     image = perspective.image
                     edges_detected = perspective.detected
-                page.quality_warning = quality_warning(
+                page.quality_score, page.quality_warning, quality_details = quality_assessment(
                     image,
                     document_edges_required=correct_edges,
                     document_edges_detected=edges_detected,
                 )
+                page.quality_details = json.dumps(
+                    quality_details, sort_keys=True, separators=(",", ":")
+                )
+                page.review_status = (
+                    PageReviewStatus.pending
+                    if page.quality_warning
+                    else PageReviewStatus.not_required
+                )
+                page.review_reason = page.quality_warning
+                page.reviewed_by_user_id = None
+                page.reviewed_at = None
                 image = ImageOps.autocontrast(image, cutoff=1)
                 image = ImageEnhance.Sharpness(image).enhance(1.15)
                 image = image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=110, threshold=3))
-                image.save(output, "JPEG", quality=92, optimize=True)
-            page.processed_path = str(output_relative).replace("\\", "/")
-            page.mime_type = "image/jpeg"
-            job.status = JobStatus.needs_review if page.quality_warning else JobStatus.completed
+                if page.rotation_degrees:
+                    image = image.rotate(-page.rotation_degrees, expand=True)
+                _, output = save_page_result(
+                    db,
+                    page=page,
+                    image=image,
+                    result_type="baseline",
+                    processor_version="baseline-v1",
+                    rotation_degrees=page.rotation_degrees,
+                    settings=settings,
+                )
+            job.status = JobStatus.completed
             job.error = None
         except Exception as exc:  # keep originals and expose a recoverable failure
             job.status = JobStatus.failed if job.attempts >= 3 else JobStatus.pending
             job.error = str(exc)[:1000]
-            if output.exists():
+            if output is not None and output.exists():
                 output.unlink()
         finally:
             job.lease_until = None

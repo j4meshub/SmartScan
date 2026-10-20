@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import AccountDeletionStatus, JobStatus, Role, UploadStatus, UserStatus
+from .models import (
+    AccountDeletionStatus,
+    JobStatus,
+    PageReviewStatus,
+    Role,
+    UploadStatus,
+    UserStatus,
+)
 
 
 class RegisterRequest(BaseModel):
@@ -196,15 +204,48 @@ class ProjectView(BaseModel):
     updated_at: datetime
 
 
-class PageView(BaseModel):
+class PageResultView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    version: int
+    result_type: str
+    mime_type: str
+    sha256: str | None
+    size_bytes: int | None
+    rotation_degrees: int
+    processor_version: str
+    created_at: datetime
+
+
+class PageView(BaseModel):
     id: str
     project_id: str
     page_number: int
     size_bytes: int
     mime_type: str
+    original_mime_type: str
     quality_warning: str | None
+    quality_score: float | None
+    quality_details: dict[str, object] | None
+    rotation_degrees: int
+    active_result_version: int
+    review_status: PageReviewStatus
+    review_reason: str | None
+    reviewed_by_user_id: str | None
+    reviewed_at: datetime | None
+    active_result: PageResultView | None
     created_at: datetime
+    updated_at: datetime
+
+
+class PageRotationRequest(BaseModel):
+    degrees: Literal[90, 180, 270]
+
+
+class PageReviewUpdate(BaseModel):
+    status: Literal["pending", "confirmed"]
+    note: str | None = Field(default=None, max_length=160)
 
 
 class UploadCreate(BaseModel):

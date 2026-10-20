@@ -17,6 +17,7 @@ from services.api.app.database import SessionLocal
 from services.api.app.models import (
     AccountMergeAudit,
     JobStatus,
+    PageResult,
     PhoneEncryptionStatus,
     ProcessingJob,
     Role,
@@ -151,9 +152,24 @@ def create_pair(
                     page_number=1,
                     original_path=original_relative,
                     processed_path=processed_relative,
+                    active_result_version=1,
                     sha256=hashlib.sha256(original_data).hexdigest(),
                     size_bytes=len(original_data),
                     mime_type="image/jpeg",
+                )
+            )
+            db.add(
+                PageResult(
+                    page_id=page_id,
+                    owner_user_id=source_id,
+                    version=1,
+                    result_type="baseline",
+                    file_path=processed_relative,
+                    mime_type="image/jpeg",
+                    sha256=hashlib.sha256(processed_data).hexdigest(),
+                    size_bytes=len(processed_data),
+                    rotation_degrees=0,
+                    processor_version="test-v1",
                 )
             )
             db.add(
@@ -280,6 +296,9 @@ def test_merge_moves_resources_files_and_revokes_sessions(monkeypatch: pytest.Mo
         assert page is not None and page.owner_user_id == canonical_id
         assert page.original_path.startswith(f"users/{canonical_id}/")
         assert page.processed_path and page.processed_path.startswith(f"users/{canonical_id}/")
+        result_row = db.scalar(select(PageResult).where(PageResult.page_id == page.id))
+        assert result_row is not None and result_row.owner_user_id == canonical_id
+        assert result_row.file_path == page.processed_path
         upload = db.scalar(select(UploadSession).where(UploadSession.project_id == project.id))
         assert upload is not None and upload.owner_user_id == canonical_id
         job = db.scalar(select(ProcessingJob).where(ProcessingJob.project_id == project.id))

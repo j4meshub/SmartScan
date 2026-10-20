@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import ScanProject, UploadChunk, UploadSession, User
+from .models import ScanPage, ScanProject, UploadChunk, UploadSession, User
 from .policies import can_read_data
 from .schemas import UploadView
 
@@ -17,6 +17,16 @@ def project_for_actor(db: Session, actor: User, project_id: str) -> ScanProject:
     if not owner or not can_read_data(actor, owner):
         raise HTTPException(status_code=404, detail="project not found")
     return project
+
+
+def page_for_actor(db: Session, actor: User, page_id: str) -> ScanPage:
+    page = db.get(ScanPage, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail="page not found")
+    owner = db.get(User, page.owner_user_id)
+    if owner is None or not can_read_data(actor, owner):
+        raise HTTPException(status_code=404, detail="page not found")
+    return page
 
 
 def upload_for_owner(db: Session, actor: User, upload_id: str, lock: bool = False) -> UploadSession:

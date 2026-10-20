@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -59,6 +60,12 @@ class JobStatus(str, enum.Enum):
     completed = "completed"
     failed = "failed"
     needs_review = "needs_review"
+
+
+class PageReviewStatus(str, enum.Enum):
+    not_required = "not_required"
+    pending = "pending"
+    confirmed = "confirmed"
 
 
 class UploadStatus(str, enum.Enum):
@@ -304,6 +311,14 @@ class ScanProject(Base):
 
 class ScanPage(Base):
     __tablename__ = "scan_pages"
+    __table_args__ = (
+        CheckConstraint("rotation_degrees IN (0, 90, 180, 270)", name="ck_scan_pages_rotation"),
+        CheckConstraint(
+            "quality_score IS NULL OR (quality_score >= 0 AND quality_score <= 100)",
+            name="ck_scan_pages_quality_score",
+        ),
+        CheckConstraint("active_result_version >= 0", name="ck_scan_pages_active_result_version"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     project_id: Mapped[str] = mapped_column(
         ForeignKey("scan_projects.id", ondelete="CASCADE"), nullable=False
@@ -313,14 +328,59 @@ class ScanPage(Base):
     )
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     original_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_mime_type: Mapped[str] = mapped_column(
+        String(64), default="image/jpeg", nullable=False
+    )
     processed_path: Mapped[str | None] = mapped_column(String(500))
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
     quality_warning: Mapped[str | None] = mapped_column(String(160))
+    quality_score: Mapped[float | None] = mapped_column(Float)
+    quality_details: Mapped[str | None] = mapped_column(Text)
+    rotation_degrees: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    active_result_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    review_status: Mapped[PageReviewStatus] = mapped_column(
+        Enum(PageReviewStatus), default=PageReviewStatus.not_required, nullable=False, index=True
+    )
+    review_reason: Mapped[str | None] = mapped_column(String(160))
+    reviewed_by_user_id: Mapped[str | None] = mapped_column(String(36))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ocr_text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
     project: Mapped[ScanProject] = relationship(back_populates="pages")
+    results: Mapped[list[PageResult]] = relationship(
+        back_populates="page", cascade="all, delete-orphan"
+    )
+
+
+class PageResult(Base):
+    __tablename__ = "page_results"
+    __table_args__ = (
+        UniqueConstraint("page_id", "version", name="uq_page_result_version"),
+        CheckConstraint("rotation_degrees IN (0, 90, 180, 270)", name="ck_page_result_rotation"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    page_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_pages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    result_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    sha256: Mapped[str | None] = mapped_column(String(64))
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    rotation_degrees: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    processor_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    page: Mapped[ScanPage] = relationship(back_populates="results")
 
 
 class UploadSession(Base):

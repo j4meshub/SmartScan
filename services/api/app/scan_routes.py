@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -27,6 +27,7 @@ from .domain_services import (
     valid_image_signature,
 )
 from .models import (
+    PageResult,
     ProcessingJob,
     ScanPage,
     ScanProject,
@@ -35,11 +36,20 @@ from .models import (
     UploadStatus,
     User,
 )
-from .policies import can_read_data
-from .repositories import project_for_actor, upload_for_owner, upload_view
+from .page_service import (
+    PageMutationError,
+    page_for_owner,
+    page_view,
+    rotate_page,
+    update_page_review,
+)
+from .repositories import page_for_actor, project_for_actor, upload_for_owner, upload_view
 from .schemas import (
     ChunkReceipt,
     JobView,
+    PageResultView,
+    PageReviewUpdate,
+    PageRotationRequest,
     PageView,
     ProjectCreate,
     ProjectView,
@@ -106,9 +116,10 @@ def list_pages(
     if project.owner_user_id != user.id:
         record_audit(db, request, user, "view_pages", "project", project.id, project.owner_user_id)
         db.commit()
-    return db.scalars(
+    pages = db.scalars(
         select(ScanPage).where(ScanPage.project_id == project.id).order_by(ScanPage.page_number)
     ).all()
+    return [page_view(db, page) for page in pages]
 
 
 @router.post("/v1/uploads", response_model=UploadView, status_code=201)
@@ -269,7 +280,7 @@ def complete_upload(
     if upload.status == UploadStatus.completed and upload.page_id:
         page = db.get(ScanPage, upload.page_id)
         if page:
-            return page
+            return page_view(db, page)
     if upload.status != UploadStatus.pending:
         raise HTTPException(status_code=409, detail="upload is not pending")
     if upload_has_expired(upload):
@@ -336,6 +347,7 @@ def complete_upload(
         owner_user_id=user.id,
         page_number=count + 1,
         original_path=str(relative).replace("\\", "/"),
+        original_mime_type=upload.mime_type,
         sha256=upload.expected_sha256,
         size_bytes=upload.size_bytes,
         mime_type=upload.mime_type,
@@ -355,7 +367,7 @@ def complete_upload(
     db.commit()
     db.refresh(page)
     shutil.rmtree(temp_dir, ignore_errors=True)
-    return page
+    return page_view(db, page)
 
 
 @router.post("/v1/projects/{project_id}/pages", response_model=PageView, status_code=202)
@@ -393,6 +405,7 @@ async def upload_page(
         owner_user_id=user.id,
         page_number=count + 1,
         original_path=str(relative).replace("\\", "/"),
+        original_mime_type=file.content_type,
         sha256=hashlib.sha256(data).hexdigest(),
         size_bytes=len(data),
         mime_type=file.content_type,
@@ -405,30 +418,181 @@ async def upload_page(
     )
     db.commit()
     db.refresh(page)
-    return page
+    return page_view(db, page)
+
+
+@router.get("/v1/pages/{page_id}", response_model=PageView)
+def get_page(
+    page_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    page = page_for_actor(db, user, page_id)
+    if page.owner_user_id != user.id:
+        record_audit(db, request, user, "view_page", "page", page.id, page.owner_user_id)
+        db.commit()
+    return page_view(db, page)
+
+
+@router.get("/v1/pages/{page_id}/results", response_model=list[PageResultView])
+def page_results(
+    page_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    page = page_for_actor(db, user, page_id)
+    if page.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "view_page_results",
+            "page",
+            page.id,
+            page.owner_user_id,
+        )
+        db.commit()
+    return db.scalars(
+        select(PageResult).where(PageResult.page_id == page.id).order_by(PageResult.version)
+    ).all()
+
+
+@router.post("/v1/pages/{page_id}/rotations", response_model=PageView)
+def create_page_rotation(
+    page_id: str,
+    payload: PageRotationRequest,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanPage, page_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "rotate_page",
+            "page",
+            page_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="page not found")
+    destination = None
+    try:
+        page, destination = rotate_page(
+            db,
+            actor=user,
+            page_id=page_id,
+            degrees=payload.degrees,
+            settings=settings,
+        )
+        record_audit(db, request, user, "rotate_page", "page", page.id, page.owner_user_id)
+        db.commit()
+    except PageMutationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    except Exception:
+        db.rollback()
+        if destination is not None:
+            destination.unlink(missing_ok=True)
+        raise
+    db.refresh(page)
+    return page_view(db, page)
+
+
+@router.patch("/v1/pages/{page_id}/review", response_model=PageView)
+def change_page_review(
+    page_id: str,
+    payload: PageReviewUpdate,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanPage, page_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "change_page_review",
+            "page",
+            page_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="page not found")
+    try:
+        page = page_for_owner(db, user, page_id, lock=True)
+    except PageMutationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    update_page_review(
+        page=page,
+        actor=user,
+        status=payload.status,
+        note=payload.note,
+    )
+    record_audit(
+        db,
+        request,
+        user,
+        "change_page_review",
+        "page",
+        page.id,
+        page.owner_user_id,
+    )
+    db.commit()
+    db.refresh(page)
+    return page_view(db, page)
 
 
 @router.get("/v1/pages/{page_id}/content")
 def page_content(
     page_id: str,
     request: Request,
+    variant: str = Query(default="active", pattern=r"^(active|original)$"),
+    version: int | None = Query(default=None, ge=1),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    page = db.get(ScanPage, page_id)
-    if not page:
-        raise HTTPException(status_code=404, detail="page not found")
-    owner = db.get(User, page.owner_user_id)
-    if not owner or not can_read_data(user, owner):
-        raise HTTPException(status_code=404, detail="page not found")
+    page = page_for_actor(db, user, page_id)
     if page.owner_user_id != user.id:
         record_audit(db, request, user, "download_page", "page", page.id, page.owner_user_id)
         db.commit()
-    relative = page.processed_path or page.original_path
+    result = None
+    if version is not None:
+        result = db.scalar(
+            select(PageResult).where(
+                PageResult.page_id == page.id,
+                PageResult.version == version,
+            )
+        )
+        if result is None:
+            raise HTTPException(status_code=404, detail="page result not found")
+    if variant == "original" and version is not None:
+        raise HTTPException(status_code=422, detail="version cannot be used with original")
+    relative = (
+        page.original_path
+        if variant == "original"
+        else result.file_path
+        if result is not None
+        else page.processed_path or page.original_path
+    )
+    media_type = (
+        page.original_mime_type
+        if variant == "original"
+        else result.mime_type
+        if result is not None
+        else page.mime_type
+    )
     absolute = (settings.storage_root / relative).resolve()
-    if settings.storage_root.resolve() not in absolute.parents:
+    if settings.storage_root.resolve() not in absolute.parents or not absolute.is_file():
         raise HTTPException(status_code=404, detail="page not found")
-    return FileResponse(absolute, media_type=page.mime_type, filename=f"page-{page.page_number}")
+    return FileResponse(absolute, media_type=media_type, filename=f"page-{page.page_number}")
 
 
 @router.get("/v1/jobs", response_model=list[JobView])
