@@ -3,10 +3,13 @@ package com.smartscan.core.network
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import okhttp3.RequestBody
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Path
 import retrofit2.http.POST
+import retrofit2.http.PUT
 
 interface SmartScanApi : AuthenticationApi, ScanApi
 
@@ -31,6 +34,9 @@ interface AuthenticationApi {
 }
 
 interface ScanApi {
+    @POST("v1/projects")
+    suspend fun createProject(@Body request: CreateProjectRequestDto): ProjectDto
+
     @GET("v1/projects")
     suspend fun listProjects(): List<ProjectDto>
 
@@ -42,7 +48,64 @@ interface ScanApi {
 
     @GET("v1/projects/{projectId}/exports")
     suspend fun listExports(@Path("projectId") projectId: String): List<ExportDto>
+
+    @POST("v1/uploads")
+    suspend fun createUpload(@Body request: CreateUploadRequestDto): UploadDto
+
+    @GET("v1/uploads/{uploadId}")
+    suspend fun getUpload(@Path("uploadId") uploadId: String): UploadDto
+
+    @PUT("v1/uploads/{uploadId}/chunks/{chunkIndex}")
+    suspend fun putUploadChunk(
+        @Path("uploadId") uploadId: String,
+        @Path("chunkIndex") chunkIndex: Int,
+        @Header("X-Chunk-Sha256") chunkSha256: String,
+        @Body body: RequestBody,
+    ): ChunkReceiptDto
+
+    @POST("v1/uploads/{uploadId}/complete")
+    suspend fun completeUpload(@Path("uploadId") uploadId: String): PageDto
 }
+
+@Serializable
+data class CreateProjectRequestDto(
+    val title: String,
+    val mode: String,
+    @SerialName("reading_order") val readingOrder: String = "ltr",
+)
+
+@Serializable
+data class CreateUploadRequestDto(
+    @SerialName("project_id") val projectId: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("size_bytes") val sizeBytes: Long,
+    val sha256: String,
+    @SerialName("idempotency_key") val idempotencyKey: String,
+)
+
+@Serializable
+data class UploadDto(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("size_bytes") val sizeBytes: Long,
+    @SerialName("chunk_size") val chunkSize: Long,
+    @SerialName("total_chunks") val totalChunks: Int,
+    @SerialName("received_chunks") val receivedChunks: List<Int>,
+    val status: String,
+    @SerialName("page_id") val pageId: String? = null,
+    @SerialName("expires_at") val expiresAt: String,
+)
+
+@Serializable
+data class ChunkReceiptDto(
+    @SerialName("upload_id") val uploadId: String,
+    @SerialName("chunk_index") val chunkIndex: Int,
+    @SerialName("size_bytes") val sizeBytes: Long,
+    val sha256: String,
+)
 
 @Serializable
 data class SmsChallengeRequestDto(

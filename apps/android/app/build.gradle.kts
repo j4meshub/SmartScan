@@ -29,6 +29,7 @@ dependencies {
     implementation(project(":data:local"))
     implementation(project(":data:repository"))
     implementation(project(":feature:capture"))
+    implementation(project(":feature:sync"))
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

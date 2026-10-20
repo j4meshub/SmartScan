@@ -8,6 +8,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class SmartScanApiTest {
     private val server = MockWebServer()
@@ -67,5 +69,37 @@ class SmartScanApiTest {
         assertEquals("/v1/auth/login", request.path)
         assertFalse(request.requestUrl!!.queryParameterNames.contains("password"))
         assertTrue(request.body.readUtf8().contains("\"password\":\"private-password\""))
+    }
+
+    @Test
+    fun `chunk upload keeps hash in header and bytes in body`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"upload_id":"upload-1","chunk_index":2,"size_bytes":4,"sha256":"${"a".repeat(64)}"}""",
+            ),
+        )
+        val api = SmartScanApiFactory.create(
+            ApiClientConfig(
+                baseUrl = server.url("/").toString(),
+                deviceId = "android:test-device",
+                deviceName = "Android 测试设备",
+                allowInsecureLoopback = true,
+            ),
+            tokenProvider = AccessTokenProvider { "access-token" },
+        )
+        val bytes = byteArrayOf(1, 2, 3, 4)
+
+        api.putUploadChunk(
+            "upload-1",
+            2,
+            "a".repeat(64),
+            bytes.toRequestBody("application/octet-stream".toMediaType()),
+        )
+        val request = server.takeRequest()
+
+        assertEquals("/v1/uploads/upload-1/chunks/2", request.path)
+        assertEquals("a".repeat(64), request.getHeader("X-Chunk-Sha256"))
+        assertTrue(request.body.readByteArray().contentEquals(bytes))
+        assertFalse(request.requestUrl!!.queryParameterNames.contains("token"))
     }
 }

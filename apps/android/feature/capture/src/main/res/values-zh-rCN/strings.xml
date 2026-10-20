@@ -15,6 +15,6 @@
     <string name="capture_quality_blurry">请保持稳定，并点按页面对焦</string>
     <string name="capture_exposure">曝光</string>
     <string name="capture_manual_hint">手动快门 · 低质量页面仍可带警告拍摄</string>
-    <string name="capture_saved_original">原图已保存，后续增强不会覆盖原图。</string>
+    <string name="capture_saved_original">原图已保存并进入队列，后续增强不会覆盖原图。</string>
     <string name="capture_continue">继续拍摄</string>
 </resources>

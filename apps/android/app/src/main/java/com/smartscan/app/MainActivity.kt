@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +30,10 @@ import com.smartscan.data.repository.AuthenticationRepository
 import com.smartscan.data.repository.RegistrationInput
 import com.smartscan.feature.capture.CaptureMode
 import com.smartscan.feature.capture.CaptureScreen
+import com.smartscan.feature.sync.UploadQueueCoordinator
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -36,8 +41,8 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val repository = (application as SmartScanApplication).container.authenticationRepository
-        setContent { SmartScanApp(repository) }
+        val container = (application as SmartScanApplication).container
+        setContent { SmartScanApp(container.authenticationRepository, container.uploadQueueCoordinator) }
     }
 }
 
@@ -46,7 +51,10 @@ private val Paper = Color(0xFFF4F1EB)
 private val Mint = Color(0xFFB7F7D4)
 
 @Composable
-fun SmartScanApp(authenticationRepository: AuthenticationRepository) {
+fun SmartScanApp(
+    authenticationRepository: AuthenticationRepository,
+    uploadQueueCoordinator: UploadQueueCoordinator,
+) {
     val authState = remember { MutableStateFlow<AuthUiState>(AuthUiState.Loading) }
     val state by authState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -55,6 +63,9 @@ fun SmartScanApp(authenticationRepository: AuthenticationRepository) {
 
     LaunchedEffect(authenticationRepository) {
         authState.value = authenticationRepository.restore().toUiState()
+    }
+    LaunchedEffect(state) {
+        if (state is AuthUiState.SignedIn) uploadQueueCoordinator.resumeCurrentUser()
     }
 
     when (val current = state) {
@@ -99,6 +110,7 @@ fun SmartScanApp(authenticationRepository: AuthenticationRepository) {
         )
         is AuthUiState.SignedIn -> AuthenticatedApp(
             user = current.user,
+            uploadQueueCoordinator = uploadQueueCoordinator,
             onLogout = {
                 authState.value = AuthUiState.Loading
                 scope.launch {
@@ -113,7 +125,11 @@ fun SmartScanApp(authenticationRepository: AuthenticationRepository) {
 }
 
 @Composable
-private fun AuthenticatedApp(user: UserProfile, onLogout: () -> Unit) {
+private fun AuthenticatedApp(
+    user: UserProfile,
+    uploadQueueCoordinator: UploadQueueCoordinator,
+    onLogout: () -> Unit,
+) {
     MaterialTheme(colorScheme = lightColorScheme(primary = Ink, background = Paper)) {
         val navController = rememberNavController()
         val backStackEntry by navController.currentBackStackEntryAsState()
@@ -160,9 +176,29 @@ private fun AuthenticatedApp(user: UserProfile, onLogout: () -> Unit) {
                     SettingsScreen(user, onLogout)
                 }
                 composable(CaptureRoute) { entry ->
+                    val mode = CaptureMode.fromRoute(entry.arguments?.getString("mode"))
+                    val localProjectId = rememberSaveable { UUID.randomUUID().toString() }
+                    val titlePrefix = stringResource(
+                        when (mode) {
+                            CaptureMode.DOCUMENT -> R.string.upload_project_document
+                            CaptureMode.EXAM -> R.string.upload_project_exam
+                            CaptureMode.BOOK -> R.string.upload_project_book
+                        },
+                    )
+                    val projectTitle = remember(titlePrefix) {
+                        "${titlePrefix}_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"))}"
+                    }
                     CaptureScreen(
-                        mode = CaptureMode.fromRoute(entry.arguments?.getString("mode")),
+                        mode = mode,
                         onBack = { navController.popBackStack() },
+                        onOriginalCaptured = { path ->
+                            uploadQueueCoordinator.enqueue(
+                                localProjectId = localProjectId,
+                                title = projectTitle,
+                                mode = mode.routeValue,
+                                originalPath = path,
+                            )
+                        },
                     )
                 }
             }
