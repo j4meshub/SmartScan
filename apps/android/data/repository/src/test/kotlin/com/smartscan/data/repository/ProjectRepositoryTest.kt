@@ -62,7 +62,7 @@ private class ProjectCacheFake(
 }
 
 private class FakeApi(private val error: IOException? = null) : ScanApi {
-    override suspend fun createProject(request: CreateProjectRequestDto): ProjectDto = error("not expected")
+    override suspend fun createProject(request: CreateProjectRequestDto): ProjectDto = kotlin.error("not expected")
 
     override suspend fun listProjects(): List<ProjectDto> {
         error?.let { throw it }
@@ -72,13 +72,13 @@ private class FakeApi(private val error: IOException? = null) : ScanApi {
     override suspend fun listPages(projectId: String) = emptyList<com.smartscan.core.network.PageDto>()
     override suspend fun listJobs() = emptyList<com.smartscan.core.network.JobDto>()
     override suspend fun listExports(projectId: String) = emptyList<com.smartscan.core.network.ExportDto>()
-    override suspend fun createUpload(request: CreateUploadRequestDto): UploadDto = error("not expected")
-    override suspend fun getUpload(uploadId: String): UploadDto = error("not expected")
+    override suspend fun createUpload(request: CreateUploadRequestDto): UploadDto = kotlin.error("not expected")
+    override suspend fun getUpload(uploadId: String): UploadDto = kotlin.error("not expected")
     override suspend fun putUploadChunk(
         uploadId: String,
         chunkIndex: Int,
         chunkSha256: String,
         body: RequestBody,
-    ): ChunkReceiptDto = error("not expected")
-    override suspend fun completeUpload(uploadId: String): PageDto = error("not expected")
+    ): ChunkReceiptDto = kotlin.error("not expected")
+    override suspend fun completeUpload(uploadId: String): PageDto = kotlin.error("not expected")
 }
