@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="progress.css">
   <link rel="stylesheet" href="camera.css">
   <link rel="stylesheet" href="auth.css">
+  <link rel="stylesheet" href="capture.css">
   <title>SmartScan</title>
 </head>
 <body>
@@ -115,6 +116,7 @@
         </div>
       </div>
       <label class="file-drop"><input id="pageFile" type="file" accept="image/jpeg,image/png,image/webp,image/heic" capture="environment"><span>＋</span><b data-i18n="selectPage">拍摄或选择页面</b><small id="fileName" data-i18n="originalKept">原图会一直保留到你删除项目</small></label>
+      <img id="capturePreview" class="capture-preview hidden" alt="待上传页面预览">
       <div id="uploadProgressWrap" class="upload-progress hidden" aria-live="polite">
         <div><span data-i18n="uploading">正在上传</span><b id="uploadPercent">0%</b></div>
         <progress id="uploadProgress" max="100" value="0"></progress>

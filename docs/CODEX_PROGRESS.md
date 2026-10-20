@@ -7,15 +7,42 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M4 H5 完整产品 |
-| 当前工作包 | `H5-001` 登录与企业微信绑定 |
-| 工作包状态 | 完成，PR CI 已通过，等待合并 |
-| 当前分支 | `codex/h5-001-auth-binding` |
-| 最后验证基线 | `4a76fb9`（API-001 PR #25 已合并） |
-| 工作包提交 | `3d9e142`（实现提交） |
-| PR | `#26`，CI 已通过，等待合并 |
-| 下一工作包 | `H5-002` 拍摄入口 |
+| 当前工作包 | `H5-002` 拍摄入口 |
+| 工作包状态 | 进行中，实现与本地门禁完成，待提交 PR |
+| 当前分支 | `codex/h5-002-capture-entry` |
+| 最后验证基线 | `10ab33e`（H5-001 PR #26 已合并） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `H5-003` 页面编辑 |
 
 ## 当前工作包进展
+
+- H5-001 已由 PR #26 合并到主线，中文 squash 提交为 `10ab33e`；真实企微、短信与内置浏览器保持人工验收。
+- H5-002 在 POC 基线上补齐后摄和高清理想约束、细分相机错误、ImageCapture 运行失败后的帧级回退。
+- 页面隐藏、进入后台、关闭弹窗和完成拍摄都会释放媒体轨道，避免移动端摄像头残留占用。
+- 实时拍摄与系统相机/文件选择统一展示待上传预览，系统入口不因能力检测或权限拒绝而隐藏。
+- H5 专项测试当前 `20 passed`；真实设备的焦点、曝光、方向、分辨率和企业微信行为继续保留人工门禁。
+
+`H5-002` 本地门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python tools/api_compatibility.py
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/auth-client.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+npm test  # apps/h5
+git diff --check
+```
+
+本地结果：`152 passed, 5 skipped`，应用代码覆盖率 `88.29%`；128 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `20 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试等待 PR CI 复核。
 
 - API-001 已由 PR #25 合并到主线，中文 squash 提交为 `4a76fb9`；当前与上一代契约继续由 CI 双门禁保护。
 - H5 登录请求现在发送稳定设备标识，获得短期访问令牌和单次轮换刷新令牌；并发 `401` 共用一次刷新，失败后清理会话。
@@ -427,10 +454,11 @@ git diff --check
 | JPG/PDF 多格式导出 | `4e10b2e` | 本地 143 项通过、覆盖率 88.46%；PR CI 在 PostgreSQL 17 环境 148 项通过、覆盖率 88.75%；多页制品、三档质量、当前 OCR 文本层、过期回退、IDOR、账号合并/删除、迁移、Web 与容器检查通过；PR #23 已合并 |
 | 文件生命周期管理 | `d8025b8` | 本地 149 项通过、覆盖率 88.23%；PR CI 在 PostgreSQL 17 环境 154 项通过、覆盖率 88.49%；鉴权下载、Range/X-Accel、上传取消、过期回收、项目清理重试、IDOR、迁移、Web 与容器检查通过；PR #24 已合并 |
 | v1 API 契约冻结 | `4a76fb9` | 本地 152 项通过、覆盖率 88.28%；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.55%；双快照兼容检查、破坏性反例、版本响应头、Web 与容器检查通过；PR #25 已合并 |
-| H5 登录与企业微信绑定 | `3d9e142` | 本地 152 项通过、覆盖率 88.29%，H5 17 项通过；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.56%；设备会话、刷新轮换、企微回调、短信绑定、兼容契约、Web 与容器检查通过；PR #26 等待合并 |
+| H5 登录与企业微信绑定 | `10ab33e` | 本地 152 项通过、覆盖率 88.29%，H5 17 项通过；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.56%；设备会话、刷新轮换、企微回调、短信绑定、兼容契约、Web 与容器检查通过；PR #26 已合并 |
 
 ## 下一步
 
-1. 合并已通过全部 CI 的 PR #26。
-2. 从 `H5-002` 继续完善拍摄入口、生命周期释放与系统相机兜底证据。
+1. 使用中文提交 H5-002 并创建 PR，等待 PostgreSQL、Web 与容器 CI。
+2. CI 通过后记录准确证据并合并。
+3. 合并后从 `H5-003` 继续实现四角调整、旋转、滤镜和页序编辑。
 3. 真实企业微信租户、短信与内置浏览器继续保留人工验收门禁，不以 Mock 结果代替。
