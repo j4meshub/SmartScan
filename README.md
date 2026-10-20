@@ -9,6 +9,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 ## 当前包含内容
 
 - FastAPI API：已拆分稳定用户主体、本地登录身份和已验证手机号，并提供 Argon2id 密码哈希、手机号确定性 HMAC、随机会话令牌和会话撤销。
+- 手机号保护：新验证号码使用绑定用户的 AES-256-GCM 认证密文和版本化 HMAC；旧账号明确等待下一次可信验证补齐，轮换工具默认干跑。
 - 企业微信可信身份 POC：默认关闭的真实适配器、开发 Mock、可信手机号契约和安全账号决策；真实租户仍待人工验收。
 - H5 相机与弱网 POC：实时后置相机、`ImageCapture`/视频帧拍摄、系统相机兜底，以及不重传已确认分片的自动恢复测试。
 - 文档透视评估框架：授权固定数据集清单、角点误差与可用率指标、耗时/内存报告及最少样本门禁；真实样本仍待人工验收。
@@ -52,11 +53,13 @@ python -m http.server 8081 --directory apps/admin-web
 - 管理后台：`http://localhost:8081`
 - API 文档：`http://localhost:8000/docs`
 
-开发环境注册使用 `SMARTSCAN_DEV_SMS_CODE`，非开发环境会拒绝该验证码。首次启动 API 前应设置 `SMARTSCAN_SUPERADMIN_PASSWORD`，以初始化受保护的超级管理员。生产环境会拒绝缺失或强度不足的核心密钥，仓库中不会硬编码方案文档里的示例密码。
+开发环境注册使用 `SMARTSCAN_DEV_SMS_CODE`，非开发环境会拒绝该验证码。首次启动 API 前应设置 `SMARTSCAN_SUPERADMIN_PASSWORD`，以初始化受保护的超级管理员。生产环境还必须注入手机号 HMAC 与 AES-256-GCM Keyring；缺失、弱值或无效编码会拒绝启动，仓库中不会硬编码实际密钥。
 
 企业微信 POC 默认使用 `SMARTSCAN_WECOM_MODE=disabled`。本地契约说明、运行模式与真实租户验收项见[企业微信可信身份 POC](docs/POC_WECOM_IDENTITY.md)。
 
 统一用户、登录身份、已验证手机号的职责、兼容期双写和回滚边界见[统一身份模型说明](docs/UNIFIED_IDENTITY_MODEL.md)。
+
+手机号密文格式、生产 Secret 配置、旧数据补验证和分批轮换步骤见[手机号数据保护与密钥轮换](docs/PHONE_DATA_PROTECTION.md)。
 
 文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
 

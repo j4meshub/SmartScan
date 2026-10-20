@@ -17,11 +17,19 @@ from .identity_services import (
     local_identity_by_username,
     local_identity_for_user,
     user_view,
-    verified_phone_by_hmac,
+    verified_phone_by_hmacs,
 )
 from .models import SessionToken, User, UserStatus
+from .phone_protection import protect_phone
 from .schemas import LoginRequest, PasswordChange, RegisterRequest, TokenResponse, UserView
-from .security import hash_password, mask_phone, phone_hmac, token_hash, verify_password
+from .security import (
+    hash_password,
+    mask_phone,
+    phone_hmac,
+    phone_hmac_candidates,
+    token_hash,
+    verify_password,
+)
 
 settings = get_settings()
 router = APIRouter()
@@ -31,8 +39,9 @@ router = APIRouter()
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     if settings.env != "development" or payload.sms_code != settings.dev_sms_code:
         raise HTTPException(status_code=400, detail="invalid verification code")
+    candidates = phone_hmac_candidates(payload.phone)
     digest = phone_hmac(payload.phone)
-    existing_phone = verified_phone_by_hmac(db, digest)
+    existing_phone = verified_phone_by_hmacs(db, list(candidates.values()))
     existing_identity = local_identity_by_username(db, payload.username)
     if existing_identity:
         raise HTTPException(status_code=409, detail="username already exists")
@@ -54,6 +63,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     )
     db.add(user)
     db.flush()
+    protected = protect_phone(payload.phone, user_id=user.id)
     add_local_identity(
         db,
         user,
@@ -63,8 +73,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     add_verified_phone(
         db,
         user,
-        phone_hmac=digest,
-        phone_masked=user.phone_masked,
+        protected=protected,
         verification_source="development_sms",
     )
     record_audit(db, request, user, "register", "user", user.id, user.id)

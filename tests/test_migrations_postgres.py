@@ -16,7 +16,7 @@ from services.api.app.migrations import (
     head_revision,
     upgrade_database,
 )
-from services.api.app.models import User, UserIdentity, VerifiedPhone
+from services.api.app.models import PhoneEncryptionStatus, User, UserIdentity, VerifiedPhone
 
 POSTGRES_URL = os.getenv("SMARTSCAN_TEST_POSTGRES_URL")
 pytestmark = pytest.mark.skipif(not POSTGRES_URL, reason="未配置隔离 PostgreSQL 测试库")
@@ -115,5 +115,8 @@ def test_postgresql_legacy_baseline_is_adopted_and_guarded() -> None:
     assert username == "postgres-legacy"
     assert identity is not None and identity.credential_hash == "hash"
     assert phone is not None and phone.verification_source == "legacy"
+    assert phone.hmac_key_id == "legacy-v1"
+    assert phone.encryption_status == PhoneEncryptionStatus.unavailable
+    assert phone.phone_ciphertext is None
     assert current_revision(url) == head_revision(url)
     assert_postgresql_guards_installed()

@@ -5,7 +5,8 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import User, UserIdentity, VerifiedPhone
+from .models import PhoneEncryptionStatus, User, UserIdentity, VerifiedPhone
+from .phone_protection import ProtectedPhone
 from .schemas import UserView
 
 LOCAL_PROVIDER = "local"
@@ -31,6 +32,12 @@ def local_identity_for_user(db: Session, user_id: str) -> UserIdentity | None:
 
 def verified_phone_by_hmac(db: Session, digest: str) -> VerifiedPhone | None:
     return db.scalar(select(VerifiedPhone).where(VerifiedPhone.phone_hmac == digest))
+
+
+def verified_phone_by_hmacs(db: Session, digests: list[str]) -> VerifiedPhone | None:
+    if not digests:
+        return None
+    return db.scalar(select(VerifiedPhone).where(VerifiedPhone.phone_hmac.in_(digests)))
 
 
 def verified_phone_for_user(db: Session, user_id: str) -> VerifiedPhone | None:
@@ -62,15 +69,18 @@ def add_verified_phone(
     db: Session,
     user: User,
     *,
-    phone_hmac: str,
-    phone_masked: str,
+    protected: ProtectedPhone,
     verification_source: str,
     verified_at: datetime | None = None,
 ) -> VerifiedPhone:
     phone = VerifiedPhone(
         user_id=user.id,
-        phone_hmac=phone_hmac,
-        phone_masked=phone_masked,
+        phone_hmac=protected.phone_hmac,
+        hmac_key_id=protected.hmac_key_id,
+        phone_masked=protected.phone_masked,
+        phone_ciphertext=protected.phone_ciphertext,
+        encryption_key_id=protected.encryption_key_id,
+        encryption_status=PhoneEncryptionStatus.encrypted,
         verification_source=verification_source,
     )
     if verified_at is not None:

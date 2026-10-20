@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from collections import Counter
 
 import httpx
@@ -270,6 +271,10 @@ def test_production_live_mode_requires_all_wecom_secrets() -> None:
         _env_file=None,
         env="production",
         secret_key="s" * 32,
+        phone_hmac_peppers={"v1": "p" * 32},
+        phone_hmac_active_key_id="v1",
+        phone_encryption_keys={"v1": base64.urlsafe_b64encode(b"k" * 32).decode()},
+        phone_encryption_active_key_id="v1",
         superadmin_password="strong-bootstrap-password",
         wecom_mode="live",
         wecom_corp_id="corp-test",

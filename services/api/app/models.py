@@ -4,7 +4,17 @@ import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -29,6 +39,11 @@ class UserStatus(str, enum.Enum):
     disabled = "disabled"
     deleting = "deleting"
     deleted = "deleted"
+
+
+class PhoneEncryptionStatus(str, enum.Enum):
+    unavailable = "unavailable"
+    encrypted = "encrypted"
 
 
 class JobStatus(str, enum.Enum):
@@ -97,12 +112,25 @@ class VerifiedPhone(Base):
     __table_args__ = (
         UniqueConstraint("user_id", name="uq_verified_phone_user"),
         UniqueConstraint("phone_hmac", name="uq_verified_phone_hmac"),
+        CheckConstraint(
+            "(encryption_status = 'unavailable' AND phone_ciphertext IS NULL "
+            "AND encryption_key_id IS NULL) OR "
+            "(encryption_status = 'encrypted' AND phone_ciphertext IS NOT NULL "
+            "AND encryption_key_id IS NOT NULL)",
+            name="ck_verified_phone_encryption_state",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     phone_hmac: Mapped[str] = mapped_column(String(64), nullable=False)
+    hmac_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
     phone_masked: Mapped[str] = mapped_column(String(32), nullable=False)
+    phone_ciphertext: Mapped[str | None] = mapped_column(Text)
+    encryption_key_id: Mapped[str | None] = mapped_column(String(64))
+    encryption_status: Mapped[PhoneEncryptionStatus] = mapped_column(
+        Enum(PhoneEncryptionStatus), nullable=False
+    )
     verification_source: Mapped[str] = mapped_column(String(32), nullable=False)
     verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

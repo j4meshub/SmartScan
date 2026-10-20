@@ -15,6 +15,7 @@ dependencies = [
   "pydantic-settings>=2.6,<3",
   "python-multipart>=0.0.12,<1",
   "argon2-cffi>=23.1,<26",
+  "cryptography>=46,<51",
   "pillow>=10.4,<13",
   "httpx>=0.27,<1",
   "psycopg[binary]>=3.2,<4",

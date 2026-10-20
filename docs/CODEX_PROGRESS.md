@@ -7,21 +7,36 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M2 统一账号与安全 |
-| 当前工作包 | `ACC-001` 拆分统一用户、登录身份和已验证手机号 |
-| 工作包状态 | 完成，PR #12 的 PostgreSQL 17、API、Web 与容器检查已通过，等待合并 |
-| 当前分支 | `codex/acc-001-unified-account` |
-| 最后验证基线 | `913eb2b`（ACC-001 PR #12 CI 已通过） |
-| 工作包提交 | `91cb6e7`（启动记录）、`69812c6`（实现与本地验证） |
-| PR | [#12](https://github.com/j4meshub/SmartScan/pull/12)（CI 已通过，等待合并） |
-| 下一工作包 | `ACC-002` 手机号加密与 HMAC 索引 |
+| 当前工作包 | `ACC-002` 手机号认证加密、HMAC 版本与密钥轮换 |
+| 工作包状态 | 完成，PR #13 的 PostgreSQL 17、API、Web 与容器检查已通过，等待合并 |
+| 当前分支 | `codex/acc-002-phone-protection` |
+| 最后验证基线 | `f9566e3`（ACC-002 PR #13 CI 已通过） |
+| 工作包提交 | `a67ae45`（启动记录）、`6739727`（实现与本地验证）、`f9566e3`（PR 断点） |
+| PR | [#13](https://github.com/j4meshub/SmartScan/pull/13)（CI 已通过，等待合并） |
+| 下一工作包 | `SMS-001` 验证码服务 |
 
 ## 当前工作包进展
 
-- 新增 `verified_phones`，并让 `user_identities` 保存本地凭据与创建时间；`users` 继续作为稳定主体和所有权锚点。
-- 迁移 `20261020_0003` 回填现有本地账号，拒绝重复身份和用户名冲突，跳过没有已验证手机号的超级管理员占位值。
-- 注册、登录、密码修改、`/v1/me` 和后台用户视图已经切换到新结构；兼容期继续双写旧账号列，现有 `/v1` 字段保持不变。
-- 旧 `create_all` 数据库改用固定基线快照识别，避免 ORM 演进后误判首个版本。
-- `ACC-001` 未提前实现手机号密文、短信 Provider、企微 OAuth、账号自动合并或删除冷静期，这些仍由后续工作包完成。
+- 新验证号码使用 AES-256-GCM、随机 nonce 和绑定用户/密钥版本的关联数据，数据库只保存密文与版本 ID。
+- HMAC 查重覆盖配置中全部保留 Pepper 版本；新写入使用活动版本，显式轮换同时更新兼容期旧列。
+- 迁移 `20261020_0004` 将旧行标记为 `unavailable` 与 `legacy-v1`，等待下一次可信验证补齐，不从掩码猜测原号。
+- 轮换命令默认干跑，`--apply` 才分批写入；错误、日志和计数不输出原号、密文或密钥。
+- `ACC-002` 不实现验证码发送、企微绑定或账号合并，这些仍由 `SMS-001`、`WECOM-001` 和 `ACC-003` 负责。
+
+`ACC-002` 提交前 Python 与迁移检查：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term --cov-fail-under=77 -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+```
+
+本地结果：`89 passed, 2 skipped`，应用代码覆盖率 `87.18%`；Ruff、54 个 Python 文件格式、迁移升级/漂移/版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。手机号保护专项 32 项通过；两项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。
+
+PR #13 CI 结果：PostgreSQL 17 环境 `91 passed`，应用代码覆盖率 `87.18%`；Ruff、54 个 Python 文件格式、迁移升级/漂移、H5 `8 passed`、Web 与 Compose/容器检查全部通过。该绿灯证明加密结构、命名枚举和迁移可以在隔离 PostgreSQL 上运行，不代表真实 Secret 管理、备份恢复或生产轮换演练已经通过。
 
 `ACC-001` 提交前全量检查：
 
@@ -199,10 +214,11 @@ git diff --check
 | 基础试卷净化 POC | `6ff0f2a` | PR CI 55 项通过、覆盖率 84.35%；三级建议、保守净化、原图回退、Web 与 Compose/容器检查通过；PR #9 已合并，真实试卷指标待人工验收 |
 | 双页拆分与去弯曲 POC | `6a6301a` | PR CI 66 项通过、覆盖率 85.50%；非中心书脊、阅读顺序、去弯曲回退、Web 与 Compose/容器检查通过；PR #10 已合并，真实书籍指标待人工验收 |
 | 16 用户混合负载工具 | `4fa566a` | PR CI 77 项通过、覆盖率 85.50%；16 会话 Mock、目标防护、资源门禁、Web 与 Compose/容器检查通过；PR #11 已合并，目标服务器 30 分钟正式容量仍阻塞 |
-| 统一身份模型 | `69812c6` | PR CI 82 项通过、覆盖率 87.24%；用户主体、登录身份、已验证手机号、旧库回填、降级、Web 与 Compose/容器检查通过；PR #12 待合并 |
+| 统一身份模型 | `d097a17` | PR CI 82 项通过、覆盖率 87.24%；用户主体、登录身份、已验证手机号、旧库回填、降级、Web 与 Compose/容器检查通过；PR #12 已合并 |
+| 手机号数据保护 | `6739727` | PR CI 91 项通过、覆盖率 87.18%；AES-GCM、版本化 HMAC、旧数据状态、轮换、迁移、Web 与 Compose/容器检查通过；PR #13 待合并 |
 
 ## 下一步
 
-1. 合并 PR #12，并从最新 `main` 创建 `codex/acc-002-phone-protection`。
-2. 为已验证手机号设计认证加密密文、HMAC 版本和密钥轮换边界，不把密钥提交到仓库。
-3. 编写 expand/migrate 迁移、双密钥读取/轮换测试和日志脱敏测试，保持 `/v1` 契约兼容。
+1. 合并 PR #13，并从最新 `main` 创建 `codex/sms-001-verification-service`。
+2. 设计验证码挑战、五分钟有效期、最多五次尝试、手机号/IP 限频和 Provider 接口。
+3. 使用开发 Mock 与契约测试推进；真实短信供应商仍保持人工验收，不把 Mock 标记为真实通过。
