@@ -3,6 +3,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY pyproject.toml ./
 COPY services ./services
+COPY alembic.ini ./
+COPY migrations ./migrations
 RUN pip install --no-cache-dir ".[vision]"
 RUN useradd --create-home --uid 10001 smartscan && chown -R smartscan:smartscan /app
 USER smartscan

@@ -38,9 +38,10 @@
 ## 常用验证命令
 
 ```text
-python -m ruff check services
-python -m ruff format --check services
+python -m ruff check services migrations tests
+python -m ruff format --check services migrations tests
 python -m pytest -q
+python -m alembic check
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js
 docker compose -f deploy/compose/docker-compose.yml config

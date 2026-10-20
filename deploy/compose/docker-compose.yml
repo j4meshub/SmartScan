@@ -14,6 +14,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 8
+  migrate:
+    build: {context: ../.., dockerfile: services/api/Dockerfile}
+    restart: "no"
+    command: ["python", "-m", "services.api.app.migrations", "upgrade"]
+    env_file: ../../.env
+    environment:
+      SMARTSCAN_DATABASE_URL: postgresql+psycopg://smartscan:${POSTGRES_PASSWORD}@postgres:5432/smartscan
+      SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+    volumes: ["scan-data:/srv/smartscan/data"]
+    depends_on: {postgres: {condition: service_healthy}}
   api:
     build: {context: ../.., dockerfile: services/api/Dockerfile}
     restart: unless-stopped
@@ -22,8 +34,11 @@ services:
       SMARTSCAN_DATABASE_URL: postgresql+psycopg://smartscan:${POSTGRES_PASSWORD}@postgres:5432/smartscan
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
     volumes: ["scan-data:/srv/smartscan/data"]
-    depends_on: {postgres: {condition: service_healthy}}
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
     expose: ["8000"]
   worker-cpu-1: &worker
     build: {context: ../.., dockerfile: services/worker/Dockerfile}
@@ -33,8 +48,11 @@ services:
       SMARTSCAN_DATABASE_URL: postgresql+psycopg://smartscan:${POSTGRES_PASSWORD}@postgres:5432/smartscan
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
     volumes: ["scan-data:/srv/smartscan/data"]
-    depends_on: {postgres: {condition: service_healthy}}
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
   worker-cpu-2: *worker
   nginx:
     image: nginx:1.27-alpine

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     env: str = "development"
     database_url: str = "sqlite:///./smartscan.db"
+    auto_migrate: bool = True
     storage_root: Path = Path("./data")
     secret_key: str = "development-only-secret-change-me"
     phone_pepper: str = "development-only-phone-pepper"
