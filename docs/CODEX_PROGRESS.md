@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
 | 当前工作包 | `POC-002` H5 相机与弱网续传自动测试 |
-| 工作包状态 | 进行中，本地实现与验证完成，等待 PR CI |
+| 工作包状态 | 完成，PR CI 已通过，等待合并；真机与真实弱网等待人工验收 |
 | 当前分支 | `codex/poc-002-h5-camera-network` |
 | 最后验证基线 | `a766af5`（POC-001 PR #6 已合并） |
 | 工作包提交 | `c3dffba` |
@@ -48,12 +48,13 @@ git diff --check
 - Ruff 与格式检查通过，39 个 Python 文件纳入检查。
 - H5 相机与弱网专项自动测试 `8 passed`。
 - 全量本地测试 `36 passed, 2 skipped`，应用代码覆盖率 `82.80%`，达到 `77%` 门禁。
-- 本地跳过的两项 PostgreSQL 测试等待本工作包 PR CI 执行。
+- 本地跳过的两项 PostgreSQL 测试已由 PR CI 的 PostgreSQL 17 服务执行并通过。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
 - H5 应用、相机模块、续传模块和管理后台 JavaScript 语法检查通过。
 - `git diff --check` 通过。
-- 当前 Windows 未安装 Docker；Compose 语义检查等待 PR CI 执行。
+- 当前 Windows 未安装 Docker；PR CI 的 Compose 语义检查已通过。
+- PR CI 通过：PostgreSQL 环境 `38 passed`、覆盖率 `82.80%`，Node.js 22 环境 H5 `8 passed`，Web 与 Compose/容器检查全部通过。
 
 ## 外部阻塞
 
@@ -82,9 +83,10 @@ git diff --check
 | 隔离测试与契约基线 | `11d0a1c` | PR CI 21 项通过、覆盖率 77.67%；隔离、快照与漂移门禁通过；PR #4 已合并 |
 | 现有资源越权矩阵 | `1b0e3dd` | PR CI 25 项通过、覆盖率 80.97%；角色、IDOR、审计、Web 与 Compose/容器检查通过；PR #5 已合并 |
 | 企业微信可信身份 POC | `a766af5` | PR CI 38 项通过、覆盖率 82.80%；适配器、Mock、账号决策、Web 与 Compose/容器检查通过；PR #6 已合并，真实租户待人工验收 |
+| H5 相机与弱网 POC | `8806831` | PR CI API 38 项、H5 8 项通过，覆盖率 82.80%；相机兜底、续传、Web 与 Compose/容器检查通过；PR #7，真机弱网待人工验收 |
 
 ## 下一步
 
-1. 等待 `POC-002` PR #7 CI，失败时定位、修复并重跑。
-2. PR CI 通过后合并，并从最新 `main` 创建 `codex/poc-003-perspective-evaluation`。
+1. 合并 `POC-002` PR #7。
+2. 从最新 `main` 创建 `codex/poc-003-perspective-evaluation`。
 3. 使用真实 Android/企业微信设备及 Wi-Fi、4G、5G 网络切换执行人工验收；条件未提供前保持“等待人工验收”。
