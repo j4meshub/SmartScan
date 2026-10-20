@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
 | 当前工作包 | `POC-004` 基础试卷检测与净化 |
-| 工作包状态 | 进行中，已完成需求与安全边界盘点，待实现规则 POC |
+| 工作包状态 | 进行中，规则检测、保守净化与本地全量验证已完成，待提交和 PR |
 | 当前分支 | `codex/poc-004-exam-cleanup` |
 | 最后验证基线 | `2371cd7`（POC-003 PR #8 已合并） |
 | 工作包提交 | 待创建 |
@@ -19,11 +19,30 @@
 
 - v1.4 要求规则与轻量模型融合识别题号、选项、答题线和版式；高置信建议净化，中置信询问，低置信保持普通扫描。
 - 无模板基础净化应分离彩色与黑色笔迹、保护印刷 OCR/版式区域，并在疑似覆盖印刷内容时保留或弱化，不能生成虚假原文。
-- 本工作包先实现不依赖外部 AI 的规则检测与保守彩色笔迹 POC；黑色笔迹在没有可靠分割模型时不自动擦除。
-- POC 将返回候选、实际处理和低置信复核掩膜；风险过高时整页回退原图，并以合成试卷覆盖印刷保护、彩色笔迹、灰度原图和大面积异常。
+- 已实现不依赖外部 AI 的规则检测与保守彩色笔迹 POC；黑色笔迹在没有可靠分割模型时不自动擦除。
+- POC 返回候选、实际处理和低置信复核掩膜；风险过高时整页回退原图，并以合成试卷覆盖印刷保护、彩色笔迹、灰度原图和大面积异常。
+- 专项 Ruff 与格式检查通过，试卷模块 `12 passed`；首次测试暴露并修复了大面积/深色候选被过早过滤的问题，现会进入原图回退而不是被当作无候选。
 - `EXAM-001` 至 `EXAM-003` 后续负责接入 OCR/轻量模型、用户私有模板、固定数据集指标和产品数据模型，本 POC 不提前宣称产品化完成。
 
 ## 已执行验证
+
+`POC-004` 提交前全量检查：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`53 passed, 2 skipped`，覆盖率 `84.35%`；Ruff、43 个 Python 文件格式、迁移漂移、当前数据库版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过，当前 Windows 未安装 Docker；两者由 PR CI 复核。
 
 `POC-003` 专项检查已执行：
 
@@ -118,6 +137,6 @@ git diff --check
 
 ## 下一步
 
-1. 实现试卷规则特征、置信区间和稳定的结构化结果。
-2. 实现只处理安全彩色候选的基础净化、印刷保护、复核掩膜和整页原图回退。
-3. 增加合成测试、中文安全边界说明和全量门禁；真实固定数据集另行保持人工验收。
+1. 创建 POC-004 中文提交和 PR，并由 PostgreSQL、Web 和 Compose CI 复核。
+2. CI 通过后合并 POC；真实检出与印刷保持指标继续“等待人工验收”。
+3. 从 `POC-005` 继续双页检测、拆分与去弯曲回退。
