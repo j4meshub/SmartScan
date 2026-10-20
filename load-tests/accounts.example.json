@@ -1,0 +1,20 @@
+{
+  "accounts": [
+    {"username": "load_book_01", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_book_02", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_book_03", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_book_04", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_book_05", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_book_06", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_book_07", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_book_08", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_browse_01", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_browse_02", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_browse_03", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_browse_04", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_scan_01", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_scan_02", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_scan_03", "password_env": "SMARTSCAN_LOAD_PASSWORD"},
+    {"username": "load_scan_04", "password_env": "SMARTSCAN_LOAD_PASSWORD"}
+  ]
+}

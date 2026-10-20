@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
 | 当前工作包 | `POC-006` 16 用户混合负载脚本 |
-| 工作包状态 | 进行中，已完成容量场景与安全边界盘点，待实现负载驱动器和报告 |
+| 工作包状态 | 进行中，负载驱动器、资源门禁与本地全量验证已完成，待提交和 PR |
 | 当前分支 | `codex/poc-006-mixed-load` |
 | 最后验证基线 | `6a6301a`（POC-005 PR #10 已合并） |
 | 工作包提交 | 待创建 |
@@ -22,9 +22,30 @@
 - 验收需报告非处理 API P95、上传到任务可见时间、错误、任务丢失、跨用户返回和最终任务状态；CPU 满载时仍应能登录和查询。
 - 负载工具必须默认只允许回环地址；其他 staging 主机需显式列入允许列表并确认非生产，禁止直接对生产运行。
 - 账号清单只引用本地环境变量中的密码，不在 JSON、报告、Git 或日志中保存凭据；测试数据使用工具生成的合成 JPEG。
-- 公司目标服务器当前不可用，因此可完成脚本、单元测试和本地短时冒烟，但 8 vCPU/16 GB、真实网络、30 分钟和 BBR 对照仍保持阻塞。
+- 已实现严格目标 URL 校验、16 账号环境变量清单、固定角色、周期登录、项目隔离检查、分片上传、任务可见和下载流程。
+- 已实现不含凭据的 JSON/中文 Markdown 报告，记录每类请求时延、任务状态、2 秒可见率、任务缺失、隔离违规及服务器资源指标；缺少 30 分钟、下载或资源证据时门禁不会通过。
+- 专项 Ruff 与格式检查通过，负载工具 `11 passed`，其中完整 16 会话 Mock 覆盖登录、项目、分片、完成、任务观察与隔离。
+- 公司目标服务器当前不可用；8 vCPU/16 GB、真实网络、30 分钟、CPU 饱和、磁盘回收和 BBR 对照保持阻塞，Mock 不作为容量通过证据。
 
 ## 已执行验证
+
+`POC-006` 提交前全量检查：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`75 passed, 2 skipped`，应用代码覆盖率 `85.50%`；Ruff、47 个 Python 文件格式、迁移漂移、当前数据库版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过，当前 Windows 未安装 Docker；两者由 PR CI 复核。目标服务器不可用，未运行 30 分钟正式负载。
 
 `POC-005` 提交前全量检查：
 
@@ -161,6 +182,6 @@ git diff --check
 
 ## 下一步
 
-1. 实现安全目标校验、16 账号角色分配、登录、混合请求和分片上传流程。
-2. 输出不含凭据的 JSON/中文 Markdown 报告，统计 P95、任务可见、错误、隔离违规和任务缺失。
-3. 增加单元测试与短时本地冒烟说明；目标服务器恢复后再运行 30 分钟正式门禁。
+1. 创建 POC-006 中文提交和 PR，并由 PostgreSQL、Web 和 Compose CI 复核。
+2. CI 通过后合并工具；目标服务器 30 分钟正式负载继续保持“阻塞”。
+3. 从 `ACC-001` 继续统一用户、登录身份和已验证手机号拆分。
