@@ -14,4 +14,8 @@ def can_manage_account(actor: User, target: User) -> bool:
         return False
     if target.role == Role.super_admin:
         return False
-    return actor.id != target.id
+    if actor.id == target.id:
+        return False
+    if actor.role == Role.super_admin:
+        return True
+    return target.role == Role.user

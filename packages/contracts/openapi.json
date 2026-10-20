@@ -1,1442 +1,19 @@
 {
-  "components": {
-    "schemas": {
-      "AccountDeletionCancelPayload": {
-        "properties": {
-          "phone": {
-            "title": "Phone",
-            "type": "string"
-          },
-          "sms_challenge_id": {
-            "maxLength": 36,
-            "minLength": 36,
-            "title": "Sms Challenge Id",
-            "type": "string"
-          },
-          "sms_code": {
-            "maxLength": 8,
-            "minLength": 4,
-            "title": "Sms Code",
-            "type": "string"
-          }
-        },
-        "required": [
-          "phone",
-          "sms_challenge_id",
-          "sms_code"
-        ],
-        "title": "AccountDeletionCancelPayload",
-        "type": "object"
-      },
-      "AccountDeletionRequestPayload": {
-        "properties": {
-          "phone": {
-            "title": "Phone",
-            "type": "string"
-          },
-          "sms_challenge_id": {
-            "maxLength": 36,
-            "minLength": 36,
-            "title": "Sms Challenge Id",
-            "type": "string"
-          },
-          "sms_code": {
-            "maxLength": 8,
-            "minLength": 4,
-            "title": "Sms Code",
-            "type": "string"
-          }
-        },
-        "required": [
-          "phone",
-          "sms_challenge_id",
-          "sms_code"
-        ],
-        "title": "AccountDeletionRequestPayload",
-        "type": "object"
-      },
-      "AccountDeletionStatus": {
-        "enum": [
-          "pending",
-          "cleanup_pending",
-          "completed",
-          "canceled"
-        ],
-        "title": "AccountDeletionStatus",
-        "type": "string"
-      },
-      "AccountDeletionView": {
-        "properties": {
-          "canceled_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Canceled At"
-          },
-          "completed_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed At"
-          },
-          "execute_after": {
-            "format": "date-time",
-            "title": "Execute After",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "requested_at": {
-            "format": "date-time",
-            "title": "Requested At",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/AccountDeletionStatus"
-          }
-        },
-        "required": [
-          "id",
-          "status",
-          "requested_at",
-          "execute_after"
-        ],
-        "title": "AccountDeletionView",
-        "type": "object"
-      },
-      "AccountMergeRequest": {
-        "properties": {
-          "idempotency_key": {
-            "maxLength": 100,
-            "minLength": 16,
-            "pattern": "^[A-Za-z0-9_.:-]+$",
-            "title": "Idempotency Key",
-            "type": "string"
-          },
-          "phone": {
-            "title": "Phone",
-            "type": "string"
-          },
-          "sms_challenge_id": {
-            "maxLength": 36,
-            "minLength": 36,
-            "title": "Sms Challenge Id",
-            "type": "string"
-          },
-          "sms_code": {
-            "maxLength": 8,
-            "minLength": 4,
-            "title": "Sms Code",
-            "type": "string"
-          }
-        },
-        "required": [
-          "phone",
-          "sms_challenge_id",
-          "sms_code",
-          "idempotency_key"
-        ],
-        "title": "AccountMergeRequest",
-        "type": "object"
-      },
-      "AccountMergeView": {
-        "properties": {
-          "canonical_user_id": {
-            "title": "Canonical User Id",
-            "type": "string"
-          },
-          "merge_id": {
-            "title": "Merge Id",
-            "type": "string"
-          },
-          "merged_at": {
-            "format": "date-time",
-            "title": "Merged At",
-            "type": "string"
-          },
-          "require_reauthentication": {
-            "default": true,
-            "title": "Require Reauthentication",
-            "type": "boolean"
-          },
-          "result": {
-            "title": "Result",
-            "type": "string"
-          },
-          "source_user_id": {
-            "title": "Source User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "merge_id",
-          "canonical_user_id",
-          "source_user_id",
-          "result",
-          "merged_at"
-        ],
-        "title": "AccountMergeView",
-        "type": "object"
-      },
-      "Body_upload_page_v1_projects__project_id__pages_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_upload_page_v1_projects__project_id__pages_post",
-        "type": "object"
-      },
-      "ChunkReceipt": {
-        "properties": {
-          "chunk_index": {
-            "title": "Chunk Index",
-            "type": "integer"
-          },
-          "sha256": {
-            "title": "Sha256",
-            "type": "string"
-          },
-          "size_bytes": {
-            "title": "Size Bytes",
-            "type": "integer"
-          },
-          "upload_id": {
-            "title": "Upload Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "upload_id",
-          "chunk_index",
-          "size_bytes",
-          "sha256"
-        ],
-        "title": "ChunkReceipt",
-        "type": "object"
-      },
-      "DeviceSessionView": {
-        "properties": {
-          "access_expires_at": {
-            "format": "date-time",
-            "title": "Access Expires At",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "current": {
-            "title": "Current",
-            "type": "boolean"
-          },
-          "device_id": {
-            "title": "Device Id",
-            "type": "string"
-          },
-          "device_name": {
-            "title": "Device Name",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "last_seen_at": {
-            "format": "date-time",
-            "title": "Last Seen At",
-            "type": "string"
-          },
-          "platform": {
-            "title": "Platform",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "device_id",
-          "device_name",
-          "platform",
-          "current",
-          "created_at",
-          "last_seen_at",
-          "access_expires_at"
-        ],
-        "title": "DeviceSessionView",
-        "type": "object"
-      },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "title": "Detail",
-            "type": "array"
-          }
-        },
-        "title": "HTTPValidationError",
-        "type": "object"
-      },
-      "JobStatus": {
-        "enum": [
-          "pending",
-          "running",
-          "completed",
-          "failed",
-          "needs_review"
-        ],
-        "title": "JobStatus",
-        "type": "string"
-      },
-      "JobView": {
-        "properties": {
-          "attempts": {
-            "title": "Attempts",
-            "type": "integer"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "page_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Page Id"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/JobStatus"
-          }
-        },
-        "required": [
-          "id",
-          "project_id",
-          "page_id",
-          "kind",
-          "status",
-          "attempts",
-          "error",
-          "created_at"
-        ],
-        "title": "JobView",
-        "type": "object"
-      },
-      "LoginRequest": {
-        "properties": {
-          "password": {
-            "title": "Password",
-            "type": "string"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "username",
-          "password"
-        ],
-        "title": "LoginRequest",
-        "type": "object"
-      },
-      "PageView": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "mime_type": {
-            "title": "Mime Type",
-            "type": "string"
-          },
-          "page_number": {
-            "title": "Page Number",
-            "type": "integer"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          },
-          "quality_warning": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Quality Warning"
-          },
-          "size_bytes": {
-            "title": "Size Bytes",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "project_id",
-          "page_number",
-          "size_bytes",
-          "mime_type",
-          "quality_warning",
-          "created_at"
-        ],
-        "title": "PageView",
-        "type": "object"
-      },
-      "PasswordChange": {
-        "properties": {
-          "current_password": {
-            "title": "Current Password",
-            "type": "string"
-          },
-          "new_password": {
-            "maxLength": 128,
-            "minLength": 10,
-            "title": "New Password",
-            "type": "string"
-          }
-        },
-        "required": [
-          "current_password",
-          "new_password"
-        ],
-        "title": "PasswordChange",
-        "type": "object"
-      },
-      "ProjectCreate": {
-        "properties": {
-          "mode": {
-            "default": "document",
-            "pattern": "^(document|exam|book)$",
-            "title": "Mode",
-            "type": "string"
-          },
-          "reading_order": {
-            "default": "ltr",
-            "pattern": "^(ltr|rtl)$",
-            "title": "Reading Order",
-            "type": "string"
-          },
-          "title": {
-            "maxLength": 160,
-            "minLength": 1,
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "title"
-        ],
-        "title": "ProjectCreate",
-        "type": "object"
-      },
-      "ProjectView": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "mode": {
-            "title": "Mode",
-            "type": "string"
-          },
-          "owner_user_id": {
-            "title": "Owner User Id",
-            "type": "string"
-          },
-          "reading_order": {
-            "title": "Reading Order",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "owner_user_id",
-          "title",
-          "mode",
-          "reading_order",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "ProjectView",
-        "type": "object"
-      },
-      "RefreshRequest": {
-        "properties": {
-          "refresh_token": {
-            "maxLength": 256,
-            "minLength": 64,
-            "title": "Refresh Token",
-            "type": "string"
-          }
-        },
-        "required": [
-          "refresh_token"
-        ],
-        "title": "RefreshRequest",
-        "type": "object"
-      },
-      "RegisterRequest": {
-        "properties": {
-          "locale": {
-            "default": "zh-CN",
-            "title": "Locale",
-            "type": "string"
-          },
-          "password": {
-            "maxLength": 128,
-            "minLength": 10,
-            "title": "Password",
-            "type": "string"
-          },
-          "phone": {
-            "title": "Phone",
-            "type": "string"
-          },
-          "sms_challenge_id": {
-            "anyOf": [
-              {
-                "maxLength": 36,
-                "minLength": 36,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sms Challenge Id"
-          },
-          "sms_code": {
-            "maxLength": 8,
-            "minLength": 4,
-            "title": "Sms Code",
-            "type": "string"
-          },
-          "username": {
-            "pattern": "^[A-Za-z0-9_.-]{3,32}$",
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "phone",
-          "sms_code",
-          "username",
-          "password"
-        ],
-        "title": "RegisterRequest",
-        "type": "object"
-      },
-      "Role": {
-        "enum": [
-          "user",
-          "admin",
-          "super_admin"
-        ],
-        "title": "Role",
-        "type": "string"
-      },
-      "RoleChange": {
-        "properties": {
-          "role": {
-            "$ref": "#/components/schemas/Role"
-          }
-        },
-        "required": [
-          "role"
-        ],
-        "title": "RoleChange",
-        "type": "object"
-      },
-      "SmsChallengeRequest": {
-        "properties": {
-          "phone": {
-            "title": "Phone",
-            "type": "string"
-          },
-          "purpose": {
-            "default": "registration",
-            "pattern": "^(registration|wecom_binding|account_merge|account_deletion|account_deletion_cancel)$",
-            "title": "Purpose",
-            "type": "string"
-          }
-        },
-        "required": [
-          "phone"
-        ],
-        "title": "SmsChallengeRequest",
-        "type": "object"
-      },
-      "SmsChallengeView": {
-        "properties": {
-          "challenge_id": {
-            "title": "Challenge Id",
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "title": "Expires At",
-            "type": "string"
-          },
-          "retry_after_seconds": {
-            "title": "Retry After Seconds",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "challenge_id",
-          "expires_at",
-          "retry_after_seconds"
-        ],
-        "title": "SmsChallengeView",
-        "type": "object"
-      },
-      "StatusChange": {
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/UserStatus"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "title": "StatusChange",
-        "type": "object"
-      },
-      "TokenResponse": {
-        "properties": {
-          "access_token": {
-            "title": "Access Token",
-            "type": "string"
-          },
-          "device_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Device Id"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "title": "Expires At",
-            "type": "string"
-          },
-          "refresh_expires_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Expires At"
-          },
-          "refresh_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Token"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
-          },
-          "token_type": {
-            "default": "bearer",
-            "title": "Token Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "access_token",
-          "expires_at"
-        ],
-        "title": "TokenResponse",
-        "type": "object"
-      },
-      "UploadCreate": {
-        "properties": {
-          "file_name": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "File Name",
-            "type": "string"
-          },
-          "idempotency_key": {
-            "maxLength": 100,
-            "minLength": 8,
-            "pattern": "^[A-Za-z0-9_.:-]+$",
-            "title": "Idempotency Key",
-            "type": "string"
-          },
-          "mime_type": {
-            "pattern": "^image/(jpeg|png|webp|heic)$",
-            "title": "Mime Type",
-            "type": "string"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          },
-          "sha256": {
-            "pattern": "^[a-f0-9]{64}$",
-            "title": "Sha256",
-            "type": "string"
-          },
-          "size_bytes": {
-            "exclusiveMinimum": 15.0,
-            "title": "Size Bytes",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "project_id",
-          "file_name",
-          "mime_type",
-          "size_bytes",
-          "sha256",
-          "idempotency_key"
-        ],
-        "title": "UploadCreate",
-        "type": "object"
-      },
-      "UploadStatus": {
-        "enum": [
-          "pending",
-          "completed",
-          "expired"
-        ],
-        "title": "UploadStatus",
-        "type": "string"
-      },
-      "UploadView": {
-        "properties": {
-          "chunk_size": {
-            "title": "Chunk Size",
-            "type": "integer"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "title": "Expires At",
-            "type": "string"
-          },
-          "file_name": {
-            "title": "File Name",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "mime_type": {
-            "title": "Mime Type",
-            "type": "string"
-          },
-          "page_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Page Id"
-          },
-          "project_id": {
-            "title": "Project Id",
-            "type": "string"
-          },
-          "received_chunks": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Received Chunks",
-            "type": "array"
-          },
-          "size_bytes": {
-            "title": "Size Bytes",
-            "type": "integer"
-          },
-          "status": {
-            "$ref": "#/components/schemas/UploadStatus"
-          },
-          "total_chunks": {
-            "title": "Total Chunks",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "project_id",
-          "file_name",
-          "mime_type",
-          "size_bytes",
-          "chunk_size",
-          "total_chunks",
-          "received_chunks",
-          "status",
-          "page_id",
-          "expires_at"
-        ],
-        "title": "UploadView",
-        "type": "object"
-      },
-      "UserStatus": {
-        "enum": [
-          "active",
-          "disabled",
-          "deleting",
-          "deleted"
-        ],
-        "title": "UserStatus",
-        "type": "string"
-      },
-      "UserView": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "locale": {
-            "title": "Locale",
-            "type": "string"
-          },
-          "must_change_password": {
-            "title": "Must Change Password",
-            "type": "boolean"
-          },
-          "phone_masked": {
-            "title": "Phone Masked",
-            "type": "string"
-          },
-          "role": {
-            "$ref": "#/components/schemas/Role"
-          },
-          "status": {
-            "$ref": "#/components/schemas/UserStatus"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "username",
-          "phone_masked",
-          "role",
-          "status",
-          "locale",
-          "must_change_password",
-          "created_at"
-        ],
-        "title": "UserView",
-        "type": "object"
-      },
-      "ValidationError": {
-        "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "title": "Location",
-            "type": "array"
-          },
-          "msg": {
-            "title": "Message",
-            "type": "string"
-          },
-          "type": {
-            "title": "Error Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError",
-        "type": "object"
-      },
-      "WeComAuthorizeView": {
-        "properties": {
-          "authorization_url": {
-            "title": "Authorization Url",
-            "type": "string"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "title": "Expires At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "authorization_url",
-          "expires_at"
-        ],
-        "title": "WeComAuthorizeView",
-        "type": "object"
-      },
-      "WeComCallbackView": {
-        "properties": {
-          "access_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Access Token"
-          },
-          "action": {
-            "title": "Action",
-            "type": "string"
-          },
-          "binding_expires_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Binding Expires At"
-          },
-          "binding_ticket": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Binding Ticket"
-          },
-          "expires_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expires At"
-          }
-        },
-        "required": [
-          "action"
-        ],
-        "title": "WeComCallbackView",
-        "type": "object"
-      },
-      "WeComPhoneBindRequest": {
-        "properties": {
-          "binding_ticket": {
-            "maxLength": 256,
-            "minLength": 32,
-            "title": "Binding Ticket",
-            "type": "string"
-          },
-          "phone": {
-            "title": "Phone",
-            "type": "string"
-          },
-          "sms_challenge_id": {
-            "maxLength": 36,
-            "minLength": 36,
-            "title": "Sms Challenge Id",
-            "type": "string"
-          },
-          "sms_code": {
-            "maxLength": 8,
-            "minLength": 4,
-            "title": "Sms Code",
-            "type": "string"
-          }
-        },
-        "required": [
-          "binding_ticket",
-          "phone",
-          "sms_challenge_id",
-          "sms_code"
-        ],
-        "title": "WeComPhoneBindRequest",
-        "type": "object"
-      }
-    }
-  },
+  "openapi": "3.1.0",
   "info": {
-    "description": "Unified account, RBAC, scanning projects, uploads and CPU processing queue.",
     "title": "SmartScan API",
+    "description": "Unified account, RBAC, scanning projects, uploads and CPU processing queue.",
     "version": "0.1.0"
   },
-  "openapi": "3.1.0",
   "paths": {
-    "/health": {
-      "get": {
-        "operationId": "health_health_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Health Health Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Health"
-      }
-    },
-    "/v1/admin/audit": {
-      "get": {
-        "operationId": "audit_logs_v1_admin_audit_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Audit Logs"
-      }
-    },
-    "/v1/admin/users": {
-      "get": {
-        "operationId": "admin_users_v1_admin_users_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/UserView"
-                  },
-                  "title": "Response Admin Users V1 Admin Users Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Admin Users"
-      }
-    },
-    "/v1/admin/users/{target_id}/projects": {
-      "get": {
-        "operationId": "admin_user_projects_v1_admin_users__target_id__projects_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "target_id",
-            "required": true,
-            "schema": {
-              "title": "Target Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ProjectView"
-                  },
-                  "title": "Response Admin User Projects V1 Admin Users  Target Id  Projects Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Admin User Projects"
-      }
-    },
-    "/v1/admin/users/{target_id}/role": {
-      "patch": {
-        "operationId": "change_role_v1_admin_users__target_id__role_patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "target_id",
-            "required": true,
-            "schema": {
-              "title": "Target Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RoleChange"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Change Role"
-      }
-    },
-    "/v1/admin/users/{target_id}/status": {
-      "patch": {
-        "operationId": "change_status_v1_admin_users__target_id__status_patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "target_id",
-            "required": true,
-            "schema": {
-              "title": "Target Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StatusChange"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Change Status"
-      }
-    },
-    "/v1/auth/account-deletion/cancel": {
-      "post": {
-        "operationId": "cancel_pending_account_deletion_v1_auth_account_deletion_cancel_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AccountDeletionCancelPayload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountDeletionView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Cancel Pending Account Deletion"
-      }
-    },
     "/v1/auth/account-merges": {
       "post": {
+        "summary": "Account Merge",
         "operationId": "account_merge_v1_auth_account_merges_post",
         "parameters": [
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -1452,244 +29,112 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AccountMergeRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccountMergeView"
                 }
               }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Account Merge"
-      }
-    },
-    "/v1/auth/login": {
-      "post": {
-        "operationId": "login_v1_auth_login_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
             }
           },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Login"
-      }
-    },
-    "/v1/auth/logout": {
-      "post": {
-        "operationId": "logout_v1_auth_logout_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": true,
-            "schema": {
-              "title": "Authorization",
-              "type": "string"
             }
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Logout"
-      }
-    },
-    "/v1/auth/refresh": {
-      "post": {
-        "operationId": "refresh_session_v1_auth_refresh_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Refresh Session"
-      }
-    },
-    "/v1/auth/register": {
-      "post": {
-        "operationId": "register_v1_auth_register_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Register"
-      }
-    },
-    "/v1/auth/sms/challenges": {
-      "post": {
-        "operationId": "request_sms_challenge_v1_auth_sms_challenges_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SmsChallengeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SmsChallengeView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Request Sms Challenge"
+        }
       }
     },
     "/v1/auth/wecom/authorize": {
       "post": {
+        "summary": "Wecom Authorize",
         "operationId": "wecom_authorize_v1_auth_wecom_authorize_post",
         "responses": {
           "201": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WeComAuthorizeView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           }
-        },
-        "summary": "Wecom Authorize"
+        }
+      }
+    },
+    "/v1/auth/wecom/callback": {
+      "get": {
+        "summary": "Wecom Callback",
+        "operationId": "wecom_callback_v1_auth_wecom_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 20,
+              "maxLength": 256,
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeComCallbackView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/auth/wecom/bind-phone": {
       "post": {
+        "summary": "Wecom Bind Phone",
         "operationId": "wecom_bind_phone_v1_auth_wecom_bind_phone_post",
         "requestBody": {
           "content": {
@@ -1703,138 +148,220 @@
         },
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TokenResponse"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Wecom Bind Phone"
+        }
       }
     },
-    "/v1/auth/wecom/callback": {
-      "get": {
-        "operationId": "wecom_callback_v1_auth_wecom_callback_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "code",
-            "required": true,
-            "schema": {
-              "maxLength": 512,
-              "minLength": 1,
-              "title": "Code",
-              "type": "string"
+    "/v1/auth/sms/challenges": {
+      "post": {
+        "summary": "Request Sms Challenge",
+        "operationId": "request_sms_challenge_v1_auth_sms_challenges_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmsChallengeRequest"
+              }
             }
           },
-          {
-            "in": "query",
-            "name": "state",
-            "required": true,
-            "schema": {
-              "maxLength": 256,
-              "minLength": 20,
-              "title": "State",
-              "type": "string"
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmsChallengeView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
             }
           }
-        ],
+        }
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "summary": "Register",
+        "operationId": "register_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "summary": "Login",
+        "operationId": "login_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WeComCallbackView"
+                  "$ref": "#/components/schemas/TokenResponse"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Wecom Callback"
+        }
       }
     },
-    "/v1/jobs": {
-      "get": {
-        "operationId": "jobs_v1_jobs_get",
+    "/v1/auth/refresh": {
+      "post": {
+        "summary": "Refresh Session",
+        "operationId": "refresh_session_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "summary": "Logout",
+        "operationId": "logout_v1_auth_logout_post",
         "parameters": [
           {
-            "in": "header",
             "name": "authorization",
-            "required": false,
+            "in": "header",
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
               "title": "Authorization"
             }
           }
         ],
         "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/JobView"
-                  },
-                  "title": "Response Jobs V1 Jobs Get",
-                  "type": "array"
-                }
-              }
-            },
+          "204": {
             "description": "Successful Response"
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Jobs"
+        }
       }
     },
     "/v1/me": {
       "get": {
+        "summary": "Me",
         "operationId": "me_v1_me_get",
         "parameters": [
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -1851,36 +378,36 @@
         ],
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Me"
+        }
       }
     },
     "/v1/me/account-deletion": {
       "post": {
+        "summary": "Create Account Deletion",
         "operationId": "create_account_deletion_v1_me_account_deletion_post",
         "parameters": [
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -1896,270 +423,275 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AccountDeletionRequestPayload"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "202": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccountDeletionView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
+        }
+      }
+    },
+    "/v1/auth/account-deletion/cancel": {
+      "post": {
+        "summary": "Cancel Pending Account Deletion",
+        "operationId": "cancel_pending_account_deletion_v1_auth_account_deletion_cancel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletionCancelPayload"
+              }
+            }
+          },
+          "required": true
         },
-        "summary": "Create Account Deletion"
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/sessions": {
+      "get": {
+        "summary": "Device Sessions",
+        "operationId": "device_sessions_v1_me_sessions_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceSessionView"
+                  },
+                  "title": "Response Device Sessions V1 Me Sessions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Revoke All Device Sessions",
+        "operationId": "revoke_all_device_sessions_v1_me_sessions_delete",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/sessions/{session_id}": {
+      "delete": {
+        "summary": "Revoke One Device Session",
+        "operationId": "revoke_one_device_session_v1_me_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/me/password": {
       "post": {
+        "summary": "Change Password",
         "operationId": "change_password_v1_me_password_post",
         "parameters": [
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": true,
             "schema": {
-              "title": "Authorization",
-              "type": "string"
+              "type": "string",
+              "title": "Authorization"
             }
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PasswordChange"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
             "description": "Successful Response"
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Change Password"
+        }
       }
     },
-    "/v1/me/sessions": {
-      "delete": {
-        "operationId": "revoke_all_device_sessions_v1_me_sessions_delete",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Revoke All Device Sessions"
-      },
+    "/health": {
       "get": {
-        "operationId": "device_sessions_v1_me_sessions_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": true,
-            "schema": {
-              "title": "Authorization",
-              "type": "string"
-            }
-          }
-        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/DeviceSessionView"
-                  },
-                  "title": "Response Device Sessions V1 Me Sessions Get",
-                  "type": "array"
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
                 }
               }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Device Sessions"
-      }
-    },
-    "/v1/me/sessions/{session_id}": {
-      "delete": {
-        "operationId": "revoke_one_device_session_v1_me_sessions__session_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
             }
           }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Revoke One Device Session"
-      }
-    },
-    "/v1/pages/{page_id}/content": {
-      "get": {
-        "operationId": "page_content_v1_pages__page_id__content_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "page_id",
-            "required": true,
-            "schema": {
-              "title": "Page Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Page Content"
+        }
       }
     },
     "/v1/projects": {
       "get": {
+        "summary": "List Projects",
         "operationId": "list_projects_v1_projects_get",
         "parameters": [
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2176,38 +708,38 @@
         ],
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/ProjectView"
                   },
-                  "title": "Response List Projects V1 Projects Get",
-                  "type": "array"
+                  "title": "Response List Projects V1 Projects Get"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "List Projects"
+        }
       },
       "post": {
+        "summary": "Create Project",
         "operationId": "create_project_v1_projects_post",
         "parameters": [
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2223,56 +755,56 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ProjectCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Create Project"
+        }
       }
     },
     "/v1/projects/{project_id}": {
       "get": {
+        "summary": "Get Project",
         "operationId": "get_project_v1_projects__project_id__get",
         "parameters": [
           {
-            "in": "path",
             "name": "project_id",
+            "in": "path",
             "required": true,
             "schema": {
-              "title": "Project Id",
-              "type": "string"
+              "type": "string",
+              "title": "Project Id"
             }
           },
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2289,45 +821,45 @@
         ],
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProjectView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Get Project"
+        }
       }
     },
     "/v1/projects/{project_id}/pages": {
       "get": {
+        "summary": "List Pages",
         "operationId": "list_pages_v1_projects__project_id__pages_get",
         "parameters": [
           {
-            "in": "path",
             "name": "project_id",
+            "in": "path",
             "required": true,
             "schema": {
-              "title": "Project Id",
-              "type": "string"
+              "type": "string",
+              "title": "Project Id"
             }
           },
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2344,47 +876,47 @@
         ],
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/PageView"
                   },
-                  "title": "Response List Pages V1 Projects  Project Id  Pages Get",
-                  "type": "array"
+                  "title": "Response List Pages V1 Projects  Project Id  Pages Get"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "List Pages"
+        }
       },
       "post": {
+        "summary": "Upload Page",
         "operationId": "upload_page_v1_projects__project_id__pages_post",
         "parameters": [
           {
-            "in": "path",
             "name": "project_id",
+            "in": "path",
             "required": true,
             "schema": {
-              "title": "Project Id",
-              "type": "string"
+              "type": "string",
+              "title": "Project Id"
             }
           },
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2400,47 +932,47 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_upload_page_v1_projects__project_id__pages_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "202": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PageView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Upload Page"
+        }
       }
     },
     "/v1/uploads": {
       "post": {
+        "summary": "Create Upload",
         "operationId": "create_upload_v1_uploads_post",
         "parameters": [
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2456,56 +988,56 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UploadCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UploadView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Create Upload"
+        }
       }
     },
     "/v1/uploads/{upload_id}": {
       "get": {
+        "summary": "Get Upload",
         "operationId": "get_upload_v1_uploads__upload_id__get",
         "parameters": [
           {
-            "in": "path",
             "name": "upload_id",
+            "in": "path",
             "required": true,
             "schema": {
-              "title": "Upload Id",
-              "type": "string"
+              "type": "string",
+              "title": "Upload Id"
             }
           },
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2522,64 +1054,64 @@
         ],
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UploadView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Get Upload"
+        }
       }
     },
     "/v1/uploads/{upload_id}/chunks/{chunk_index}": {
       "put": {
+        "summary": "Put Upload Chunk",
         "operationId": "put_upload_chunk_v1_uploads__upload_id__chunks__chunk_index__put",
         "parameters": [
           {
-            "in": "path",
             "name": "upload_id",
-            "required": true,
-            "schema": {
-              "title": "Upload Id",
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Upload Id"
+            }
+          },
+          {
             "name": "chunk_index",
+            "in": "path",
             "required": true,
             "schema": {
-              "title": "Chunk Index",
-              "type": "integer"
+              "type": "integer",
+              "title": "Chunk Index"
             }
           },
           {
-            "in": "header",
             "name": "x-chunk-sha256",
+            "in": "header",
             "required": true,
             "schema": {
+              "type": "string",
               "pattern": "^[a-f0-9]{64}$",
-              "title": "X-Chunk-Sha256",
-              "type": "string"
+              "title": "X-Chunk-Sha256"
             }
           },
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2596,45 +1128,45 @@
         ],
         "responses": {
           "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ChunkReceipt"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
           }
-        },
-        "summary": "Put Upload Chunk"
+        }
       }
     },
     "/v1/uploads/{upload_id}/complete": {
       "post": {
+        "summary": "Complete Upload",
         "operationId": "complete_upload_v1_uploads__upload_id__complete_post",
         "parameters": [
           {
-            "in": "path",
             "name": "upload_id",
+            "in": "path",
             "required": true,
             "schema": {
-              "title": "Upload Id",
-              "type": "string"
+              "type": "string",
+              "title": "Upload Id"
             }
           },
           {
-            "in": "header",
             "name": "authorization",
+            "in": "header",
             "required": false,
             "schema": {
               "anyOf": [
@@ -2651,27 +1183,2225 @@
         ],
         "responses": {
           "202": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PageView"
                 }
               }
-            },
-            "description": "Successful Response"
+            }
           },
           "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            },
-            "description": "Validation Error"
+            }
+          }
+        }
+      }
+    },
+    "/v1/pages/{page_id}/content": {
+      "get": {
+        "summary": "Page Content",
+        "operationId": "page_content_v1_pages__page_id__content_get",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs": {
+      "get": {
+        "summary": "Jobs",
+        "operationId": "jobs_v1_jobs_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobView"
+                  },
+                  "title": "Response Jobs V1 Jobs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users": {
+      "get": {
+        "summary": "Admin Users",
+        "operationId": "admin_users_v1_admin_users_get",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Role"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UserStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserView"
+                  },
+                  "title": "Response Admin Users V1 Admin Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{target_id}/projects": {
+      "get": {
+        "summary": "Admin User Projects",
+        "operationId": "admin_user_projects_v1_admin_users__target_id__projects_get",
+        "parameters": [
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectView"
+                  },
+                  "title": "Response Admin User Projects V1 Admin Users  Target Id  Projects Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{target_id}/role": {
+      "patch": {
+        "summary": "Change Role",
+        "operationId": "change_role_v1_admin_users__target_id__role_patch",
+        "parameters": [
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleChange"
+              }
+            }
           }
         },
-        "summary": "Complete Upload"
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{target_id}/status": {
+      "patch": {
+        "summary": "Change Status",
+        "operationId": "change_status_v1_admin_users__target_id__status_patch",
+        "parameters": [
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{target_id}/sessions": {
+      "delete": {
+        "summary": "Revoke Target Sessions",
+        "operationId": "revoke_target_sessions_v1_admin_users__target_id__sessions_delete",
+        "parameters": [
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/users/{target_id}/account-deletion": {
+      "post": {
+        "summary": "Create Admin Account Deletion",
+        "operationId": "create_admin_account_deletion_v1_admin_users__target_id__account_deletion_post",
+        "parameters": [
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminAccountDeletionRequestPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccountDeletionView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/account-deletions": {
+      "get": {
+        "summary": "Admin Account Deletions",
+        "operationId": "admin_account_deletions_v1_admin_account_deletions_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AccountDeletionStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminAccountDeletionView"
+                  },
+                  "title": "Response Admin Account Deletions V1 Admin Account Deletions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/account-deletions/{request_id}/cancel": {
+      "post": {
+        "summary": "Cancel Admin Account Deletion",
+        "operationId": "cancel_admin_account_deletion_v1_admin_account_deletions__request_id__cancel_post",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminAccountDeletionCancelPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccountDeletionView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/audit": {
+      "get": {
+        "summary": "Audit Logs",
+        "operationId": "audit_logs_v1_admin_audit_get",
+        "parameters": [
+          {
+            "name": "actor_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 36
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor User Id"
+            }
+          },
+          {
+            "name": "target_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 36
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target User Id"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "name": "result",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(allowed|denied)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Result"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLogView"
+                  },
+                  "title": "Response Audit Logs V1 Admin Audit Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountDeletionCancelPayload": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "sms_challenge_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Sms Challenge Id"
+          },
+          "sms_code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "sms_challenge_id",
+          "sms_code"
+        ],
+        "title": "AccountDeletionCancelPayload"
+      },
+      "AccountDeletionRequestPayload": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "sms_challenge_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Sms Challenge Id"
+          },
+          "sms_code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "sms_challenge_id",
+          "sms_code"
+        ],
+        "title": "AccountDeletionRequestPayload"
+      },
+      "AccountDeletionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "cleanup_pending",
+          "completed",
+          "canceled"
+        ],
+        "title": "AccountDeletionStatus"
+      },
+      "AccountDeletionView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountDeletionStatus"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "execute_after": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Execute After"
+          },
+          "canceled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canceled At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "requested_at",
+          "execute_after"
+        ],
+        "title": "AccountDeletionView"
+      },
+      "AccountMergeRequest": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "sms_challenge_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Sms Challenge Id"
+          },
+          "sms_code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 16,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "sms_challenge_id",
+          "sms_code",
+          "idempotency_key"
+        ],
+        "title": "AccountMergeRequest"
+      },
+      "AccountMergeView": {
+        "properties": {
+          "merge_id": {
+            "type": "string",
+            "title": "Merge Id"
+          },
+          "canonical_user_id": {
+            "type": "string",
+            "title": "Canonical User Id"
+          },
+          "source_user_id": {
+            "type": "string",
+            "title": "Source User Id"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "require_reauthentication": {
+            "type": "boolean",
+            "title": "Require Reauthentication",
+            "default": true
+          },
+          "merged_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Merged At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "merge_id",
+          "canonical_user_id",
+          "source_user_id",
+          "result",
+          "merged_at"
+        ],
+        "title": "AccountMergeView"
+      },
+      "AdminAccountDeletionCancelPayload": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "AdminAccountDeletionCancelPayload"
+      },
+      "AdminAccountDeletionRequestPayload": {
+        "properties": {
+          "confirm_username": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 3,
+            "title": "Confirm Username"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirm_username",
+          "reason"
+        ],
+        "title": "AdminAccountDeletionRequestPayload"
+      },
+      "AdminAccountDeletionView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountDeletionStatus"
+          },
+          "request_source": {
+            "type": "string",
+            "title": "Request Source"
+          },
+          "requested_by_user_id": {
+            "type": "string",
+            "title": "Requested By User Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "cancellation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Reason"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "execute_after": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Execute After"
+          },
+          "canceled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canceled At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "username",
+          "status",
+          "request_source",
+          "requested_by_user_id",
+          "reason",
+          "cancellation_reason",
+          "requested_at",
+          "execute_after",
+          "canceled_at",
+          "completed_at",
+          "attempts",
+          "last_error"
+        ],
+        "title": "AdminAccountDeletionView"
+      },
+      "AuditLogView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "target_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target User Id"
+          },
+          "object_type": {
+            "type": "string",
+            "title": "Object Type"
+          },
+          "object_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "actor_user_id",
+          "target_user_id",
+          "object_type",
+          "object_id",
+          "action",
+          "result",
+          "request_id",
+          "ip",
+          "user_agent",
+          "created_at"
+        ],
+        "title": "AuditLogView"
+      },
+      "Body_upload_page_v1_projects__project_id__pages_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_page_v1_projects__project_id__pages_post"
+      },
+      "ChunkReceipt": {
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "title": "Upload Id"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "title": "Chunk Index"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload_id",
+          "chunk_index",
+          "size_bytes",
+          "sha256"
+        ],
+        "title": "ChunkReceipt"
+      },
+      "DeviceSessionView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "device_name": {
+            "type": "string",
+            "title": "Device Name"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "current": {
+            "type": "boolean",
+            "title": "Current"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "access_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Access Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "device_id",
+          "device_name",
+          "platform",
+          "current",
+          "created_at",
+          "last_seen_at",
+          "access_expires_at"
+        ],
+        "title": "DeviceSessionView"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "needs_review"
+        ],
+        "title": "JobStatus"
+      },
+      "JobView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "page_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "page_id",
+          "kind",
+          "status",
+          "attempts",
+          "error",
+          "created_at"
+        ],
+        "title": "JobView"
+      },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "PageView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "page_number": {
+            "type": "integer",
+            "title": "Page Number"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "quality_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Warning"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "page_number",
+          "size_bytes",
+          "mime_type",
+          "quality_warning",
+          "created_at"
+        ],
+        "title": "PageView"
+      },
+      "PasswordChange": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "title": "Current Password"
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 10,
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChange"
+      },
+      "ProjectCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "mode": {
+            "type": "string",
+            "pattern": "^(document|exam|book)$",
+            "title": "Mode",
+            "default": "document"
+          },
+          "reading_order": {
+            "type": "string",
+            "pattern": "^(ltr|rtl)$",
+            "title": "Reading Order",
+            "default": "ltr"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "ProjectCreate"
+      },
+      "ProjectView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "owner_user_id": {
+            "type": "string",
+            "title": "Owner User Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "reading_order": {
+            "type": "string",
+            "title": "Reading Order"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "owner_user_id",
+          "title",
+          "mode",
+          "reading_order",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProjectView"
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 64,
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest"
+      },
+      "RegisterRequest": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "sms_code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code"
+          },
+          "sms_challenge_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36,
+                "minLength": 36
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Challenge Id"
+          },
+          "username": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{3,32}$",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 10,
+            "title": "Password"
+          },
+          "locale": {
+            "type": "string",
+            "title": "Locale",
+            "default": "zh-CN"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "sms_code",
+          "username",
+          "password"
+        ],
+        "title": "RegisterRequest"
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "user",
+          "admin",
+          "super_admin"
+        ],
+        "title": "Role"
+      },
+      "RoleChange": {
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "RoleChange"
+      },
+      "SmsChallengeRequest": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "purpose": {
+            "type": "string",
+            "pattern": "^(registration|wecom_binding|account_merge|account_deletion|account_deletion_cancel)$",
+            "title": "Purpose",
+            "default": "registration"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone"
+        ],
+        "title": "SmsChallengeRequest"
+      },
+      "SmsChallengeView": {
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "title": "Challenge Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "retry_after_seconds": {
+            "type": "integer",
+            "title": "Retry After Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "challenge_id",
+          "expires_at",
+          "retry_after_seconds"
+        ],
+        "title": "SmsChallengeView"
+      },
+      "StatusChange": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/UserStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "StatusChange"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          },
+          "refresh_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Expires At"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "expires_at"
+        ],
+        "title": "TokenResponse"
+      },
+      "UploadCreate": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "file_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "File Name"
+          },
+          "mime_type": {
+            "type": "string",
+            "pattern": "^image/(jpeg|png|webp|heic)$",
+            "title": "Mime Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "exclusiveMinimum": 15.0,
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Sha256"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "file_name",
+          "mime_type",
+          "size_bytes",
+          "sha256",
+          "idempotency_key"
+        ],
+        "title": "UploadCreate"
+      },
+      "UploadStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "completed",
+          "expired"
+        ],
+        "title": "UploadStatus"
+      },
+      "UploadView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "chunk_size": {
+            "type": "integer",
+            "title": "Chunk Size"
+          },
+          "total_chunks": {
+            "type": "integer",
+            "title": "Total Chunks"
+          },
+          "received_chunks": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Received Chunks"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UploadStatus"
+          },
+          "page_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "file_name",
+          "mime_type",
+          "size_bytes",
+          "chunk_size",
+          "total_chunks",
+          "received_chunks",
+          "status",
+          "page_id",
+          "expires_at"
+        ],
+        "title": "UploadView"
+      },
+      "UserStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "disabled",
+          "deleting",
+          "deleted"
+        ],
+        "title": "UserStatus"
+      },
+      "UserView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "phone_masked": {
+            "type": "string",
+            "title": "Phone Masked"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UserStatus"
+          },
+          "locale": {
+            "type": "string",
+            "title": "Locale"
+          },
+          "must_change_password": {
+            "type": "boolean",
+            "title": "Must Change Password"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "phone_masked",
+          "role",
+          "status",
+          "locale",
+          "must_change_password",
+          "created_at"
+        ],
+        "title": "UserView"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WeComAuthorizeView": {
+        "properties": {
+          "authorization_url": {
+            "type": "string",
+            "title": "Authorization Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "authorization_url",
+          "expires_at"
+        ],
+        "title": "WeComAuthorizeView"
+      },
+      "WeComCallbackView": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "access_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Token"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "binding_ticket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binding Ticket"
+          },
+          "binding_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binding Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "WeComCallbackView"
+      },
+      "WeComPhoneBindRequest": {
+        "properties": {
+          "binding_ticket": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Binding Ticket"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "sms_challenge_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Sms Challenge Id"
+          },
+          "sms_code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "binding_ticket",
+          "phone",
+          "sms_challenge_id",
+          "sms_code"
+        ],
+        "title": "WeComPhoneBindRequest"
       }
     }
   }
