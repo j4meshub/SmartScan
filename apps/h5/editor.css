@@ -103,7 +103,92 @@
   justify-content: flex-end;
 }
 
+.project-files {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.project-files-heading,
+.job-row,
+.artifact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.project-files-heading h3,
+.job-row p,
+.artifact-row p {
+  margin: 0;
+}
+
+.job-list,
+.export-list {
+  display: grid;
+  gap: 8px;
+}
+
+.job-row,
+.export-card {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.job-row progress {
+  width: min(180px, 38vw);
+}
+
+.export-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.export-controls label {
+  display: grid;
+  gap: 5px;
+}
+
+.export-controls select {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 10px;
+}
+
+.export-controls .ocr-option {
+  display: flex;
+  align-items: center;
+}
+
+.export-card {
+  display: grid;
+  gap: 8px;
+}
+
+.artifact-row small {
+  color: var(--muted);
+}
+
+.artifact-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.artifact-actions button {
+  min-height: 36px;
+}
+
 @media (max-width: 600px) {
   .editor-card { padding: 18px; }
   .editor-toolbar > *, .editor-actions > * { flex: 1 1 42%; }
+  .export-controls { grid-template-columns: 1fr; }
+  .artifact-row { align-items: flex-start; flex-direction: column; }
 }

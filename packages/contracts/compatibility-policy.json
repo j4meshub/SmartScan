@@ -30,7 +30,11 @@
         "create_page_rotation_v1_pages__page_id__rotations_post",
         "create_page_edit_v1_pages__page_id__edits_post",
         "change_page_review_v1_pages__page_id__review_patch",
-        "page_content_v1_pages__page_id__content_get"
+        "page_content_v1_pages__page_id__content_get",
+        "jobs_v1_jobs_get",
+        "list_exports_v1_projects__project_id__exports_get",
+        "create_project_export_v1_projects__project_id__exports_post",
+        "export_artifact_content_v1_export_artifacts__artifact_id__content_get"
       ]
     },
     "admin_web": {

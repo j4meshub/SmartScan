@@ -160,6 +160,21 @@
         <button id="confirmReview" class="secondary hidden" type="button" data-editor-i18n="confirm">确认已复核</button>
         <button id="savePageEdit" class="primary" type="button" data-editor-i18n="save">应用裁切与滤镜</button>
       </div>
+      <section class="project-files" aria-labelledby="projectFilesTitle">
+        <div class="project-files-heading">
+          <h3 id="projectFilesTitle" data-editor-i18n="filesTitle">处理与导出</h3>
+          <button id="refreshProjectFiles" class="text-button" type="button" data-editor-i18n="refreshFiles">刷新状态</button>
+        </div>
+        <div id="projectJobList" class="job-list" aria-live="polite"></div>
+        <div class="export-controls">
+          <label><span data-editor-i18n="format">格式</span><select id="exportFormat"><option value="pdf">PDF</option><option value="jpg">JPG</option></select></label>
+          <label><span data-editor-i18n="quality">质量</span><select id="exportQuality"><option value="clear" data-editor-i18n="qualityClear">清晰</option><option value="balanced" selected data-editor-i18n="qualityBalanced">均衡</option><option value="small" data-editor-i18n="qualitySmall">小文件</option></select></label>
+          <label class="ocr-option"><input id="exportOcr" type="checkbox"><span data-editor-i18n="includeOcr">PDF 包含 OCR 文本层</span></label>
+          <button id="createExport" class="primary" type="button" data-editor-i18n="createExport">生成导出</button>
+        </div>
+        <div id="exportList" class="export-list"></div>
+        <p id="projectFilesMessage" class="message" role="status"></p>
+      </section>
       <p id="editorMessage" class="message" role="status"></p>
     </div>
   </dialog>
