@@ -190,6 +190,20 @@ class WeComBindingTicket(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class AccountMergeAudit(Base):
+    __tablename__ = "account_merge_audits"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    idempotency_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    source_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    canonical_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    initiator_user_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    rule: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[str] = mapped_column(String(20), nullable=False)
+    resource_counts: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class SessionToken(Base):
     __tablename__ = "sessions"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)

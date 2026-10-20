@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from .account_merge import AccountMergeError, merge_accounts
 from .audit import record_audit
 from .config import get_settings
 from .database import get_db
@@ -23,6 +24,8 @@ from .identity_services import (
 from .models import SessionToken, User, UserStatus
 from .phone_protection import protect_phone
 from .schemas import (
+    AccountMergeRequest,
+    AccountMergeView,
     LoginRequest,
     PasswordChange,
     RegisterRequest,
@@ -61,6 +64,45 @@ from .wecom_auth import (
 settings = get_settings()
 router = APIRouter()
 WECOM_OAUTH_COOKIE = "smartscan_wecom_oauth_state"
+
+
+@router.post("/v1/auth/account-merges", response_model=AccountMergeView)
+def account_merge(
+    payload: AccountMergeRequest,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        outcome = merge_accounts(
+            db,
+            actor=user,
+            phone=payload.phone,
+            sms_challenge_id=payload.sms_challenge_id,
+            sms_code=payload.sms_code,
+            idempotency_key=payload.idempotency_key,
+        )
+    except AccountMergeError as exc:
+        record_audit(db, request, user, "merge_account", "account_merge", result="denied")
+        db.commit()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    record_audit(
+        db,
+        request,
+        user,
+        "merge_account",
+        "account_merge",
+        outcome.audit.id,
+        outcome.audit.canonical_user_id,
+    )
+    db.commit()
+    return AccountMergeView(
+        merge_id=outcome.audit.id,
+        canonical_user_id=outcome.audit.canonical_user_id,
+        source_user_id=outcome.audit.source_user_id,
+        result=outcome.audit.result,
+        merged_at=outcome.audit.created_at,
+    )
 
 
 @router.post("/v1/auth/wecom/authorize", response_model=WeComAuthorizeView, status_code=201)

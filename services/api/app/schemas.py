@@ -18,7 +18,9 @@ class RegisterRequest(BaseModel):
 
 class SmsChallengeRequest(BaseModel):
     phone: str
-    purpose: str = Field(default="registration", pattern=r"^(registration|wecom_binding)$")
+    purpose: str = Field(
+        default="registration", pattern=r"^(registration|wecom_binding|account_merge)$"
+    )
 
 
 class SmsChallengeView(BaseModel):
@@ -45,6 +47,26 @@ class WeComPhoneBindRequest(BaseModel):
     phone: str
     sms_challenge_id: str = Field(min_length=36, max_length=36)
     sms_code: str = Field(min_length=4, max_length=8)
+
+
+class AccountMergeRequest(BaseModel):
+    phone: str
+    sms_challenge_id: str = Field(min_length=36, max_length=36)
+    sms_code: str = Field(min_length=4, max_length=8)
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+
+
+class AccountMergeView(BaseModel):
+    merge_id: str
+    canonical_user_id: str
+    source_user_id: str
+    result: str
+    require_reauthentication: bool = True
+    merged_at: datetime
 
 
 class LoginRequest(BaseModel):
