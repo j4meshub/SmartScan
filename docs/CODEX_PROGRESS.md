@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M4 H5 完整产品 |
 | 当前工作包 | `H5-005` 双语与 E2E |
-| 工作包状态 | 进行中，本地门禁已通过，等待推送与 PR |
+| 工作包状态 | 进行中，本地门禁已通过，PR 等待 CI |
 | 当前分支 | `codex/h5-005-i18n-e2e` |
 | 最后验证基线 | `a43deb9`（H5-004 PR #29 已合并） |
 | 工作包提交 | `43cf5be`（实现提交） |
-| PR | 待创建 |
+| PR | `#30`，等待 CI |
 | 下一工作包 | `AND-001` Android 分层工程与 API 客户端 |
 
 ## 当前工作包进展
@@ -49,7 +49,7 @@ git diff --check
 
 本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；132 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、Playwright `1.64.1` 锁文件重装、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试等待 PR CI 复核。
 
-PR CI 结果：待创建 PR 后补充。
+PR #30 CI 结果：等待 PostgreSQL、Chromium E2E、Web 和容器门禁。
 
 首次 Chromium E2E 的 3 项失败均因原生 `fetch` 以错误上下文调用；修复请求封装后核心流程通过，剩余两项严格定位问题收窄到真实元素作用域。首次 axe 扫描发现编辑器 11px 眉题对比度为 `4.24:1`，加深颜色后 WCAG 2 A/AA 扫描通过。没有忽略规则或放宽产品断言。
 
@@ -474,7 +474,7 @@ git diff --check
 
 ## 下一步
 
-1. 推送 `H5-005` 分支并创建中文 PR。
-2. 等待 PostgreSQL、Web、Chromium E2E 和容器 CI 通过后合并，并回填最终提交与验证证据。
+1. 等待 PR #30 的 PostgreSQL、Web、Chromium E2E 和容器 CI 通过后合并，并回填最终提交与验证证据。
+2. 合并后将 M4 自动化代码门禁标记为完成。
 3. M4 代码门禁完成后从 `AND-001` 继续 Android 分层工程与 API 客户端。
 4. 真实企业微信租户、短信、相机、弱网、系统分享与屏幕阅读器继续保留人工验收门禁，不以 Mock 结果代替。
