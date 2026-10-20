@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
 | 当前工作包 | `POC-001` 企业微信可信身份 |
-| 工作包状态 | 进行中，本地实现与验证完成，待提交和 PR |
+| 工作包状态 | 进行中，本地实现与验证完成，等待 PR CI |
 | 当前分支 | `codex/poc-001-wecom-adapter` |
 | 最后验证基线 | `1b0e3dd`（SEC-001 PR #5 已合并） |
-| 工作包提交 | 待创建 |
-| PR | 待创建 |
+| 工作包提交 | `f368c84` |
+| PR | [#6 建立企业微信可信身份适配器](https://github.com/j4meshub/SmartScan/pull/6) |
 | 下一工作包 | `POC-002` H5 相机与弱网续传自动测试 |
 
 ## 当前工作包进展
@@ -78,6 +78,6 @@ git diff --check
 
 ## 下一步
 
-1. 自审并提交 `POC-001`，创建中文 PR。
-2. PR CI 通过后合并，并从最新 `main` 创建 `codex/poc-002-h5-camera-network`。
+1. 等待 `POC-001` PR #6 CI，失败时定位、修复并重跑。
+2. CI 通过后合并，并从最新 `main` 创建 `codex/poc-002-h5-camera-network`。
 3. 使用真实 CorpId、AgentId、Secret、可信域名和测试成员执行人工验收；条件未提供前保持“等待人工验收”。
