@@ -8,10 +8,11 @@
 |---|---|
 | 当前里程碑 | M0 工程基础 |
 | 当前工作包 | `GOV-001` 长任务治理 |
-| 工作包状态 | 完成，等待 PR |
+| 工作包状态 | 完成，PR 验证中 |
 | 当前分支 | `codex/gov-001-long-task-docs` |
 | 最后验证基线 | `1d5a9d6` |
-| PR | 待创建 |
+| 工作包提交 | `da8d627` |
+| PR | [#1 建立长期开发与断点续接机制](https://github.com/j4meshub/SmartScan/pull/1) |
 | 下一工作包 | `DB-001` 版本化迁移 |
 
 ## 本工作包完成内容
@@ -62,9 +63,10 @@ git diff --check
 | 中文文档规范 | `13903b3` | 中文说明文档和提交规范 |
 | 分片上传与断点续传 | `38df17a` | 7 项测试通过；分片、哈希、幂等和隔离 |
 | 文档透视校正 POC | `1d5a9d6` | 10 项测试通过；OpenCV 透视和保守回退 |
+| 长任务治理 | `da8d627` | Ruff、格式、10 项 Pytest、H5 与后台 JavaScript 语法检查通过；PR #1 |
 
 ## 下一步
 
-1. 完成 `GOV-001` 验证、中文提交、推送和 PR。
-2. 合并后从最新 `main` 创建 `codex/db-001-versioned-migrations`。
+1. 等待 `GOV-001` PR #1 的 CI 通过并合并。
+2. 从最新 `main` 创建 `codex/db-001-versioned-migrations`。
 3. `DB-001` 先盘点当前 SQLite/PostgreSQL 差异，再引入 Alembic 基线和升级测试。
