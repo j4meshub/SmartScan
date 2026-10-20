@@ -47,6 +47,8 @@ Android 门禁将验证 Room v1→v2 迁移、队列用户隔离、服务端确�
 
 本地结果：95 个 Python 文件格式与 Ruff、OpenAPI 客户端兼容、迁移模型漂移、CI YAML、Android XML、兼容策略 JSON 和差异检查通过；后端 `156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；H5 `33 passed`，Chromium E2E/axe `3 passed`。本机未安装 Docker、JDK、Gradle 与 Android SDK，因此 Compose 配置以及 Android 的 Room/Robolectric、续传处理器、应用编译和 Lint 交由 PR CI 验证；缺少本机工具链不是产品门禁通过证据。
 
+首轮推送提交 `78e5b94` 的 API、Web 与容器 CI 通过；Android 编译发现既有仓储测试的 `ScanApi` Fake 未实现本工作包新增的项目创建与上传方法。修复补齐测试替身的完整接口边界，保持未使用的方法显式失败，等待第二轮验证。
+
 - AND-002 已由 PR #32 合并到主线，中文 squash 提交为 `60bac1e`；认证仓储、Keystore 会话、Room 用户分区缓存、Compose 登录注册与退出清理已完成。
 - 新增 `:feature:capture`，将 CameraX 生命周期、状态机、质量提示和原图捕获从 `:app` 分离；模块不依赖认证、网络或仓储。
 - 首页智能扫描、试卷净化和连续扫书入口已传入明确的 `CaptureMode`，三种模式共用后摄预览，底部导航在相机内隐藏。
