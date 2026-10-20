@@ -7,15 +7,48 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M5 Android |
-| 当前工作包 | `AND-002` 身份与缓存 |
-| 工作包状态 | 进行中，PR #32 已创建，等待最终头 CI 与合并 |
-| 当前分支 | `codex/and-002-identity-cache` |
-| 最后验证基线 | `41bf07d`（AND-001 PR #31 已合并） |
-| 工作包提交 | `f435d3b`（最新验证提交） |
-| PR | [#32](https://github.com/j4meshub/SmartScan/pull/32) |
-| 下一工作包 | `AND-003` CameraX 拍摄 |
+| 当前工作包 | `AND-003` CameraX 拍摄 |
+| 工作包状态 | 进行中，PR #33 已创建，等待最终头 CI 与合并 |
+| 当前分支 | `codex/and-003-camerax-capture` |
+| 最后验证基线 | `60bac1e`（AND-002 PR #32 已合并） |
+| 工作包提交 | `302dc89`（最新验证提交） |
+| PR | [#33](https://github.com/j4meshub/SmartScan/pull/33) |
+| 下一工作包 | `AND-004` 离线与续传 |
 
 ## 当前工作包进展
+
+- AND-002 已由 PR #32 合并到主线，中文 squash 提交为 `60bac1e`；认证仓储、Keystore 会话、Room 用户分区缓存、Compose 登录注册与退出清理已完成。
+- 新增 `:feature:capture`，将 CameraX 生命周期、状态机、质量提示和原图捕获从 `:app` 分离；模块不依赖认证、网络或仓储。
+- 首页智能扫描、试卷净化和连续扫书入口已传入明确的 `CaptureMode`，三种模式共用后摄预览，底部导航在相机内隐藏。
+- CameraX 使用 `KEEP_ONLY_LATEST` 在独立线程分析 Y 平面；最多每 250 毫秒更新亮度、相邻抽样差和极亮比例提示，不阻塞预览。
+- 用户可点按预览触发 AF/AE、使用设备支持范围内的曝光补偿，并在相机就绪后手动快门；没有倒计时或自动拍摄。
+- 原图写入应用私有 `files/captures/originals`，文件名不含用户信息；低质量只提示不禁拍，保存失败不创建成功状态。
+- 连续扫书自动快门仍属于 `BOOK-001`，上传和后台恢复仍属于 `AND-004`，当前不以占位逻辑宣称完成。
+
+`AND-003` 计划门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python tools/api_compatibility.py
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm --prefix apps/h5 ci
+npm --prefix apps/h5 test
+npm --prefix apps/h5 run test:e2e
+gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
+git diff --check
+```
+
+本机已通过差异检查、Android Manifest/双语资源 XML 解析和中英文资源键一致性检查。本机未安装 JDK、Gradle 与 Android SDK，CameraX/Compose 编译、拍摄状态机与质量评估单元测试、应用单元测试和 Lint 等待 GitHub CI；模拟器和真机不因 CI 通过而自动验收。
+
+首轮推送 CI 的 API、Web 和容器门禁通过；Android 编译发现 `:app` 移除旧 Room 依赖后仍直接调用 `Room.databaseBuilder`。修复把数据库创建工厂收回 `:data:local`，应用层只调用 `SmartScanDatabase.open`，不把 Room API 再泄漏回应用模块，等待重跑验证。
+
+第二轮 Android 编译确认返回 `SmartScanDatabase` 仍会让应用编译器解析其 `RoomDatabase` 父类。修复进一步把公开工厂返回类型收窄为 `UserScopedCache`，数据库与 DAO 类型完全停留在 `:data:local`，应用层不再感知 Room，等待第三轮验证。
+
+第三轮提交 `302dc89` 的 API、Web、容器和 Android CI 已全部通过，PR #33 已创建。Android 在固定 JDK 17、Gradle 8.9 与 SDK 35 环境执行 187 个任务，完成拍摄状态机/质量评估、既有模块与应用单元测试、应用编译和 `lintDebug`，`BUILD SUCCESSFUL`；该结果不替代 CameraX 真机验收。
 
 - AND-001 已由 PR #31 合并到主线，中文 squash 提交为 `41bf07d`；领域、网络、仓储与应用模块、Compose 导航、HTTPS 配置和 Android CI 基线已完成。
 - AND-002 已核对并接入服务端注册、登录、刷新、注销与 `/v1/me` 契约。
@@ -460,6 +493,7 @@ git diff --check
 | 文档透视真实样本 | 等待人工验收 | 提供已授权、脱敏且具有人工期望标注的固定文档照片集 |
 | 真实短信 | 等待人工验收 | 冻结供应商、签名、模板、密钥和限频参数 |
 | Android 正式签名分发 | 等待人工验收 | 冻结包名、签名资产和 GitLab 发布位置 |
+| Android CameraX 真机 | 等待人工验收 | 提供目标设备，验证权限、后摄、方向、对焦、曝光、质量阈值、中断恢复和连续原图完整性 |
 | iOS 真机与 App Store | 等待人工验收 | 冻结 Team、Bundle ID、地区、隐私与支持 URL，并使用 Mac 完成门禁 |
 
 外部阻塞不会阻止 Mock、契约、算法、客户端和本地部署工作；模拟结果不得把上述门禁改为“完成”。
@@ -503,10 +537,11 @@ git diff --check
 | H5 项目恢复与文件分享 | `a43deb9` | 本地 156 项通过、覆盖率 88.28%，H5 29 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；项目恢复、任务轮询、导出、鉴权下载、Web Share 回退、Web 与容器检查通过；PR #29 已合并 |
 | H5 双语与浏览器 E2E | `6d20db5` | 本地 156 项通过、覆盖率 88.28%，H5 33 项、Chromium E2E/axe 3 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；中英文、键盘编辑、真实模块加载、分享回退、无障碍、Web 与容器检查通过；PR #30 已合并 |
 | Android 分层工程与 API 客户端 | `41bf07d` | 本地后端与 H5 回归通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%，Android JDK 17/Gradle 8.9/SDK 35 的网络与仓储测试、应用单元测试和 Lint 通过，Web 与容器通过；PR #31 已合并，模拟器和真机待后续门禁 |
+| Android 身份与用户分区缓存 | `60bac1e` | 本地后端 156 项、H5 33 项和 Chromium E2E/axe 3 项通过；PR #32 最终头两套 CI 的 API、Web、容器与 Android 共 8 项通过；首轮 Room/Kotlin 元数据失败已升级 Room 2.7.2 后修复，真实 Keystore、短信和真机待人工验收 |
 
 ## 下一步
 
-1. 为 `AND-002` 增加注册、登录、刷新、注销和当前用户 DTO/仓储，令牌不得写入 URL 或普通日志。
-2. 使用 Android Keystore 保护会话密钥，使用 Room 建立强制 `user_id` 分区的本地缓存，并在退出时清理当前用户缓存。
-3. 补充令牌轮换、损坏密文、跨用户缓存隔离和退出失败仍本地清理的自动测试，再运行完整 Android 与仓库门禁。
-4. Android 模拟器、真机、正式签名，以及真实企业微信、短信、相机和弱网继续保留人工验收门禁，不以 Mock 结果代替。
+1. 完成 `AND-003` CameraX/Compose 编译、状态机和质量评估单元测试及 Lint，修复任何 CI 失败。
+2. 自审相机生命周期、低质量强制拍摄、原图不可变和三模式导航边界，回填测试证据后创建中文 PR。
+3. CI 通过并合并后进入 `AND-004`，将私有原图接入用户分区 Room 队列、WorkManager、分片续传和网络切换恢复。
+4. Android 模拟器、真机、正式签名，以及真实企业微信、短信、相机和弱网继续保留人工验收门禁，不以 Mock 或 CI 结果代替。

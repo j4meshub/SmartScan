@@ -1,5 +1,6 @@
 package com.smartscan.data.local
 
+import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -7,6 +8,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import com.smartscan.core.model.ScanProject
@@ -47,6 +49,15 @@ interface CachedProjectDao {
 @Database(entities = [CachedProjectEntity::class], version = 1, exportSchema = false)
 abstract class SmartScanDatabase : RoomDatabase() {
     abstract fun cachedProjects(): CachedProjectDao
+}
+
+fun openUserScopedCache(context: Context): UserScopedCache {
+    val database = Room.databaseBuilder(
+        context.applicationContext,
+        SmartScanDatabase::class.java,
+        "smartscan-cache.db",
+    ).build()
+    return RoomUserScopedCache(database.cachedProjects())
 }
 
 class RoomUserScopedCache(private val dao: CachedProjectDao) : UserScopedCache {

@@ -8,4 +8,5 @@ include(":core:network")
 include(":core:security")
 include(":data:local")
 include(":data:repository")
+include(":feature:capture")
 

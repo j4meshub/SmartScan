@@ -1,0 +1,20 @@
+<resources>
+    <string name="capture_back">返回</string>
+    <string name="capture_mode_document">智能扫描</string>
+    <string name="capture_mode_exam">试卷净化</string>
+    <string name="capture_mode_book">连续扫书</string>
+    <string name="capture_permission_required">拍摄页面需要相机权限。</string>
+    <string name="capture_permission_action">允许使用相机</string>
+    <string name="capture_camera_unavailable">后置相机不可用。可以返回，后续通过文件导入继续。</string>
+    <string name="capture_save_failed">原图保存失败，未创建页面。</string>
+    <string name="capture_quality_analyzing">正在检查对焦与曝光…</string>
+    <string name="capture_quality_ready">可以拍摄</string>
+    <string name="capture_quality_dark">请移至更明亮的位置</string>
+    <string name="capture_quality_bright">请降低曝光或避开直射光</string>
+    <string name="capture_quality_glare">请调整角度以减少反光</string>
+    <string name="capture_quality_blurry">请保持稳定，并点按页面对焦</string>
+    <string name="capture_exposure">曝光</string>
+    <string name="capture_manual_hint">手动快门 · 低质量页面仍可带警告拍摄</string>
+    <string name="capture_saved_original">原图已保存，后续增强不会覆盖原图。</string>
+    <string name="capture_continue">继续拍摄</string>
+</resources>

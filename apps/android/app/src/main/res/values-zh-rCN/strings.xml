@@ -4,7 +4,9 @@
     <string name="smart_scan">智能扫描</string>
     <string name="smart_scan_description">自动裁切 · 增强 · 旋转</string>
     <string name="exam_clean">试卷净化</string>
+    <string name="exam_clean_description">拍摄后进入净化</string>
     <string name="book_scan">连续扫书</string>
+    <string name="book_scan_description">连续拍摄书页</string>
     <string name="ready">●  就绪</string>
     <string name="home">首页</string>
     <string name="projects">项目</string>

@@ -4,7 +4,9 @@
     <string name="smart_scan">Smart Scan</string>
     <string name="smart_scan_description">Auto crop · Enhance · Rotate</string>
     <string name="exam_clean">Clean Exam</string>
+    <string name="exam_clean_description">Capture for cleanup</string>
     <string name="book_scan">Scan a Book</string>
+    <string name="book_scan_description">Capture continuous pages</string>
     <string name="ready">●  READY</string>
     <string name="home">Home</string>
     <string name="projects">Projects</string>
