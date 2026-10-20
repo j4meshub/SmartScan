@@ -286,8 +286,22 @@ class JobView(BaseModel):
     kind: str
     status: JobStatus
     attempts: int
+    max_attempts: int
+    priority: int
+    progress: int
+    available_at: datetime
+    lease_until: datetime | None
+    heartbeat_at: datetime | None
+    started_at: datetime | None
+    baseline_ready_at: datetime | None
+    completed_at: datetime | None
+    cancel_requested_at: datetime | None
+    canceled_at: datetime | None
+    error_code: str | None
     error: str | None
+    result_version: int | None
     created_at: datetime
+    updated_at: datetime
 
 
 class RoleChange(BaseModel):

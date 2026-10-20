@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from services.api.app.account_deletion import process_account_deletion
 from services.api.app.config import Settings
+from services.api.app.job_service import claim_next_job
 from services.api.app.migrations import (
     BASELINE_REVISION,
     alembic_config,
@@ -25,9 +26,12 @@ from services.api.app.migrations import (
 from services.api.app.models import (
     AccountDeletionRequest,
     AccountDeletionStatus,
+    JobStatus,
     PhoneEncryptionStatus,
     PhoneReuseQuarantine,
+    ProcessingJob,
     RefreshToken,
+    ScanProject,
     SessionToken,
     User,
     UserIdentity,
@@ -262,4 +266,62 @@ def test_postgresql_concurrent_refresh_detects_replay_and_revokes_family() -> No
         assert device_session is not None and device_session.revoked_at is not None
         assert len(refresh_rows) == 2
         assert all(item.revoked_at is not None for item in refresh_rows)
+    engine.dispose()
+
+
+def test_postgresql_concurrent_workers_only_claim_job_once() -> None:
+    url = isolated_postgres_url()
+    upgrade_database(url)
+    engine = create_engine(url)
+    now = datetime.now(UTC)
+    with Session(engine) as session:
+        user = User(
+            id="job-claim-user",
+            username="job-claim-user",
+            password_hash="hash",
+            phone_hmac="6" * 64,
+            phone_masked="+86******0014",
+        )
+        session.add(user)
+        session.flush()
+        project = ScanProject(
+            id="job-claim-project",
+            owner_user_id=user.id,
+            title="并发领取",
+        )
+        session.add(project)
+        session.flush()
+        session.add(
+            ProcessingJob(
+                id="job-claim-id",
+                owner_user_id=user.id,
+                project_id=project.id,
+                kind="document",
+                available_at=now,
+            )
+        )
+        session.commit()
+
+    settings = Settings(database_url=url, storage_root=Path("."), job_lease_seconds=60)
+
+    def claim_once(worker: str) -> str | None:
+        with Session(engine) as session:
+            claim = claim_next_job(
+                session,
+                worker_id=worker,
+                now=now,
+                settings=settings,
+            )
+            session.commit()
+            return claim.lease_token if claim else None
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        tokens = list(executor.map(claim_once, ("worker-a", "worker-b")))
+
+    assert sum(token is not None for token in tokens) == 1
+    with Session(engine) as session:
+        job = session.get(ProcessingJob, "job-claim-id")
+        assert job is not None and job.status == JobStatus.baseline_processing
+        assert job.attempts == 1
+        assert job.lease_token in tokens
     engine.dispose()

@@ -154,7 +154,15 @@ def rotate_page(
     active_job = db.scalar(
         select(ProcessingJob.id).where(
             ProcessingJob.page_id == page.id,
-            ProcessingJob.status.in_([JobStatus.pending, JobStatus.running]),
+            ProcessingJob.status.in_(
+                [
+                    JobStatus.queued,
+                    JobStatus.baseline_processing,
+                    JobStatus.baseline_ready,
+                    JobStatus.optional_enhancing,
+                    JobStatus.failed_retryable,
+                ]
+            ),
         )
     )
     if active_job is not None:

@@ -26,6 +26,7 @@ from .domain_services import (
     upload_matches_request,
     valid_image_signature,
 )
+from .job_service import JobFlowError, cancel_job, retry_job
 from .models import (
     PageResult,
     ProcessingJob,
@@ -43,6 +44,7 @@ from .page_service import (
     rotate_page,
     update_page_review,
 )
+from .policies import can_read_data
 from .repositories import page_for_actor, project_for_actor, upload_for_owner, upload_view
 from .schemas import (
     ChunkReceipt,
@@ -360,6 +362,7 @@ def complete_upload(
             project_id=project.id,
             page_id=page.id,
             kind=project.mode,
+            max_attempts=settings.job_max_attempts,
         )
     )
     upload.status = UploadStatus.completed
@@ -413,7 +416,11 @@ async def upload_page(
     db.add(page)
     db.add(
         ProcessingJob(
-            owner_user_id=user.id, project_id=project.id, page_id=page.id, kind=project.mode
+            owner_user_id=user.id,
+            project_id=project.id,
+            page_id=page.id,
+            kind=project.mode,
+            max_attempts=settings.job_max_attempts,
         )
     )
     db.commit()
@@ -603,3 +610,80 @@ def jobs(user: User = Depends(current_user), db: Session = Depends(get_db)):
         .order_by(ProcessingJob.created_at.desc())
         .limit(100)
     ).all()
+
+
+@router.get("/v1/jobs/{job_id}", response_model=JobView)
+def get_job(
+    job_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    job = db.get(ProcessingJob, job_id)
+    owner = db.get(User, job.owner_user_id) if job is not None else None
+    if job is None or owner is None or not can_read_data(user, owner):
+        raise HTTPException(status_code=404, detail="job not found")
+    if job.owner_user_id != user.id:
+        record_audit(db, request, user, "view_job", "job", job.id, job.owner_user_id)
+        db.commit()
+    return job
+
+
+def _deny_job_mutation(
+    db: Session,
+    request: Request,
+    actor: User,
+    *,
+    job_id: str,
+    action: str,
+) -> None:
+    candidate = db.get(ProcessingJob, job_id)
+    if candidate is not None and candidate.owner_user_id != actor.id:
+        record_audit(
+            db,
+            request,
+            actor,
+            action,
+            "job",
+            job_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="job not found")
+
+
+@router.post("/v1/jobs/{job_id}/cancel", response_model=JobView)
+def cancel_owned_job(
+    job_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    _deny_job_mutation(db, request, user, job_id=job_id, action="cancel_job")
+    try:
+        job = cancel_job(db, actor=user, job_id=job_id)
+    except JobFlowError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    record_audit(db, request, user, "cancel_job", "job", job.id, job.owner_user_id)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/v1/jobs/{job_id}/retry", response_model=JobView)
+def retry_owned_job(
+    job_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    _deny_job_mutation(db, request, user, job_id=job_id, action="retry_job")
+    try:
+        job = retry_job(db, actor=user, job_id=job_id)
+    except JobFlowError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    record_audit(db, request, user, "retry_job", "job", job.id, job.owner_user_id)
+    db.commit()
+    db.refresh(job)
+    return job

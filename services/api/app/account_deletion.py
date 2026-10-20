@@ -475,7 +475,9 @@ def process_account_deletion(
             select(ProcessingJob.id)
             .where(
                 ProcessingJob.owner_user_id == user.id,
-                ProcessingJob.status == JobStatus.running,
+                ProcessingJob.status.in_(
+                    [JobStatus.baseline_processing, JobStatus.optional_enhancing]
+                ),
             )
             .with_for_update()
         )

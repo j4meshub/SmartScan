@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from services.api.app import main
 from services.api.app.database import SessionLocal
+from services.api.app.job_service import claim_job_by_id
 from services.api.app.models import AuditLog, ProcessingJob, Role, ScanPage, User
 from services.worker.app.main import process
 
@@ -59,7 +60,10 @@ def create_processed_page(
     with SessionLocal() as db:
         job_id = db.scalar(select(ProcessingJob.id).where(ProcessingJob.page_id == page_id))
         assert job_id is not None
-    process(job_id)
+        claim = claim_job_by_id(db, job_id, worker_id="page-version-test")
+        assert claim is not None
+        db.commit()
+    process(claim)
     return page_id, original
 
 
@@ -82,7 +86,7 @@ def test_processing_creates_version_and_review_without_blocking_job() -> None:
         jobs = client.get("/v1/jobs", headers=headers)
         assert jobs.status_code == 200
         matching = [job for job in jobs.json() if job["page_id"] == page_id]
-        assert matching[0]["status"] == "completed"
+        assert matching[0]["status"] == "ready"
 
         original_response = client.get(
             f"/v1/pages/{page_id}/content?variant=original", headers=headers

@@ -41,4 +41,4 @@ def test_register_create_project_and_upload_page():
         assert upload.status_code == 202, upload.text
         jobs = client.get("/v1/jobs", headers=headers)
         assert jobs.status_code == 200
-        assert jobs.json()[0]["status"] == "pending"
+        assert jobs.json()[0]["status"] == "queued"

@@ -481,7 +481,7 @@ def test_page_version_migration_separates_review_from_job_status(tmp_path: Path)
             "review_status": "pending",
             "review_reason": "low_resolution",
         }
-        assert job_status == "completed"
+        assert job_status == "ready"
         assert result == {
             "version": 1,
             "result_type": "baseline",
@@ -504,5 +504,110 @@ def test_page_version_migration_separates_review_from_job_status(tmp_path: Path)
                 )
                 == "needs_review"
             )
+    finally:
+        downgraded.dispose()
+
+
+def test_job_state_machine_migration_maps_legacy_states_and_can_downgrade(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "job-state-machine.db")
+    command.upgrade(alembic_config(url), "20261020_0013")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('legacy-job-user', 'legacy-job', 'hash', :phone_hmac, '+86******0014', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "5" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_projects "
+                "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) VALUES "
+                "('legacy-job-project', 'legacy-job-user', '旧任务', 'document', 'ltr', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+        for job_id, status, attempts in (
+            ("job-pending", "pending", 0),
+            ("job-running", "running", 1),
+            ("job-completed", "completed", 1),
+            ("job-retryable", "failed", 1),
+            ("job-final", "failed", 3),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO processing_jobs "
+                    "(id, owner_user_id, project_id, page_id, kind, status, attempts, "
+                    "lease_until, error, created_at, updated_at) VALUES "
+                    "(:id, 'legacy-job-user', 'legacy-job-project', NULL, 'document', :status, "
+                    ":attempts, CURRENT_TIMESTAMP, 'legacy error', CURRENT_TIMESTAMP, "
+                    "CURRENT_TIMESTAMP)"
+                ),
+                {"id": job_id, "status": status, "attempts": attempts},
+            )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        columns = {item["name"] for item in inspect(migrated).get_columns("processing_jobs")}
+        assert {
+            "max_attempts",
+            "priority",
+            "progress",
+            "available_at",
+            "lease_owner",
+            "lease_token",
+            "heartbeat_at",
+            "started_at",
+            "baseline_ready_at",
+            "completed_at",
+            "cancel_requested_at",
+            "canceled_at",
+            "error_code",
+            "result_version",
+        }.issubset(columns)
+        with migrated.connect() as connection:
+            rows = (
+                connection.execute(
+                    text(
+                        "SELECT id, status, max_attempts, progress, lease_until, error_code "
+                        "FROM processing_jobs ORDER BY id"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        by_id = {row["id"]: row for row in rows}
+        assert by_id["job-pending"]["status"] == "queued"
+        assert by_id["job-running"]["status"] == "queued"
+        assert by_id["job-completed"]["status"] == "ready"
+        assert by_id["job-completed"]["progress"] == 100
+        assert by_id["job-retryable"]["status"] == "failed_retryable"
+        assert by_id["job-final"]["status"] == "failed_final"
+        assert by_id["job-final"]["error_code"] == "legacy_failure"
+        assert all(row["max_attempts"] == 3 for row in rows)
+        assert all(row["lease_until"] is None for row in rows)
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0013")
+    downgraded = create_engine(url)
+    try:
+        columns = {item["name"] for item in inspect(downgraded).get_columns("processing_jobs")}
+        assert "max_attempts" not in columns
+        with downgraded.connect() as connection:
+            states = dict(connection.execute(text("SELECT id, status FROM processing_jobs")).all())
+        assert states == {
+            "job-pending": "pending",
+            "job-running": "pending",
+            "job-completed": "completed",
+            "job-retryable": "pending",
+            "job-final": "failed",
+        }
     finally:
         downgraded.dispose()

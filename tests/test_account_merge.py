@@ -204,7 +204,7 @@ def create_pair(
                     project_id=project_id,
                     page_id=page_id,
                     kind="document",
-                    status=JobStatus.pending,
+                    status=JobStatus.queued,
                 )
             )
         db.commit()

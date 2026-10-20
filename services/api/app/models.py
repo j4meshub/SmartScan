@@ -55,11 +55,14 @@ class AccountDeletionStatus(str, enum.Enum):
 
 
 class JobStatus(str, enum.Enum):
-    pending = "pending"
-    running = "running"
-    completed = "completed"
-    failed = "failed"
-    needs_review = "needs_review"
+    queued = "queued"
+    baseline_processing = "baseline_processing"
+    baseline_ready = "baseline_ready"
+    optional_enhancing = "optional_enhancing"
+    ready = "ready"
+    failed_retryable = "failed_retryable"
+    failed_final = "failed_final"
+    canceled = "canceled"
 
 
 class PageReviewStatus(str, enum.Enum):
@@ -437,6 +440,10 @@ class UploadChunk(Base):
 
 class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
+    __table_args__ = (
+        CheckConstraint("progress >= 0 AND progress <= 100", name="ck_processing_jobs_progress"),
+        CheckConstraint("max_attempts >= 1", name="ck_processing_jobs_max_attempts"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     owner_user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
@@ -447,11 +454,30 @@ class ProcessingJob(Base):
     page_id: Mapped[str | None] = mapped_column(ForeignKey("scan_pages.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[JobStatus] = mapped_column(
-        Enum(JobStatus), default=JobStatus.pending, nullable=False, index=True
+        Enum(JobStatus, native_enum=False, length=32),
+        default=JobStatus.queued,
+        nullable=False,
+        index=True,
     )
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False, index=True
+    )
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    lease_token: Mapped[str | None] = mapped_column(String(36))
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    baseline_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_code: Mapped[str | None] = mapped_column(String(64))
     error: Mapped[str | None] = mapped_column(Text)
+    result_version: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

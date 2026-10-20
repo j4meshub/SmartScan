@@ -7,21 +7,43 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
-| 当前工作包 | `SCAN-001` 页面版本与复核 |
-| 工作包状态 | 完成，PR #20 全部 CI 已通过，等待合并 |
-| 当前分支 | `codex/scan-001-page-review` |
-| 最后验证基线 | `5d73afa`（ADMIN-001 PR #19 已合并） |
-| 工作包提交 | `2a3a64d`（实现与本地验证） |
-| PR | [#20](https://github.com/j4meshub/SmartScan/pull/20) |
-| 下一工作包 | `JOB-001` 完整任务状态机 |
+| 当前工作包 | `JOB-001` 完整任务状态机 |
+| 工作包状态 | 完成，PR #21 六项 CI 已通过，等待合并 |
+| 当前分支 | `codex/job-001-state-machine` |
+| 最后验证基线 | `7e501ff`（SCAN-001 PR #20 已合并） |
+| 工作包提交 | `fc581f6`（实现提交） |
+| PR | [#21](https://github.com/j4meshub/SmartScan/pull/21)（六项 CI 已通过，等待合并） |
+| 下一工作包 | `OCR-001` 基础 OCR |
 
 ## 当前工作包进展
 
-- 已新增追加式 `page_results`、原图类型、结构化质量、累计旋转、活动版本和独立复核状态；旧 `processed_path` 与 `mime_type` 继续作为兼容指针。
-- Worker 将处理图写入 `results/<项目>/<页面>/vNNNN.jpg`，作业成功统一为 `completed`；低质量页面改为 `review_status=pending`，不再混入作业生命周期。
-- 已新增页面详情、版本列表、原图/活动/指定版本读取、所有者旋转和复核接口；管理员保持只读，越权与不存在统一 `404`，成功及拒绝修改均审计。
-- `0013` 会把旧处理图登记为 `legacy-baseline`，把旧 `needs_review` 迁移成“作业完成、页面待复核”，并提供降级恢复旧语义。
-- 账号合并已覆盖每个结果版本的所有权与文件补偿；账号删除显式计数并清理页面结果。
+- `0014` 已把旧作业状态兼容迁移为排队、基础处理、基础就绪、可选增强、就绪、分级失败和取消，并新增租约、心跳、退避、阶段时间戳和结果版本关联。
+- Worker 现在通过随机租约令牌领取及续租；过期抢占、取消和重试都会使旧令牌失效，写结果时再次锁行校验，页面结果与作业终态在同一事务提交。
+- 已新增所有者作业详情、取消和手动重试接口；管理员只读遵循既有角色矩阵，跨用户修改统一返回 `404` 并写审计。
+- 已覆盖租约过期恢复、旧 Worker 拒绝、指数退避、最终失败、取消竞态、单结果幂等、接口 IDOR、旧库迁移/降级和 PostgreSQL 双 Worker 单次领取。
+
+`JOB-001` 提交前全量检查：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`125 passed, 5 skipped`，应用代码覆盖率 `88.66%`；108 个 Python 文件格式、Ruff、`0014` 空库/旧版本升级与降级、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。
+
+首次聚焦回归曾出现 2 项失败：一项测试未先升级隔离数据库，另一项仍断言 `0013` 中间态；补齐测试数据库升级并按 `0014` 终态断言后重跑为 `31 passed`。随后发现 PostgreSQL 专项测试 import 排序问题，修复后 Ruff 与全量门禁通过。这些失败均为测试装配问题，未通过放宽业务断言规避。
+
+PR #21 CI 结果：PostgreSQL 17 环境 `130 passed`，应用代码覆盖率 `89.00%`；两组 API、Web/H5 和 Compose/容器检查共 6 项全部通过，迁移模型漂移为 `No new upgrade operations detected`。该绿灯证明 `0014` PostgreSQL 枚举迁移、双 Worker 单次领取、崩溃恢复语义和回归门禁通过，不代表真实进程强杀、磁盘满或目标服务器多 Worker 压力已经验收。
 
 `SCAN-001` 提交前全量检查：
 
@@ -259,10 +281,11 @@ git diff --check
 | 设备会话与刷新令牌 | `0d617f2` | PR CI 在 PostgreSQL 17 环境 109 项通过、覆盖率 87.75%；短期访问令牌、一次性刷新轮换、重放整族吊销、设备撤销、旧客户端兼容、迁移、Web 与 Compose/容器检查通过；PR #17 已合并 |
 | 账号删除与手机号隔离 | `495576b` | PR CI 在 PostgreSQL 17 环境 117 项通过、覆盖率 86.86%；强验证、7 天冷静期、可重入清理、文件补偿、30 天复用隔离、并发 Worker、Web 与 Compose/容器检查通过；PR #18 已合并 |
 | 完整管理与审计 | `5d73afa` | PR CI 在 PostgreSQL 17 环境 121 项通过、覆盖率 87.75%；角色层级、分页过滤、会话撤销、受控删除、失败审计、迁移、Web 与 Compose/容器检查通过；PR #19 已合并 |
-| 页面版本与独立复核 | `2a3a64d` | PR CI 在 PostgreSQL 17 环境 125 项通过、覆盖率 88.63%；原图保护、追加式结果、质量/旋转/复核、旧状态迁移、IDOR、Web 与 Compose/容器检查通过；PR #20 待合并 |
+| 页面版本与独立复核 | `7e501ff` | PR CI 在 PostgreSQL 17 环境 125 项通过、覆盖率 88.63%；原图保护、追加式结果、质量/旋转/复核、旧状态迁移、IDOR、Web 与 Compose/容器检查通过；PR #20 已合并 |
+| 完整任务状态机 | `fc581f6` | PR CI 在 PostgreSQL 17 环境 130 项通过、覆盖率 89.00%；租约、心跳、过期抢占、指数退避、取消/重试、单结果幂等、IDOR、迁移、Web 与 Compose/容器检查通过；PR #21 等待合并 |
 
 ## 下一步
 
-1. 合并已经通过全部 CI 的 PR #20。
-2. 从 `JOB-001` 开始扩展完整任务状态机、心跳和租约恢复。
-3. 验证 Worker 崩溃重入不会重复生成页面或已提交结果版本。
+1. 合并 PR #21，不把后续 staging 强杀、磁盘满和多 Worker 压力门禁误记为已完成。
+2. 同步主线并创建 `codex/ocr-001-cpu-ocr` 工作分支。
+3. 从 `OCR-001` 继续 CPU OCR、方向融合、隐私过滤和智能命名工作包。

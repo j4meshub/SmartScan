@@ -1,0 +1,250 @@
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
+
+from .config import Settings, get_settings
+from .models import JobStatus, ProcessingJob, User
+
+
+class JobFlowError(RuntimeError):
+    def __init__(self, code: str, status_code: int = 409):
+        super().__init__(code)
+        self.code = code
+        self.status_code = status_code
+
+
+@dataclass(frozen=True)
+class JobClaim:
+    job_id: str
+    lease_token: str
+    worker_id: str
+
+
+def job_for_owner(db: Session, actor: User, job_id: str, *, lock: bool = False) -> ProcessingJob:
+    statement = select(ProcessingJob).where(
+        ProcessingJob.id == job_id,
+        ProcessingJob.owner_user_id == actor.id,
+    )
+    if lock:
+        statement = statement.with_for_update()
+    job = db.scalar(statement)
+    if job is None:
+        raise JobFlowError("job_not_found", status_code=404)
+    return job
+
+
+def _clear_lease(job: ProcessingJob) -> None:
+    job.lease_owner = None
+    job.lease_token = None
+    job.lease_until = None
+    job.heartbeat_at = None
+
+
+def _finalize_exhausted_leases(db: Session, now: datetime) -> None:
+    exhausted = db.scalars(
+        select(ProcessingJob)
+        .where(
+            ProcessingJob.status == JobStatus.baseline_processing,
+            ProcessingJob.lease_until < now,
+            ProcessingJob.attempts >= ProcessingJob.max_attempts,
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    for job in exhausted:
+        job.status = JobStatus.failed_final
+        job.error_code = job.error_code or "lease_expired"
+        job.error = job.error or "worker lease expired after maximum attempts"
+        job.completed_at = now
+        _clear_lease(job)
+
+
+def _claim_job_row(
+    job: ProcessingJob,
+    *,
+    worker_id: str,
+    now: datetime,
+    settings: Settings,
+) -> JobClaim:
+    token = str(uuid.uuid4())
+    job.status = JobStatus.baseline_processing
+    job.attempts += 1
+    job.progress = max(job.progress, 5)
+    job.started_at = job.started_at or now
+    job.lease_owner = worker_id
+    job.lease_token = token
+    job.lease_until = now + timedelta(seconds=settings.job_lease_seconds)
+    job.heartbeat_at = now
+    job.error_code = None
+    job.error = None
+    return JobClaim(job.id, token, worker_id)
+
+
+def claim_next_job(
+    db: Session,
+    *,
+    worker_id: str,
+    now: datetime | None = None,
+    settings: Settings | None = None,
+) -> JobClaim | None:
+    settings = settings or get_settings()
+    now = now or datetime.now(UTC)
+    _finalize_exhausted_leases(db, now)
+    claimable_status = or_(
+        ProcessingJob.status == JobStatus.queued,
+        ProcessingJob.status == JobStatus.failed_retryable,
+        (
+            (ProcessingJob.status == JobStatus.baseline_processing)
+            & (ProcessingJob.lease_until < now)
+        ),
+    )
+    job = db.scalar(
+        select(ProcessingJob)
+        .where(
+            claimable_status,
+            ProcessingJob.available_at <= now,
+            ProcessingJob.attempts < ProcessingJob.max_attempts,
+        )
+        .order_by(ProcessingJob.priority.desc(), ProcessingJob.created_at, ProcessingJob.id)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    if job is None:
+        return None
+    claim = _claim_job_row(job, worker_id=worker_id, now=now, settings=settings)
+    db.flush()
+    return claim
+
+
+def claim_job_by_id(
+    db: Session,
+    job_id: str,
+    *,
+    worker_id: str,
+    now: datetime | None = None,
+    settings: Settings | None = None,
+) -> JobClaim | None:
+    settings = settings or get_settings()
+    now = now or datetime.now(UTC)
+    job = db.scalar(select(ProcessingJob).where(ProcessingJob.id == job_id).with_for_update())
+    if job is None or job.attempts >= job.max_attempts:
+        return None
+    due = job.available_at
+    if due.tzinfo is None:
+        due = due.replace(tzinfo=UTC)
+    lease_until = job.lease_until
+    if lease_until is not None and lease_until.tzinfo is None:
+        lease_until = lease_until.replace(tzinfo=UTC)
+    claimable = job.status in (JobStatus.queued, JobStatus.failed_retryable) or (
+        job.status == JobStatus.baseline_processing
+        and lease_until is not None
+        and lease_until < now
+    )
+    if not claimable or due > now:
+        return None
+    claim = _claim_job_row(job, worker_id=worker_id, now=now, settings=settings)
+    db.flush()
+    return claim
+
+
+def heartbeat_job(
+    db: Session,
+    claim: JobClaim,
+    *,
+    progress: int,
+    now: datetime | None = None,
+    settings: Settings | None = None,
+) -> bool:
+    settings = settings or get_settings()
+    now = now or datetime.now(UTC)
+    job = db.scalar(select(ProcessingJob).where(ProcessingJob.id == claim.job_id).with_for_update())
+    if (
+        job is None
+        or job.status != JobStatus.baseline_processing
+        or job.lease_token != claim.lease_token
+        or job.cancel_requested_at is not None
+    ):
+        return False
+    job.progress = max(job.progress, min(progress, 95))
+    job.heartbeat_at = now
+    job.lease_until = now + timedelta(seconds=settings.job_lease_seconds)
+    return True
+
+
+def mark_job_failure(
+    db: Session,
+    claim: JobClaim,
+    *,
+    error_code: str,
+    error: str,
+    now: datetime | None = None,
+    settings: Settings | None = None,
+) -> ProcessingJob | None:
+    settings = settings or get_settings()
+    now = now or datetime.now(UTC)
+    job = db.scalar(select(ProcessingJob).where(ProcessingJob.id == claim.job_id).with_for_update())
+    if job is None or job.lease_token != claim.lease_token:
+        return None
+    if job.status == JobStatus.canceled or job.cancel_requested_at is not None:
+        job.status = JobStatus.canceled
+        job.canceled_at = job.canceled_at or now
+        job.progress = 0
+    elif job.attempts >= job.max_attempts:
+        job.status = JobStatus.failed_final
+        job.completed_at = now
+    else:
+        job.status = JobStatus.failed_retryable
+        delay = settings.job_retry_base_seconds * (2 ** max(job.attempts - 1, 0))
+        job.available_at = now + timedelta(seconds=min(delay, 300))
+    job.error_code = error_code[:64]
+    job.error = error[:1000]
+    _clear_lease(job)
+    return job
+
+
+def cancel_job(
+    db: Session,
+    *,
+    actor: User,
+    job_id: str,
+    now: datetime | None = None,
+) -> ProcessingJob:
+    now = now or datetime.now(UTC)
+    job = job_for_owner(db, actor, job_id, lock=True)
+    if job.status in (JobStatus.ready, JobStatus.failed_final, JobStatus.canceled):
+        raise JobFlowError("job_cannot_be_canceled")
+    job.cancel_requested_at = now
+    job.status = JobStatus.canceled
+    job.canceled_at = now
+    job.progress = 0
+    _clear_lease(job)
+    return job
+
+
+def retry_job(
+    db: Session,
+    *,
+    actor: User,
+    job_id: str,
+    now: datetime | None = None,
+) -> ProcessingJob:
+    now = now or datetime.now(UTC)
+    job = job_for_owner(db, actor, job_id, lock=True)
+    if job.status not in (JobStatus.failed_retryable, JobStatus.failed_final):
+        raise JobFlowError("job_cannot_be_retried")
+    if job.status == JobStatus.failed_final:
+        job.attempts = 0
+    job.status = JobStatus.queued
+    job.available_at = now
+    job.progress = 0
+    job.completed_at = None
+    job.cancel_requested_at = None
+    job.canceled_at = None
+    job.error_code = None
+    job.error = None
+    _clear_lease(job)
+    return job
