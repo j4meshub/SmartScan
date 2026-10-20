@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M2 统一账号与安全 |
 | 当前工作包 | `WECOM-001` 企业微信 OAuth 登录与安全绑定 |
-| 工作包状态 | 进行中，正在盘点 POC 适配器、OAuth state、身份冲突和手机号绑定事务 |
+| 工作包状态 | 进行中，OAuth state、回调、可信手机号绑定、短信回退和本地门禁已通过，待提交、PR 与 CI |
 | 当前分支 | `codex/wecom-001-oauth-binding` |
 | 最后验证基线 | `4a1e8fc`（SMS-001 PR #14 已合并） |
 | 工作包提交 | 待创建 |
@@ -17,11 +17,13 @@
 
 ## 当前工作包进展
 
-- 复用 POC-001 的默认关闭、development Mock 和固定企业微信官方域名适配器，不重新实现不受控 HTTP 客户端。
-- OAuth state 必须短期、一次性、绑定发起会话意图，并在回调前完成认证校验；code 和 Secret 不进入日志。
-- 已绑定 Provider 身份只能回到原用户；可信手机号只允许唯一候选自动绑定，多候选或与既有身份冲突时拒绝并审计。
-- 无可信手机号时进入短信挑战绑定，不按姓名、掩码或其他弱属性猜测账号。
+- 已实现绑定发起浏览器 Cookie 的 10 分钟一次性 OAuth state、固定官方授权 URL 和先消费 state 后访问 Provider 的回调顺序。
+- 已绑定 Provider 身份回到原用户；可信手机号只允许唯一候选自动绑定，多候选或一用户多企微身份冲突拒绝并审计。
+- 无可信手机号时返回一次性 binding ticket，并通过 `wecom_binding` 短信挑战完成绑定或新建用户。
+- code、state/ticket 原文、Secret、access token 和完整手机号不进入数据库明文字段、审计或错误响应。
 - 真实 CorpId、AgentId、Secret、可信域名和成员权限缺失，因此 live 流程只能保持“等待人工验收”。
+
+本地全量结果：`97 passed, 2 skipped`，应用代码覆盖率 `87.32%`；Ruff、61 个 Python 文件格式、迁移升级/漂移/版本、OpenAPI 契约、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试等待 PR CI 复核；本机未安装 Docker，Compose 配置等待 CI 复核。
 
 `ACC-002` 提交前 Python 与迁移检查：
 

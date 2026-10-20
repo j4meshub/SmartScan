@@ -168,6 +168,28 @@ class SmsRateLimit(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class WeComOAuthState(Base):
+    __tablename__ = "wecom_oauth_states"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class WeComBindingTicket(Base):
+    __tablename__ = "wecom_binding_tickets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    ticket_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    provider_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    assurance: Mapped[str] = mapped_column(String(32), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class SessionToken(Base):
     __tablename__ = "sessions"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)

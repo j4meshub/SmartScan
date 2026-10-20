@@ -370,7 +370,7 @@
           },
           "purpose": {
             "default": "registration",
-            "pattern": "^registration$",
+            "pattern": "^(registration|wecom_binding)$",
             "title": "Purpose",
             "type": "string"
           }
@@ -664,6 +664,118 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WeComAuthorizeView": {
+        "properties": {
+          "authorization_url": {
+            "title": "Authorization Url",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorization_url",
+          "expires_at"
+        ],
+        "title": "WeComAuthorizeView",
+        "type": "object"
+      },
+      "WeComCallbackView": {
+        "properties": {
+          "access_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Token"
+          },
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "binding_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binding Expires At"
+          },
+          "binding_ticket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binding Ticket"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "WeComCallbackView",
+        "type": "object"
+      },
+      "WeComPhoneBindRequest": {
+        "properties": {
+          "binding_ticket": {
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Binding Ticket",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "sms_challenge_id": {
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Sms Challenge Id",
+            "type": "string"
+          },
+          "sms_code": {
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "binding_ticket",
+          "phone",
+          "sms_challenge_id",
+          "sms_code"
+        ],
+        "title": "WeComPhoneBindRequest",
         "type": "object"
       }
     }
@@ -1122,6 +1234,114 @@
           }
         },
         "summary": "Request Sms Challenge"
+      }
+    },
+    "/v1/auth/wecom/authorize": {
+      "post": {
+        "operationId": "wecom_authorize_v1_auth_wecom_authorize_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeComAuthorizeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Wecom Authorize"
+      }
+    },
+    "/v1/auth/wecom/bind-phone": {
+      "post": {
+        "operationId": "wecom_bind_phone_v1_auth_wecom_bind_phone_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeComPhoneBindRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wecom Bind Phone"
+      }
+    },
+    "/v1/auth/wecom/callback": {
+      "get": {
+        "operationId": "wecom_callback_v1_auth_wecom_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 20,
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeComCallbackView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wecom Callback"
       }
     },
     "/v1/jobs": {

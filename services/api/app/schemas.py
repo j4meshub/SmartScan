@@ -18,13 +18,33 @@ class RegisterRequest(BaseModel):
 
 class SmsChallengeRequest(BaseModel):
     phone: str
-    purpose: str = Field(default="registration", pattern=r"^registration$")
+    purpose: str = Field(default="registration", pattern=r"^(registration|wecom_binding)$")
 
 
 class SmsChallengeView(BaseModel):
     challenge_id: str
     expires_at: datetime
     retry_after_seconds: int
+
+
+class WeComAuthorizeView(BaseModel):
+    authorization_url: str
+    expires_at: datetime
+
+
+class WeComCallbackView(BaseModel):
+    action: str
+    access_token: str | None = None
+    expires_at: datetime | None = None
+    binding_ticket: str | None = None
+    binding_expires_at: datetime | None = None
+
+
+class WeComPhoneBindRequest(BaseModel):
+    binding_ticket: str = Field(min_length=32, max_length=256)
+    phone: str
+    sms_challenge_id: str = Field(min_length=36, max_length=36)
+    sms_code: str = Field(min_length=4, max_length=8)
 
 
 class LoginRequest(BaseModel):
