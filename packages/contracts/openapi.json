@@ -3523,6 +3523,111 @@
             ],
             "title": "Reviewed At"
           },
+          "ocr_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Text"
+          },
+          "ocr_status": {
+            "type": "string",
+            "title": "Ocr Status"
+          },
+          "ocr_result_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Result Version"
+          },
+          "ocr_model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Model Version"
+          },
+          "ocr_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Confidence"
+          },
+          "ocr_rotation_degrees": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Rotation Degrees"
+          },
+          "ocr_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Details"
+          },
+          "ocr_title_candidate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Title Candidate"
+          },
+          "ocr_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Error Code"
+          },
+          "ocr_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocr Updated At"
+          },
           "active_result": {
             "anyOf": [
               {
@@ -3561,6 +3666,16 @@
           "review_reason",
           "reviewed_by_user_id",
           "reviewed_at",
+          "ocr_text",
+          "ocr_status",
+          "ocr_result_version",
+          "ocr_model_version",
+          "ocr_confidence",
+          "ocr_rotation_degrees",
+          "ocr_details",
+          "ocr_title_candidate",
+          "ocr_error_code",
+          "ocr_updated_at",
           "active_result",
           "created_at",
           "updated_at"
@@ -3628,6 +3743,40 @@
             "type": "string",
             "title": "Title"
           },
+          "suggested_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Name"
+          },
+          "suggested_name_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Name Source"
+          },
+          "suggested_name_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Name Updated At"
+          },
           "mode": {
             "type": "string",
             "title": "Mode"
@@ -3652,6 +3801,9 @@
           "id",
           "owner_user_id",
           "title",
+          "suggested_name",
+          "suggested_name_source",
+          "suggested_name_updated_at",
           "mode",
           "reading_order",
           "created_at",

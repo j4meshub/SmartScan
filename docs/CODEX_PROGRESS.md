@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `OCR-001` 基础 OCR |
-| 工作包状态 | 进行中，正在冻结 CPU 引擎、四方向融合和安全命名边界 |
+| 工作包状态 | 进行中，本地实现与全量门禁已通过，等待提交、PR 和 PostgreSQL CI |
 | 当前分支 | `codex/ocr-001-cpu-ocr` |
 | 最后验证基线 | `1f5094b`（JOB-001 PR #21 已合并） |
 | 工作包提交 | 待创建 |
@@ -18,9 +18,34 @@
 ## 当前工作包进展
 
 - JOB-001 已由 PR #21 合并到主线，合并提交为 `1f5094b`。
-- OCR-001 使用 CPU 本地适配器，不接入外部 AI；PaddleOCR 与 PaddlePaddle 固定为已核验的版本，生产模型必须从只读本地目录加载，禁止首次请求联网下载。
-- 将实现 0°、90°、180°、270° 四方向识别与置信/版式融合，自动方向只作用于处理图，原图继续不可变。
-- 将保存与活动页面结果版本关联的 OCR 文本、行框、模型版本和置信度；标题候选过滤手机号、证件号、页码及非法文件名字符，无可信标题时按用户 locale 回退通用日期名称。
+- OCR-001 使用固定 `paddleocr==3.7.0`、`paddlepaddle==3.3.1` 的 CPU 本地适配器；模型包从只读目录加载并按版本与全部文件 SHA-256 校验，生产启动禁止关闭或首次请求联网下载。
+- 已实现 0°、90°、180°、270° 四方向识别与置信/版式融合，每次推理后续租；非零方向没有明确优势时保持 0°，自动方向只作用于处理图，原图继续不可变。
+- `0015` 已增加与活动页面结果版本关联的 OCR 全文、行框、模型、置信度、方向和状态；手动旋转会使旧 OCR 失效，旧 `ocr_text` 兼容迁移为 `legacy`。
+- 标题候选过滤手机号、18 位证件号、页码、非法字符、重复扩展名和 Windows 保留名；建议名称不覆盖用户标题，无可信标题时按 locale 回退日期名称。
+- 已覆盖离线模型适配参数/结果解析、清单篡改、方向阈值、敏感标题、Worker 失败重试、原图保留、页面 IDOR/管理员审计、迁移降级和 OpenAPI 增量契约。
+
+`OCR-001` 提交前全量检查：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`140 passed, 5 skipped`，应用代码覆盖率 `88.80%`；114 个 Python 文件格式、Ruff、`0015` 空库/旧版本升级与降级、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法、Compose YAML/只读挂载解析和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。本机未安装 Docker，`docker compose config` 等待 PR CI 执行；本地 PyYAML 已验证锚点展开前的 YAML 结构与 OCR 只读挂载。
+
+首次聚焦门禁曾发现全角中文冒号未清理、一个布尔表达式和未使用变量问题；补齐全角非法字符后重跑为 `31 passed`。首次全量门禁的唯一失败是新增测试误把既有审计成功值断言成 `success`，保持仓库统一的 `allowed` 契约后，OCR 专项 `3 passed`、最终全量 `140 passed`。失败均已定位修复，没有放宽方向、隐私、权限或迁移断言。
+
+真实 PP-OCRv6 模型包、已授权固定数据集、文字方向正确率 `≥98%`、CPU 耗时/内存和双 Worker 容量仍等待人工验收；自动化假引擎和适配器契约绿灯不得替代这些外部门禁。
 
 上一工作包完成摘要：
 
@@ -293,6 +318,6 @@ git diff --check
 
 ## 下一步
 
-1. 增加 OCR 结构化结果字段与 `0015` 迁移，保持旧 `ocr_text` 兼容并关联活动页面结果版本。
-2. 实现固定本地模型的 PaddleOCR CPU 适配器、四方向融合、安全标题候选与本地化默认命名。
-3. 接入 Worker、API、账号生命周期和 OpenAPI，补齐方向、隐私过滤、迁移、IDOR 与失败回退测试。
+1. 提交 OCR-001，实现记录关联提交与 PR，并等待 PostgreSQL 17、Web 和 Compose/容器门禁。
+2. CI 通过后更新完成证据并合并；真实模型质量保持“等待人工验收”，不得记为已通过。
+3. 从 `EXPORT-001` 继续 JPG/PDF、多页、三档质量、稳定文件名和可选 OCR 文本层。

@@ -300,6 +300,9 @@ class ScanProject(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     title: Mapped[str] = mapped_column(String(160), nullable=False)
+    suggested_name: Mapped[str | None] = mapped_column(String(160))
+    suggested_name_source: Mapped[str | None] = mapped_column(String(24))
+    suggested_name_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     mode: Mapped[str] = mapped_column(String(24), default="document", nullable=False)
     reading_order: Mapped[str] = mapped_column(String(12), default="ltr", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -321,6 +324,22 @@ class ScanPage(Base):
             name="ck_scan_pages_quality_score",
         ),
         CheckConstraint("active_result_version >= 0", name="ck_scan_pages_active_result_version"),
+        CheckConstraint(
+            "ocr_confidence IS NULL OR (ocr_confidence >= 0 AND ocr_confidence <= 1)",
+            name="ck_scan_pages_ocr_confidence",
+        ),
+        CheckConstraint(
+            "ocr_rotation_degrees IS NULL OR ocr_rotation_degrees IN (0, 90, 180, 270)",
+            name="ck_scan_pages_ocr_rotation",
+        ),
+        CheckConstraint(
+            "ocr_status IN ('pending', 'ready', 'disabled', 'stale', 'legacy')",
+            name="ck_scan_pages_ocr_status",
+        ),
+        CheckConstraint(
+            "ocr_result_version IS NULL OR ocr_result_version >= 0",
+            name="ck_scan_pages_ocr_result_version",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     project_id: Mapped[str] = mapped_column(
@@ -350,6 +369,15 @@ class ScanPage(Base):
     reviewed_by_user_id: Mapped[str | None] = mapped_column(String(36))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ocr_text: Mapped[str | None] = mapped_column(Text)
+    ocr_status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False)
+    ocr_result_version: Mapped[int | None] = mapped_column(Integer)
+    ocr_model_version: Mapped[str | None] = mapped_column(String(64))
+    ocr_confidence: Mapped[float | None] = mapped_column(Float)
+    ocr_rotation_degrees: Mapped[int | None] = mapped_column(Integer)
+    ocr_details: Mapped[str | None] = mapped_column(Text)
+    ocr_title_candidate: Mapped[str | None] = mapped_column(String(160))
+    ocr_error_code: Mapped[str | None] = mapped_column(String(64))
+    ocr_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

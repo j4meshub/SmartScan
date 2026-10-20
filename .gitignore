@@ -21,6 +21,7 @@ datasets/perspective/images/
 reports/perspective/
 reports/load/
 load-tests/accounts.local.json
+models/ocr/
 smartscan.db
 .DS_Store
 

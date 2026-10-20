@@ -77,7 +77,7 @@ def test_processing_creates_version_and_review_without_blocking_job() -> None:
         body = page.json()
         assert body["active_result_version"] == 1
         assert body["active_result"]["result_type"] == "baseline"
-        assert body["active_result"]["processor_version"] == "baseline-v1"
+        assert body["active_result"]["processor_version"] == "baseline-v2"
         assert body["quality_score"] < 100
         assert body["quality_details"]["width"] == 640
         assert body["review_status"] == "pending"

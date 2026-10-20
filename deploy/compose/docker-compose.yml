@@ -49,7 +49,10 @@ services:
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_ENV: production
       SMARTSCAN_AUTO_MIGRATE: "false"
-    volumes: ["scan-data:/srv/smartscan/data"]
+      SMARTSCAN_OCR_MODEL_ROOT: /opt/smartscan/models/ocr
+    volumes:
+      - scan-data:/srv/smartscan/data
+      - ../../models/ocr:/opt/smartscan/models/ocr:ro
     depends_on:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}

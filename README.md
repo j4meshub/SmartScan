@@ -25,6 +25,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - 完整管理审计：分层用户管理、会话撤销、受控账号删除、分页过滤，以及成功/失败操作的不可变审计。
 - 页面版本与复核：原图不可覆盖，基础处理与手动旋转按版本追加，结构化记录质量、旋转角度和独立复核状态。
 - 可恢复任务状态机：随机租约令牌、心跳续租、过期抢占、指数退避、最终失败、所有者取消与显式重试。
+- 基础 OCR 与安全命名：固定版本的本地 CPU 适配器、四方向置信融合、版本关联行框，以及过滤手机号/证件号/页码的中英文建议名称。
 - 只增不改的审计事件：覆盖登录和管理员跨用户访问。
 - 按所有者隔离的扫描项目、安全图片路径、SHA-256 元数据，以及由 PostgreSQL 支持的租约任务队列。
 - 分片上传、断点续传、分片/整文件哈希校验、幂等完成和跨用户隔离。
@@ -41,7 +42,8 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 python -m venv .venv
 # Windows：.venv\Scripts\activate
 # macOS/Linux：source .venv/bin/activate
-pip install -e ".[dev,vision]"
+pip install -e ".[dev,vision]"       # 不运行真实 OCR 的普通开发
+# pip install -e ".[dev,vision,ocr]" # 需要离线 OCR 模型包时
 copy .env.example .env   # macOS/Linux 使用 cp
 python -m services.api.app.migrations upgrade
 uvicorn services.api.app.main:app --reload
@@ -85,6 +87,8 @@ python -m http.server 8081 --directory apps/admin-web
 
 作业阶段、租约令牌、心跳、崩溃恢复、重试退避和取消边界见[作业状态机、租约与恢复](docs/JOB_STATE_MACHINE.md)。
 
+固定 CPU 运行库、离线模型清单、四方向融合、OCR 结果字段和安全命名见[基础 OCR、方向融合与安全命名](docs/OCR_PIPELINE.md)。
+
 文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
 
 试卷规则检测、保守净化和禁止生成虚假原文的边界见[基础试卷检测与保守净化 POC](docs/POC_EXAM_CLEANUP.md)。
@@ -101,7 +105,7 @@ python -m http.server 8081 --directory apps/admin-web
 docker compose -f deploy/compose/docker-compose.yml up --build
 ```
 
-Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API 和 Worker。数据库版本管理、旧基线接管和回滚要求详见[数据库迁移说明](docs/DATABASE_MIGRATIONS.md)。正式上线前仍需配置 TLS、加密备份和生产密钥管理。
+Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API 和 Worker。生产 Worker 还要求在 `models/ocr` 放置通过清单校验的离线模型包；缺失或被篡改时拒绝领取任务。数据库版本管理、旧基线接管和回滚要求详见[数据库迁移说明](docs/DATABASE_MIGRATIONS.md)。正式上线前仍需配置 TLS、加密备份和生产密钥管理。
 
 ## 测试
 

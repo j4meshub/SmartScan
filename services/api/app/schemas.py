@@ -198,6 +198,9 @@ class ProjectView(BaseModel):
     id: str
     owner_user_id: str
     title: str
+    suggested_name: str | None
+    suggested_name_source: str | None
+    suggested_name_updated_at: datetime | None
     mode: str
     reading_order: str
     created_at: datetime
@@ -234,6 +237,16 @@ class PageView(BaseModel):
     review_reason: str | None
     reviewed_by_user_id: str | None
     reviewed_at: datetime | None
+    ocr_text: str | None
+    ocr_status: str
+    ocr_result_version: int | None
+    ocr_model_version: str | None
+    ocr_confidence: float | None
+    ocr_rotation_degrees: int | None
+    ocr_details: dict[str, object] | None
+    ocr_title_candidate: str | None
+    ocr_error_code: str | None
+    ocr_updated_at: datetime | None
     active_result: PageResultView | None
     created_at: datetime
     updated_at: datetime

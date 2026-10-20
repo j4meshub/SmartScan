@@ -57,6 +57,14 @@ def page_view(db: Session, page: ScanPage) -> PageView:
             details = loaded if isinstance(loaded, dict) else None
         except json.JSONDecodeError:
             details = None
+    ocr_details = None
+    if page.ocr_details and page.ocr_result_version == page.active_result_version:
+        try:
+            loaded_ocr = json.loads(page.ocr_details)
+            ocr_details = loaded_ocr if isinstance(loaded_ocr, dict) else None
+        except json.JSONDecodeError:
+            ocr_details = None
+    ocr_is_current = page.ocr_result_version == page.active_result_version
     return PageView(
         id=page.id,
         project_id=page.project_id,
@@ -73,6 +81,16 @@ def page_view(db: Session, page: ScanPage) -> PageView:
         review_reason=page.review_reason,
         reviewed_by_user_id=page.reviewed_by_user_id,
         reviewed_at=page.reviewed_at,
+        ocr_text=page.ocr_text if ocr_is_current else None,
+        ocr_status=page.ocr_status,
+        ocr_result_version=page.ocr_result_version,
+        ocr_model_version=page.ocr_model_version if ocr_is_current else None,
+        ocr_confidence=page.ocr_confidence if ocr_is_current else None,
+        ocr_rotation_degrees=page.ocr_rotation_degrees if ocr_is_current else None,
+        ocr_details=ocr_details,
+        ocr_title_candidate=page.ocr_title_candidate if ocr_is_current else None,
+        ocr_error_code=page.ocr_error_code,
+        ocr_updated_at=page.ocr_updated_at,
         active_result=active_page_result(db, page),
         created_at=page.created_at,
         updated_at=page.updated_at,
@@ -185,6 +203,16 @@ def rotate_page(
                 rotation_degrees=cumulative_rotation,
                 settings=settings,
             )
+            page.ocr_status = "stale"
+            page.ocr_result_version = None
+            page.ocr_text = None
+            page.ocr_model_version = None
+            page.ocr_confidence = None
+            page.ocr_rotation_degrees = None
+            page.ocr_details = None
+            page.ocr_title_candidate = None
+            page.ocr_error_code = None
+            page.ocr_updated_at = datetime.now(UTC)
     except PageMutationError:
         raise
     except Exception as exc:

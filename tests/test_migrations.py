@@ -611,3 +611,101 @@ def test_job_state_machine_migration_maps_legacy_states_and_can_downgrade(
         }
     finally:
         downgraded.dispose()
+
+
+def test_ocr_metadata_migration_preserves_legacy_text_and_can_downgrade(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "ocr-metadata.db")
+    command.upgrade(alembic_config(url), "20261020_0014")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('legacy-ocr-user', 'legacy-ocr', 'hash', :phone_hmac, '+86******0015', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "7" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_projects "
+                "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) VALUES "
+                "('legacy-ocr-project', 'legacy-ocr-user', '旧 OCR', 'document', 'ltr', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_pages "
+                "(id, project_id, owner_user_id, page_number, original_path, "
+                "original_mime_type, sha256, size_bytes, mime_type, rotation_degrees, "
+                "active_result_version, review_status, ocr_text, created_at, updated_at) VALUES "
+                "('legacy-ocr-page', 'legacy-ocr-project', 'legacy-ocr-user', 1, "
+                "'users/legacy-ocr-user/originals/page.jpg', 'image/jpeg', :sha256, 100, "
+                "'image/jpeg', 90, 1, 'not_required', '旧识别文本', CURRENT_TIMESTAMP, "
+                "CURRENT_TIMESTAMP)"
+            ),
+            {"sha256": "8" * 64},
+        )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        schema = inspect(migrated)
+        project_columns = {item["name"] for item in schema.get_columns("scan_projects")}
+        page_columns = {item["name"] for item in schema.get_columns("scan_pages")}
+        assert {"suggested_name", "suggested_name_source", "suggested_name_updated_at"}.issubset(
+            project_columns
+        )
+        assert {
+            "ocr_status",
+            "ocr_result_version",
+            "ocr_model_version",
+            "ocr_confidence",
+            "ocr_rotation_degrees",
+            "ocr_details",
+            "ocr_title_candidate",
+            "ocr_error_code",
+            "ocr_updated_at",
+        }.issubset(page_columns)
+        with migrated.connect() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        "SELECT ocr_text, ocr_status, ocr_result_version, ocr_model_version, "
+                        "ocr_rotation_degrees FROM scan_pages WHERE id = 'legacy-ocr-page'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        assert row == {
+            "ocr_text": "旧识别文本",
+            "ocr_status": "legacy",
+            "ocr_result_version": 1,
+            "ocr_model_version": "legacy-unknown",
+            "ocr_rotation_degrees": 90,
+        }
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0014")
+    downgraded = create_engine(url)
+    try:
+        schema = inspect(downgraded)
+        project_columns = {item["name"] for item in schema.get_columns("scan_projects")}
+        page_columns = {item["name"] for item in schema.get_columns("scan_pages")}
+        assert "suggested_name" not in project_columns
+        assert "ocr_status" not in page_columns
+        with downgraded.connect() as connection:
+            assert (
+                connection.scalar(
+                    text("SELECT ocr_text FROM scan_pages WHERE id = 'legacy-ocr-page'")
+                )
+                == "旧识别文本"
+            )
+    finally:
+        downgraded.dispose()
