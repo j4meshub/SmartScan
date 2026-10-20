@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `OCR-001` 基础 OCR |
-| 工作包状态 | 进行中，本地实现与全量门禁已通过，等待提交、PR 和 PostgreSQL CI |
+| 工作包状态 | 进行中，本地实现与全量门禁已通过，PR #22 等待 PostgreSQL CI |
 | 当前分支 | `codex/ocr-001-cpu-ocr` |
 | 最后验证基线 | `1f5094b`（JOB-001 PR #21 已合并） |
-| 工作包提交 | 待创建 |
-| PR | 待创建 |
+| 工作包提交 | `de63f0d`（实现提交） |
+| PR | [#22](https://github.com/j4meshub/SmartScan/pull/22)（等待 CI） |
 | 下一工作包 | `EXPORT-001` JPG/PDF 导出 |
 
 ## 当前工作包进展
@@ -318,6 +318,6 @@ git diff --check
 
 ## 下一步
 
-1. 提交 OCR-001，实现记录关联提交与 PR，并等待 PostgreSQL 17、Web 和 Compose/容器门禁。
+1. 等待 PR #22 的 PostgreSQL 17、Web 和 Compose/容器门禁。
 2. CI 通过后更新完成证据并合并；真实模型质量保持“等待人工验收”，不得记为已通过。
 3. 从 `EXPORT-001` 继续 JPG/PDF、多页、三档质量、稳定文件名和可选 OCR 文本层。
