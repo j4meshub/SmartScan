@@ -258,7 +258,10 @@ def merge_accounts(
         raise AccountMergeError("account_merge_upload_conflict")
     if any(item.status == UploadStatus.pending for item in source_uploads):
         raise AccountMergeError("account_merge_upload_pending")
-    if any(item.status == JobStatus.running for item in jobs):
+    if any(
+        item.status in (JobStatus.baseline_processing, JobStatus.optional_enhancing)
+        for item in jobs
+    ):
         raise AccountMergeError("account_merge_job_running")
 
     source_phone = next(row for row in phone_rows if row.user_id == source.id)

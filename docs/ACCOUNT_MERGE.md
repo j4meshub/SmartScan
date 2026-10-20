@@ -36,7 +36,7 @@
 | 两个账号拥有同一 Provider 类型 | `account_merge_identity_conflict` |
 | 上传幂等键在合并后会重复 | `account_merge_upload_conflict` |
 | source user 仍有待完成上传 | `account_merge_upload_pending` |
-| source user 有运行中作业 | `account_merge_job_running` |
+| source user 有 `baseline_processing` / `optional_enhancing` 作业 | `account_merge_job_running` |
 | 文件缺失、路径越界、目标冲突或哈希不一致 | 拒绝并回滚 |
 
 上述冲突不得由普通用户绕过；后续 `ADMIN-001` 只提供有审计的人工处理入口，不放宽强身份条件。

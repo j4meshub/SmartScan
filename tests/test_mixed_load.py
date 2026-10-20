@@ -125,7 +125,7 @@ def test_recorder_summary_and_reports_contain_metrics_but_no_credentials(tmp_pat
         "missing_job_count": 0,
         "task_visible_within_2s_rate": 1.0,
         "isolation_violations": 0,
-        "job_statuses": {"completed": 2},
+        "job_statuses": {"ready": 2},
         "server_resource_metrics": None,
         "acceptance_duration_met": False,
         "gate_passed": False,
@@ -189,9 +189,7 @@ def test_full_mixed_runner_tracks_tasks_and_isolation_with_mock_transport(tmp_pa
         if path == "/v1/jobs":
             return httpx.Response(
                 200,
-                json=[
-                    {"page_id": page_id, "status": "pending"} for page_id in pages.get(owner, [])
-                ],
+                json=[{"page_id": page_id, "status": "queued"} for page_id in pages.get(owner, [])],
             )
         if path.endswith("/pages"):
             return httpx.Response(200, json=[])
@@ -213,7 +211,7 @@ def test_full_mixed_runner_tracks_tasks_and_isolation_with_mock_transport(tmp_pa
     assert report["missing_job_count"] == 0
     assert report["task_visible_within_2s_rate"] == 1.0
     assert report["isolation_violations"] == 0
-    assert report["job_statuses"] == {"pending": 12}
+    assert report["job_statuses"] == {"queued": 12}
     assert report["acceptance_duration_met"] is False
     assert report["gate_passed"] is False
 

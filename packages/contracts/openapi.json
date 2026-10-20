@@ -1580,6 +1580,171 @@
         }
       }
     },
+    "/v1/jobs/{job_id}": {
+      "get": {
+        "summary": "Get Job",
+        "operationId": "get_job_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "summary": "Cancel Owned Job",
+        "operationId": "cancel_owned_job_v1_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{job_id}/retry": {
+      "post": {
+        "summary": "Retry Owned Job",
+        "operationId": "retry_owned_job_v1_jobs__job_id__retry_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/users": {
       "get": {
         "summary": "Admin Users",
@@ -2896,11 +3061,14 @@
       "JobStatus": {
         "type": "string",
         "enum": [
-          "pending",
-          "running",
-          "completed",
-          "failed",
-          "needs_review"
+          "queued",
+          "baseline_processing",
+          "baseline_ready",
+          "optional_enhancing",
+          "ready",
+          "failed_retryable",
+          "failed_final",
+          "canceled"
         ],
         "title": "JobStatus"
       },
@@ -2936,6 +3104,118 @@
             "type": "integer",
             "title": "Attempts"
           },
+          "max_attempts": {
+            "type": "integer",
+            "title": "Max Attempts"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "progress": {
+            "type": "integer",
+            "title": "Progress"
+          },
+          "available_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Available At"
+          },
+          "lease_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Until"
+          },
+          "heartbeat_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heartbeat At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "baseline_ready_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Ready At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "cancel_requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Requested At"
+          },
+          "canceled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canceled At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
           "error": {
             "anyOf": [
               {
@@ -2947,10 +3227,26 @@
             ],
             "title": "Error"
           },
+          "result_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Version"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
           }
         },
         "type": "object",
@@ -2961,8 +3257,22 @@
           "kind",
           "status",
           "attempts",
+          "max_attempts",
+          "priority",
+          "progress",
+          "available_at",
+          "lease_until",
+          "heartbeat_at",
+          "started_at",
+          "baseline_ready_at",
+          "completed_at",
+          "cancel_requested_at",
+          "canceled_at",
+          "error_code",
           "error",
-          "created_at"
+          "result_version",
+          "created_at",
+          "updated_at"
         ],
         "title": "JobView"
       },

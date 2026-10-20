@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 25 * 1024 * 1024
     upload_chunk_bytes: int = 4 * 1024 * 1024
     upload_expiry_hours: int = 24
+    job_lease_seconds: int = Field(default=300, ge=30, le=1800)
+    job_retry_base_seconds: int = Field(default=5, ge=1, le=300)
+    job_max_attempts: int = Field(default=3, ge=1, le=10)
     vision_document_min_area_ratio: float = Field(default=0.2, gt=0.05, lt=0.95)
     vision_max_detection_dimension: int = Field(default=1600, ge=640, le=4096)
 

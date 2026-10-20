@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `JOB-001` 完整任务状态机 |
-| 工作包状态 | 进行中，正在设计兼容状态迁移、租约令牌与崩溃恢复 |
+| 工作包状态 | 进行中，本地实现与全量门禁已通过，等待提交、PR 和 PostgreSQL CI |
 | 当前分支 | `codex/job-001-state-machine` |
 | 最后验证基线 | `7e501ff`（SCAN-001 PR #20 已合并） |
 | 工作包提交 | 待创建 |
@@ -17,10 +17,31 @@
 
 ## 当前工作包进展
 
-- SCAN-001 已由 PR #20 合并到主线，合并提交为 `7e501ff`。
-- 正在把旧 `pending/running/completed/failed` 映射为排队、基础处理、就绪和分级失败，同时保留 `/v1` 增量兼容。
-- 将新增租约所有者、随机租约令牌、心跳、可用时间、阶段时间戳、最大尝试次数与取消字段。
-- 将补充过期租约抢占、指数退避、最终失败、协作取消、手动重试和结果幂等测试。
+- `0014` 已把旧作业状态兼容迁移为排队、基础处理、基础就绪、可选增强、就绪、分级失败和取消，并新增租约、心跳、退避、阶段时间戳和结果版本关联。
+- Worker 现在通过随机租约令牌领取及续租；过期抢占、取消和重试都会使旧令牌失效，写结果时再次锁行校验，页面结果与作业终态在同一事务提交。
+- 已新增所有者作业详情、取消和手动重试接口；管理员只读遵循既有角色矩阵，跨用户修改统一返回 `404` 并写审计。
+- 已覆盖租约过期恢复、旧 Worker 拒绝、指数退避、最终失败、取消竞态、单结果幂等、接口 IDOR、旧库迁移/降级和 PostgreSQL 双 Worker 单次领取。
+
+`JOB-001` 提交前全量检查：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`125 passed, 5 skipped`，应用代码覆盖率 `88.66%`；108 个 Python 文件格式、Ruff、`0014` 空库/旧版本升级与降级、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。
+
+首次聚焦回归曾出现 2 项失败：一项测试未先升级隔离数据库，另一项仍断言 `0013` 中间态；补齐测试数据库升级并按 `0014` 终态断言后重跑为 `31 passed`。随后发现 PostgreSQL 专项测试 import 排序问题，修复后 Ruff 与全量门禁通过。这些失败均为测试装配问题，未通过放宽业务断言规避。
 
 `SCAN-001` 提交前全量检查：
 
@@ -262,6 +283,6 @@ git diff --check
 
 ## 下一步
 
-1. 冻结 JOB-001 的状态转换、租约令牌、重试退避和取消规则。
-2. 实现兼容迁移、Worker 状态机与作业详情/取消/重试接口。
-3. 验证 Worker 崩溃重入不会重复生成页面或已提交结果版本。
+1. 提交 JOB-001，实现记录关联提交与 PR，并等待 PostgreSQL 17 的并发领取和迁移门禁。
+2. CI 通过后更新完成证据并合并，不把后续 staging 强杀、磁盘满和多 Worker 压力门禁误记为已完成。
+3. 从 `OCR-001` 继续 CPU OCR、方向融合、隐私过滤和智能命名工作包。

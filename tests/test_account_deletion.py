@@ -353,7 +353,7 @@ def test_running_processing_job_defers_account_cleanup() -> None:
         job = db.scalar(select(ProcessingJob).where(ProcessingJob.owner_user_id == user_id))
         assert request_row is not None and job is not None
         request_row.execute_after = now - timedelta(seconds=1)
-        job.status = JobStatus.running
+        job.status = JobStatus.baseline_processing
         db.commit()
         deferred = process_account_deletion(
             db,
@@ -366,7 +366,7 @@ def test_running_processing_job_defers_account_cleanup() -> None:
         assert db.get(ScanProject, project.json()["id"]) is not None
         job = db.get(ProcessingJob, job.id)
         assert job is not None
-        job.status = JobStatus.failed
+        job.status = JobStatus.failed_final
         db.commit()
         completed = process_account_deletion(
             db,
