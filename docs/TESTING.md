@@ -2,6 +2,8 @@
 
 SmartScan 的测试基线覆盖 Python 静态检查、数据库迁移、API 契约、权限与上传集成测试、视觉算法、前端语法和 Compose 配置。GitHub Actions 与 GitLab CI 使用相同的核心 Python 门禁。
 
+CI 的迁移漂移检查使用独立 `ci-smartscan.db`：先显式执行版本化升级，再运行 `alembic check`。该步骤不能依赖 Pytest 留下数据库文件，因为测试会话必须在结束时完整清理隔离资源。
+
 ## 隔离资源
 
 根目录 `tests/conftest.py` 在测试模块导入前设置独立环境：
