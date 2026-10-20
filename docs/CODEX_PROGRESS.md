@@ -52,7 +52,7 @@ git diff --check
 
 本机结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；133 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法、CI YAML、Android Manifest、兼容策略 JSON、密钥模式和差异检查均通过。5 项 PostgreSQL 专属测试及 Android 编译等待 PR CI 复核。本机未安装 JDK、Gradle 与 Android SDK，Android JVM 单元测试、应用单元测试和 Lint 将由固定 JDK 17、Gradle 8.9 与 Android 35 SDK 的 GitHub CI 执行；这不等同于模拟器或真机验收。
 
-PR #31 首轮 CI：Web/Chromium 与容器通过；Android 在 `android-actions/setup-android@v3` 内部执行已被新命令行工具移除的 `sdkmanager tools`，尚未进入项目编译。已移除该冗余动作，改用 GitHub Ubuntu Runner 预装的 Android SDK 直接安装固定 Android 35 平台与构建工具，等待最终分支头重跑。PostgreSQL 门禁仍在执行。
+PR #31 前两轮 Android CI 均未进入项目编译：首轮 `setup-android@v3` 请求已移除的 `tools` 包；第二轮确认 Ubuntu Runner 未把 `sdkmanager` 预置到 `PATH`。现改用已修复废弃包默认值且负责安装命令行工具的 `setup-android@v4`，由其安装固定 Android 35 平台与构建工具，等待最终分支头重跑。对应轮次的 Web/Chromium 与容器均通过，PostgreSQL 门禁继续执行。
 
 `H5-005` 本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；132 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法和差异检查均通过。PR #30 CI 在 PostgreSQL 17 环境 `161 passed`，覆盖率 `88.54%`；Web 的 33 项单元测试和 3 项 Chromium E2E/axe、容器门禁全部通过。
 
