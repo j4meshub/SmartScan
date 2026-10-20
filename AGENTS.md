@@ -50,10 +50,11 @@ node --check apps/h5/resumable-upload.js
 npm --prefix apps/h5 test
 npm --prefix apps/h5 run test:e2e
 node --check apps/admin-web/app.js
+gradle -p apps/android :core:network:test :data:repository:test :app:testDebugUnitTest :app:lintDebug
 docker compose -f deploy/compose/docker-compose.yml config
 ```
 
-只运行与工作包相关的快速检查可以用于开发中反馈，但完成工作包前必须运行所有适用检查。Android 和 iOS 命令在对应工程建立后补入本节。
+只运行与工作包相关的快速检查可以用于开发中反馈，但完成工作包前必须运行所有适用检查。Android 命令需要 JDK 17、Gradle 8.9 和 Android 35 SDK；iOS 命令在可复现工程建立后补入本节。
 
 ## 安全边界
 

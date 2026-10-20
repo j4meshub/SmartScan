@@ -6,24 +6,25 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M4 H5 完整产品 |
-| 当前工作包 | `H5-005` 双语与 E2E |
-| 工作包状态 | 进行中，本地门禁已通过，PR 等待 CI |
-| 当前分支 | `codex/h5-005-i18n-e2e` |
-| 最后验证基线 | `a43deb9`（H5-004 PR #29 已合并） |
-| 工作包提交 | `43cf5be`（实现提交） |
-| PR | `#30`，等待 CI |
-| 下一工作包 | `AND-001` Android 分层工程与 API 客户端 |
+| 当前里程碑 | M5 Android |
+| 当前工作包 | `AND-001` 分层工程与 API 客户端 |
+| 工作包状态 | 进行中，本机可执行门禁通过，Android 编译等待 CI |
+| 当前分支 | `codex/and-001-layered-foundation` |
+| 最后验证基线 | `6d20db5`（H5-005 PR #30 已合并） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `AND-002` 身份与缓存 |
 
 ## 当前工作包进展
 
-- H5-004 已由 PR #29 合并到主线，中文 squash 提交为 `a43deb9`；真实 Web Share、企业微信接收方和大文件内存继续保留人工验收。
-- H5-005 将主界面和编辑器中英文词条集中管理，自动检查两种语言键集合及 HTML 文本、替代文本和无障碍名称覆盖。
-- 四角控制可使用键盘方向键移动，并公开滑块坐标；界面增加高对比焦点和减少动画支持。
-- Playwright 使用内存 Mock API 验证中文登录/项目/任务/导出/分享回退、英文界面和 URL 项目恢复，axe 扫描 WCAG 2 A/AA。
-- 真实 Chromium 首次暴露原生 `fetch` 调用上下文错误，修复后增加单元回归；axe 首次发现 `4.24:1` 小字号对比度并修正颜色。
+- H5-005 已由 PR #30 合并到主线，中文 squash 提交为 `6d20db5`；M4 桌面自动化门禁完成，真实企微、短信、相机、弱网、系统分享和屏幕阅读器继续保留人工验收。
+- Android 工程已拆分 `:core:model`、`:core:network`、`:data:repository` 和 `:app`，依赖方向保持从应用到仓储/网络再到领域模型。
+- Compose 已建立首页、项目和设置三个稳定导航入口；项目与设置业务页由后续工作包接入，不以占位界面宣称功能完成。
+- Retrofit/OkHttp 客户端已建模项目、页面、任务和导出读取接口，项目仓储完成 DTO 到领域模型映射及稳定错误分类。
+- 远端 API 根地址强制 HTTPS，禁止凭据、查询与片段；HTTP 仅能在测试显式允许回环地址。默认使用不可解析的 `.invalid` 域名，不携带真实令牌。
+- `MockWebServer` 验证项目请求路径、设备头、Bearer 头和新增可选字段兼容；兼容矩阵只登记已进入仓储产品链路的项目列表接口。
 
-`H5-005` 本地门禁：
+`AND-001` 计划门禁：
 
 ```text
 python -m ruff format --check .
@@ -41,17 +42,18 @@ node --check apps/h5/page-editor.js
 node --check apps/h5/project-files.js
 node --check apps/h5/resumable-upload.js
 node --check apps/admin-web/app.js
-npm ci  # apps/h5
-npm test  # apps/h5
-npm run test:e2e  # apps/h5
+npm --prefix apps/h5 ci
+npm --prefix apps/h5 test
+npm --prefix apps/h5 run test:e2e
+gradle -p apps/android :core:network:test :data:repository:test :app:testDebugUnitTest :app:lintDebug
 git diff --check
 ```
 
-本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；132 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、Playwright `1.64.1` 锁文件重装、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试等待 PR CI 复核。
+本机结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；133 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法、CI YAML、Android Manifest、兼容策略 JSON、密钥模式和差异检查均通过。5 项 PostgreSQL 专属测试及 Android 编译等待 PR CI 复核。本机未安装 JDK、Gradle 与 Android SDK，Android JVM 单元测试、应用单元测试和 Lint 将由固定 JDK 17、Gradle 8.9 与 Android 35 SDK 的 GitHub CI 执行；这不等同于模拟器或真机验收。
 
-PR #30 CI 结果：等待 PostgreSQL、Chromium E2E、Web 和容器门禁。
+PR CI 结果：等待创建 PR。
 
-首次 Chromium E2E 的 3 项失败均因原生 `fetch` 以错误上下文调用；修复请求封装后核心流程通过，剩余两项严格定位问题收窄到真实元素作用域。首次 axe 扫描发现编辑器 11px 眉题对比度为 `4.24:1`，加深颜色后 WCAG 2 A/AA 扫描通过。没有忽略规则或放宽产品断言。
+`H5-005` 本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；132 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法和差异检查均通过。PR #30 CI 在 PostgreSQL 17 环境 `161 passed`，覆盖率 `88.54%`；Web 的 33 项单元测试和 3 项 Chromium E2E/axe、容器门禁全部通过。
 
 `H5-004` 本地结果：`156 passed, 5 skipped`，覆盖率 `88.28%`，H5 `29 passed`。PR #29 CI 在 PostgreSQL 17 环境 `161 passed`，覆盖率 `88.54%`；Web 与容器门禁全部通过。
 
@@ -471,10 +473,11 @@ git diff --check
 | H5 拍摄入口 | `3cd4511` | 本地 152 项通过、覆盖率 88.29%，H5 20 项通过；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.56%；后摄、ImageCapture/帧回退、后台释放、系统相机、预览、Web 与容器检查通过；PR #27 已合并 |
 | H5 页面编辑 | `1868eea` | 本地 156 项通过、覆盖率 88.28%，H5 25 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；四角裁切、滤镜、旋转、页序、复核、IDOR、OpenAPI、Web 与容器检查通过；PR #28 已合并 |
 | H5 项目恢复与文件分享 | `a43deb9` | 本地 156 项通过、覆盖率 88.28%，H5 29 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；项目恢复、任务轮询、导出、鉴权下载、Web Share 回退、Web 与容器检查通过；PR #29 已合并 |
+| H5 双语与浏览器 E2E | `6d20db5` | 本地 156 项通过、覆盖率 88.28%，H5 33 项、Chromium E2E/axe 3 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；中英文、键盘编辑、真实模块加载、分享回退、无障碍、Web 与容器检查通过；PR #30 已合并 |
 
 ## 下一步
 
-1. 等待 PR #30 的 PostgreSQL、Web、Chromium E2E 和容器 CI 通过后合并，并回填最终提交与验证证据。
-2. 合并后将 M4 自动化代码门禁标记为完成。
-3. M4 代码门禁完成后从 `AND-001` 继续 Android 分层工程与 API 客户端。
-4. 真实企业微信租户、短信、相机、弱网、系统分享与屏幕阅读器继续保留人工验收门禁，不以 Mock 结果代替。
+1. 完成 `AND-001` 本机可执行门禁并提交，创建中文 PR。
+2. 由 GitHub CI 的固定 Android 工具链执行 JVM 单元测试、应用单元测试与 Lint；失败时先定位、修复并重跑。
+3. CI 通过且自审完成后合并，回填最终提交与验证证据，再从 `AND-002` 身份与缓存继续。
+4. Android 模拟器、真机、正式签名，以及真实企业微信、短信、相机和弱网继续保留人工验收门禁，不以 Mock 结果代替。

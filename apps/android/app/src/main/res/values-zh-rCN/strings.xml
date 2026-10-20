@@ -1,2 +1,15 @@
-<resources><string name="app_name">智能扫描</string><string name="headline">捕捉纸上的每一分清晰。</string><string name="smart_scan">智能扫描</string><string name="exam_clean">试卷净化</string><string name="book_scan">连续扫书</string></resources>
+<resources>
+    <string name="app_name">智能扫描</string>
+    <string name="headline">捕捉纸上的每一分清晰。</string>
+    <string name="smart_scan">智能扫描</string>
+    <string name="smart_scan_description">自动裁切 · 增强 · 旋转</string>
+    <string name="exam_clean">试卷净化</string>
+    <string name="book_scan">连续扫书</string>
+    <string name="ready">●  就绪</string>
+    <string name="home">首页</string>
+    <string name="projects">项目</string>
+    <string name="projects_description">同步后的扫描项目会显示在这里。</string>
+    <string name="settings">设置</string>
+    <string name="settings_description">账号、语言和存储设置会显示在这里。</string>
+</resources>
 

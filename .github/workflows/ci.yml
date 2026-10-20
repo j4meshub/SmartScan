@@ -60,6 +60,22 @@ jobs:
       - run: npm run test:e2e
         working-directory: apps/h5
       - run: node --check apps/admin-web/app.js
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: 安装 Android 35 SDK
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Android 分层、单元测试与 Lint
+        run: gradle -p apps/android :core:network:test :data:repository:test :app:testDebugUnitTest :app:lintDebug --stacktrace
   containers:
     runs-on: ubuntu-latest
     steps:

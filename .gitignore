@@ -18,6 +18,8 @@ local.properties
 DerivedData/
 *.xcuserstate
 data/
+!/apps/android/data/
+!/apps/android/data/**
 uploads/
 datasets/perspective/images/
 reports/perspective/

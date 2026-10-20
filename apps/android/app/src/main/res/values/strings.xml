@@ -1,2 +1,15 @@
-<resources><string name="app_name">SmartScan</string><string name="headline">Capture every detail on paper.</string><string name="smart_scan">Smart Scan</string><string name="exam_clean">Clean Exam</string><string name="book_scan">Scan a Book</string></resources>
+<resources>
+    <string name="app_name">SmartScan</string>
+    <string name="headline">Capture every detail on paper.</string>
+    <string name="smart_scan">Smart Scan</string>
+    <string name="smart_scan_description">Auto crop · Enhance · Rotate</string>
+    <string name="exam_clean">Clean Exam</string>
+    <string name="book_scan">Scan a Book</string>
+    <string name="ready">●  READY</string>
+    <string name="home">Home</string>
+    <string name="projects">Projects</string>
+    <string name="projects_description">Your synchronized scan projects will appear here.</string>
+    <string name="settings">Settings</string>
+    <string name="settings_description">Account, language, and storage controls will appear here.</string>
+</resources>
 
