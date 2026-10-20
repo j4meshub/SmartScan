@@ -46,6 +46,16 @@ test("设备标识稳定且设备名按 UTF-8 编码", () => {
   });
 });
 
+test("请求实现始终以全局上下文调用以兼容浏览器原生 fetch", async () => {
+  let receivedThis = null;
+  const auth = client(function fetchLike() {
+    receivedThis = this;
+    return Promise.resolve(jsonResponse(200, {access_token: "access", refresh_token: "refresh"}));
+  });
+  await auth.login("demo", "correct-password");
+  assert.equal(receivedThis, globalThis);
+});
+
 test("登录会把访问与刷新令牌原子写入会话存储", async () => {
   const calls = [];
   const auth = client(async (url, options) => {

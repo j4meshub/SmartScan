@@ -40,14 +40,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: 22}
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/h5/package-lock.json
       - run: node --check apps/h5/app.js
       - run: node --check apps/h5/auth-client.js
       - run: node --check apps/h5/camera.js
+      - run: node --check apps/h5/i18n.js
       - run: node --check apps/h5/page-editor.js
       - run: node --check apps/h5/project-files.js
       - run: node --check apps/h5/resumable-upload.js
-      - run: node --test apps/h5/tests/*.test.js
+      - run: npm ci
+        working-directory: apps/h5
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/h5
+      - run: npm test
+        working-directory: apps/h5
+      - run: npm run test:e2e
+        working-directory: apps/h5
       - run: node --check apps/admin-web/app.js
   containers:
     runs-on: ubuntu-latest

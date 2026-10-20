@@ -7,23 +7,23 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M4 H5 完整产品 |
-| 当前工作包 | `H5-004` 文件与分享 |
-| 工作包状态 | 进行中，本地门禁已通过，PR 等待 CI |
-| 当前分支 | `codex/h5-004-file-share` |
-| 最后验证基线 | `1868eea`（H5-003 PR #28 已合并） |
-| 工作包提交 | `5185963`（实现提交） |
-| PR | `#29`，等待 CI |
-| 下一工作包 | `H5-005` 双语与 E2E |
+| 当前工作包 | `H5-005` 双语与 E2E |
+| 工作包状态 | 进行中，本地门禁已通过，等待提交与 PR |
+| 当前分支 | `codex/h5-005-i18n-e2e` |
+| 最后验证基线 | `a43deb9`（H5-004 PR #29 已合并） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `AND-001` Android 分层工程与 API 客户端 |
 
 ## 当前工作包进展
 
-- H5-003 已由 PR #28 合并到主线，中文 squash 提交为 `1868eea`；真实移动端裁切精度继续保留人工验收。
-- H5-004 使用 `#project=<id>` 恢复项目工作区，恢复前必须在当前用户项目列表重新验证项目，URL 不携带凭据。
-- 页面、当前项目任务和导出记录同步恢复；存在活动任务时每 3 秒轮询，关闭项目后停止后台请求。
-- 支持 PDF/JPG、三档质量和 PDF OCR 文本层导出，文件先经鉴权接口取得 Blob，再下载或交给 Web Share。
-- Web Share 不可用或非取消类失败时回退本地下载；用户主动取消不触发隐式下载。
+- H5-004 已由 PR #29 合并到主线，中文 squash 提交为 `a43deb9`；真实 Web Share、企业微信接收方和大文件内存继续保留人工验收。
+- H5-005 将主界面和编辑器中英文词条集中管理，自动检查两种语言键集合及 HTML 文本、替代文本和无障碍名称覆盖。
+- 四角控制可使用键盘方向键移动，并公开滑块坐标；界面增加高对比焦点和减少动画支持。
+- Playwright 使用内存 Mock API 验证中文登录/项目/任务/导出/分享回退、英文界面和 URL 项目恢复，axe 扫描 WCAG 2 A/AA。
+- 真实 Chromium 首次暴露原生 `fetch` 调用上下文错误，修复后增加单元回归；axe 首次发现 `4.24:1` 小字号对比度并修正颜色。
 
-`H5-004` 本地门禁：
+`H5-005` 本地门禁：
 
 ```text
 python -m ruff format --check .
@@ -36,17 +36,24 @@ python -m services.api.app.migrations check
 node --check apps/h5/app.js
 node --check apps/h5/auth-client.js
 node --check apps/h5/camera.js
+node --check apps/h5/i18n.js
 node --check apps/h5/page-editor.js
 node --check apps/h5/project-files.js
 node --check apps/h5/resumable-upload.js
 node --check apps/admin-web/app.js
+npm ci  # apps/h5
 npm test  # apps/h5
+npm run test:e2e  # apps/h5
 git diff --check
 ```
 
-本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；131 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `29 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试等待 PR CI 复核。
+本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；132 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、Playwright `1.64.1` 锁文件重装、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试等待 PR CI 复核。
 
-PR #29 CI 结果：等待 PostgreSQL、Web 和容器门禁。
+PR CI 结果：待创建 PR 后补充。
+
+首次 Chromium E2E 的 3 项失败均因原生 `fetch` 以错误上下文调用；修复请求封装后核心流程通过，剩余两项严格定位问题收窄到真实元素作用域。首次 axe 扫描发现编辑器 11px 眉题对比度为 `4.24:1`，加深颜色后 WCAG 2 A/AA 扫描通过。没有忽略规则或放宽产品断言。
+
+`H5-004` 本地结果：`156 passed, 5 skipped`，覆盖率 `88.28%`，H5 `29 passed`。PR #29 CI 在 PostgreSQL 17 环境 `161 passed`，覆盖率 `88.54%`；Web 与容器门禁全部通过。
 
 `H5-003` 本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；H5 `25 passed`，OpenAPI、迁移、JavaScript 和差异检查通过。PR #28 CI 在 PostgreSQL 17 环境 `161 passed`，覆盖率 `88.54%`；Web 与容器门禁全部通过。
 
@@ -419,7 +426,7 @@ git diff --check
 |---|---|---|
 | 公司 staging 与目标主机负载 | 阻塞 | 提供可隔离的数据库、数据目录和域名/端口 |
 | 企业微信真实身份与手机号 | 等待人工验收 | 提供 CorpId、AgentId、Secret、可信域名及测试成员权限 |
-| H5 相机与真实弱网 | 等待人工验收 | 提供至少 3 款 Android 手机、2 个企业微信版本及 Wi-Fi/4G/5G 网络切换条件 |
+| H5 真机与真实弱网 | 等待人工验收 | 提供至少 3 款 Android 手机、2 个企业微信版本、Wi-Fi/4G/5G 切换、系统分享目标和屏幕阅读器条件 |
 | 文档透视真实样本 | 等待人工验收 | 提供已授权、脱敏且具有人工期望标注的固定文档照片集 |
 | 真实短信 | 等待人工验收 | 冻结供应商、签名、模板、密钥和限频参数 |
 | Android 正式签名分发 | 等待人工验收 | 冻结包名、签名资产和 GitLab 发布位置 |
@@ -463,10 +470,11 @@ git diff --check
 | H5 登录与企业微信绑定 | `10ab33e` | 本地 152 项通过、覆盖率 88.29%，H5 17 项通过；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.56%；设备会话、刷新轮换、企微回调、短信绑定、兼容契约、Web 与容器检查通过；PR #26 已合并 |
 | H5 拍摄入口 | `3cd4511` | 本地 152 项通过、覆盖率 88.29%，H5 20 项通过；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.56%；后摄、ImageCapture/帧回退、后台释放、系统相机、预览、Web 与容器检查通过；PR #27 已合并 |
 | H5 页面编辑 | `1868eea` | 本地 156 项通过、覆盖率 88.28%，H5 25 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；四角裁切、滤镜、旋转、页序、复核、IDOR、OpenAPI、Web 与容器检查通过；PR #28 已合并 |
+| H5 项目恢复与文件分享 | `a43deb9` | 本地 156 项通过、覆盖率 88.28%，H5 29 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；项目恢复、任务轮询、导出、鉴权下载、Web Share 回退、Web 与容器检查通过；PR #29 已合并 |
 
 ## 下一步
 
-1. 等待 PR #29 的 PostgreSQL、Web 和容器 CI 通过后合并，并回填最终提交与验证证据。
-2. 合并后将 `H5-004` 标记为完成。
-3. 从 `H5-005` 继续双语覆盖、浏览器 E2E 和无障碍门禁。
-4. 真实企业微信租户、短信、相机、弱网与系统分享继续保留人工验收门禁，不以 Mock 结果代替。
+1. 提交 `H5-005`，推送分支并创建中文 PR。
+2. 等待 PostgreSQL、Web、Chromium E2E 和容器 CI 通过后合并，并回填最终提交与验证证据。
+3. M4 代码门禁完成后从 `AND-001` 继续 Android 分层工程与 API 客户端。
+4. 真实企业微信租户、短信、相机、弱网、系统分享与屏幕阅读器继续保留人工验收门禁，不以 Mock 结果代替。
