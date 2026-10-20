@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
 | 当前工作包 | `POC-005` 双页检测、拆分与去弯曲回退 |
-| 工作包状态 | 进行中，已完成需求与算法安全边界盘点，待实现几何 POC |
+| 工作包状态 | 进行中，双页拆分、保守去弯曲与本地全量验证已完成，待提交和 PR |
 | 当前分支 | `codex/poc-005-book-split` |
 | 最后验证基线 | `6ff0f2a`（POC-004 PR #9 已合并） |
 | 工作包提交 | 待创建 |
@@ -21,9 +21,30 @@
 - 阅读顺序必须由项目显式保存为左到右或右到左，不能依据界面语言猜测。
 - 只可靠识别到一页时保存单页并提示另一侧缺失；低置信书脊不得把桌面或相邻页当成第二页。
 - 去弯曲需要用几何质量分数约束，结果没有改善时回退未去弯曲页面；本 POC 先验证边界曲线与确定性网格，文字基线/OCR 评分留给产品化阶段。
-- 合成测试将覆盖非中心书脊、不等宽页面、两种阅读顺序、单页回退、可信曲面校正和过度曲面回退。
+- 已实现非中心书脊暗谷、左右覆盖率、独立裁切和显式阅读顺序；低置信书脊或缺侧会返回一张完整原图。
+- 已实现二次边界曲率估计、确定性纵向网格和输出几何改善门禁；直页、过度曲率或未改善结果均回退原页。
+- 专项 Ruff 与格式检查通过，双页模块 `11 passed`，覆盖非中心书脊、不等宽页面、两种顺序、单页/缺侧及去弯曲采用与回退。
+- 真实浅色桌面、厚书、手指、反光和文字基线仍需授权固定数据集，不以合成结果宣称达到 `95%` 拆分率。
 
 ## 已执行验证
+
+`POC-005` 提交前全量检查：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`64 passed, 2 skipped`，覆盖率 `85.50%`；Ruff、45 个 Python 文件格式、迁移漂移、当前数据库版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过，当前 Windows 未安装 Docker；两者由 PR CI 复核。
 
 `POC-004` 提交前全量检查：
 
@@ -139,6 +160,6 @@ git diff --check
 
 ## 下一步
 
-1. 实现非中心书脊置信度、左右独立裁切和显式阅读顺序。
-2. 实现保守边界去弯曲、几何改善评分和原页回退。
-3. 增加合成测试与中文边界说明；真实书籍固定数据集继续保留人工门禁。
+1. 创建 POC-005 中文提交和 PR，并由 PostgreSQL、Web 和 Compose CI 复核。
+2. CI 通过后合并 POC；真实拆分与去弯曲指标继续“等待人工验收”。
+3. 从 `POC-006` 继续 16 用户混合负载脚本与本地报告。
