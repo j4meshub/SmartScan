@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "SmartScan API",
-    "description": "Unified account, RBAC, scanning projects, uploads and CPU processing queue.",
-    "version": "0.1.0"
+    "title": "SmartScan 接口",
+    "description": "统一账号、权限、扫描项目、上传、处理、导出与文件生命周期接口。",
+    "version": "2026-10-20.1"
   },
   "paths": {
     "/v1/auth/account-merges": {

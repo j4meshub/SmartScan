@@ -17,7 +17,7 @@ unit-test:
     SMARTSCAN_TEST_POSTGRES_URL: postgresql+psycopg://smartscan:ci-only-password@postgres:5432/smartscan_test
     SMARTSCAN_DATABASE_URL: sqlite:///./ci-smartscan.db
     SMARTSCAN_STORAGE_ROOT: ./ci-data
-  script: ["pip install -e .[dev,vision]", "pytest --cov=services --cov-report=term-missing --cov-fail-under=77", "python -m services.api.app.migrations upgrade", "python -m services.api.app.migrations drift"]
+  script: ["pip install -e .[dev,vision]", "pytest --cov=services --cov-report=term-missing --cov-fail-under=77", "python tools/api_compatibility.py", "python -m services.api.app.migrations upgrade", "python -m services.api.app.migrations drift"]
 web-check:
   stage: lint
   image: node:22
