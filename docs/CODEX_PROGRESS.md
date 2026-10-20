@@ -7,25 +7,23 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M0 工程基础 |
-| 当前工作包 | `DB-001` 版本化迁移 |
-| 工作包状态 | 完成，PR CI 已通过，等待合并 |
-| 当前分支 | `codex/db-001-versioned-migrations` |
-| 最后验证基线 | `dde779e`（GOV-001 PR #1 已合并） |
-| 工作包提交 | `5e2dc13` |
-| PR | [#2 引入版本化数据库迁移](https://github.com/j4meshub/SmartScan/pull/2) |
-| 下一工作包 | `ARC-001` API 分层 |
+| 当前工作包 | `ARC-001` API 分层 |
+| 工作包状态 | 进行中，现状边界已盘点 |
+| 当前分支 | `codex/arc-001-api-layers` |
+| 最后验证基线 | `91ff720`（DB-001 PR #2 已合并） |
+| 工作包提交 | 待创建 |
+| PR | 待创建 |
+| 下一工作包 | `QA-001` 测试与 CI 基线 |
 
-## 本工作包完成内容
+## 当前工作包进展
 
-- 引入 Alembic 初始基线，统一管理 SQLite 与 PostgreSQL 表结构。
-- 空库可以升级到最新版本；旧 `create_all` 基线经完整表列校验后无损接管。
-- API 开发启动使用版本化迁移；Worker 只检查版本，不再运行 `create_all`。
-- 生产 Compose 先运行一次性迁移服务，再启动 API 和 Worker。
-- PostgreSQL 超级管理员和审计保护约束纳入迁移版本。
+- 已确认当前 `services/api/app/main.py` 共 795 行，包含启动、认证、项目、上传、文件、任务和管理后台等职责。
+- 已按认证、项目、上传/文件、任务、管理后台划分路由边界；公共查询与业务规则将分别进入存储层和服务层。
+- 拆分必须保持既有路径、状态码、响应模型、依赖注入、统一 `404` 行为和 OpenAPI 行为不变。
 
-## 已执行验证
+## 最近一次完整验证
 
-本工作包执行了以下检查：
+`DB-001` 合并前执行了以下检查，作为 `ARC-001` 的回归基线：
 
 ```text
 python -m ruff check services migrations tests
@@ -41,7 +39,7 @@ git diff --check
 验证结果：
 
 - Ruff 检查通过，28 个 Python 文件格式检查通过。
-- 本地 Pytest 通过：`15 passed, 2 skipped`，服务端覆盖率 `79%`；新增 5 项 SQLite 迁移测试，覆盖空库、旧基线、残缺基线、版本门禁和回滚再升级。2 项 PostgreSQL 测试因本机未提供隔离测试库而跳过，将由 PR CI 的 PostgreSQL 17 服务执行。
+- 本地 Pytest 通过：`15 passed, 2 skipped`，服务端覆盖率 `79%`；新增 5 项 SQLite 迁移测试，覆盖空库、旧基线、残缺基线、版本门禁和回滚再升级。2 项本地跳过的 PostgreSQL 测试随后已由 PR CI 执行。
 - PR CI 使用 PostgreSQL 17 实际执行全部迁移测试：`17 passed`、无跳过、服务端覆盖率 `79%`。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
@@ -49,7 +47,7 @@ git diff --check
 - H5 和管理后台 JavaScript 语法检查通过。
 - `git diff --check` 通过，仅有 Windows LF/CRLF 提示。
 - GitHub Actions、GitLab CI 和 Compose YAML 语法解析通过。
-- 当前 Windows 环境未安装 Docker，Compose 语义检查和镜像构建等待 PR CI；真实 PostgreSQL 迁移仍保留外部门禁。
+- 当前 Windows 环境未安装 Docker；Compose 语义检查已由 PR CI 通过，真实公司环境的 PostgreSQL 迁移仍保留外部门禁。
 
 ## 外部阻塞
 
@@ -72,10 +70,11 @@ git diff --check
 | 分片上传与断点续传 | `38df17a` | 7 项测试通过；分片、哈希、幂等和隔离 |
 | 文档透视校正 POC | `1d5a9d6` | 10 项测试通过；OpenCV 透视和保守回退 |
 | 长任务治理 | `dde779e` | Ruff、格式、10 项 Pytest、H5、后台及 Compose CI 通过；PR #1 已合并 |
-| 版本化数据库迁移 | `5e2dc13` | 本地 15 项通过；PR CI 17 项通过且 PostgreSQL 测试无跳过；PR #2 |
+| 版本化数据库迁移 | `91ff720` | 本地 15 项通过；PR CI 17 项通过且 PostgreSQL 测试无跳过；PR #2 已合并 |
 
 ## 下一步
 
-1. 合并 `DB-001` PR #2。
-2. 从最新 `main` 创建 `codex/arc-001-api-layers`。
-3. 公司 PostgreSQL 环境恢复后复核真实升级、保护约束和回滚演练；在此之前不得宣称该外部门禁通过。
+1. 先增加路由清单/OpenAPI 回归证据，再移动代码，避免拆分过程中静默改变契约。
+2. 将应用装配与生命周期保留在 `main.py`，按认证、项目、上传/文件、任务和管理职责拆分路由。
+3. 将跨路由业务规则移入服务层，将 SQLAlchemy 查询和锁定操作移入存储层。
+4. 全量测试和 CI 通过后更新架构说明，提交并创建 `ARC-001` PR。
