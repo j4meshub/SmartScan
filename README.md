@@ -106,6 +106,8 @@ Android 模块边界、Compose 导航、环境注入、请求安全和 CI 工具
 
 Android 注册登录、一次性刷新令牌、Keystore 加密会话、Room 用户分区和退出清理见[Android 身份、Keystore 与用户分区缓存](docs/ANDROID_AUTH_AND_CACHE.md)。
 
+Android 三模式 CameraX 预览、点按对焦、曝光补偿、质量提示、手动快门和原图保护见[Android CameraX 拍摄与质量提示](docs/ANDROID_CAMERA_CAPTURE.md)。
+
 文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
 
 试卷规则检测、保守净化和禁止生成虚假原文的边界见[基础试卷检测与保守净化 POC](docs/POC_EXAM_CLEANUP.md)。

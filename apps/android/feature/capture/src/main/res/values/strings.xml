@@ -1,0 +1,20 @@
+<resources>
+    <string name="capture_back">Back</string>
+    <string name="capture_mode_document">Smart Scan</string>
+    <string name="capture_mode_exam">Clean Exam</string>
+    <string name="capture_mode_book">Scan a Book</string>
+    <string name="capture_permission_required">Camera permission is required to capture a page.</string>
+    <string name="capture_permission_action">Allow camera</string>
+    <string name="capture_camera_unavailable">The rear camera is unavailable. You can return and use file import in a later step.</string>
+    <string name="capture_save_failed">The original image could not be saved. No page was created.</string>
+    <string name="capture_quality_analyzing">Checking focus and exposure…</string>
+    <string name="capture_quality_ready">Ready to capture</string>
+    <string name="capture_quality_dark">Move to brighter light</string>
+    <string name="capture_quality_bright">Reduce exposure or direct light</string>
+    <string name="capture_quality_glare">Change the angle to reduce glare</string>
+    <string name="capture_quality_blurry">Hold the device steady and tap the page to focus</string>
+    <string name="capture_exposure">Exposure</string>
+    <string name="capture_manual_hint">Manual shutter · low-quality pages can still be captured with a warning</string>
+    <string name="capture_saved_original">Original image saved. Enhancement never overwrites it.</string>
+    <string name="capture_continue">Capture another page</string>
+</resources>

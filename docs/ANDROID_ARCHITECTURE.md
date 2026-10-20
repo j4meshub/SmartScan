@@ -21,12 +21,14 @@
         │       └─ :core:network
         │
         ├─ :core:network ── Retrofit 契约、序列化与请求头
-        └─ :core:model ── 不依赖 Android 的领域对象
+        ├─ :core:model ── 不依赖 Android 的领域对象
+        └─ :feature:capture ── CameraX 预览、质量提示与原图捕获
 ```
 
 - `:core:model` 只保存项目、页面、任务和导出领域模型，可被后续缓存与界面复用。
 - `:core:network` 声明当前 `/v1` 读取契约，忽略服务端新增的可选字段，但不吞掉缺失必填字段或类型错误。
 - `:data:repository` 隔离 DTO 与领域对象，并把 HTTP、网络和响应解析失败转换为不泄漏异常内容的分类结果。
+- `:feature:capture` 封装 CameraX 生命周期、实时亮度/清晰度/高光提示、点按对焦、曝光补偿、手动快门和不可变原图落盘；不依赖网络或认证实现。
 - `:app` 只负责 Android 入口、Compose 导航和依赖装配。当前首页、项目和设置是稳定导航入口，具体业务由后续工作包接入。
 
 依赖方向只允许上层依赖下层；网络模块不能依赖应用模块，领域模型不能依赖 Android 或传输库。
@@ -59,7 +61,7 @@ gradle -p apps/android -PSMARTSCAN_API_BASE_URL=https://staging.example.com/ :ap
 本机具备 JDK 17、Gradle 8.9 与 Android 35 SDK 时运行：
 
 ```text
-gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :data:repository:test :data:local:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
+gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
 ```
 
 GitHub CI 会安装固定工具链并执行同一命令。网络单元测试使用本地 `MockWebServer`，只验证请求头、路径和兼容解析，不访问开发、staging 或生产 API。模拟器、真机、身份缓存和后台恢复分别由 `AND-002` 至 `AND-005` 验收。

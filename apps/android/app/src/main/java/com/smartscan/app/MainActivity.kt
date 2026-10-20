@@ -27,6 +27,8 @@ import com.smartscan.core.model.UserProfile
 import com.smartscan.data.repository.ApiResult
 import com.smartscan.data.repository.AuthenticationRepository
 import com.smartscan.data.repository.RegistrationInput
+import com.smartscan.feature.capture.CaptureMode
+import com.smartscan.feature.capture.CaptureScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -114,6 +116,8 @@ fun SmartScanApp(authenticationRepository: AuthenticationRepository) {
 private fun AuthenticatedApp(user: UserProfile, onLogout: () -> Unit) {
     MaterialTheme(colorScheme = lightColorScheme(primary = Ink, background = Paper)) {
         val navController = rememberNavController()
+        val backStackEntry by navController.currentBackStackEntryAsState()
+        val currentDestination = backStackEntry?.destination
         val destinations = listOf(
             AppDestination.Home,
             AppDestination.Projects,
@@ -121,22 +125,22 @@ private fun AuthenticatedApp(user: UserProfile, onLogout: () -> Unit) {
         )
         Scaffold(
             bottomBar = {
-                NavigationBar {
-                    val backStackEntry by navController.currentBackStackEntryAsState()
-                    val currentDestination = backStackEntry?.destination
-                    destinations.forEach { destination ->
-                        NavigationBarItem(
-                            selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true,
-                            onClick = {
-                                navController.navigate(destination.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Text(destination.symbol) },
-                            label = { Text(stringResource(destination.labelResource)) },
-                        )
+                if (currentDestination?.route != CaptureRoute) {
+                    NavigationBar {
+                        destinations.forEach { destination ->
+                            NavigationBarItem(
+                                selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true,
+                                onClick = {
+                                    navController.navigate(destination.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = { Text(destination.symbol) },
+                                label = { Text(stringResource(destination.labelResource)) },
+                            )
+                        }
                     }
                 }
             },
@@ -146,12 +150,20 @@ private fun AuthenticatedApp(user: UserProfile, onLogout: () -> Unit) {
                 startDestination = AppDestination.Home.route,
                 modifier = Modifier.padding(innerPadding),
             ) {
-                composable(AppDestination.Home.route) { SmartScanHome() }
+                composable(AppDestination.Home.route) {
+                    SmartScanHome { mode -> navController.navigate("capture/${mode.routeValue}") }
+                }
                 composable(AppDestination.Projects.route) {
                     PlaceholderScreen(R.string.projects, R.string.projects_description)
                 }
                 composable(AppDestination.Settings.route) {
                     SettingsScreen(user, onLogout)
+                }
+                composable(CaptureRoute) { entry ->
+                    CaptureScreen(
+                        mode = CaptureMode.fromRoute(entry.arguments?.getString("mode")),
+                        onBack = { navController.popBackStack() },
+                    )
                 }
             }
         }
@@ -290,8 +302,10 @@ private sealed class AppDestination(
     data object Settings : AppDestination("settings", R.string.settings, "⚙")
 }
 
+private const val CaptureRoute = "capture/{mode}"
+
 @Composable
-private fun SmartScanHome() {
+private fun SmartScanHome(onModeSelected: (CaptureMode) -> Unit) {
     Column(Modifier.fillMaxSize().background(Paper).padding(horizontal = 20.dp, vertical = 30.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("⌗  SmartScan", fontWeight = FontWeight.Black, fontSize = 20.sp)
@@ -302,11 +316,30 @@ private fun SmartScanHome() {
         Spacer(Modifier.height(62.dp))
         Text(stringResource(R.string.headline), fontWeight = FontWeight.Black, fontSize = 46.sp, lineHeight = 48.sp, letterSpacing = (-1.6).sp)
         Spacer(Modifier.height(36.dp))
-        ScanModeCard(stringResource(R.string.smart_scan), stringResource(R.string.smart_scan_description), Ink, Color.White)
+        ScanModeCard(
+            stringResource(R.string.smart_scan),
+            stringResource(R.string.smart_scan_description),
+            Ink,
+            Color.White,
+        ) { onModeSelected(CaptureMode.DOCUMENT) }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.weight(1f)) { ScanModeCard(stringResource(R.string.exam_clean), "✦", Color.White, Ink) }
-            Box(Modifier.weight(1f)) { ScanModeCard(stringResource(R.string.book_scan), "◫", Color.White, Ink) }
+            Box(Modifier.weight(1f)) {
+                ScanModeCard(
+                    stringResource(R.string.exam_clean),
+                    stringResource(R.string.exam_clean_description),
+                    Color.White,
+                    Ink,
+                ) { onModeSelected(CaptureMode.EXAM) }
+            }
+            Box(Modifier.weight(1f)) {
+                ScanModeCard(
+                    stringResource(R.string.book_scan),
+                    stringResource(R.string.book_scan_description),
+                    Color.White,
+                    Ink,
+                ) { onModeSelected(CaptureMode.BOOK) }
+            }
         }
     }
 }
@@ -324,8 +357,14 @@ private fun PlaceholderScreen(titleResource: Int, descriptionResource: Int) {
 }
 
 @Composable
-private fun ScanModeCard(title: String, subtitle: String, background: Color, foreground: Color) {
-    Surface(onClick = { /* CameraX 拍摄流程由 AND-003 接入。 */ }, color = background, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth().height(150.dp)) {
+private fun ScanModeCard(
+    title: String,
+    subtitle: String,
+    background: Color,
+    foreground: Color,
+    onClick: () -> Unit,
+) {
+    Surface(onClick = onClick, color = background, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth().height(150.dp)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Surface(color = Mint, shape = RoundedCornerShape(14.dp)) { Text("⌗", Modifier.padding(12.dp), color = Ink, fontSize = 22.sp) }
             Column { Text(title, color = foreground, fontWeight = FontWeight.Bold, fontSize = 20.sp); Text(subtitle, color = if (foreground == Color.White) Color(0xFFB8C0CC) else Color(0xFF747B86), fontSize = 12.sp) }
