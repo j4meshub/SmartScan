@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from fastapi.routing import APIRoute
-
 from services.api.app.main import app
 
 EXPECTED_OPERATIONS = {
@@ -31,13 +29,15 @@ EXPECTED_OPERATIONS = {
 
 
 def test_public_route_methods_and_status_codes_are_stable() -> None:
+    schema = app.openapi()
     actual = {
-        (method, route.path, route.status_code or 200)
-        for route in app.routes
-        if isinstance(route, APIRoute)
-        and not route.path.startswith(("/docs", "/redoc", "/openapi"))
-        for method in route.methods
-        if method != "HEAD"
+        (
+            method.upper(),
+            path,
+            min(int(status) for status in operation["responses"] if status.startswith("2")),
+        )
+        for path, path_item in schema["paths"].items()
+        for method, operation in path_item.items()
     }
     assert actual == EXPECTED_OPERATIONS
 

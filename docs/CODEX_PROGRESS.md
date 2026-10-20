@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M0 工程基础 |
 | 当前工作包 | `ARC-001` API 分层 |
-| 工作包状态 | 进行中，契约基线与服务/存储层已建立 |
+| 工作包状态 | 进行中，本地实现与验证完成，待提交和 PR |
 | 当前分支 | `codex/arc-001-api-layers` |
 | 最后验证基线 | `91ff720`（DB-001 PR #2 已合并） |
 | 工作包提交 | 待创建 |
@@ -23,10 +23,12 @@
 - 新增路由/OpenAPI 契约测试，固定 22 个公开操作的路径、方法、状态码与核心响应模型。
 - 超级管理员初始化、会话签发和上传校验已移入 `domain_services.py`；项目/上传资源查询与上传视图装配已移入 `repositories.py`。
 - 首轮分层后契约与现有 API 回归共 `9 passed`。
+- 原 795 行入口已缩减为 56 行应用装配；认证、扫描、管理路由分别为 113、441、121 行的职责模块。
+- 完整本地回归为 `17 passed, 2 skipped`，服务端覆盖率 `81%`；本地跳过项仍是需要 PostgreSQL 17 的两项迁移测试。
 
-## 最近一次完整验证
+## 已执行验证
 
-`DB-001` 合并前执行了以下检查，作为 `ARC-001` 的回归基线：
+`ARC-001` 执行了以下检查：
 
 ```text
 python -m ruff check services migrations tests
@@ -41,9 +43,9 @@ git diff --check
 
 验证结果：
 
-- Ruff 检查通过，28 个 Python 文件格式检查通过。
-- 本地 Pytest 通过：`15 passed, 2 skipped`，服务端覆盖率 `79%`；新增 5 项 SQLite 迁移测试，覆盖空库、旧基线、残缺基线、版本门禁和回滚再升级。2 项本地跳过的 PostgreSQL 测试随后已由 PR CI 执行。
-- PR CI 使用 PostgreSQL 17 实际执行全部迁移测试：`17 passed`、无跳过、服务端覆盖率 `79%`。
+- Ruff 检查通过，34 个 Python 文件格式检查通过。
+- 本地 Pytest 通过：`17 passed, 2 skipped`，服务端覆盖率 `81%`；新增 2 项 API 路由/OpenAPI 契约测试。
+- 两项 PostgreSQL 迁移测试等待本工作包 PR CI 的 PostgreSQL 17 服务执行。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
 - PostgreSQL 离线迁移 SQL 生成通过，包含 `0001` 结构基线与 `0002` 保护约束。
@@ -77,7 +79,6 @@ git diff --check
 
 ## 下一步
 
-1. 将应用装配与生命周期保留在 `main.py`，按认证、项目、上传/文件、任务和管理职责移动路由。
-2. 继续把路由中的复用业务规则移入服务层，把 SQLAlchemy 查询和锁定操作移入存储层。
-3. 每轮移动后运行路由/OpenAPI 契约与 API 回归测试。
-4. 全量测试和 CI 通过后更新架构说明，提交并创建 `ARC-001` PR。
+1. 提交并推送 `ARC-001`，创建中文 PR。
+2. 等待 PR CI 的 PostgreSQL、API、Web 和 Compose 检查全部通过后合并。
+3. 从最新 `main` 创建 `codex/qa-001-test-ci-baseline`，继续 M0 测试隔离与 CI 基线。
