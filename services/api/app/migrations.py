@@ -11,10 +11,110 @@ from sqlalchemy import create_engine, inspect
 
 from . import models as _models  # noqa: F401  # 注册全部 SQLAlchemy 模型
 from .config import get_settings
-from .database import Base
 
 BASELINE_REVISION = "20261020_0001"
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+# 旧 create_all 数据库只能在与首个受控迁移完全一致时被接管。该快照不得随 ORM 演进。
+LEGACY_BASELINE_COLUMNS: dict[str, set[str]] = {
+    "users": {
+        "id",
+        "username",
+        "password_hash",
+        "phone_hmac",
+        "phone_masked",
+        "role",
+        "status",
+        "locale",
+        "must_change_password",
+        "created_at",
+        "deleted_at",
+    },
+    "user_identities": {
+        "id",
+        "user_id",
+        "provider",
+        "provider_subject",
+        "verified_at",
+        "last_login_at",
+    },
+    "sessions": {"id", "user_id", "token_hash", "expires_at", "revoked_at", "created_at"},
+    "scan_projects": {
+        "id",
+        "owner_user_id",
+        "title",
+        "mode",
+        "reading_order",
+        "created_at",
+        "updated_at",
+    },
+    "scan_pages": {
+        "id",
+        "project_id",
+        "owner_user_id",
+        "page_number",
+        "original_path",
+        "processed_path",
+        "sha256",
+        "size_bytes",
+        "mime_type",
+        "quality_warning",
+        "ocr_text",
+        "created_at",
+    },
+    "upload_sessions": {
+        "id",
+        "owner_user_id",
+        "project_id",
+        "idempotency_key",
+        "file_name",
+        "mime_type",
+        "size_bytes",
+        "expected_sha256",
+        "chunk_size",
+        "total_chunks",
+        "status",
+        "page_id",
+        "expires_at",
+        "created_at",
+        "updated_at",
+    },
+    "upload_chunks": {
+        "id",
+        "upload_id",
+        "chunk_index",
+        "size_bytes",
+        "sha256",
+        "relative_path",
+        "created_at",
+    },
+    "processing_jobs": {
+        "id",
+        "owner_user_id",
+        "project_id",
+        "page_id",
+        "kind",
+        "status",
+        "attempts",
+        "lease_until",
+        "error",
+        "created_at",
+        "updated_at",
+    },
+    "audit_logs": {
+        "id",
+        "actor_user_id",
+        "target_user_id",
+        "object_type",
+        "object_id",
+        "action",
+        "result",
+        "request_id",
+        "ip",
+        "user_agent",
+        "created_at",
+    },
+}
 
 
 def alembic_config(database_url: str | None = None) -> Config:
@@ -33,7 +133,7 @@ def _schema_tables(database_url: str) -> set[str]:
 
 
 def _validate_legacy_baseline(database_url: str) -> None:
-    expected_tables = set(Base.metadata.tables)
+    expected_tables = set(LEGACY_BASELINE_COLUMNS)
     actual_tables = _schema_tables(database_url)
     if actual_tables != expected_tables:
         missing = sorted(expected_tables - actual_tables)
@@ -45,8 +145,7 @@ def _validate_legacy_baseline(database_url: str) -> None:
     engine = create_engine(database_url)
     try:
         schema = inspect(engine)
-        for table_name, table in Base.metadata.tables.items():
-            expected_columns = set(table.columns.keys())
+        for table_name, expected_columns in LEGACY_BASELINE_COLUMNS.items():
             actual_columns = {column["name"] for column in schema.get_columns(table_name)}
             if actual_columns != expected_columns:
                 missing = sorted(expected_columns - actual_columns)

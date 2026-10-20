@@ -8,20 +8,39 @@
 |---|---|
 | 当前里程碑 | M2 统一账号与安全 |
 | 当前工作包 | `ACC-001` 拆分统一用户、登录身份和已验证手机号 |
-| 工作包状态 | 进行中，已完成现有表结构盘点，待设计 expand/migrate 迁移与兼容访问层 |
+| 工作包状态 | 进行中，结构拆分、数据回填、兼容访问层和本地门禁已通过，待提交、PR 与 CI |
 | 当前分支 | `codex/acc-001-unified-account` |
 | 最后验证基线 | `4fa566a`（POC-006 PR #11 已合并） |
-| 工作包提交 | 待创建 |
+| 工作包提交 | `91cb6e7`（启动记录）；实现提交待创建 |
 | PR | 待创建 |
 | 下一工作包 | `ACC-002` 手机号加密与 HMAC 索引 |
 
 ## 当前工作包进展
 
-- 当前 `users` 表同时保存用户主体、`username`、`password_hash`、`phone_hmac` 和 `phone_masked`，不满足统一账号与多登录身份、多个验证来源分离的目标。
-- 当前 `user_identities` 已保存 `provider` 与 `provider_subject`，可作为登录身份拆分基础，但本地用户名/密码仍留在 `users`，手机号也没有独立验证时间、来源和状态。
-- 本工作包将采用 expand/migrate：先增加可空的新身份/手机号结构并回填现有账号，再让认证与视图走兼容访问层；删除旧列属于后续 contract，不在同一迁移中进行。
-- 现有用户 ID、角色、状态、项目所有权、会话和 API 字段必须保持兼容；未知或残缺旧数据停止迁移，不自动猜测身份归属。
-- `ACC-001` 只拆分结构与无损回填，不提前实现手机号密文、短信 Provider、企微 OAuth、账号自动合并或删除冷静期，这些由后续工作包完成。
+- 新增 `verified_phones`，并让 `user_identities` 保存本地凭据与创建时间；`users` 继续作为稳定主体和所有权锚点。
+- 迁移 `20261020_0003` 回填现有本地账号，拒绝重复身份和用户名冲突，跳过没有已验证手机号的超级管理员占位值。
+- 注册、登录、密码修改、`/v1/me` 和后台用户视图已经切换到新结构；兼容期继续双写旧账号列，现有 `/v1` 字段保持不变。
+- 旧 `create_all` 数据库改用固定基线快照识别，避免 ORM 演进后误判首个版本。
+- `ACC-001` 未提前实现手机号密文、短信 Provider、企微 OAuth、账号自动合并或删除冷静期，这些仍由后续工作包完成。
+
+`ACC-001` 提交前全量检查：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term --cov-fail-under=77 -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`80 passed, 2 skipped`，应用代码覆盖率 `87.24%`；Ruff、50 个 Python 文件格式、迁移升级/漂移/版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。
 
 ## 已执行验证
 

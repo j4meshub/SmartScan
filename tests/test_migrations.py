@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from services.api.app.database import Base
 from services.api.app.migrations import (
+    BASELINE_REVISION,
     alembic_config,
     check_database_drift,
     current_revision,
@@ -16,11 +17,19 @@ from services.api.app.migrations import (
     head_revision,
     upgrade_database,
 )
-from services.api.app.models import User
+from services.api.app.models import User, UserIdentity, VerifiedPhone
 
 
 def sqlite_url(path: Path) -> str:
     return f"sqlite:///{path.as_posix()}"
+
+
+def create_unversioned_baseline(url: str) -> None:
+    command.upgrade(alembic_config(url), BASELINE_REVISION)
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE alembic_version"))
+    engine.dispose()
 
 
 def test_empty_database_upgrades_to_head(tmp_path: Path) -> None:
@@ -42,8 +51,8 @@ def test_empty_database_upgrades_to_head(tmp_path: Path) -> None:
 
 def test_legacy_create_all_database_is_adopted_without_data_loss(tmp_path: Path) -> None:
     url = sqlite_url(tmp_path / "legacy.db")
+    create_unversioned_baseline(url)
     engine = create_engine(url)
-    Base.metadata.create_all(engine)
     with Session(engine) as session:
         session.add(
             User(
@@ -63,6 +72,19 @@ def test_legacy_create_all_database_is_adopted_without_data_loss(tmp_path: Path)
     try:
         with Session(migrated_engine) as session:
             assert session.scalar(select(User.username).where(User.id == "legacy-user")) == "legacy"
+            identity = session.scalar(
+                select(UserIdentity).where(UserIdentity.user_id == "legacy-user")
+            )
+            phone = session.scalar(
+                select(VerifiedPhone).where(VerifiedPhone.user_id == "legacy-user")
+            )
+            assert identity is not None
+            assert identity.provider == "local"
+            assert identity.provider_subject == "legacy"
+            assert identity.credential_hash == "hash"
+            assert phone is not None
+            assert phone.phone_hmac == "a" * 64
+            assert phone.verification_source == "legacy"
     finally:
         migrated_engine.dispose()
     assert current_revision(url) == head_revision(url)
@@ -76,6 +98,36 @@ def test_incomplete_legacy_database_is_rejected(tmp_path: Path) -> None:
     engine.dispose()
 
     with pytest.raises(RuntimeError, match="无法自动接管旧数据库基线"):
+        upgrade_database(url)
+
+
+def test_legacy_identity_mismatch_is_rejected_instead_of_guessed(tmp_path: Path) -> None:
+    url = sqlite_url(tmp_path / "identity-mismatch.db")
+    create_unversioned_baseline(url)
+    engine = create_engine(url)
+    with Session(engine) as session:
+        session.add(
+            User(
+                id="mismatch-user",
+                username="expected-name",
+                password_hash="hash",
+                phone_hmac="c" * 64,
+                phone_masked="+86******0002",
+            )
+        )
+        session.commit()
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO user_identities "
+                "(id, user_id, provider, provider_subject, verified_at, last_login_at) "
+                "VALUES ('mismatch-identity', 'mismatch-user', 'local', "
+                "'different-name', CURRENT_TIMESTAMP, NULL)"
+            )
+        )
+    engine.dispose()
+
+    with pytest.raises(RuntimeError, match="本地身份与用户名不一致"):
         upgrade_database(url)
 
 
@@ -106,3 +158,38 @@ def test_initial_migration_can_downgrade_and_upgrade_again(tmp_path: Path) -> No
 
     upgrade_database(url)
     assert current_revision(url) == head_revision(url)
+
+
+def test_identity_split_can_downgrade_without_losing_legacy_account_columns(tmp_path: Path) -> None:
+    url = sqlite_url(tmp_path / "identity-rollback.db")
+    upgrade_database(url)
+    engine = create_engine(url)
+    with Session(engine) as session:
+        session.add(
+            User(
+                id="rollback-user",
+                username="rollback",
+                password_hash="hash",
+                phone_hmac="d" * 64,
+                phone_masked="+86******0003",
+            )
+        )
+        session.commit()
+    engine.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0002")
+
+    downgraded_engine = create_engine(url)
+    try:
+        schema = inspect(downgraded_engine)
+        assert "verified_phones" not in schema.get_table_names()
+        identity_columns = {item["name"] for item in schema.get_columns("user_identities")}
+        assert "credential_hash" not in identity_columns
+        assert "created_at" not in identity_columns
+        with downgraded_engine.connect() as connection:
+            assert (
+                connection.scalar(text("SELECT username FROM users WHERE id = 'rollback-user'"))
+                == "rollback"
+            )
+    finally:
+        downgraded_engine.dispose()
