@@ -47,8 +47,10 @@
       ]
     },
     "android": {
-      "status": "skeleton",
-      "consumed_operation_ids": []
+      "status": "foundation",
+      "consumed_operation_ids": [
+        "list_projects_v1_projects_get"
+      ]
     },
     "ios": {
       "status": "skeleton",
