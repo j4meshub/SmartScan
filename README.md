@@ -4,6 +4,8 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 
 本仓库是依据 v1.4 实施方案建立的首个可执行基线，并非已经具备 App Store 上架或生产验收条件的最终版本。当前完成范围和剩余工作详见[实施状态](docs/IMPLEMENTATION_STATUS.md)。
 
+长期开发采用可断点续接的工作包机制。完整路线见[长期执行计划](docs/CODEX_EXECUTION_PLAN.md)，当前断点和验证证据见[长任务进度](docs/CODEX_PROGRESS.md)，跨阶段技术选择见[实施决策记录](docs/DECISIONS.md)。
+
 ## 当前包含内容
 
 - FastAPI API：本地注册与登录、Argon2id 密码哈希、手机号确定性 HMAC、随机会话令牌和会话撤销。
