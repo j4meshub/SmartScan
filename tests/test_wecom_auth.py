@@ -33,6 +33,9 @@ def register_local(client: TestClient, phone: str, username: str) -> None:
 def start_oauth(client: TestClient) -> tuple[str, str]:
     response = client.post("/v1/auth/wecom/authorize")
     assert response.status_code == 201, response.text
+    assert "Path=/" in response.headers["set-cookie"]
+    assert "HttpOnly" in response.headers["set-cookie"]
+    assert "SameSite=lax" in response.headers["set-cookie"]
     url = response.json()["authorization_url"]
     parsed = urlparse(url)
     assert parsed.scheme == "https"
@@ -71,6 +74,9 @@ def test_callback_binds_unique_verified_phone_and_state_is_one_time(monkeypatch)
         assert callback.status_code == 200, callback.text
         assert callback.json()["action"] == "bind_verified_phone"
         assert callback.json()["access_token"]
+        assert callback.json()["refresh_token"]
+        assert callback.json()["session_id"]
+        assert callback.json()["device_id"]
 
         replay = client.get(
             "/v1/auth/wecom/callback",

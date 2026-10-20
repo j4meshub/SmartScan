@@ -6,16 +6,44 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M3 扫描与输出平台 |
-| 当前工作包 | `API-001` v1 契约冻结 |
-| 工作包状态 | 完成，PR CI 已通过，等待合并 |
-| 当前分支 | `codex/api-001-contract-freeze` |
-| 最后验证基线 | `d8025b8`（FILE-001 PR #24 已合并） |
-| 工作包提交 | `9b9219f`（实现提交） |
-| PR | `#25`，CI 已通过，等待合并 |
-| 下一工作包 | `H5-001` 登录与企业微信绑定 |
+| 当前里程碑 | M4 H5 完整产品 |
+| 当前工作包 | `H5-001` 登录与企业微信绑定 |
+| 工作包状态 | 进行中，实现与本地门禁完成，待提交 PR |
+| 当前分支 | `codex/h5-001-auth-binding` |
+| 最后验证基线 | `4a76fb9`（API-001 PR #25 已合并） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `H5-002` 拍摄入口 |
 
 ## 当前工作包进展
+
+- API-001 已由 PR #25 合并到主线，中文 squash 提交为 `4a76fb9`；当前与上一代契约继续由 CI 双门禁保护。
+- H5 登录请求现在发送稳定设备标识，获得短期访问令牌和单次轮换刷新令牌；并发 `401` 共用一次刷新，失败后清理会话。
+- 凭据只原子保存在标签页 `sessionStorage`，设备 ID 单独保存在 `localStorage`；旧版长期访问令牌键会被清理。
+- 企业微信授权、回调、可信手机号直接登录、缺手机号短信绑定、冲突错误和安全退出已接入双语界面。
+- 企微回调增量返回完整设备会话，契约修订为 `2026-10-20.2`；H5 实际消费的认证操作已登记到兼容矩阵。
+- Mock 和自动测试只证明本地契约；真实企微租户、真实短信、HTTPS Cookie 与 Android 企业微信内置浏览器保持人工验收。
+
+`H5-001` 本地门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python tools/api_compatibility.py
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/auth-client.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+npm test  # apps/h5
+git diff --check
+```
+
+本地结果：`152 passed, 5 skipped`，应用代码覆盖率 `88.29%`；128 个 Python 文件格式、Ruff、当前/上一代 OpenAPI 兼容检查、迁移升级/漂移/版本、H5 `17 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 复核。
 
 - FILE-001 已由 PR #24 合并到主线，中文 squash 提交为 `d8025b8`；生产 TLS、大文件并发、磁盘满和备份恢复继续保留 OPS staging 门禁。
 - API-001 使用 `openapi.json` 固定当前运行时契约，并以独立 `openapi-baseline.json` 固定仍受支持的上一代客户端基线。
@@ -396,10 +424,10 @@ git diff --check
 | 基础 OCR 与安全命名 | `cff564c` | PR CI 在 PostgreSQL 17 环境 145 项通过、覆盖率 89.11%；固定离线适配、四方向融合、版本关联结果、敏感命名过滤、IDOR、迁移、Web 与 Compose/容器检查通过；PR #22 已合并，真实模型指标待人工验收 |
 | JPG/PDF 多格式导出 | `4e10b2e` | 本地 143 项通过、覆盖率 88.46%；PR CI 在 PostgreSQL 17 环境 148 项通过、覆盖率 88.75%；多页制品、三档质量、当前 OCR 文本层、过期回退、IDOR、账号合并/删除、迁移、Web 与容器检查通过；PR #23 已合并 |
 | 文件生命周期管理 | `d8025b8` | 本地 149 项通过、覆盖率 88.23%；PR CI 在 PostgreSQL 17 环境 154 项通过、覆盖率 88.49%；鉴权下载、Range/X-Accel、上传取消、过期回收、项目清理重试、IDOR、迁移、Web 与容器检查通过；PR #24 已合并 |
-| v1 API 契约冻结 | `9b9219f` | 本地 152 项通过、覆盖率 88.28%；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.55%；双快照兼容检查、破坏性反例、版本响应头、Web 与容器检查通过；PR #25 等待合并 |
+| v1 API 契约冻结 | `4a76fb9` | 本地 152 项通过、覆盖率 88.28%；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.55%；双快照兼容检查、破坏性反例、版本响应头、Web 与容器检查通过；PR #25 已合并 |
 
 ## 下一步
 
-1. 合并已通过全部 CI 的 PR #25。
-2. 从 `H5-001` 继续，把统一登录、刷新令牌和企业微信绑定接入双语 H5。
-3. 使用 Mock 验证本地契约；真实企业微信租户继续保留人工验收门禁。
+1. 提交 H5-001 实现并创建中文 PR，等待 PostgreSQL、Web 和容器 CI。
+2. CI 通过并合并后从 `H5-002` 继续完善拍摄入口。
+3. 真实企业微信租户、短信与内置浏览器继续保留人工验收门禁，不以 Mock 结果代替。

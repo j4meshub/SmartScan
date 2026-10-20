@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="progress.css">
   <link rel="stylesheet" href="camera.css">
+  <link rel="stylesheet" href="auth.css">
   <title>SmartScan</title>
 </head>
 <body>
@@ -18,7 +19,10 @@
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span>SmartScan</span>
       </a>
-      <button id="languageButton" class="language" type="button" aria-label="Switch language">中 / EN</button>
+      <div class="topbar-actions">
+        <button id="logoutButton" class="text-button hidden" data-i18n="logout" type="button">退出登录</button>
+        <button id="languageButton" class="language" type="button" aria-label="Switch language">中 / EN</button>
+      </div>
     </header>
 
     <main>
@@ -28,12 +32,26 @@
           <h1 data-i18n="authTitle">扫描、整理，一气呵成。</h1>
           <p data-i18n="authText">一套账号连接企微、Android 与 iOS，原图始终由你掌控。</p>
         </div>
-        <form id="loginForm" class="panel form-panel">
-          <label><span data-i18n="username">用户名</span><input name="username" autocomplete="username" required value="demo"></label>
-          <label><span data-i18n="password">密码</span><input name="password" type="password" autocomplete="current-password" required></label>
-          <button class="primary" data-i18n="login" type="submit">登录</button>
+        <div class="panel form-panel">
+          <form id="loginForm" class="auth-form">
+            <label><span data-i18n="username">用户名</span><input name="username" autocomplete="username" required value="demo"></label>
+            <label><span data-i18n="password">密码</span><input name="password" type="password" autocomplete="current-password" required></label>
+            <button class="primary" data-i18n="login" type="submit">登录</button>
+          </form>
+          <div id="wecomActions" class="wecom-actions">
+            <div class="auth-divider"><span data-i18n="or">或</span></div>
+            <button id="wecomLoginButton" class="wecom-button" data-i18n="wecomLogin" type="button">企业微信登录</button>
+          </div>
           <p id="authMessage" class="message" role="status"></p>
-        </form>
+          <form id="phoneBindingForm" class="auth-form hidden">
+            <div class="binding-copy"><h2 data-i18n="bindingTitle">验证安全手机号</h2><p data-i18n="bindingText">企业微信未提供可信手机号，请用短信验证后完成绑定。</p></div>
+            <label><span data-i18n="phone">手机号（含国家码）</span><input id="bindingPhone" name="phone" type="tel" autocomplete="tel" placeholder="+8613800000000" required></label>
+            <label><span data-i18n="smsCode">短信验证码</span><span class="code-row"><input name="sms_code" inputmode="numeric" autocomplete="one-time-code" minlength="4" maxlength="8" required><button id="sendBindingCode" class="secondary" data-i18n="sendCode" type="button">发送验证码</button></span></label>
+            <button class="primary" data-i18n="finishBinding" type="submit">完成绑定</button>
+            <button id="backToLogin" class="text-button" data-i18n="backToLogin" type="button">返回账号登录</button>
+            <p id="bindingMessage" class="message" role="status"></p>
+          </form>
+        </div>
       </section>
 
       <section id="homeView">

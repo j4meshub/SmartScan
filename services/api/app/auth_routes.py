@@ -155,7 +155,7 @@ def wecom_authorize(response: Response, db: Session = Depends(get_db)):
         WECOM_OAUTH_COOKIE,
         start.state,
         max_age=settings.wecom_state_ttl_seconds,
-        path="/v1/auth/wecom/callback",
+        path="/",
         secure=settings.env != "development",
         httponly=True,
         samesite="lax",
@@ -200,6 +200,10 @@ def wecom_callback(
             action=outcome.decision.action,
             access_token=token.access_token,
             expires_at=token.expires_at,
+            refresh_token=token.refresh_token,
+            refresh_expires_at=token.refresh_expires_at,
+            session_id=token.session_id,
+            device_id=token.device_id,
         )
     db.commit()
     if outcome.decision.action == "require_conflict_review":

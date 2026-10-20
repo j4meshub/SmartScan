@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "api_major": "v1",
-  "current_contract_revision": "2026-10-20.1",
+  "current_contract_revision": "2026-10-20.2",
   "previous_contract_revision": "2026-10-20.0",
   "supported_client_generations": [
     "current",
@@ -13,6 +13,12 @@
       "status": "active",
       "consumed_operation_ids": [
         "login_v1_auth_login_post",
+        "refresh_session_v1_auth_refresh_post",
+        "logout_v1_auth_logout_post",
+        "wecom_authorize_v1_auth_wecom_authorize_post",
+        "wecom_callback_v1_auth_wecom_callback_get",
+        "request_sms_challenge_v1_auth_sms_challenges_post",
+        "wecom_bind_phone_v1_auth_wecom_bind_phone_post",
         "list_projects_v1_projects_get",
         "create_project_v1_projects_post",
         "create_upload_v1_uploads_post",
