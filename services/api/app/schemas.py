@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .models import (
     AccountDeletionStatus,
@@ -260,6 +260,26 @@ class PageView(BaseModel):
 
 class PageRotationRequest(BaseModel):
     degrees: Literal[90, 180, 270]
+
+
+class PageCorner(BaseModel):
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+
+
+class PageEditRequest(BaseModel):
+    corners: list[PageCorner] | None = Field(default=None, min_length=4, max_length=4)
+    filter: Literal["original", "enhance", "grayscale", "bw"] = "original"
+
+    @model_validator(mode="after")
+    def require_edit(self) -> PageEditRequest:
+        if self.corners is None and self.filter == "original":
+            raise ValueError("at least one page edit is required")
+        return self
+
+
+class PageOrderUpdate(BaseModel):
+    page_ids: list[str] = Field(min_length=1, max_length=500)
 
 
 class PageReviewUpdate(BaseModel):

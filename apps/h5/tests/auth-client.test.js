@@ -13,7 +13,12 @@ class MemoryStorage {
 const cryptoApi = {randomUUID: () => "11111111-2222-4333-8444-555555555555"};
 
 function jsonResponse(status, body) {
-  return {status, ok: status >= 200 && status < 300, json: async () => body};
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    json: async () => body,
+    blob: async () => new Blob([JSON.stringify(body)]),
+  };
 }
 
 function client(fetchImpl, onAuthLost = () => {}) {
@@ -157,4 +162,27 @@ test("注销无论服务端结果如何都清理浏览器会话", async () => {
   await assert.rejects(() => auth.logout(), /temporary_error/);
   assert.equal(auth.session, null);
   assert.equal(auth.sessionStorage.getItem(authStorageKeys.session), null);
+});
+
+test("鉴权图片下载在 401 后刷新并返回 Blob", async () => {
+  let imageRequests = 0;
+  const auth = client(async (url, options) => {
+    if (url.endsWith("/v1/auth/refresh")) {
+      return jsonResponse(200, {access_token: "access-2", refresh_token: "refresh-2"});
+    }
+    imageRequests += 1;
+    if (options.headers.Authorization === "Bearer access-1") {
+      return jsonResponse(401, {detail: "session expired"});
+    }
+    return {
+      status: 200,
+      ok: true,
+      blob: async () => new Blob(["image"], {type: "image/jpeg"}),
+    };
+  });
+  auth.setSession({access_token: "access-1", refresh_token: "refresh-1"});
+  const blob = await auth.requestBlob("/v1/pages/page-1/content");
+  assert.equal(blob.type, "image/jpeg");
+  assert.equal(await blob.text(), "image");
+  assert.equal(imageRequests, 2);
 });

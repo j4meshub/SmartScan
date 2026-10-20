@@ -3,7 +3,7 @@
   "info": {
     "title": "SmartScan 接口",
     "description": "统一账号、权限、扫描项目、上传、处理、导出与文件生命周期接口。",
-    "version": "2026-10-20.2"
+    "version": "2026-10-20.3"
   },
   "paths": {
     "/v1/auth/account-merges": {
@@ -1073,6 +1073,75 @@
         }
       }
     },
+    "/v1/projects/{project_id}/pages/order": {
+      "patch": {
+        "summary": "Reorder Pages",
+        "operationId": "reorder_pages_v1_projects__project_id__pages_order_patch",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageOrderUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PageView"
+                  },
+                  "title": "Response Reorder Pages V1 Projects  Project Id  Pages Order Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/projects/{project_id}/exports": {
       "get": {
         "summary": "List Exports",
@@ -1740,6 +1809,71 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PageRotationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pages/{page_id}/edits": {
+      "post": {
+        "summary": "Create Page Edit",
+        "operationId": "create_page_edit_v1_pages__page_id__edits_post",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageEditRequest"
               }
             }
           }
@@ -3886,6 +4020,79 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "PageCorner": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "PageCorner"
+      },
+      "PageEditRequest": {
+        "properties": {
+          "corners": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PageCorner"
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corners"
+          },
+          "filter": {
+            "type": "string",
+            "enum": [
+              "original",
+              "enhance",
+              "grayscale",
+              "bw"
+            ],
+            "title": "Filter",
+            "default": "original"
+          }
+        },
+        "type": "object",
+        "title": "PageEditRequest"
+      },
+      "PageOrderUpdate": {
+        "properties": {
+          "page_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Page Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_ids"
+        ],
+        "title": "PageOrderUpdate"
       },
       "PageResultView": {
         "properties": {

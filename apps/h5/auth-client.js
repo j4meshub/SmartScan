@@ -124,6 +124,23 @@ export class AuthClient {
     return payload;
   }
 
+  async requestBlob(path, options = {}, {retry = true} = {}) {
+    let response = await this.fetchResponse(path, options, {auth: true});
+    if (response.status === 401 && retry && this.session?.refresh_token) {
+      await this.refresh();
+      response = await this.fetchResponse(path, options, {auth: true});
+    }
+    if (!response.ok) {
+      const payload = await responsePayload(response);
+      if (response.status === 401) {
+        this.clearSession();
+        this.onAuthLost();
+      }
+      throw new ApiError(payload?.detail || `HTTP ${response.status}`, response.status);
+    }
+    return response.blob();
+  }
+
   async refresh() {
     if (this.refreshPromise) return this.refreshPromise;
     const refreshToken = this.session?.refresh_token;
