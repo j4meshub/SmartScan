@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import Role, SessionToken, UploadSession, User, UserIdentity
+from .identity_services import add_local_identity
+from .models import Role, SessionToken, UploadSession, User
 from .schemas import TokenResponse, UploadCreate
 from .security import hash_password, new_session
 
@@ -25,9 +26,10 @@ def ensure_superadmin(db: Session) -> None:
     existing = db.scalar(select(User).where(User.role == Role.super_admin))
     if existing or not settings.superadmin_password:
         return
+    password_hash = hash_password(settings.superadmin_password)
     admin = User(
         username="admin",
-        password_hash=hash_password(settings.superadmin_password),
+        password_hash=password_hash,
         phone_hmac=hashlib.sha256(b"superadmin-no-phone").hexdigest(),
         phone_masked="not-bound",
         role=Role.super_admin,
@@ -35,7 +37,7 @@ def ensure_superadmin(db: Session) -> None:
     )
     db.add(admin)
     db.flush()
-    db.add(UserIdentity(user_id=admin.id, provider="local", provider_subject="admin"))
+    add_local_identity(db, admin, username="admin", credential_hash=password_hash)
     db.commit()
 
 

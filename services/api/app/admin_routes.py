@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from .audit import record_audit
 from .database import get_db
 from .dependencies import current_user
+from .identity_services import user_view
 from .models import AuditLog, Role, ScanProject, SessionToken, User, UserStatus
 from .policies import can_manage_account, can_read_data
 from .schemas import ProjectView, RoleChange, StatusChange, UserView
@@ -26,9 +27,10 @@ def require_admin(user: User) -> None:
 @router.get("/v1/admin/users", response_model=list[UserView])
 def admin_users(user: User = Depends(current_user), db: Session = Depends(get_db)):
     require_admin(user)
-    return db.scalars(
+    users = db.scalars(
         select(User).where(User.status != UserStatus.deleted).order_by(User.created_at.desc())
     ).all()
+    return [user_view(db, item) for item in users]
 
 
 @router.get("/v1/admin/users/{target_id}/projects", response_model=list[ProjectView])
@@ -73,7 +75,7 @@ def change_role(
     record_audit(db, request, user, "change_role", "user", target.id, target.id)
     db.commit()
     db.refresh(target)
-    return target
+    return user_view(db, target)
 
 
 @router.patch("/v1/admin/users/{target_id}/status", response_model=UserView)
@@ -99,7 +101,7 @@ def change_status(
     record_audit(db, request, user, "change_status", "user", target.id, target.id)
     db.commit()
     db.refresh(target)
-    return target
+    return user_view(db, target)
 
 
 @router.get("/v1/admin/audit")

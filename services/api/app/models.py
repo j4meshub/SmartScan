@@ -66,6 +66,9 @@ class User(Base):
     identities: Mapped[list[UserIdentity]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    verified_phone: Mapped[VerifiedPhone | None] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
     projects: Mapped[list[ScanProject]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
@@ -75,15 +78,35 @@ class UserIdentity(Base):
     __tablename__ = "user_identities"
     __table_args__ = (
         UniqueConstraint("provider", "provider_subject", name="uq_identity_provider_subject"),
+        UniqueConstraint("user_id", "provider", name="uq_identity_user_provider"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     provider: Mapped[str] = mapped_column(String(20), nullable=False)
     provider_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    credential_hash: Mapped[str | None] = mapped_column(String(255))
     verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     user: Mapped[User] = relationship(back_populates="identities")
+
+
+class VerifiedPhone(Base):
+    __tablename__ = "verified_phones"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_verified_phone_user"),
+        UniqueConstraint("phone_hmac", name="uq_verified_phone_hmac"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    phone_hmac: Mapped[str] = mapped_column(String(64), nullable=False)
+    phone_masked: Mapped[str] = mapped_column(String(32), nullable=False)
+    verification_source: Mapped[str] = mapped_column(String(32), nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    user: Mapped[User] = relationship(back_populates="verified_phone")
 
 
 class SessionToken(Base):

@@ -6,26 +6,43 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M1 阶段 0 风险 POC |
-| 当前工作包 | `POC-006` 16 用户混合负载脚本 |
-| 工作包状态 | 工具已通过 PR CI，目标服务器正式负载阻塞；待合并 PR |
-| 当前分支 | `codex/poc-006-mixed-load` |
-| 最后验证基线 | `6a6301a`（POC-005 PR #10 已合并） |
-| 工作包提交 | `8278b7c`（16 会话驱动器、资源门禁与专项测试） |
-| PR | [#11](https://github.com/j4meshub/SmartScan/pull/11) |
-| 下一工作包 | `ACC-001` 拆分统一用户、登录身份和已验证手机号 |
+| 当前里程碑 | M2 统一账号与安全 |
+| 当前工作包 | `ACC-001` 拆分统一用户、登录身份和已验证手机号 |
+| 工作包状态 | 完成，PR #12 的 PostgreSQL 17、API、Web 与容器检查已通过，等待合并 |
+| 当前分支 | `codex/acc-001-unified-account` |
+| 最后验证基线 | `913eb2b`（ACC-001 PR #12 CI 已通过） |
+| 工作包提交 | `91cb6e7`（启动记录）、`69812c6`（实现与本地验证） |
+| PR | [#12](https://github.com/j4meshub/SmartScan/pull/12)（CI 已通过，等待合并） |
+| 下一工作包 | `ACC-002` 手机号加密与 HMAC 索引 |
 
 ## 当前工作包进展
 
-- v1.4 固定场景为 8 个用户连续上传书页、4 个用户浏览/下载、4 个用户提交普通扫描，持续至少 30 分钟。
-- 16 并发表示 16 个已登录会话可同时受理并持续运行，CPU 重任务仍通过队列并以 2 个 Worker 起步，不把 16 个任务强制同时推理。
-- 验收需报告非处理 API P95、上传到任务可见时间、错误、任务丢失、跨用户返回和最终任务状态；CPU 满载时仍应能登录和查询。
-- 负载工具必须默认只允许回环地址；其他 staging 主机需显式列入允许列表并确认非生产，禁止直接对生产运行。
-- 账号清单只引用本地环境变量中的密码，不在 JSON、报告、Git 或日志中保存凭据；测试数据使用工具生成的合成 JPEG。
-- 已实现严格目标 URL 校验、16 账号环境变量清单、固定角色、周期登录、项目隔离检查、分片上传、任务可见和下载流程。
-- 已实现不含凭据的 JSON/中文 Markdown 报告，记录每类请求时延、任务状态、2 秒可见率、任务缺失、隔离违规及服务器资源指标；缺少 30 分钟、下载或资源证据时门禁不会通过。
-- 专项 Ruff 与格式检查通过，负载工具 `11 passed`，其中完整 16 会话 Mock 覆盖登录、项目、分片、完成、任务观察与隔离。
-- 公司目标服务器当前不可用；8 vCPU/16 GB、真实网络、30 分钟、CPU 饱和、磁盘回收和 BBR 对照保持阻塞，Mock 不作为容量通过证据。
+- 新增 `verified_phones`，并让 `user_identities` 保存本地凭据与创建时间；`users` 继续作为稳定主体和所有权锚点。
+- 迁移 `20261020_0003` 回填现有本地账号，拒绝重复身份和用户名冲突，跳过没有已验证手机号的超级管理员占位值。
+- 注册、登录、密码修改、`/v1/me` 和后台用户视图已经切换到新结构；兼容期继续双写旧账号列，现有 `/v1` 字段保持不变。
+- 旧 `create_all` 数据库改用固定基线快照识别，避免 ORM 演进后误判首个版本。
+- `ACC-001` 未提前实现手机号密文、短信 Provider、企微 OAuth、账号自动合并或删除冷静期，这些仍由后续工作包完成。
+
+`ACC-001` 提交前全量检查：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term --cov-fail-under=77 -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`80 passed, 2 skipped`，应用代码覆盖率 `87.24%`；Ruff、50 个 Python 文件格式、迁移升级/漂移/版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。
+
+PR #12 CI 结果：PostgreSQL 17 环境 `82 passed`，应用代码覆盖率 `87.24%`；Ruff、50 个 Python 文件格式、迁移升级/漂移、H5 `8 passed`、Web 与 Compose/容器检查全部通过。该绿灯证明统一身份拆分及迁移在隔离 PostgreSQL 上可运行，不代表真实短信、企业微信租户或生产备份回滚门禁已经通过。
 
 ## 已执行验证
 
@@ -181,9 +198,11 @@ git diff --check
 | 文档透视评估框架 | `2371cd7` | PR CI 43 项通过、覆盖率 82.81%；授权清单、指标、性能报告、Web 与 Compose/容器检查通过；PR #8 已合并，真实数据集指标待人工验收 |
 | 基础试卷净化 POC | `6ff0f2a` | PR CI 55 项通过、覆盖率 84.35%；三级建议、保守净化、原图回退、Web 与 Compose/容器检查通过；PR #9 已合并，真实试卷指标待人工验收 |
 | 双页拆分与去弯曲 POC | `6a6301a` | PR CI 66 项通过、覆盖率 85.50%；非中心书脊、阅读顺序、去弯曲回退、Web 与 Compose/容器检查通过；PR #10 已合并，真实书籍指标待人工验收 |
+| 16 用户混合负载工具 | `4fa566a` | PR CI 77 项通过、覆盖率 85.50%；16 会话 Mock、目标防护、资源门禁、Web 与 Compose/容器检查通过；PR #11 已合并，目标服务器 30 分钟正式容量仍阻塞 |
+| 统一身份模型 | `69812c6` | PR CI 82 项通过、覆盖率 87.24%；用户主体、登录身份、已验证手机号、旧库回填、降级、Web 与 Compose/容器检查通过；PR #12 待合并 |
 
 ## 下一步
 
-1. 合并 POC-006 PR #11；目标服务器 30 分钟正式负载继续保持“阻塞”。
-2. 创建 `ACC-001` 工作分支，拆分统一用户、登录身份和已验证手机号。
-3. 公司服务器恢复后在隔离 staging 补跑正式容量与 BBR 对照，不直接压测生产。
+1. 合并 PR #12，并从最新 `main` 创建 `codex/acc-002-phone-protection`。
+2. 为已验证手机号设计认证加密密文、HMAC 版本和密钥轮换边界，不把密钥提交到仓库。
+3. 编写 expand/migrate 迁移、双密钥读取/轮换测试和日志脱敏测试，保持 `/v1` 契约兼容。

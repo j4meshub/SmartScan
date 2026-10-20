@@ -11,7 +11,15 @@ from .config import get_settings
 from .database import get_db
 from .dependencies import current_user
 from .domain_services import issue_session
-from .models import SessionToken, User, UserIdentity, UserStatus
+from .identity_services import (
+    add_local_identity,
+    add_verified_phone,
+    local_identity_by_username,
+    local_identity_for_user,
+    user_view,
+    verified_phone_by_hmac,
+)
+from .models import SessionToken, User, UserStatus
 from .schemas import LoginRequest, PasswordChange, RegisterRequest, TokenResponse, UserView
 from .security import hash_password, mask_phone, phone_hmac, token_hash, verify_password
 
@@ -24,12 +32,13 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     if settings.env != "development" or payload.sms_code != settings.dev_sms_code:
         raise HTTPException(status_code=400, detail="invalid verification code")
     digest = phone_hmac(payload.phone)
-    existing_phone = db.scalar(select(User).where(User.phone_hmac == digest))
-    existing_name = db.scalar(select(User).where(User.username == payload.username))
-    if existing_name:
+    existing_phone = verified_phone_by_hmac(db, digest)
+    existing_identity = local_identity_by_username(db, payload.username)
+    if existing_identity:
         raise HTTPException(status_code=409, detail="username already exists")
     if existing_phone:
-        if existing_phone.status != UserStatus.active:
+        phone_owner = db.get(User, existing_phone.user_id)
+        if not phone_owner or phone_owner.status != UserStatus.active:
             raise HTTPException(status_code=403, detail="phone is linked to an unavailable account")
         raise HTTPException(status_code=409, detail="phone already registered; use account binding")
     try:
@@ -45,27 +54,35 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     )
     db.add(user)
     db.flush()
-    db.add(UserIdentity(user_id=user.id, provider="local", provider_subject=payload.username))
+    add_local_identity(
+        db,
+        user,
+        username=payload.username,
+        credential_hash=password_hash,
+    )
+    add_verified_phone(
+        db,
+        user,
+        phone_hmac=digest,
+        phone_masked=user.phone_masked,
+        verification_source="development_sms",
+    )
     record_audit(db, request, user, "register", "user", user.id, user.id)
     return issue_session(db, user)
 
 
 @router.post("/v1/auth/login", response_model=TokenResponse)
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.username == payload.username))
-    if not user or not verify_password(payload.password, user.password_hash):
+    identity = local_identity_by_username(db, payload.username)
+    user = db.get(User, identity.user_id) if identity else None
+    credential_hash = identity.credential_hash if identity else None
+    if not user or not credential_hash or not verify_password(payload.password, credential_hash):
         record_audit(db, request, None, "login", "user", result="denied")
         db.commit()
         raise HTTPException(status_code=401, detail="invalid credentials")
     if user.status != UserStatus.active:
         raise HTTPException(status_code=403, detail="account unavailable")
-    identity = db.scalar(
-        select(UserIdentity).where(
-            UserIdentity.user_id == user.id, UserIdentity.provider == "local"
-        )
-    )
-    if identity:
-        identity.last_login_at = datetime.now(UTC)
+    identity.last_login_at = datetime.now(UTC)
     record_audit(db, request, user, "login", "user", user.id, user.id)
     return issue_session(db, user)
 
@@ -84,8 +101,8 @@ def logout(
 
 
 @router.get("/v1/me", response_model=UserView)
-def me(user: User = Depends(current_user)):
-    return user
+def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return user_view(db, user)
 
 
 @router.post("/v1/me/password", status_code=204)
@@ -96,12 +113,17 @@ def change_password(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if not verify_password(payload.current_password, user.password_hash):
+    identity = local_identity_for_user(db, user.id)
+    credential_hash = identity.credential_hash if identity else None
+    if not credential_hash or not verify_password(payload.current_password, credential_hash):
         raise HTTPException(status_code=400, detail="current password is incorrect")
     try:
-        user.password_hash = hash_password(payload.new_password)
+        new_hash = hash_password(payload.new_password)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    assert identity is not None
+    identity.credential_hash = new_hash
+    user.password_hash = new_hash
     user.must_change_password = False
     current_digest = token_hash(authorization.split(" ", 1)[1])
     db.execute(

@@ -4,13 +4,19 @@ import os
 from collections.abc import Iterator
 
 import pytest
+from alembic import command
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from services.api.app.database import Base
-from services.api.app.migrations import current_revision, head_revision, upgrade_database
-from services.api.app.models import User
+from services.api.app.migrations import (
+    BASELINE_REVISION,
+    alembic_config,
+    current_revision,
+    head_revision,
+    upgrade_database,
+)
+from services.api.app.models import User, UserIdentity, VerifiedPhone
 
 POSTGRES_URL = os.getenv("SMARTSCAN_TEST_POSTGRES_URL")
 pytestmark = pytest.mark.skipif(not POSTGRES_URL, reason="未配置隔离 PostgreSQL 测试库")
@@ -73,8 +79,10 @@ def test_postgresql_empty_database_upgrades_with_guards() -> None:
 
 def test_postgresql_legacy_baseline_is_adopted_and_guarded() -> None:
     url = isolated_postgres_url()
+    command.upgrade(alembic_config(url), BASELINE_REVISION)
     engine = create_engine(url)
-    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE alembic_version"))
     with Session(engine) as session:
         session.add(
             User(
@@ -96,8 +104,16 @@ def test_postgresql_legacy_baseline_is_adopted_and_guarded() -> None:
             username = session.scalar(
                 select(User.username).where(User.id == "postgres-legacy-user")
             )
+            identity = session.scalar(
+                select(UserIdentity).where(UserIdentity.user_id == "postgres-legacy-user")
+            )
+            phone = session.scalar(
+                select(VerifiedPhone).where(VerifiedPhone.user_id == "postgres-legacy-user")
+            )
     finally:
         migrated_engine.dispose()
     assert username == "postgres-legacy"
+    assert identity is not None and identity.credential_hash == "hash"
+    assert phone is not None and phone.verification_source == "legacy"
     assert current_revision(url) == head_revision(url)
     assert_postgresql_guards_installed()
