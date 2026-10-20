@@ -19,6 +19,8 @@ from .models import (
     JobStatus,
     PageResult,
     ProcessingJob,
+    ProjectDeletion,
+    ProjectDeletionStatus,
     Role,
     ScanExport,
     ScanPage,
@@ -287,6 +289,14 @@ def merge_accounts(
         for item in jobs
     ):
         raise AccountMergeError("account_merge_job_running")
+    pending_cleanup = db.scalar(
+        select(ProjectDeletion.id).where(
+            ProjectDeletion.owner_user_id.in_((source.id, canonical.id)),
+            ProjectDeletion.status == ProjectDeletionStatus.cleanup_pending,
+        )
+    )
+    if pending_cleanup is not None:
+        raise AccountMergeError("account_merge_project_cleanup_pending")
 
     source_phone = next(row for row in phone_rows if row.user_id == source.id)
     references: list[_FileReference] = []

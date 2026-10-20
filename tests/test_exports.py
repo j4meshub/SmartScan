@@ -142,9 +142,21 @@ def test_multi_page_jpg_quality_and_pdf_current_ocr_layer() -> None:
         with SessionLocal() as db:
             artifact = db.get(ExportArtifact, pdf.json()["artifacts"][0]["id"])
             assert artifact is not None
-            assert (
-                (main.settings.storage_root / artifact.file_path).read_bytes().startswith(b"%PDF")
-            )
+            pdf_bytes = (main.settings.storage_root / artifact.file_path).read_bytes()
+            assert pdf_bytes.startswith(b"%PDF")
+            artifact_id = artifact.id
+        downloaded = client.get(f"/v1/export-artifacts/{artifact_id}/content", headers=headers)
+        assert downloaded.status_code == 200
+        assert downloaded.content == pdf_bytes
+        assert downloaded.headers["etag"] == f'"{pdf.json()["artifacts"][0]["sha256"]}"'
+        assert downloaded.headers["cache-control"] == "private, max-age=0, must-revalidate"
+        partial = client.get(
+            f"/v1/export-artifacts/{artifact_id}/content",
+            headers={**headers, "Range": "bytes=0-15"},
+        )
+        assert partial.status_code == 206
+        assert partial.content == pdf_bytes[:16]
+        assert partial.headers["content-range"] == f"bytes 0-15/{len(pdf_bytes)}"
 
 
 def test_export_stale_ocr_falls_back_and_cross_user_is_hidden_and_audited() -> None:
@@ -183,7 +195,14 @@ def test_export_stale_ocr_falls_back_and_cross_user_is_hidden_and_audited() -> N
         assert exported.status_code == 201, exported.text
         assert exported.json()["ocr_pages_used"] == 0
         export_id = exported.json()["id"]
+        artifact_id = exported.json()["artifacts"][0]["id"]
         assert client.get(f"/v1/exports/{export_id}", headers=attacker_headers).status_code == 404
+        assert (
+            client.get(
+                f"/v1/export-artifacts/{artifact_id}/content", headers=attacker_headers
+            ).status_code
+            == 404
+        )
         assert (
             client.post(
                 f"/v1/projects/{project_id}/exports",
@@ -196,9 +215,13 @@ def test_export_stale_ocr_falls_back_and_cross_user_is_hidden_and_audited() -> N
             denied = list(
                 db.scalars(
                     select(AuditLog).where(
-                        AuditLog.object_type.in_(("export", "project")),
+                        AuditLog.object_type.in_(("export", "export_artifact", "project")),
                         AuditLog.result == "denied",
                     )
                 )
             )
-            assert {item.action for item in denied} >= {"view_export", "create_export"}
+            assert {item.action for item in denied} >= {
+                "view_export",
+                "create_export",
+                "download_export",
+            }

@@ -31,6 +31,8 @@ from services.api.app.models import (
     User,
 )
 from services.api.app.page_service import save_page_result
+from services.api.app.project_cleanup import process_next_project_cleanup
+from services.api.app.upload_cleanup import process_next_upload_cleanup
 from services.worker.app.ocr import (
     OcrAnalysis,
     OcrEngine,
@@ -301,6 +303,18 @@ def process_account_deletion_queue() -> bool:
         return result is not None
 
 
+def process_project_cleanup_queue() -> bool:
+    with SessionLocal() as db:
+        result = process_next_project_cleanup(db, settings=settings)
+        return result is not None
+
+
+def process_upload_cleanup_queue() -> bool:
+    with SessionLocal() as db:
+        result = process_next_upload_cleanup(db, settings=settings)
+        return result is not None
+
+
 def main() -> None:
     ensure_database_current()
     if settings.ocr_enabled:
@@ -312,6 +326,8 @@ def main() -> None:
         now_monotonic = time.monotonic()
         if now_monotonic >= next_deletion_sweep:
             try:
+                process_upload_cleanup_queue()
+                process_project_cleanup_queue()
                 process_account_deletion_queue()
             except Exception as exc:
                 print(f"账号删除任务失败：{type(exc).__name__}", flush=True)
