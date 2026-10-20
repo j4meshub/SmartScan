@@ -19,7 +19,7 @@ python -m services.api.app.migrations check
 检查 SQLAlchemy 模型是否存在尚未生成的迁移：
 
 ```bash
-python -m alembic check
+python -m services.api.app.migrations drift
 ```
 
 开发环境默认设置 `SMARTSCAN_AUTO_MIGRATE=true`，API 启动时会执行同一版本化升级入口。生产 Compose 强制设置为 `false`，由独立 `migrate` 服务先完成升级，API 和 Worker 只有在该服务成功后才启动。
@@ -40,7 +40,7 @@ python -m alembic check
 3. 运行 `python -m alembic revision --autogenerate -m "中文变更说明"`。
 4. 人工审查生成脚本，特别检查数据回填、锁表、索引、枚举和 PostgreSQL 专属语句。
 5. 补充空库升级、上一版本升级、数据保留和失败回滚测试。
-6. 运行 Ruff、全量 Pytest、`python -m alembic check` 和 Compose 配置检查。
+6. 运行 Ruff、全量 Pytest、`python -m services.api.app.migrations drift` 和 Compose 配置检查。
 
 迁移脚本必须可重复部署；数据回填量较大时拆成独立步骤，不在长事务中一次处理全部数据。
 

@@ -66,7 +66,7 @@ Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API �
 ruff check services migrations tests
 ruff format --check services migrations tests
 pytest --cov=services --cov-report=term-missing --cov-fail-under=77
-python -m alembic check
+python -m services.api.app.migrations drift
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js
 ```

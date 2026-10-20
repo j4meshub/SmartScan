@@ -33,7 +33,7 @@ jobs:
       - run: ruff format --check services migrations tests
       - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
       - run: python -m services.api.app.migrations upgrade
-      - run: python -m alembic check
+      - run: python -m services.api.app.migrations drift
   web:
     runs-on: ubuntu-latest
     steps:

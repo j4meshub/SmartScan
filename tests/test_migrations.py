@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from services.api.app.database import Base
 from services.api.app.migrations import (
     alembic_config,
+    check_database_drift,
     current_revision,
     ensure_database_current,
     head_revision,
@@ -36,6 +37,7 @@ def test_empty_database_upgrades_to_head(tmp_path: Path) -> None:
     assert "alembic_version" in tables
     assert current_revision(url) == head_revision(url)
     ensure_database_current(url)
+    check_database_drift(url)
 
 
 def test_legacy_create_all_database_is_adopted_without_data_loss(tmp_path: Path) -> None:

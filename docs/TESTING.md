@@ -2,7 +2,7 @@
 
 SmartScan 的测试基线覆盖 Python 静态检查、数据库迁移、API 契约、权限与上传集成测试、视觉算法、前端语法和 Compose 配置。GitHub Actions 与 GitLab CI 使用相同的核心 Python 门禁。
 
-CI 的迁移漂移检查使用独立 `ci-smartscan.db`：先显式执行版本化升级，再运行 `alembic check`。该步骤不能依赖 Pytest 留下数据库文件，因为测试会话必须在结束时完整清理隔离资源。
+CI 的迁移漂移检查使用独立 `ci-smartscan.db`：先显式执行版本化升级，再运行应用级 `migrations drift` 命令。升级与漂移检查通过同一配置入口读取 `SMARTSCAN_DATABASE_URL`，且不能依赖 Pytest 留下数据库文件，因为测试会话必须在结束时完整清理隔离资源。
 
 ## 隔离资源
 
@@ -29,7 +29,7 @@ CI 的迁移漂移检查使用独立 `ci-smartscan.db`：先显式执行版本�
 python -m ruff check services migrations tests
 python -m ruff format --check services migrations tests
 python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
-python -m alembic check
+python -m services.api.app.migrations drift
 python -m services.api.app.migrations check
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js

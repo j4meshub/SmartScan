@@ -31,7 +31,7 @@
 python -m ruff check services migrations tests
 python -m ruff format --check services migrations tests
 python -m pytest --cov=services --cov-report=term-missing
-python -m alembic check
+python -m services.api.app.migrations drift
 python -m services.api.app.migrations check
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js
@@ -45,6 +45,7 @@ git diff --check
 - OpenAPI 完整快照与隔离测试环境断言通过。
 - 两项 PostgreSQL 迁移测试等待本工作包 PR CI 的 PostgreSQL 17 服务执行。
 - PR 首轮 API 测试为 `21 passed` 且覆盖率门禁通过，但后续 `alembic check` 因隔离测试正确清理数据库而失败；CI 已改为显式升级独立 `ci-smartscan.db` 后再检查漂移，等待复验。
+- 第二轮确认直接调用 Alembic 未读取 `SMARTSCAN_DATABASE_URL`；已新增应用级 `migrations drift` 命令，使升级和漂移检查使用同一数据库配置，等待复验。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
 - PostgreSQL 离线迁移 SQL 生成通过，包含 `0001` 结构基线与 `0002` 保护约束。

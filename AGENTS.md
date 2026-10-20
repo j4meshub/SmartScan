@@ -41,7 +41,7 @@
 python -m ruff check services migrations tests
 python -m ruff format --check services migrations tests
 python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
-python -m alembic check
+python -m services.api.app.migrations drift
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js
 docker compose -f deploy/compose/docker-compose.yml config
