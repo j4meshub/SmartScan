@@ -38,8 +38,8 @@
 ## 常用验证命令
 
 ```text
-python -m ruff check services migrations tests
-python -m ruff format --check services migrations tests
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
 python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
 python -m services.api.app.migrations drift
 node --check apps/h5/app.js

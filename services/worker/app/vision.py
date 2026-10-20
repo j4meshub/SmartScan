@@ -12,6 +12,7 @@ class PerspectiveResult:
     image: Image.Image
     detected: bool
     confidence: float
+    corners: np.ndarray | None = None
 
 
 def _order_corners(points: np.ndarray) -> np.ndarray:
@@ -122,10 +123,11 @@ def correct_document_perspective(
         max_detection_dimension=max_detection_dimension,
     )
     if detection is None:
-        return PerspectiveResult(image=image.copy(), detected=False, confidence=0.0)
+        return PerspectiveResult(image=image.copy(), detected=False, confidence=0.0, corners=None)
     corners, confidence = detection
     return PerspectiveResult(
         image=_warp_document(image, corners),
         detected=True,
         confidence=confidence,
+        corners=corners,
     )

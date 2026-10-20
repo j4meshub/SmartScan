@@ -26,8 +26,8 @@ CI 的迁移漂移检查使用独立 `ci-smartscan.db`：先显式执行版本�
 ## 本地完整检查
 
 ```bash
-python -m ruff check services migrations tests
-python -m ruff format --check services migrations tests
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
 python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
 python -m services.api.app.migrations drift
 python -m services.api.app.migrations check

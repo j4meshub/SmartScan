@@ -17,6 +17,8 @@ DerivedData/
 *.xcuserstate
 data/
 uploads/
+datasets/perspective/images/
+reports/perspective/
 smartscan.db
 .DS_Store
 

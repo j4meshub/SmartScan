@@ -26,6 +26,8 @@ def test_detects_and_corrects_skewed_document():
     assert corners.shape == (4, 2)
     assert confidence >= 0.5
     assert result.detected is True
+    assert result.corners is not None
+    assert result.corners.shape == (4, 2)
     assert result.image.width < image.width
     assert result.image.height < image.height
     assert result.image.width > 700
@@ -39,6 +41,7 @@ def test_preserves_image_when_document_edges_are_not_found():
 
     assert result.detected is False
     assert result.confidence == 0.0
+    assert result.corners is None
     assert result.image.size == image.size
 
 

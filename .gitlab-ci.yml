@@ -3,7 +3,7 @@ default: {interruptible: true}
 python-lint:
   stage: lint
   image: python:3.12
-  script: ["pip install -e .[dev,vision]", "ruff check services migrations tests", "ruff format --check services migrations tests"]
+  script: ["pip install -e .[dev,vision]", "ruff check services migrations tests tools", "ruff format --check services migrations tests tools"]
 unit-test:
   stage: unit-test
   image: python:3.12

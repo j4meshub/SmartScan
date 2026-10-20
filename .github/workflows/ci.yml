@@ -29,8 +29,8 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12", cache: pip}
       - run: pip install -e ".[dev,vision]"
-      - run: ruff check services migrations tests
-      - run: ruff format --check services migrations tests
+      - run: ruff check services migrations tests tools
+      - run: ruff format --check services migrations tests tools
       - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
       - run: python -m services.api.app.migrations upgrade
       - run: python -m services.api.app.migrations drift

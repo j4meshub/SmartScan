@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
 | 当前工作包 | `POC-003` 文档透视真实样本评估框架 |
-| 工作包状态 | 进行中，完成基线与样本缺口盘点，待实现评估框架 |
+| 工作包状态 | 进行中，评估框架与本地全量验证已完成，待提交、PR 与 CI |
 | 当前分支 | `codex/poc-003-perspective-evaluation` |
 | 最后验证基线 | `fd82c30`（POC-002 PR #7 已合并） |
 | 工作包提交 | 待创建 |
@@ -19,13 +19,43 @@
 
 - 当前透视算法在缩放副本上执行 Canny、形态学闭运算和轮廓筛选，选取面积最大的凸四边形并映射回原图。
 - 置信度当前仅按四边形面积比例计算；未检测到可信边缘时保留完整画面并进入复核。
-- 现有自动测试只有一个倾斜合成文档、一个无边缘回退和一个复核标记场景。
-- 仓库目前没有授权真实样本、样本来源/许可清单、人工期望标注、批量指标脚本或耗时/内存报告。
-- 在授权固定数据集完成评估前，不得宣称达到 v1.4 的文档边缘/透视可用率 `≥95%`。
+- 已增加授权固定数据集清单及 JSON Schema，强制检查授权、脱敏、用途、审批引用、SHA-256、路径边界和人工四角标注；图片与预览目录均不进入 Git。
+- 已实现批量评估器，报告检测召回、透视可用率、负样本误检率、归一化角点误差、P50/P95/最大耗时和进程峰值 RSS，且报告不包含原始路径。
+- 默认门禁要求至少 `100` 个正样本且可用率 `≥95%`；合成样本即使全部可用，也会因数量不足保持门禁关闭。
+- 已增加合成数据回归，覆盖成功报告、角点质量未达标、样本数不足、授权/哈希错误、路径穿越和现有保守回退。
+- 仓库目前仍没有授权真实样本；在固定数据集评估和人工复核前，不得宣称达到 v1.4 指标。
 
 ## 已执行验证
 
-`POC-003` 当前仅完成只读盘点，评估代码尚未提交。最近已验证基线为 POC-002 PR #7：
+`POC-003` 专项检查已执行：
+
+```text
+python -m ruff check services/worker/app/vision.py services/worker/tests/test_vision.py tools/evaluate_perspective.py tests/test_perspective_evaluation.py
+python -m ruff format --check services/worker/app/vision.py services/worker/tests/test_vision.py tools/evaluate_perspective.py tests/test_perspective_evaluation.py
+python -m pytest services/worker/tests/test_vision.py tests/test_perspective_evaluation.py -q
+```
+
+专项结果：Ruff 与格式检查通过，透视处理和评估器 `8 passed`。
+
+提交前全量检查已执行：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`41 passed, 2 skipped`，覆盖率 `82.81%`；Ruff、格式、迁移漂移、当前数据库版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务验证。当前 Windows 未安装 Docker，Compose 继续由 PR CI 验证。
+
+最近已验证的合并基线仍为 POC-002 PR #7：
 
 ```text
 python -m ruff check services migrations tests
@@ -87,6 +117,6 @@ git diff --check
 
 ## 下一步
 
-1. 建立不提交图片本体的授权样本 manifest 格式与许可/脱敏检查。
-2. 实现批量评估脚本，输出检测、人工可用性、角点误差、耗时和峰值内存 JSON/Markdown 报告。
-3. 用合成夹具验证评估器；真实样本到位后运行固定数据集并判断是否达到 `≥95%`，未达到时保持风险闸门关闭。
+1. 完成 POC-003 全量验证、自审、中文提交、PR 和 CI。
+2. CI 通过后将评估框架合并，并把真实数据集结论保持为“等待人工验收”。
+3. 在不虚构真实指标的前提下继续 `POC-004` 基础试卷检测与净化；真实样本到位后再运行固定数据集并记录结论。
