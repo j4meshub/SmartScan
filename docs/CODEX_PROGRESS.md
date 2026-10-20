@@ -44,6 +44,8 @@ git diff --check
 
 本机已通过差异检查、Android Manifest/双语资源 XML 解析和中英文资源键一致性检查。本机未安装 JDK、Gradle 与 Android SDK，CameraX/Compose 编译、拍摄状态机与质量评估单元测试、应用单元测试和 Lint 等待 GitHub CI；模拟器和真机不因 CI 通过而自动验收。
 
+首轮推送 CI 的 API、Web 和容器门禁通过；Android 编译发现 `:app` 移除旧 Room 依赖后仍直接调用 `Room.databaseBuilder`。修复把数据库创建工厂收回 `:data:local`，应用层只调用 `SmartScanDatabase.open`，不把 Room API 再泄漏回应用模块，等待重跑验证。
+
 - AND-001 已由 PR #31 合并到主线，中文 squash 提交为 `41bf07d`；领域、网络、仓储与应用模块、Compose 导航、HTTPS 配置和 Android CI 基线已完成。
 - AND-002 已核对并接入服务端注册、登录、刷新、注销与 `/v1/me` 契约。
 - 注册、登录、验证码申请、启动恢复、一次性刷新与注销已进入认证仓储和 Compose 产品入口；认证失败不保留半完成会话。

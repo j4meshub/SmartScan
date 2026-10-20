@@ -2,7 +2,6 @@ package com.smartscan.app
 
 import android.app.Application
 import android.provider.Settings
-import androidx.room.Room
 import com.smartscan.core.auth.SessionStore
 import com.smartscan.core.network.ApiClientConfig
 import com.smartscan.core.network.SmartScanApiFactory
@@ -33,11 +32,7 @@ class SmartScanApplication : Application() {
             ),
             tokenProvider = { sessionStore.current()?.accessToken },
         )
-        val database = Room.databaseBuilder(
-            applicationContext,
-            SmartScanDatabase::class.java,
-            "smartscan-cache.db",
-        ).build()
+        val database = SmartScanDatabase.open(this)
         val userCache = RoomUserScopedCache(database.cachedProjects())
         container = DefaultAppContainer(
             authenticationRepository = DefaultAuthenticationRepository(
