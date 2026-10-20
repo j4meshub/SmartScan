@@ -81,8 +81,9 @@ class UploadProcessor(
 
         return try {
             val fileHash = upload.sha256 ?: sha256(source)
-            val remoteUpload = if (upload.serverUploadId != null) {
-                remote.getUpload(upload.serverUploadId)
+            val existingUploadId = upload.serverUploadId
+            val remoteUpload = if (existingUploadId != null) {
+                remote.getUpload(existingUploadId)
             } else {
                 remote.createUpload(
                     CreateUploadRequestDto(
