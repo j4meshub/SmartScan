@@ -52,6 +52,10 @@ class WeComCallbackView(BaseModel):
     action: str
     access_token: str | None = None
     expires_at: datetime | None = None
+    refresh_token: str | None = None
+    refresh_expires_at: datetime | None = None
+    session_id: str | None = None
+    device_id: str | None = None
     binding_ticket: str | None = None
     binding_expires_at: datetime | None = None
 
