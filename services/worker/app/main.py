@@ -6,6 +6,7 @@ import signal
 import socket
 import time
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps, ImageStat
@@ -21,13 +22,33 @@ from services.api.app.job_service import (
     mark_job_failure,
 )
 from services.api.app.migrations import ensure_database_current
-from services.api.app.models import JobStatus, PageReviewStatus, ProcessingJob, ScanPage
+from services.api.app.models import (
+    JobStatus,
+    PageReviewStatus,
+    ProcessingJob,
+    ScanPage,
+    ScanProject,
+    User,
+)
 from services.api.app.page_service import save_page_result
+from services.worker.app.ocr import (
+    OcrAnalysis,
+    OcrEngine,
+    PaddleOcrEngine,
+    analyze_four_orientations,
+    default_document_name,
+    rotate_clockwise,
+)
 from services.worker.app.vision import correct_document_perspective
 
 settings = get_settings()
 running = True
 worker_id = f"{socket.gethostname()}:{os.getpid()}"
+
+
+@lru_cache(maxsize=1)
+def get_ocr_engine() -> OcrEngine:
+    return PaddleOcrEngine(settings)
 
 
 def stop(*_: object) -> None:
@@ -92,11 +113,12 @@ def quality_assessment(
     return score, warnings[0] if warnings else None, details
 
 
-def process(claim: JobClaim) -> None:
+def process(claim: JobClaim, *, ocr_engine: OcrEngine | None = None) -> None:
     page_id: str | None = None
     source: Path | None = None
     job_kind = "document"
     rotation_degrees = 0
+    locale = "zh-CN"
     page_missing = False
     with SessionLocal() as db:
         job = db.get(ProcessingJob, claim.job_id)
@@ -114,6 +136,8 @@ def process(claim: JobClaim) -> None:
             page_id = page.id
             job_kind = job.kind
             rotation_degrees = page.rotation_degrees
+            owner = db.get(User, job.owner_user_id)
+            locale = owner.locale if owner is not None else "zh-CN"
     if page_missing:
         with SessionLocal() as db:
             mark_job_failure(
@@ -153,7 +177,22 @@ def process(claim: JobClaim) -> None:
             if rotation_degrees:
                 image = image.rotate(-rotation_degrees, expand=True)
             rendered = image.copy()
-        if not heartbeat(claim, 70):
+        analysis: OcrAnalysis | None = None
+        if settings.ocr_enabled or ocr_engine is not None:
+            if not heartbeat(claim, 20):
+                return
+            engine = ocr_engine or get_ocr_engine()
+            analysis = analyze_four_orientations(
+                rendered,
+                engine,
+                min_confidence=settings.ocr_min_confidence,
+                title_min_confidence=settings.ocr_title_min_confidence,
+                orientation_margin=settings.ocr_orientation_margin,
+                on_pass=lambda index: heartbeat(claim, 20 + index * 15),
+            )
+            if analysis.rotation_degrees:
+                rendered = rotate_clockwise(rendered, analysis.rotation_degrees)
+        elif not heartbeat(claim, 80):
             return
         with SessionLocal() as db:
             job = db.scalar(
@@ -179,16 +218,54 @@ def process(claim: JobClaim) -> None:
             page.review_reason = page.quality_warning
             page.reviewed_by_user_id = None
             page.reviewed_at = None
+            final_rotation = (
+                page.rotation_degrees + (analysis.rotation_degrees if analysis else 0)
+            ) % 360
             result, output = save_page_result(
                 db,
                 page=page,
                 image=rendered,
                 result_type="baseline",
-                processor_version="baseline-v1",
-                rotation_degrees=page.rotation_degrees,
+                processor_version="baseline-v2",
+                rotation_degrees=final_rotation,
                 settings=settings,
             )
             now = datetime.now(UTC)
+            project = db.get(ScanProject, page.project_id)
+            if analysis is not None:
+                page.ocr_text = analysis.text
+                page.ocr_status = "ready"
+                page.ocr_result_version = result.version
+                page.ocr_model_version = analysis.model_version
+                page.ocr_confidence = analysis.confidence
+                page.ocr_rotation_degrees = analysis.rotation_degrees
+                page.ocr_details = json.dumps(
+                    analysis.details, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                )
+                page.ocr_title_candidate = analysis.title_candidate
+                page.ocr_error_code = None
+                page.ocr_updated_at = now
+            else:
+                page.ocr_text = None
+                page.ocr_status = "disabled"
+                page.ocr_result_version = None
+                page.ocr_model_version = None
+                page.ocr_confidence = None
+                page.ocr_rotation_degrees = None
+                page.ocr_details = None
+                page.ocr_title_candidate = None
+                page.ocr_error_code = None
+                page.ocr_updated_at = now
+            if project is not None:
+                candidate = analysis.title_candidate if analysis is not None else None
+                if candidate and project.suggested_name_source != "ocr":
+                    project.suggested_name = candidate
+                    project.suggested_name_source = "ocr"
+                    project.suggested_name_updated_at = now
+                elif project.suggested_name is None:
+                    project.suggested_name = default_document_name(locale, now.date())
+                    project.suggested_name_source = "fallback"
+                    project.suggested_name_updated_at = now
             job.status = JobStatus.baseline_ready
             job.baseline_ready_at = now
             job.progress = 90
@@ -226,6 +303,8 @@ def process_account_deletion_queue() -> bool:
 
 def main() -> None:
     ensure_database_current()
+    if settings.ocr_enabled:
+        get_ocr_engine()
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     next_deletion_sweep = 0.0

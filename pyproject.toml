@@ -24,6 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<9", "pytest-cov>=5,<7", "ruff>=0.7,<1"]
 vision = ["opencv-python-headless>=4.10,<5", "numpy>=2,<3"]
+ocr = ["paddleocr==3.7.0", "paddlepaddle==3.3.1"]
 
 [tool.setuptools.packages.find]
 include = ["services*"]

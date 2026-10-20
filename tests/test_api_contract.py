@@ -89,6 +89,23 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
     }.issubset(component_schemas)
     assert "securitySchemes" not in schema["components"]
     assert schema["paths"]["/v1/uploads/{upload_id}/complete"]["post"]["responses"]["202"]
+    page_properties = component_schemas["PageView"]["properties"]
+    assert {
+        "ocr_text",
+        "ocr_status",
+        "ocr_result_version",
+        "ocr_model_version",
+        "ocr_confidence",
+        "ocr_rotation_degrees",
+        "ocr_details",
+        "ocr_title_candidate",
+        "ocr_error_code",
+        "ocr_updated_at",
+    }.issubset(page_properties)
+    project_properties = component_schemas["ProjectView"]["properties"]
+    assert {"suggested_name", "suggested_name_source", "suggested_name_updated_at"}.issubset(
+        project_properties
+    )
 
 
 def test_openapi_matches_committed_snapshot() -> None:

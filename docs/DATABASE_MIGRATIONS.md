@@ -64,6 +64,8 @@ python -m services.api.app.migrations drift
 
 `0014` 将旧作业状态映射到完整生命周期，并把 PostgreSQL 原生枚举兼容转换为固定长度状态字符串。降级会压缩状态并丢失租约、心跳、退避和阶段时间戳；详细映射见[作业状态机、租约与恢复](JOB_STATE_MACHINE.md)。
 
+`0015` 为项目增加独立建议名称，为页面增加与活动处理结果版本关联的 OCR 状态、全文、行框、置信度、方向、模型版本和错误字段。已有非空 `ocr_text` 标记为 `legacy` 并保留原文；降级会删除新增 OCR 元数据和建议名称，但保留旧 `ocr_text`。详细边界见[基础 OCR、方向融合与安全命名](OCR_PIPELINE.md)。
+
 ## 新增迁移
 
 1. 先按 expand/migrate/contract 设计兼容变更，确保当前及上一客户端可以共存。

@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     vision_document_min_area_ratio: float = Field(default=0.2, gt=0.05, lt=0.95)
     vision_max_detection_dimension: int = Field(default=1600, ge=640, le=4096)
+    ocr_enabled: bool = False
+    ocr_model_root: Path = Path("./models/ocr")
+    ocr_package_version: str = "3.7.0"
+    ocr_engine_version: str = "3.3.1"
+    ocr_model_version: str = "PP-OCRv6-small-v1"
+    ocr_cpu_threads: int = Field(default=4, ge=1, le=16)
+    ocr_min_confidence: float = Field(default=0.55, ge=0.0, le=1.0)
+    ocr_title_min_confidence: float = Field(default=0.70, ge=0.0, le=1.0)
+    ocr_orientation_margin: float = Field(default=0.04, ge=0.0, le=0.5)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -155,6 +164,8 @@ class Settings(BaseSettings):
                 )
             ):
                 raise RuntimeError("live WeCom configuration is incomplete")
+            if not self.ocr_enabled:
+                raise RuntimeError("SMARTSCAN_OCR_ENABLED=true is required in production")
 
 
 @lru_cache

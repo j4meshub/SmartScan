@@ -7,15 +7,49 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
-| 当前工作包 | `JOB-001` 完整任务状态机 |
-| 工作包状态 | 完成，PR #21 六项 CI 已通过，等待合并 |
-| 当前分支 | `codex/job-001-state-machine` |
-| 最后验证基线 | `7e501ff`（SCAN-001 PR #20 已合并） |
-| 工作包提交 | `fc581f6`（实现提交） |
-| PR | [#21](https://github.com/j4meshub/SmartScan/pull/21)（六项 CI 已通过，等待合并） |
-| 下一工作包 | `OCR-001` 基础 OCR |
+| 当前工作包 | `OCR-001` 基础 OCR |
+| 工作包状态 | 等待人工验收，代码及 PR #22 六项 CI 已通过，等待合并；真实模型门禁未提供 |
+| 当前分支 | `codex/ocr-001-cpu-ocr` |
+| 最后验证基线 | `1f5094b`（JOB-001 PR #21 已合并） |
+| 工作包提交 | `de63f0d`（实现提交） |
+| PR | [#22](https://github.com/j4meshub/SmartScan/pull/22)（六项 CI 已通过，等待合并） |
+| 下一工作包 | `EXPORT-001` JPG/PDF 导出 |
 
 ## 当前工作包进展
+
+- JOB-001 已由 PR #21 合并到主线，合并提交为 `1f5094b`。
+- OCR-001 使用固定 `paddleocr==3.7.0`、`paddlepaddle==3.3.1` 的 CPU 本地适配器；模型包从只读目录加载并按版本与全部文件 SHA-256 校验，生产启动禁止关闭或首次请求联网下载。
+- 已实现 0°、90°、180°、270° 四方向识别与置信/版式融合，每次推理后续租；非零方向没有明确优势时保持 0°，自动方向只作用于处理图，原图继续不可变。
+- `0015` 已增加与活动页面结果版本关联的 OCR 全文、行框、模型、置信度、方向和状态；手动旋转会使旧 OCR 失效，旧 `ocr_text` 兼容迁移为 `legacy`。
+- 标题候选过滤手机号、18 位证件号、页码、非法字符、重复扩展名和 Windows 保留名；建议名称不覆盖用户标题，无可信标题时按 locale 回退日期名称。
+- 已覆盖离线模型适配参数/结果解析、清单篡改、方向阈值、敏感标题、Worker 失败重试、原图保留、页面 IDOR/管理员审计、迁移降级和 OpenAPI 增量契约。
+
+`OCR-001` 提交前全量检查：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`140 passed, 5 skipped`，应用代码覆盖率 `88.80%`；114 个 Python 文件格式、Ruff、`0015` 空库/旧版本升级与降级、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法、Compose YAML/只读挂载解析和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。本机未安装 Docker，`docker compose config` 等待 PR CI 执行；本地 PyYAML 已验证锚点展开前的 YAML 结构与 OCR 只读挂载。
+
+首次聚焦门禁曾发现全角中文冒号未清理、一个布尔表达式和未使用变量问题；补齐全角非法字符后重跑为 `31 passed`。首次全量门禁的唯一失败是新增测试误把既有审计成功值断言成 `success`，保持仓库统一的 `allowed` 契约后，OCR 专项 `3 passed`、最终全量 `140 passed`。失败均已定位修复，没有放宽方向、隐私、权限或迁移断言。
+
+真实 PP-OCRv6 模型包、已授权固定数据集、文字方向正确率 `≥98%`、CPU 耗时/内存和双 Worker 容量仍等待人工验收；自动化假引擎和适配器契约绿灯不得替代这些外部门禁。
+
+PR #22 CI 结果：PostgreSQL 17 环境 `145 passed`，应用代码覆盖率 `89.11%`；两组 API、Web/H5 和 Compose/容器检查共 6 项全部通过，迁移模型漂移为 `No new upgrade operations detected`。该绿灯证明 `0015` 可在 PostgreSQL 升级、离线适配契约、四方向规则、敏感命名、页面权限和 Compose 只读模型挂载通过，不代表真实模型质量、容量或发布模型包已经验收。
+
+上一工作包完成摘要：
 
 - `0014` 已把旧作业状态兼容迁移为排队、基础处理、基础就绪、可选增强、就绪、分级失败和取消，并新增租约、心跳、退避、阶段时间戳和结果版本关联。
 - Worker 现在通过随机租约令牌领取及续租；过期抢占、取消和重试都会使旧令牌失效，写结果时再次锁行校验，页面结果与作业终态在同一事务提交。
@@ -282,10 +316,11 @@ git diff --check
 | 账号删除与手机号隔离 | `495576b` | PR CI 在 PostgreSQL 17 环境 117 项通过、覆盖率 86.86%；强验证、7 天冷静期、可重入清理、文件补偿、30 天复用隔离、并发 Worker、Web 与 Compose/容器检查通过；PR #18 已合并 |
 | 完整管理与审计 | `5d73afa` | PR CI 在 PostgreSQL 17 环境 121 项通过、覆盖率 87.75%；角色层级、分页过滤、会话撤销、受控删除、失败审计、迁移、Web 与 Compose/容器检查通过；PR #19 已合并 |
 | 页面版本与独立复核 | `7e501ff` | PR CI 在 PostgreSQL 17 环境 125 项通过、覆盖率 88.63%；原图保护、追加式结果、质量/旋转/复核、旧状态迁移、IDOR、Web 与 Compose/容器检查通过；PR #20 已合并 |
-| 完整任务状态机 | `fc581f6` | PR CI 在 PostgreSQL 17 环境 130 项通过、覆盖率 89.00%；租约、心跳、过期抢占、指数退避、取消/重试、单结果幂等、IDOR、迁移、Web 与 Compose/容器检查通过；PR #21 等待合并 |
+| 完整任务状态机 | `1f5094b` | PR CI 在 PostgreSQL 17 环境 130 项通过、覆盖率 89.00%；租约、心跳、过期抢占、指数退避、取消/重试、单结果幂等、IDOR、迁移、Web 与 Compose/容器检查通过；PR #21 已合并 |
+| 基础 OCR 与安全命名 | `de63f0d` | PR CI 在 PostgreSQL 17 环境 145 项通过、覆盖率 89.11%；固定离线适配、四方向融合、版本关联结果、敏感命名过滤、IDOR、迁移、Web 与 Compose/容器检查通过；PR #22 等待合并，真实模型指标待人工验收 |
 
 ## 下一步
 
-1. 合并 PR #21，不把后续 staging 强杀、磁盘满和多 Worker 压力门禁误记为已完成。
-2. 同步主线并创建 `codex/ocr-001-cpu-ocr` 工作分支。
-3. 从 `OCR-001` 继续 CPU OCR、方向融合、隐私过滤和智能命名工作包。
+1. 合并 PR #22；真实模型质量保持“等待人工验收”，不得记为已通过。
+2. 同步主线并创建 `codex/export-001-jpg-pdf` 工作分支。
+3. 从 `EXPORT-001` 继续 JPG/PDF、多页、三档质量、稳定文件名和可选 OCR 文本层。
