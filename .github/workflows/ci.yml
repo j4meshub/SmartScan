@@ -29,7 +29,7 @@ jobs:
       - run: pip install -e ".[dev,vision]"
       - run: ruff check services migrations tests
       - run: ruff format --check services migrations tests
-      - run: pytest --cov=services --cov-report=term-missing
+      - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
       - run: python -m alembic check
   web:
     runs-on: ubuntu-latest

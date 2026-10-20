@@ -15,7 +15,7 @@ unit-test:
     POSTGRES_USER: smartscan
     POSTGRES_PASSWORD: ci-only-password
     SMARTSCAN_TEST_POSTGRES_URL: postgresql+psycopg://smartscan:ci-only-password@postgres:5432/smartscan_test
-  script: ["pip install -e .[dev,vision]", "pytest", "python -m alembic check"]
+  script: ["pip install -e .[dev,vision]", "pytest --cov=services --cov-report=term-missing --cov-fail-under=77", "python -m alembic check"]
 web-check:
   stage: lint
   image: node:22

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from services.api.app.main import app
+
+OPENAPI_SNAPSHOT = Path(__file__).parents[1] / "packages" / "contracts" / "openapi.json"
 
 EXPECTED_OPERATIONS = {
     ("GET", "/health", 200),
@@ -56,3 +61,8 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
     }.issubset(component_schemas)
     assert "securitySchemes" not in schema["components"]
     assert schema["paths"]["/v1/uploads/{upload_id}/complete"]["post"]["responses"]["202"]
+
+
+def test_openapi_matches_committed_snapshot() -> None:
+    expected = json.loads(OPENAPI_SNAPSHOT.read_text(encoding="utf-8"))
+    assert app.openapi() == expected
