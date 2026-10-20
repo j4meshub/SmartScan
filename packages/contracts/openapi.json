@@ -117,6 +117,57 @@
         "title": "ChunkReceipt",
         "type": "object"
       },
+      "DeviceSessionView": {
+        "properties": {
+          "access_expires_at": {
+            "format": "date-time",
+            "title": "Access Expires At",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current": {
+            "title": "Current",
+            "type": "boolean"
+          },
+          "device_id": {
+            "title": "Device Id",
+            "type": "string"
+          },
+          "device_name": {
+            "title": "Device Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "device_id",
+          "device_name",
+          "platform",
+          "current",
+          "created_at",
+          "last_seen_at",
+          "access_expires_at"
+        ],
+        "title": "DeviceSessionView",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -364,6 +415,21 @@
         "title": "ProjectView",
         "type": "object"
       },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "maxLength": 256,
+            "minLength": 64,
+            "title": "Refresh Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "type": "object"
+      },
       "RegisterRequest": {
         "properties": {
           "locale": {
@@ -497,10 +563,55 @@
             "title": "Access Token",
             "type": "string"
           },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
           "expires_at": {
             "format": "date-time",
             "title": "Expires At",
             "type": "string"
+          },
+          "refresh_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Expires At"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
           },
           "token_type": {
             "default": "bearer",
@@ -1290,6 +1401,44 @@
         "summary": "Logout"
       }
     },
+    "/v1/auth/refresh": {
+      "post": {
+        "operationId": "refresh_session_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Session"
+      }
+    },
     "/v1/auth/register": {
       "post": {
         "operationId": "register_v1_auth_register_post",
@@ -1610,6 +1759,134 @@
           }
         },
         "summary": "Change Password"
+      }
+    },
+    "/v1/me/sessions": {
+      "delete": {
+        "operationId": "revoke_all_device_sessions_v1_me_sessions_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke All Device Sessions"
+      },
+      "get": {
+        "operationId": "device_sessions_v1_me_sessions_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceSessionView"
+                  },
+                  "title": "Response Device Sessions V1 Me Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Device Sessions"
+      }
+    },
+    "/v1/me/sessions/{session_id}": {
+      "delete": {
+        "operationId": "revoke_one_device_session_v1_me_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke One Device Session"
       }
     },
     "/v1/pages/{page_id}/content": {

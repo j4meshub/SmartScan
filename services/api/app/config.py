@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     wecom_state_ttl_seconds: int = Field(default=600, ge=60, le=1800)
     wecom_binding_ttl_seconds: int = Field(default=600, ge=60, le=1800)
     wecom_timeout_seconds: float = Field(default=5.0, ge=1.0, le=30.0)
+    access_token_minutes: int = Field(default=15, ge=5, le=60)
+    refresh_token_days: int = Field(default=30, ge=1, le=90)
     session_hours: int = 24
     max_upload_bytes: int = 25 * 1024 * 1024
     upload_chunk_bytes: int = 4 * 1024 * 1024

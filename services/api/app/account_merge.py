@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import Settings, get_settings
@@ -20,7 +20,6 @@ from .models import (
     Role,
     ScanPage,
     ScanProject,
-    SessionToken,
     UploadChunk,
     UploadSession,
     UploadStatus,
@@ -30,6 +29,7 @@ from .models import (
     VerifiedPhone,
 )
 from .security import phone_hmac_candidates
+from .session_service import revoke_user_sessions
 from .sms import consume_sms_challenge
 
 
@@ -298,11 +298,8 @@ def merge_accounts(
             job.owner_user_id = canonical.id
         db.delete(source_phone)
         now = datetime.now(UTC)
-        db.execute(
-            update(SessionToken)
-            .where(SessionToken.user_id.in_((source.id, canonical.id)))
-            .values(revoked_at=now)
-        )
+        revoke_user_sessions(db, source.id)
+        revoke_user_sessions(db, canonical.id)
         source.status = UserStatus.deleted
         source.deleted_at = now
         resource_counts = {

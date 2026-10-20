@@ -83,6 +83,25 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_at: datetime
+    refresh_token: str | None = None
+    refresh_expires_at: datetime | None = None
+    session_id: str | None = None
+    device_id: str | None = None
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=64, max_length=256)
+
+
+class DeviceSessionView(BaseModel):
+    id: str
+    device_id: str
+    device_name: str
+    platform: str
+    current: bool
+    created_at: datetime
+    last_seen_at: datetime
+    access_expires_at: datetime
 
 
 class UserView(BaseModel):

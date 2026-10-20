@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .audit import record_audit
 from .database import get_db
 from .dependencies import current_user
 from .identity_services import user_view
-from .models import AuditLog, Role, ScanProject, SessionToken, User, UserStatus
+from .models import AuditLog, Role, ScanProject, User, UserStatus
 from .policies import can_manage_account, can_read_data
 from .schemas import ProjectView, RoleChange, StatusChange, UserView
+from .session_service import revoke_user_sessions
 
 router = APIRouter()
 
@@ -67,11 +66,7 @@ def change_role(
     if not target or not can_manage_account(user, target) or payload.role == Role.super_admin:
         raise HTTPException(status_code=404, detail="user not found")
     target.role = payload.role
-    db.execute(
-        update(SessionToken)
-        .where(SessionToken.user_id == target.id)
-        .values(revoked_at=datetime.now(UTC))
-    )
+    revoke_user_sessions(db, target.id)
     record_audit(db, request, user, "change_role", "user", target.id, target.id)
     db.commit()
     db.refresh(target)
@@ -93,11 +88,7 @@ def change_status(
     if payload.status not in (UserStatus.active, UserStatus.disabled):
         raise HTTPException(status_code=422, detail="unsupported status transition")
     target.status = payload.status
-    db.execute(
-        update(SessionToken)
-        .where(SessionToken.user_id == target.id)
-        .values(revoked_at=datetime.now(UTC))
-    )
+    revoke_user_sessions(db, target.id)
     record_audit(db, request, user, "change_status", "user", target.id, target.id)
     db.commit()
     db.refresh(target)

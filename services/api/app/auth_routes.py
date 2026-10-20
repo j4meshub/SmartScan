@@ -4,7 +4,7 @@ import hmac
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .account_merge import AccountMergeError, merge_accounts
@@ -26,8 +26,10 @@ from .phone_protection import protect_phone
 from .schemas import (
     AccountMergeRequest,
     AccountMergeView,
+    DeviceSessionView,
     LoginRequest,
     PasswordChange,
+    RefreshRequest,
     RegisterRequest,
     SmsChallengeRequest,
     SmsChallengeView,
@@ -44,6 +46,15 @@ from .security import (
     phone_hmac_candidates,
     token_hash,
     verify_password,
+)
+from .session_service import (
+    SessionFlowError,
+    access_session,
+    active_device_sessions,
+    device_metadata_from_request,
+    revoke_device_session,
+    revoke_user_sessions,
+    rotate_refresh_token,
 )
 from .sms import (
     SmsProviderError,
@@ -64,6 +75,14 @@ from .wecom_auth import (
 settings = get_settings()
 router = APIRouter()
 WECOM_OAUTH_COOKIE = "smartscan_wecom_oauth_state"
+
+
+def _issue_session(db: Session, user: User, request: Request) -> TokenResponse:
+    try:
+        metadata = device_metadata_from_request(request)
+    except SessionFlowError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    return issue_session(db, user, metadata)
 
 
 @router.post("/v1/auth/account-merges", response_model=AccountMergeView)
@@ -156,7 +175,7 @@ def wecom_callback(
             outcome.user.id,
             outcome.user.id,
         )
-        token = issue_session(db, outcome.user)
+        token = _issue_session(db, outcome.user, request)
         return WeComCallbackView(
             action=outcome.decision.action,
             access_token=token.access_token,
@@ -229,7 +248,7 @@ def wecom_bind_phone(
         outcome.user.id,
         outcome.user.id,
     )
-    return issue_session(db, outcome.user)
+    return _issue_session(db, outcome.user, request)
 
 
 @router.post(
@@ -341,7 +360,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         verification_source=verification_source,
     )
     record_audit(db, request, user, "register", "user", user.id, user.id)
-    return issue_session(db, user)
+    return _issue_session(db, user, request)
 
 
 @router.post("/v1/auth/login", response_model=TokenResponse)
@@ -357,7 +376,34 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
         raise HTTPException(status_code=403, detail="account unavailable")
     identity.last_login_at = datetime.now(UTC)
     record_audit(db, request, user, "login", "user", user.id, user.id)
-    return issue_session(db, user)
+    return _issue_session(db, user, request)
+
+
+@router.post("/v1/auth/refresh", response_model=TokenResponse)
+def refresh_session(
+    payload: RefreshRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        token = rotate_refresh_token(db, payload.refresh_token)
+    except SessionFlowError as exc:
+        record_audit(db, request, None, "refresh_session", "session", result="denied")
+        db.commit()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    session = db.get(SessionToken, token.session_id)
+    actor = db.get(User, session.user_id) if session is not None else None
+    record_audit(
+        db,
+        request,
+        actor,
+        "refresh_session",
+        "session",
+        token.session_id,
+        actor.id if actor else None,
+    )
+    db.commit()
+    return token
 
 
 @router.post("/v1/auth/logout", status_code=204)
@@ -366,16 +412,69 @@ def logout(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    digest = token_hash(authorization.split(" ", 1)[1])
-    token = db.scalar(select(SessionToken).where(SessionToken.token_hash == digest))
-    if token:
-        token.revoked_at = datetime.now(UTC)
-        db.commit()
+    try:
+        token = access_session(db, authorization, lock=True)
+    except SessionFlowError:
+        return
+    revoke_device_session(db, token)
+    db.commit()
 
 
 @router.get("/v1/me", response_model=UserView)
 def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
     return user_view(db, user)
+
+
+@router.get("/v1/me/sessions", response_model=list[DeviceSessionView])
+def device_sessions(
+    authorization: str = Header(...),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    current = access_session(db, authorization)
+    return [
+        DeviceSessionView(
+            id=item.id,
+            device_id=item.device_id,
+            device_name=item.device_name,
+            platform=item.platform,
+            current=item.id == current.id,
+            created_at=item.created_at,
+            last_seen_at=item.last_seen_at,
+            access_expires_at=item.expires_at,
+        )
+        for item in active_device_sessions(db, user.id)
+    ]
+
+
+@router.delete("/v1/me/sessions/{session_id}", status_code=204)
+def revoke_one_device_session(
+    session_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    target = db.scalar(
+        select(SessionToken)
+        .where(SessionToken.id == session_id, SessionToken.user_id == user.id)
+        .with_for_update()
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    revoke_device_session(db, target)
+    record_audit(db, request, user, "revoke_device_session", "session", target.id, user.id)
+    db.commit()
+
+
+@router.delete("/v1/me/sessions", status_code=204)
+def revoke_all_device_sessions(
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    revoke_user_sessions(db, user.id)
+    record_audit(db, request, user, "revoke_all_sessions", "user", user.id, user.id)
+    db.commit()
 
 
 @router.post("/v1/me/password", status_code=204)
@@ -399,10 +498,6 @@ def change_password(
     user.password_hash = new_hash
     user.must_change_password = False
     current_digest = token_hash(authorization.split(" ", 1)[1])
-    db.execute(
-        update(SessionToken)
-        .where(SessionToken.user_id == user.id, SessionToken.token_hash != current_digest)
-        .values(revoked_at=datetime.now(UTC))
-    )
+    revoke_user_sessions(db, user.id, except_access_token_hash=current_digest)
     record_audit(db, request, user, "change_password", "user", user.id, user.id)
     db.commit()
