@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M0 工程基础 |
 | 当前工作包 | `SEC-001` 现有资源 IDOR 测试 |
-| 工作包状态 | 进行中，本地实现与验证完成，等待 PR CI |
+| 工作包状态 | 完成，PR CI 已通过，等待合并 |
 | 当前分支 | `codex/sec-001-idor-tests` |
 | 最后验证基线 | `11d0a1c`（QA-001 PR #4 已合并） |
 | 工作包提交 | `593bb44` |
@@ -44,11 +44,12 @@ git diff --check
 - Ruff 与格式检查通过，37 个 Python 文件纳入检查。
 - IDOR 专项测试 `4 passed`，覆盖普通用户、管理员、超级管理员和未登录边界。
 - 全量本地测试 `23 passed, 2 skipped`，应用代码覆盖率 `80.97%`，达到 `77%` 门禁。
-- 两项 PostgreSQL 测试等待 PR CI 执行。
+- 本地跳过的两项 PostgreSQL 测试已由 PR CI 的 PostgreSQL 17 服务执行并通过。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
 - H5 和管理后台 JavaScript 语法检查通过。
 - `git diff --check` 通过。
+- PR CI 在 PostgreSQL 17 环境下通过：`25 passed`、应用代码覆盖率 `80.97%`，Web 与 Compose/容器检查全部通过。
 
 ## 外部阻塞
 
@@ -74,9 +75,10 @@ git diff --check
 | 版本化数据库迁移 | `91ff720` | 本地 15 项通过；PR CI 17 项通过且 PostgreSQL 测试无跳过；PR #2 已合并 |
 | API 路由职责拆分 | `f711e47` | 入口缩减至 56 行；PR CI 19 项通过且覆盖率 81%；PR #3 已合并 |
 | 隔离测试与契约基线 | `11d0a1c` | PR CI 21 项通过、覆盖率 77.67%；隔离、快照与漂移门禁通过；PR #4 已合并 |
+| 现有资源越权矩阵 | `aa3cf4d` | PR CI 25 项通过、覆盖率 80.97%；角色、IDOR、审计、Web 与 Compose/容器检查通过；PR #5 |
 
 ## 下一步
 
-1. 等待 `SEC-001` PR #5 CI，失败时定位、修复并重跑。
-2. CI 通过后合并，并从最新 `main` 创建 `codex/poc-001-wecom-adapter`。
+1. 合并 `SEC-001` PR #5。
+2. 从最新 `main` 创建 `codex/poc-001-wecom-adapter`。
 3. 重跑、导出和删除接口尚不存在；对应工作包实现时必须追加同一 IDOR 与审计矩阵。
