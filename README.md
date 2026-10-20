@@ -10,6 +10,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 
 - FastAPI API：本地注册与登录、Argon2id 密码哈希、手机号确定性 HMAC、随机会话令牌和会话撤销。
 - 企业微信可信身份 POC：默认关闭的真实适配器、开发 Mock、可信手机号契约和安全账号决策；真实租户仍待人工验收。
+- H5 相机与弱网 POC：实时后置相机、`ImageCapture`/视频帧拍摄、系统相机兜底，以及不重传已确认分片的自动恢复测试。
 - 服务端 RBAC：实现 `user`、`admin`、唯一 `super_admin` 的数据可见范围。
 - 只增不改的审计事件：覆盖登录和管理员跨用户访问。
 - 按所有者隔离的扫描项目、安全图片路径、SHA-256 元数据，以及由 PostgreSQL 支持的租约任务队列。
@@ -71,6 +72,9 @@ ruff format --check services migrations tests
 pytest --cov=services --cov-report=term-missing --cov-fail-under=77
 python -m services.api.app.migrations drift
 node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
 node --check apps/admin-web/app.js
 ```
 

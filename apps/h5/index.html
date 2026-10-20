@@ -8,6 +8,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="progress.css">
+  <link rel="stylesheet" href="camera.css">
   <title>SmartScan</title>
 </head>
 <body>
@@ -85,6 +86,16 @@
     <form method="dialog" class="capture-card" id="captureForm">
       <div class="dialog-head"><div><p class="eyebrow" data-i18n="newProject">新建项目</p><h2 id="captureTitle">智能扫描</h2></div><button value="cancel" aria-label="Close">×</button></div>
       <label><span data-i18n="projectTitle">项目名称</span><input id="projectTitle" required maxlength="160"></label>
+      <div class="camera-tools">
+        <button id="openCamera" class="secondary" type="button" data-i18n="openCamera">打开实时相机</button>
+        <div id="cameraPanel" class="camera-panel hidden">
+          <video id="cameraPreview" autoplay muted playsinline></video>
+          <div>
+            <button id="takePhoto" class="primary" type="button" data-i18n="takePhoto">拍摄页面</button>
+            <button id="stopCamera" class="secondary" type="button" data-i18n="closeCamera">关闭相机</button>
+          </div>
+        </div>
+      </div>
       <label class="file-drop"><input id="pageFile" type="file" accept="image/jpeg,image/png,image/webp,image/heic" capture="environment"><span>＋</span><b data-i18n="selectPage">拍摄或选择页面</b><small id="fileName" data-i18n="originalKept">原图会一直保留到你删除项目</small></label>
       <div id="uploadProgressWrap" class="upload-progress hidden" aria-live="polite">
         <div><span data-i18n="uploading">正在上传</span><b id="uploadPercent">0%</b></div>
@@ -95,7 +106,7 @@
     </form>
   </dialog>
 
-  <script src="app.js" defer></script>
+  <script src="app.js" type="module"></script>
 </body>
 </html>
 
