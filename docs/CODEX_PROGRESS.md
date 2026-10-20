@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `JOB-001` 完整任务状态机 |
-| 工作包状态 | 进行中，本地实现与全量门禁已通过，等待提交、PR 和 PostgreSQL CI |
+| 工作包状态 | 进行中，本地实现与全量门禁已通过，PR #21 等待 PostgreSQL CI |
 | 当前分支 | `codex/job-001-state-machine` |
 | 最后验证基线 | `7e501ff`（SCAN-001 PR #20 已合并） |
-| 工作包提交 | 待创建 |
-| PR | 待创建 |
+| 工作包提交 | `fc581f6`（实现提交） |
+| PR | [#21](https://github.com/j4meshub/SmartScan/pull/21)（等待 CI） |
 | 下一工作包 | `OCR-001` 基础 OCR |
 
 ## 当前工作包进展
@@ -283,6 +283,6 @@ git diff --check
 
 ## 下一步
 
-1. 提交 JOB-001，实现记录关联提交与 PR，并等待 PostgreSQL 17 的并发领取和迁移门禁。
+1. 等待 PR #21 的 PostgreSQL 17 并发领取、迁移、API、Web 和 Compose/容器门禁。
 2. CI 通过后更新完成证据并合并，不把后续 staging 强杀、磁盘满和多 Worker 压力门禁误记为已完成。
 3. 从 `OCR-001` 继续 CPU OCR、方向融合、隐私过滤和智能命名工作包。
