@@ -8,10 +8,10 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `FILE-001` 文件生命周期 |
-| 工作包状态 | 进行中，实现完成，正在执行全量门禁 |
+| 工作包状态 | 进行中，实现与本地门禁完成，等待 PR CI |
 | 当前分支 | `codex/file-001-lifecycle` |
 | 最后验证基线 | `4e10b2e`（EXPORT-001 PR #23 已合并） |
-| 工作包提交 | 待创建 |
+| 工作包提交 | `f97763b`（实现提交） |
 | PR | 待创建 |
 | 下一工作包 | `API-001` v1 契约冻结 |
 
@@ -22,6 +22,26 @@
 - 未完成上传支持幂等取消，Worker 会回收已取消及过期上传的临时分片；已完成上传禁止取消。
 - 项目删除先持久化规范文件清单并事务删除关联资源，文件系统失败保持 `cleanup_pending`，由 Worker 重试至完成。
 - 跨用户下载、取消和删除继续统一返回 `404` 并记录拒绝审计；账号合并遇到待清理项目时拒绝，账号删除覆盖对应清理记录。
+
+`FILE-001` 本地门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+python -c "解析 Compose 并断言 X-Accel 前缀与 Nginx 只读存储卷"
+git diff --check
+```
+
+本地结果：`149 passed, 5 skipped`，应用代码覆盖率 `88.23%`；124 个 Python 文件格式、Ruff、`0017` 空库/旧版本升级与降级、上传取消降级映射、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法、Compose X-Accel 映射和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核；本机无 Docker，完整 `docker compose config` 由 PR CI 执行。
 
 上一工作包完成摘要：
 
