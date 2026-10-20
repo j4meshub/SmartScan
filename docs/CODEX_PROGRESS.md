@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M0 工程基础 |
 | 当前工作包 | `QA-001` 测试与 CI 基线 |
-| 工作包状态 | 进行中，本地实现与验证完成，PR CI 验证中 |
+| 工作包状态 | 完成，PR CI 已通过，等待合并 |
 | 当前分支 | `codex/qa-001-test-ci-baseline` |
 | 最后验证基线 | `f711e47`（ARC-001 PR #3 已合并） |
 | 工作包提交 | `d5211e7` |
@@ -20,7 +20,7 @@
 - 根级 `conftest.py` 在收集测试前强制使用系统临时目录中的 SQLite 数据库和文件存储，并在会话结束时清理。
 - 新增隔离环境断言，阻止测试回退到仓库数据库或数据目录。
 - 保存完整 `packages/contracts/openapi.json`，运行时 OpenAPI 与快照进行结构化全量比较。
-- 覆盖率排除测试代码后为 `77.77%`，GitHub/GitLab 统一设置 `77%` 最低门禁。
+- 覆盖率排除测试代码后最终 CI 基线为 `77.67%`，GitHub/GitLab 统一设置 `77%` 最低门禁。
 - 本地完整回归为 `19 passed, 2 skipped`；两项跳过仍是由 PR CI PostgreSQL 17 服务执行的迁移测试。
 
 ## 已执行验证
@@ -46,6 +46,7 @@ git diff --check
 - 两项 PostgreSQL 迁移测试等待本工作包 PR CI 的 PostgreSQL 17 服务执行。
 - PR 首轮 API 测试为 `21 passed` 且覆盖率门禁通过，但后续 `alembic check` 因隔离测试正确清理数据库而失败；CI 已改为显式升级独立 `ci-smartscan.db` 后再检查漂移，等待复验。
 - 第二轮确认直接调用 Alembic 未读取 `SMARTSCAN_DATABASE_URL`；已新增应用级 `migrations drift` 命令，使升级和漂移检查使用同一数据库配置，等待复验。
+- 第三轮 PR CI 通过：PostgreSQL 环境下 `21 passed`、无跳过、应用覆盖率 `77.67%`，迁移漂移、Web 与 Compose 检查全部通过。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
 - PostgreSQL 离线迁移 SQL 生成通过，包含 `0001` 结构基线与 `0002` 保护约束。
@@ -77,9 +78,10 @@ git diff --check
 | 长任务治理 | `dde779e` | Ruff、格式、10 项 Pytest、H5、后台及 Compose CI 通过；PR #1 已合并 |
 | 版本化数据库迁移 | `91ff720` | 本地 15 项通过；PR CI 17 项通过且 PostgreSQL 测试无跳过；PR #2 已合并 |
 | API 路由职责拆分 | `f711e47` | 入口缩减至 56 行；PR CI 19 项通过且覆盖率 81%；PR #3 已合并 |
+| 隔离测试与契约基线 | `d5211e7`、`9779b8e`、`93b3bd3` | PR CI 21 项通过、覆盖率 77.67%；隔离、快照与漂移门禁通过；PR #4 |
 
 ## 下一步
 
-1. 等待 `QA-001` PR #4 的 PostgreSQL、API、Web 和 Compose CI 全部通过。
-2. CI 通过后合并 PR #4。
+1. 合并 `QA-001` PR #4。
+2. 从最新 `main` 创建 `codex/sec-001-idor-tests`。
 3. 从最新 `main` 创建 `codex/sec-001-idor-tests`。
