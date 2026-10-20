@@ -7,26 +7,57 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
-| 当前工作包 | `POC-002` H5 相机与弱网续传自动测试 |
-| 工作包状态 | 完成，PR CI 已通过，等待合并；真机与真实弱网等待人工验收 |
-| 当前分支 | `codex/poc-002-h5-camera-network` |
-| 最后验证基线 | `a766af5`（POC-001 PR #6 已合并） |
-| 工作包提交 | `c3dffba` |
-| PR | [#7 验证 H5 相机与弱网续传](https://github.com/j4meshub/SmartScan/pull/7) |
-| 下一工作包 | `POC-003` 文档透视真实样本评估框架 |
+| 当前工作包 | `POC-003` 文档透视真实样本评估框架 |
+| 工作包状态 | 框架已通过 PR CI，真实固定数据集指标等待人工验收；待合并 PR |
+| 当前分支 | `codex/poc-003-perspective-evaluation` |
+| 最后验证基线 | `fd82c30`（POC-002 PR #7 已合并） |
+| 工作包提交 | `3cd84dd`（评估框架与合成回归） |
+| PR | [#8](https://github.com/j4meshub/SmartScan/pull/8) |
+| 下一工作包 | `POC-004` 基础试卷检测与净化 |
 
 ## 当前工作包进展
 
-- 新增用户触发的实时后置相机入口，优先 `ImageCapture`，不可用时从 video 帧生成 JPEG。
-- 实时相机不支持、授权失败或拍摄失败时保留 `capture=environment` 系统相机/文件选择兜底。
-- 拍摄完成、关闭相机或关闭对话框时停止全部媒体轨道，避免后台继续占用摄像头。
-- 将分片上传抽取为可测试模块；恢复时以服务端 `received_chunks` 为事实来源。
-- 自动模拟第 2 片断网并重新提交，确认项目与幂等键复用、已确认第 1 片不重传、完成后清除断点。
-- GitHub Actions 与 GitLab CI 已加入 H5 相机和弱网 Node.js 测试。
+- 当前透视算法在缩放副本上执行 Canny、形态学闭运算和轮廓筛选，选取面积最大的凸四边形并映射回原图。
+- 置信度当前仅按四边形面积比例计算；未检测到可信边缘时保留完整画面并进入复核。
+- 已增加授权固定数据集清单及 JSON Schema，强制检查授权、脱敏、用途、审批引用、SHA-256、路径边界和人工四角标注；图片与预览目录均不进入 Git。
+- 已实现批量评估器，报告检测召回、透视可用率、负样本误检率、归一化角点误差、P50/P95/最大耗时和进程峰值 RSS，且报告不包含原始路径。
+- 默认门禁要求至少 `100` 个正样本且可用率 `≥95%`；合成样本即使全部可用，也会因数量不足保持门禁关闭。
+- 已增加合成数据回归，覆盖成功报告、角点质量未达标、样本数不足、授权/哈希错误、路径穿越和现有保守回退。
+- 仓库目前仍没有授权真实样本；在固定数据集评估和人工复核前，不得宣称达到 v1.4 指标。
 
 ## 已执行验证
 
-`POC-002` 执行了以下检查：
+`POC-003` 专项检查已执行：
+
+```text
+python -m ruff check services/worker/app/vision.py services/worker/tests/test_vision.py tools/evaluate_perspective.py tests/test_perspective_evaluation.py
+python -m ruff format --check services/worker/app/vision.py services/worker/tests/test_vision.py tools/evaluate_perspective.py tests/test_perspective_evaluation.py
+python -m pytest services/worker/tests/test_vision.py tests/test_perspective_evaluation.py -q
+```
+
+专项结果：Ruff 与格式检查通过，透视处理和评估器 `8 passed`。
+
+提交前全量检查已执行：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`41 passed, 2 skipped`，覆盖率 `82.81%`；Ruff、格式、迁移漂移、当前数据库版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过。当前 Windows 未安装 Docker。
+
+PR #8 CI 结果：PostgreSQL 17 环境 `43 passed`，覆盖率 `82.81%`；Ruff、格式、迁移升级/漂移、Web、H5 `8 passed` 及 Compose/容器检查全部通过。真实数据集不存在，因此自动化绿灯只证明评估框架可运行，不代表文档透视真实可用率已达到 `95%`。
+
+最近已验证的合并基线仍为 POC-002 PR #7：
 
 ```text
 python -m ruff check services migrations tests
@@ -63,6 +94,7 @@ git diff --check
 | 公司 staging 与目标主机负载 | 阻塞 | 提供可隔离的数据库、数据目录和域名/端口 |
 | 企业微信真实身份与手机号 | 等待人工验收 | 提供 CorpId、AgentId、Secret、可信域名及测试成员权限 |
 | H5 相机与真实弱网 | 等待人工验收 | 提供至少 3 款 Android 手机、2 个企业微信版本及 Wi-Fi/4G/5G 网络切换条件 |
+| 文档透视真实样本 | 等待人工验收 | 提供已授权、脱敏且具有人工期望标注的固定文档照片集 |
 | 真实短信 | 等待人工验收 | 冻结供应商、签名、模板、密钥和限频参数 |
 | Android 正式签名分发 | 等待人工验收 | 冻结包名、签名资产和 GitLab 发布位置 |
 | iOS 真机与 App Store | 等待人工验收 | 冻结 Team、Bundle ID、地区、隐私与支持 URL，并使用 Mac 完成门禁 |
@@ -83,10 +115,10 @@ git diff --check
 | 隔离测试与契约基线 | `11d0a1c` | PR CI 21 项通过、覆盖率 77.67%；隔离、快照与漂移门禁通过；PR #4 已合并 |
 | 现有资源越权矩阵 | `1b0e3dd` | PR CI 25 项通过、覆盖率 80.97%；角色、IDOR、审计、Web 与 Compose/容器检查通过；PR #5 已合并 |
 | 企业微信可信身份 POC | `a766af5` | PR CI 38 项通过、覆盖率 82.80%；适配器、Mock、账号决策、Web 与 Compose/容器检查通过；PR #6 已合并，真实租户待人工验收 |
-| H5 相机与弱网 POC | `8806831` | PR CI API 38 项、H5 8 项通过，覆盖率 82.80%；相机兜底、续传、Web 与 Compose/容器检查通过；PR #7，真机弱网待人工验收 |
+| H5 相机与弱网 POC | `fd82c30` | PR CI API 38 项、H5 8 项通过，覆盖率 82.80%；相机兜底、续传、Web 与 Compose/容器检查通过；PR #7 已合并，真机弱网待人工验收 |
 
 ## 下一步
 
-1. 合并 `POC-002` PR #7。
-2. 从最新 `main` 创建 `codex/poc-003-perspective-evaluation`。
-3. 使用真实 Android/企业微信设备及 Wi-Fi、4G、5G 网络切换执行人工验收；条件未提供前保持“等待人工验收”。
+1. 合并 POC-003 PR #8，并把真实数据集结论保持为“等待人工验收”。
+2. 创建 `POC-004` 工作分支，开始基础试卷检测、保守净化和原图回退。
+3. 真实透视样本到位后运行固定数据集并记录结论；未达到 `95%` 时保持门禁关闭。

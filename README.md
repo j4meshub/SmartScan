@@ -11,6 +11,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - FastAPI API：本地注册与登录、Argon2id 密码哈希、手机号确定性 HMAC、随机会话令牌和会话撤销。
 - 企业微信可信身份 POC：默认关闭的真实适配器、开发 Mock、可信手机号契约和安全账号决策；真实租户仍待人工验收。
 - H5 相机与弱网 POC：实时后置相机、`ImageCapture`/视频帧拍摄、系统相机兜底，以及不重传已确认分片的自动恢复测试。
+- 文档透视评估框架：授权固定数据集清单、角点误差与可用率指标、耗时/内存报告及最少样本门禁；真实样本仍待人工验收。
 - 服务端 RBAC：实现 `user`、`admin`、唯一 `super_admin` 的数据可见范围。
 - 只增不改的审计事件：覆盖登录和管理员跨用户访问。
 - 按所有者隔离的扫描项目、安全图片路径、SHA-256 元数据，以及由 PostgreSQL 支持的租约任务队列。
@@ -52,6 +53,8 @@ python -m http.server 8081 --directory apps/admin-web
 
 企业微信 POC 默认使用 `SMARTSCAN_WECOM_MODE=disabled`。本地契约说明、运行模式与真实租户验收项见[企业微信可信身份 POC](docs/POC_WECOM_IDENTITY.md)。
 
+文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
+
 ## 容器运行
 
 将 `.env.example` 复制为 `.env`，替换所有密钥后执行：
@@ -67,8 +70,8 @@ Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API �
 完整测试隔离、OpenAPI 快照和覆盖率门禁说明见[测试与 CI 基线](docs/TESTING.md)。
 
 ```bash
-ruff check services migrations tests
-ruff format --check services migrations tests
+ruff check services migrations tests tools
+ruff format --check services migrations tests tools
 pytest --cov=services --cov-report=term-missing --cov-fail-under=77
 python -m services.api.app.migrations drift
 node --check apps/h5/app.js

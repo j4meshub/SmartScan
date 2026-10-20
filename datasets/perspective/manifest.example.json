@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "dataset_id": "替换为已授权固定数据集版本",
+  "authorization": {
+    "approved": true,
+    "deidentified": true,
+    "license": "替换为许可证或内部授权范围",
+    "consent_reference": "替换为不含个人信息的审批编号",
+    "purpose": "SmartScan 文档边缘与透视校正评估"
+  },
+  "samples": [
+    {
+      "id": "document-001",
+      "path": "images/document-001.jpg",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "category": "室内倾斜文档",
+      "expected": {
+        "document_present": true,
+        "corners_normalized": [[0.1, 0.1], [0.9, 0.12], [0.88, 0.9], [0.12, 0.88]]
+      }
+    }
+  ]
+}
