@@ -8,10 +8,10 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `EXPORT-001` JPG/PDF 导出 |
-| 工作包状态 | 进行中，正在冻结导出资源、质量档位、文本层和文件名边界 |
+| 工作包状态 | 进行中，实现与本地门禁完成，等待 PR CI |
 | 当前分支 | `codex/export-001-jpg-pdf` |
 | 最后验证基线 | `cff564c`（OCR-001 PR #22 已合并） |
-| 工作包提交 | 待创建 |
+| 工作包提交 | `e00bc95`（实现提交） |
 | PR | 待创建 |
 | 下一工作包 | `FILE-001` 文件生命周期 |
 
@@ -21,6 +21,28 @@
 - EXPORT-001 将实现所有者隔离的导出资源和可恢复状态，支持单页/多页 JPG/PDF、清晰/均衡/小文件三档及稳定建议文件名。
 - 可选 OCR 文本层只使用与活动页面结果版本一致的行框；缺失、过期或低置信 OCR 时仍生成纯图像 PDF，不伪造文本。
 - 导出文件继续放在用户隔离目录，数据库保存哈希、大小、页序、质量、OCR 使用证据与生成版本，为后续鉴权 Range/X-Accel 下载预留边界。
+- `0016` 已增加导出请求与制品表；多页 JPG 保持有序多制品，多页 PDF 生成单一制品，三档质量均不放大原图。
+- 创建、列表和详情接口已纳入 OpenAPI；跨用户创建和读取统一返回 `404` 并写拒绝审计，管理员只读写成功审计。
+- 导出文件已接入账号合并的复制/哈希/原子落位和账号删除的显式数据库清理，用户目录仍由既有隔离擦除流程处理。
+
+`EXPORT-001` 本地门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`143 passed, 5 skipped`，应用代码覆盖率 `88.46%`；118 个 Python 文件格式、Ruff、`0016` 空库升级与降级、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。首次 Web 命令误在仓库根目录执行，因根目录无 `package.json` 返回 `ENOENT`；切换到 `apps/h5` 后同一测试命令 8 项全部通过，这不是产品回归。
 
 上一工作包完成摘要：
 
@@ -328,6 +350,6 @@ git diff --check
 
 ## 下一步
 
-1. 增加导出资源模型与 `0016` 迁移，冻结页序、质量档位、状态、文件证据和所有权。
-2. 实现单页/多页 JPG/PDF、稳定文件名和只使用当前 OCR 的可选文本层。
-3. 接入创建/查询接口、权限审计、账号合并/删除、OpenAPI，并补迁移、IDOR、质量和回退测试。
+1. 推送 `codex/export-001-jpg-pdf` 并创建中文 PR，等待 PostgreSQL 17、Web 和 Compose CI。
+2. CI 通过后把 `EXPORT-001` 标记完成并合并；真实 PDF 视觉、超大项目内存和真实中文文本复制保留后续人工/容量验收。
+3. 从 `FILE-001` 继续，实现鉴权下载、HTTP Range、取消上传和项目清理。
