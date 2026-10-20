@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M0 工程基础 |
 | 当前工作包 | `ARC-001` API 分层 |
-| 工作包状态 | 进行中，本地实现与验证完成，PR CI 验证中 |
+| 工作包状态 | 完成，PR CI 已通过，等待合并 |
 | 当前分支 | `codex/arc-001-api-layers` |
 | 最后验证基线 | `91ff720`（DB-001 PR #2 已合并） |
 | 工作包提交 | `d7d9036`、`3b70296` |
@@ -45,7 +45,8 @@ git diff --check
 
 - Ruff 检查通过，34 个 Python 文件格式检查通过。
 - 本地 Pytest 通过：`17 passed, 2 skipped`，服务端覆盖率 `81%`；新增 2 项 API 路由/OpenAPI 契约测试。
-- 两项 PostgreSQL 迁移测试等待本工作包 PR CI 的 PostgreSQL 17 服务执行。
+- 两项本地跳过的 PostgreSQL 迁移测试已由本工作包 PR CI 的 PostgreSQL 17 服务执行。
+- PR CI 使用 PostgreSQL 17 实际执行全部测试：`19 passed`、无跳过、服务端覆盖率 `81%`；Web 与 Compose 检查通过。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
 - PostgreSQL 离线迁移 SQL 生成通过，包含 `0001` 结构基线与 `0002` 保护约束。
@@ -76,9 +77,9 @@ git diff --check
 | 文档透视校正 POC | `1d5a9d6` | 10 项测试通过；OpenCV 透视和保守回退 |
 | 长任务治理 | `dde779e` | Ruff、格式、10 项 Pytest、H5、后台及 Compose CI 通过；PR #1 已合并 |
 | 版本化数据库迁移 | `91ff720` | 本地 15 项通过；PR CI 17 项通过且 PostgreSQL 测试无跳过；PR #2 已合并 |
+| API 路由职责拆分 | `d7d9036`、`3b70296` | 入口缩减至 56 行；PR CI 19 项通过且覆盖率 81%；PR #3 |
 
 ## 下一步
 
-1. 等待 `ARC-001` PR #3 的 PostgreSQL、API、Web 和 Compose 检查全部通过。
-2. CI 通过后合并 PR #3。
-3. 从最新 `main` 创建 `codex/qa-001-test-ci-baseline`，继续 M0 测试隔离与 CI 基线。
+1. 合并 `ARC-001` PR #3。
+2. 从最新 `main` 创建 `codex/qa-001-test-ci-baseline`，继续 M0 测试隔离与 CI 基线。
