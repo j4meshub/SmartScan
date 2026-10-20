@@ -54,7 +54,7 @@ export class AuthClient {
     onAuthLost = () => {},
   }) {
     this.api = api.replace(/\/$/, "");
-    this.fetchImpl = fetchImpl;
+    this.fetchImpl = (...args) => Reflect.apply(fetchImpl, globalThis, args);
     this.sessionStorage = sessionStorage;
     this.deviceId = getOrCreateDeviceId(deviceStorage, cryptoApi);
     this.deviceName = deviceName;

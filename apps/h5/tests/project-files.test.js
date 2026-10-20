@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {jobStatusLabel, projectJobs, shareOrDownload, shouldPollJobs} from "../project-files.js";
+import {exportQualityLabel, exportStatusLabel, jobKindLabel, jobStatusLabel, projectJobs, shareOrDownload, shouldPollJobs} from "../project-files.js";
 
 test("任务按项目过滤并按更新时间倒序恢复", () => {
   const jobs = [
@@ -14,6 +14,9 @@ test("任务按项目过滤并按更新时间倒序恢复", () => {
   assert.equal(shouldPollJobs([{status: "ready"}, {status: "failed_final"}]), false);
   assert.equal(jobStatusLabel("ready", "zh-CN"), "处理完成");
   assert.equal(jobStatusLabel("failed_final", "en"), "Failed");
+  assert.equal(jobKindLabel("baseline", "zh-CN"), "基础处理");
+  assert.equal(exportQualityLabel("balanced", "en"), "Balanced");
+  assert.equal(exportStatusLabel("ready", "zh-CN"), "已就绪");
 });
 
 test("支持文件分享时调用 Web Share", async () => {

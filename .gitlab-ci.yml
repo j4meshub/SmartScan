@@ -21,7 +21,7 @@ unit-test:
 web-check:
   stage: lint
   image: node:22
-  script: ["node --check apps/h5/app.js", "node --check apps/h5/auth-client.js", "node --check apps/h5/camera.js", "node --check apps/h5/page-editor.js", "node --check apps/h5/project-files.js", "node --check apps/h5/resumable-upload.js", "node --test apps/h5/tests/*.test.js", "node --check apps/admin-web/app.js"]
+  script: ["node --check apps/h5/app.js", "node --check apps/h5/auth-client.js", "node --check apps/h5/camera.js", "node --check apps/h5/i18n.js", "node --check apps/h5/page-editor.js", "node --check apps/h5/project-files.js", "node --check apps/h5/resumable-upload.js", "npm --prefix apps/h5 ci", "npm --prefix apps/h5 exec -- playwright install --with-deps chromium", "npm --prefix apps/h5 test", "npm --prefix apps/h5 run test:e2e", "node --check apps/admin-web/app.js"]
 container-build:
   stage: build
   image: docker:27

@@ -32,6 +32,28 @@ export function jobStatusLabel(status, locale = "zh-CN") {
   return pair[locale === "zh-CN" ? 0 : 1];
 }
 
+export function jobKindLabel(kind, locale = "zh-CN") {
+  const labels = {
+    baseline: ["基础处理", "Baseline processing"],
+    ocr: ["文字识别", "Text recognition"],
+    enhancement: ["可选增强", "Optional enhancement"],
+  };
+  const pair = labels[kind] || [kind, kind];
+  return pair[locale === "zh-CN" ? 0 : 1];
+}
+
+export function exportQualityLabel(quality, locale = "zh-CN") {
+  const labels = {clear:["清晰","Clear"],balanced:["均衡","Balanced"],small:["小文件","Small file"]};
+  const pair = labels[quality] || [quality, quality];
+  return pair[locale === "zh-CN" ? 0 : 1];
+}
+
+export function exportStatusLabel(status, locale = "zh-CN") {
+  const labels = {ready:["已就绪","Ready"],failed:["失败","Failed"],generating:["生成中","Generating"]};
+  const pair = labels[status] || [status, status];
+  return pair[locale === "zh-CN" ? 0 : 1];
+}
+
 export function downloadBlob({blob, fileName, documentApi = globalThis.document, urlApi = globalThis.URL, schedule = globalThis.setTimeout}) {
   const url = urlApi.createObjectURL(blob);
   const anchor = documentApi.createElement("a");
