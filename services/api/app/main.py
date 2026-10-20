@@ -20,6 +20,14 @@ from .audit import record_audit
 from .config import get_settings
 from .database import SessionLocal, get_db
 from .dependencies import current_user
+from .domain_services import (
+    IMAGE_SUFFIXES,
+    ensure_superadmin,
+    issue_session,
+    upload_has_expired,
+    upload_matches_request,
+    valid_image_signature,
+)
 from .migrations import ensure_database_current, upgrade_database
 from .models import (
     AuditLog,
@@ -36,6 +44,7 @@ from .models import (
     UserStatus,
 )
 from .policies import can_manage_account, can_read_data
+from .repositories import project_for_actor, upload_for_owner, upload_view
 from .schemas import (
     ChunkReceipt,
     JobView,
@@ -55,36 +64,11 @@ from .schemas import (
 from .security import (
     hash_password,
     mask_phone,
-    new_session,
     phone_hmac,
     verify_password,
 )
 
 settings = get_settings()
-IMAGE_SUFFIXES = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/heic": ".heic",
-}
-
-
-def ensure_superadmin(db: Session) -> None:
-    existing = db.scalar(select(User).where(User.role == Role.super_admin))
-    if existing or not settings.superadmin_password:
-        return
-    admin = User(
-        username="admin",
-        password_hash=hash_password(settings.superadmin_password),
-        phone_hmac=hashlib.sha256(b"superadmin-no-phone").hexdigest(),
-        phone_masked="not-bound",
-        role=Role.super_admin,
-        must_change_password=True,
-    )
-    db.add(admin)
-    db.flush()
-    db.add(UserIdentity(user_id=admin.id, provider="local", provider_subject="admin"))
-    db.commit()
 
 
 @asynccontextmanager
@@ -121,85 +105,6 @@ async def request_id_middleware(request: Request, call_next):
     response.headers["x-content-type-options"] = "nosniff"
     response.headers["referrer-policy"] = "same-origin"
     return response
-
-
-def issue_session(db: Session, user: User) -> TokenResponse:
-    raw, digest, expires = new_session()
-    db.add(SessionToken(user_id=user.id, token_hash=digest, expires_at=expires))
-    db.commit()
-    return TokenResponse(access_token=raw, expires_at=expires)
-
-
-def project_for_actor(db: Session, actor: User, project_id: str) -> ScanProject:
-    project = db.get(ScanProject, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="project not found")
-    owner = db.get(User, project.owner_user_id)
-    if not owner or not can_read_data(actor, owner):
-        raise HTTPException(status_code=404, detail="project not found")
-    return project
-
-
-def upload_for_owner(db: Session, actor: User, upload_id: str, lock: bool = False) -> UploadSession:
-    statement = select(UploadSession).where(
-        UploadSession.id == upload_id, UploadSession.owner_user_id == actor.id
-    )
-    if lock:
-        statement = statement.with_for_update()
-    upload = db.scalar(statement)
-    if not upload:
-        raise HTTPException(status_code=404, detail="upload not found")
-    return upload
-
-
-def upload_view(db: Session, upload: UploadSession) -> UploadView:
-    received = db.scalars(
-        select(UploadChunk.chunk_index)
-        .where(UploadChunk.upload_id == upload.id)
-        .order_by(UploadChunk.chunk_index)
-    ).all()
-    return UploadView(
-        id=upload.id,
-        project_id=upload.project_id,
-        file_name=upload.file_name,
-        mime_type=upload.mime_type,
-        size_bytes=upload.size_bytes,
-        chunk_size=upload.chunk_size,
-        total_chunks=upload.total_chunks,
-        received_chunks=list(received),
-        status=upload.status,
-        page_id=upload.page_id,
-        expires_at=upload.expires_at,
-    )
-
-
-def upload_has_expired(upload: UploadSession) -> bool:
-    expires_at = upload.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=UTC)
-    return expires_at <= datetime.now(UTC)
-
-
-def upload_matches_request(upload: UploadSession, payload: UploadCreate, safe_name: str) -> bool:
-    return (
-        upload.project_id == payload.project_id
-        and upload.file_name == safe_name
-        and upload.mime_type == payload.mime_type
-        and upload.size_bytes == payload.size_bytes
-        and upload.expected_sha256 == payload.sha256
-    )
-
-
-def valid_image_signature(mime_type: str, header: bytes) -> bool:
-    if mime_type == "image/jpeg":
-        return header.startswith(b"\xff\xd8\xff")
-    if mime_type == "image/png":
-        return header.startswith(b"\x89PNG\r\n\x1a\n")
-    if mime_type == "image/webp":
-        return header.startswith(b"RIFF") and header[8:12] == b"WEBP"
-    if mime_type == "image/heic":
-        return len(header) >= 12 and header[4:8] == b"ftyp"
-    return False
 
 
 @app.get("/health")
