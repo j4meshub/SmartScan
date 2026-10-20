@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import base64
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from services.api.app import main
+from services.api.app import main, phone_protection, security
+from services.api.app.config import Settings
 from services.api.app.database import SessionLocal
 from services.api.app.models import User, UserIdentity, VerifiedPhone
-from services.api.app.security import hash_password, verify_password
+from services.api.app.phone_protection import decrypt_phone
+from services.api.app.security import hash_password, normalize_phone, verify_password
 
 
 def register(client: TestClient, *, phone: str, username: str, password: str) -> str:
@@ -57,6 +61,9 @@ def test_registration_dual_writes_new_identity_and_verified_phone() -> None:
         assert phone_row.phone_hmac == user.phone_hmac
         assert phone_row.phone_masked == user.phone_masked
         assert phone_row.verification_source == "development_sms"
+        assert phone_row.encryption_status.value == "encrypted"
+        assert phone_row.phone_ciphertext is not None
+        assert decrypt_phone(phone_row) == normalize_phone(phone)
 
 
 def test_login_view_and_password_change_use_split_identity_data() -> None:
@@ -159,3 +166,49 @@ def test_phone_conflict_uses_verified_phone_even_if_legacy_column_drifts() -> No
         )
         assert duplicate.status_code == 409
         assert duplicate.json()["detail"] == "phone already registered; use account binding"
+
+
+def test_phone_conflict_checks_retained_hmac_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    suffix = uuid.uuid4().hex[:10]
+    phone = f"+1555{str(uuid.uuid4().int % 10_000_000).zfill(7)}"
+    keyring = {
+        "old": base64.urlsafe_b64encode(b"1" * 32).decode(),
+        "new": base64.urlsafe_b64encode(b"2" * 32).decode(),
+    }
+
+    def settings(active: str) -> Settings:
+        return Settings(
+            _env_file=None,
+            phone_hmac_active_key_id=active,
+            phone_hmac_peppers={"old": "o" * 32, "new": "n" * 32},
+            phone_encryption_active_key_id=active,
+            phone_encryption_keys=keyring,
+        )
+
+    old_settings = settings("old")
+    new_settings = settings("new")
+    monkeypatch.setattr(security, "get_settings", lambda: old_settings)
+    monkeypatch.setattr(phone_protection, "get_settings", lambda: old_settings)
+
+    with TestClient(main.app) as client:
+        register(
+            client,
+            phone=phone,
+            username=f"version_old_{suffix}",
+            password="correct-horse-battery-staple",
+        )
+        monkeypatch.setattr(security, "get_settings", lambda: new_settings)
+        monkeypatch.setattr(phone_protection, "get_settings", lambda: new_settings)
+        duplicate = client.post(
+            "/v1/auth/register",
+            json={
+                "phone": phone,
+                "sms_code": main.settings.dev_sms_code,
+                "username": f"version_new_{suffix}",
+                "password": "correct-horse-battery-staple",
+                "locale": "zh-CN",
+            },
+        )
+
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "phone already registered; use account binding"

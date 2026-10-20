@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
-from .config import get_settings
+from .config import Settings, get_settings
 
 password_hasher = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2)
 
@@ -24,10 +24,31 @@ def normalize_phone(phone: str) -> str:
     return "+" + digits
 
 
-def phone_hmac(phone: str) -> str:
-    settings = get_settings()
+def phone_hmac(
+    phone: str,
+    *,
+    key_id: str | None = None,
+    settings: Settings | None = None,
+) -> str:
+    settings = settings or get_settings()
+    selected_key_id = key_id or settings.phone_hmac_active_key_id
+    pepper = settings.resolved_phone_hmac_peppers().get(selected_key_id)
+    if pepper is None:
+        raise RuntimeError("phone_hmac_key_unavailable")
     normalized = normalize_phone(phone)
-    return hmac.new(settings.phone_pepper.encode(), normalized.encode(), hashlib.sha256).hexdigest()
+    return hmac.new(pepper.encode(), normalized.encode(), hashlib.sha256).hexdigest()
+
+
+def phone_hmac_candidates(
+    phone: str,
+    *,
+    settings: Settings | None = None,
+) -> dict[str, str]:
+    settings = settings or get_settings()
+    return {
+        key_id: phone_hmac(phone, key_id=key_id, settings=settings)
+        for key_id in settings.resolved_phone_hmac_peppers()
+    }
 
 
 def mask_phone(phone: str) -> str:

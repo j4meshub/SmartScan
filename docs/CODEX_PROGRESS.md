@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M2 统一账号与安全 |
 | 当前工作包 | `ACC-002` 手机号认证加密、HMAC 版本与密钥轮换 |
-| 工作包状态 | 进行中，正在盘点密钥配置、手机号写入点和兼容迁移边界 |
+| 工作包状态 | 进行中，认证加密、版本化 HMAC、迁移和本地门禁已通过，待提交、PR 与 CI |
 | 当前分支 | `codex/acc-002-phone-protection` |
 | 最后验证基线 | `d097a17`（ACC-001 PR #12 已合并） |
 | 工作包提交 | 待创建 |
@@ -17,11 +17,24 @@
 
 ## 当前工作包进展
 
-- 以 `verified_phones` 作为唯一的新写入事实源，盘点注册、迁移回填和后续绑定所需的可恢复号码能力。
-- 设计认证加密密文格式、密钥版本和 HMAC 版本字段，支持新密钥写入、旧密钥读取以及显式轮换。
-- 保持 `phone_hmac` 唯一匹配和 `/v1` 掩码响应兼容；日志、异常和审计不得输出原始号码、密文或密钥。
-- 旧账号只有 HMAC 与掩码，无法从现有数据恢复原号；迁移必须如实标记“待下次可信验证补齐”，不得伪造密文。
+- 新验证号码使用 AES-256-GCM、随机 nonce 和绑定用户/密钥版本的关联数据，数据库只保存密文与版本 ID。
+- HMAC 查重覆盖配置中全部保留 Pepper 版本；新写入使用活动版本，显式轮换同时更新兼容期旧列。
+- 迁移 `20261020_0004` 将旧行标记为 `unavailable` 与 `legacy-v1`，等待下一次可信验证补齐，不从掩码猜测原号。
+- 轮换命令默认干跑，`--apply` 才分批写入；错误、日志和计数不输出原号、密文或密钥。
 - `ACC-002` 不实现验证码发送、企微绑定或账号合并，这些仍由 `SMS-001`、`WECOM-001` 和 `ACC-003` 负责。
+
+`ACC-002` 提交前 Python 与迁移检查：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term --cov-fail-under=77 -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+```
+
+本地结果：`89 passed, 2 skipped`，应用代码覆盖率 `87.18%`；Ruff、54 个 Python 文件格式、迁移升级/漂移/版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。手机号保护专项 32 项通过；两项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。
 
 `ACC-001` 提交前全量检查：
 

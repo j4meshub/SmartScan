@@ -17,7 +17,7 @@ from services.api.app.migrations import (
     head_revision,
     upgrade_database,
 )
-from services.api.app.models import User, UserIdentity, VerifiedPhone
+from services.api.app.models import PhoneEncryptionStatus, User, UserIdentity, VerifiedPhone
 
 
 def sqlite_url(path: Path) -> str:
@@ -85,6 +85,9 @@ def test_legacy_create_all_database_is_adopted_without_data_loss(tmp_path: Path)
             assert phone is not None
             assert phone.phone_hmac == "a" * 64
             assert phone.verification_source == "legacy"
+            assert phone.hmac_key_id == "legacy-v1"
+            assert phone.encryption_status == PhoneEncryptionStatus.unavailable
+            assert phone.phone_ciphertext is None
     finally:
         migrated_engine.dispose()
     assert current_revision(url) == head_revision(url)
@@ -193,3 +196,66 @@ def test_identity_split_can_downgrade_without_losing_legacy_account_columns(tmp_
             )
     finally:
         downgraded_engine.dispose()
+
+
+def test_phone_protection_migration_marks_unrecoverable_rows_and_can_downgrade(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "phone-protection.db")
+    command.upgrade(alembic_config(url), "20261020_0003")
+    engine = create_engine(url)
+    with Session(engine) as session:
+        session.add(
+            User(
+                id="legacy-phone-user",
+                username="legacy-phone",
+                password_hash="hash",
+                phone_hmac="e" * 64,
+                phone_masked="+86******0004",
+            )
+        )
+        session.commit()
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO verified_phones "
+                "(id, user_id, phone_hmac, phone_masked, verification_source, "
+                "verified_at, created_at) VALUES "
+                "('legacy-phone', 'legacy-phone-user', :phone_hmac, "
+                "'+86******0004', 'legacy', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "e" * 64},
+        )
+    engine.dispose()
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        with migrated.connect() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        "SELECT hmac_key_id, encryption_status, phone_ciphertext, "
+                        "encryption_key_id FROM verified_phones WHERE id = 'legacy-phone'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        assert row["hmac_key_id"] == "legacy-v1"
+        assert row["encryption_status"] == "unavailable"
+        assert row["phone_ciphertext"] is None
+        assert row["encryption_key_id"] is None
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0003")
+    downgraded = create_engine(url)
+    try:
+        columns = {item["name"] for item in inspect(downgraded).get_columns("verified_phones")}
+        assert "hmac_key_id" not in columns
+        assert "phone_ciphertext" not in columns
+        assert "encryption_key_id" not in columns
+        assert "encryption_status" not in columns
+    finally:
+        downgraded.dispose()
