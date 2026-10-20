@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M0 工程基础 |
 | 当前工作包 | `DB-001` 版本化迁移 |
-| 工作包状态 | 进行中，本地验证完成，待提交和 PR |
+| 工作包状态 | 进行中，本地验证完成，PR CI 验证中 |
 | 当前分支 | `codex/db-001-versioned-migrations` |
 | 最后验证基线 | `dde779e`（GOV-001 PR #1 已合并） |
-| 工作包提交 | 待创建 |
-| PR | 待创建 |
+| 工作包提交 | `5e2dc13` |
+| PR | [#2 引入版本化数据库迁移](https://github.com/j4meshub/SmartScan/pull/2) |
 | 下一工作包 | `ARC-001` API 分层 |
 
 ## 本工作包完成内容
@@ -74,6 +74,6 @@ git diff --check
 
 ## 下一步
 
-1. 提交并推送 `DB-001`，创建中文 PR 并等待 CI。
-2. 在 CI 通过后合并，并从最新 `main` 创建 `codex/arc-001-api-layers`。
+1. 等待 `DB-001` PR #2 的 PostgreSQL、API、Web 和 Compose CI 全部通过。
+2. 合并后从最新 `main` 创建 `codex/arc-001-api-layers`。
 3. 公司 PostgreSQL 环境恢复后复核真实升级、保护约束和回滚演练；在此之前不得宣称该外部门禁通过。
