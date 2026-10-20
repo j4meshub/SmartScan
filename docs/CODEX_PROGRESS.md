@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M5 Android |
 | 当前工作包 | `AND-002` 身份与缓存 |
-| 工作包状态 | 进行中，身份、Keystore、Room 与界面已实现，等待门禁 |
+| 工作包状态 | 进行中，PR #32 已创建，等待最终头 CI 与合并 |
 | 当前分支 | `codex/and-002-identity-cache` |
 | 最后验证基线 | `41bf07d`（AND-001 PR #31 已合并） |
-| 工作包提交 | `6d71f5a`（实现提交） |
-| PR | 待创建 |
+| 工作包提交 | `f435d3b`（最新验证提交） |
+| PR | [#32](https://github.com/j4meshub/SmartScan/pull/32) |
 | 下一工作包 | `AND-003` CameraX 拍摄 |
 
 ## 当前工作包进展
@@ -50,7 +50,7 @@ git diff --check
 
 本机结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；134 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法、配置解析、密钥模式和差异检查均通过。5 项 PostgreSQL 专属测试及 Android 编译、Room/Robolectric、应用单元测试和 Lint 等待 PR CI；本机未安装 JDK、Gradle 与 Android SDK。
 
-首轮推送 CI 的 API、Web 和容器门禁通过；Android 在 `:data:local:kaptDebugKotlin` 暴露 Room 2.6.1 只能读取 Kotlin 2.0 元数据、无法处理工程 Kotlin 2.1 元数据的问题。修复统一升级 Room runtime、KTX、compiler 和 testing 到 2.7.2，保留全部 Android 测试与 Lint 门禁，等待修复提交 CI 复核。
+首轮推送 CI 的 API、Web 和容器门禁通过；Android 在 `:data:local:kaptDebugKotlin` 暴露 Room 2.6.1 只能读取 Kotlin 2.0 元数据、无法处理工程 Kotlin 2.1 元数据的问题。修复统一升级 Room runtime、KTX、compiler 和 testing 到 2.7.2，保留全部 Android 测试与 Lint 门禁。修复提交 `f435d3b` 的 API、Web、容器与 Android CI 已全部通过，PR #32 已创建；Android 使用固定 JDK 17、Gradle 8.9 与 SDK 35 完成 network/security/repository/local/app 单元测试和 `lintDebug`。
 
 `AND-001` 计划门禁：
 
