@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M5 Android |
 | 当前工作包 | `AND-001` 分层工程与 API 客户端 |
-| 工作包状态 | 进行中，本机可执行门禁通过，Android 编译等待 CI |
+| 工作包状态 | 进行中，本机与最终 CI 门禁通过，等待合并 |
 | 当前分支 | `codex/and-001-layered-foundation` |
 | 最后验证基线 | `6d20db5`（H5-005 PR #30 已合并） |
 | 工作包提交 | `3cc567e`（实现提交） |
@@ -52,7 +52,7 @@ git diff --check
 
 本机结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；133 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法、CI YAML、Android Manifest、兼容策略 JSON、密钥模式和差异检查均通过。5 项 PostgreSQL 专属测试及 Android 编译等待 PR CI 复核。本机未安装 JDK、Gradle 与 Android SDK，Android JVM 单元测试、应用单元测试和 Lint 将由固定 JDK 17、Gradle 8.9 与 Android 35 SDK 的 GitHub CI 执行；这不等同于模拟器或真机验收。
 
-PR #31 前两轮 Android CI 均未进入项目编译：首轮 `setup-android@v3` 请求已移除的 `tools` 包；第二轮确认 Ubuntu Runner 未把 `sdkmanager` 预置到 `PATH`。改用 `setup-android@v4` 后第三轮发现仓储层缺少直接序列化依赖，补齐后第四轮完成 Kotlin 编译和单元测试，仅被 Lint 的相机硬件声明阻止。由于应用保留文件上传兜底，已按真实产品语义声明相机硬件 `required=false`，等待最终分支头重跑。对应轮次的 API、Web/Chromium 与容器均通过。
+PR #31 最终代码提交 `a2fb25a` 的两套 CI 全部通过：PostgreSQL 17 环境 `161 passed`、应用代码覆盖率 `88.54%`；Web 的 33 项单元测试和 3 项 Chromium E2E/axe、容器门禁均通过；Android 使用 JDK 17、Gradle 8.9 与 Android 35 SDK 完成网络/仓储 JVM 单元测试、应用单元测试和 `lintDebug`，Gradle `BUILD SUCCESSFUL`。前两轮分别暴露废弃 SDK `tools` 包和 `sdkmanager` 路径问题；进入编译后依次发现仓储直接依赖缺失及相机硬件声明问题，均按模块边界和文件上传兜底的真实语义修复后重跑，没有跳过测试或关闭 Lint。模拟器和真机仍是后续人工门禁。
 
 `H5-005` 本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；132 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法和差异检查均通过。PR #30 CI 在 PostgreSQL 17 环境 `161 passed`，覆盖率 `88.54%`；Web 的 33 项单元测试和 3 项 Chromium E2E/axe、容器门禁全部通过。
 
