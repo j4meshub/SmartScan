@@ -26,6 +26,7 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:network"))
     implementation(project(":core:security"))
+    implementation(project(":core:upload"))
     implementation(project(":data:local"))
     implementation(project(":data:repository"))
     implementation(project(":feature:capture"))

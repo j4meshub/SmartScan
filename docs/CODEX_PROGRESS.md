@@ -53,6 +53,8 @@ Android 门禁将验证 Room v1→v2 迁移、队列用户隔离、服务端确�
 
 后续提交 `ac5fbc3` 已越过主代码编译，Android 单元测试编译发现 `PageDto` 的公开字段暴露 `JsonElement`，但 `:core:network` 将其依赖声明为内部实现。修复把序列化 JSON 调整为 API 依赖，使公开 DTO 的完整类型在消费模块可解析，等待下一轮验证。
 
+提交 `8b11f39` 已进入应用编译和 Room/Robolectric 执行阶段：应用模块需要显式声明其实际消费的 `:core:upload` 类型；新增 Room 测试未绑定 Robolectric Runner，导致 Android Application 上下文未初始化。修复补齐模块依赖和两类 Room 测试 Runner，不用跳过测试或改成破坏性迁移。
+
 - AND-002 已由 PR #32 合并到主线，中文 squash 提交为 `60bac1e`；认证仓储、Keystore 会话、Room 用户分区缓存、Compose 登录注册与退出清理已完成。
 - 新增 `:feature:capture`，将 CameraX 生命周期、状态机、质量提示和原图捕获从 `:app` 分离；模块不依赖认证、网络或仓储。
 - 首页智能扫描、试卷净化和连续扫书入口已传入明确的 `CaptureMode`，三种模式共用后摄预览，底部导航在相机内隐藏。

@@ -16,7 +16,10 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class RoomUploadQueueStoreTest {
     private lateinit var database: SmartScanDatabase
     private lateinit var store: RoomUploadQueueStore
@@ -88,6 +91,7 @@ class RoomUploadQueueStoreTest {
     )
 }
 
+@RunWith(RobolectricTestRunner::class)
 class UploadQueueMigrationTest {
     @Test
     fun `version one database upgrades with upload queue tables`() {
