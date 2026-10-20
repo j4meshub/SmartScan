@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
 | 当前工作包 | `POC-003` 文档透视真实样本评估框架 |
-| 工作包状态 | 进行中，评估框架与本地全量验证已完成，PR CI 运行中 |
+| 工作包状态 | 框架已通过 PR CI，真实固定数据集指标等待人工验收；待合并 PR |
 | 当前分支 | `codex/poc-003-perspective-evaluation` |
 | 最后验证基线 | `fd82c30`（POC-002 PR #7 已合并） |
 | 工作包提交 | `3cd84dd`（评估框架与合成回归） |
@@ -53,7 +53,9 @@ node --check apps/admin-web/app.js
 git diff --check
 ```
 
-本地结果：`41 passed, 2 skipped`，覆盖率 `82.81%`；Ruff、格式、迁移漂移、当前数据库版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务验证。当前 Windows 未安装 Docker，Compose 继续由 PR CI 验证。
+本地结果：`41 passed, 2 skipped`，覆盖率 `82.81%`；Ruff、格式、迁移漂移、当前数据库版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过。当前 Windows 未安装 Docker。
+
+PR #8 CI 结果：PostgreSQL 17 环境 `43 passed`，覆盖率 `82.81%`；Ruff、格式、迁移升级/漂移、Web、H5 `8 passed` 及 Compose/容器检查全部通过。真实数据集不存在，因此自动化绿灯只证明评估框架可运行，不代表文档透视真实可用率已达到 `95%`。
 
 最近已验证的合并基线仍为 POC-002 PR #7：
 
@@ -117,6 +119,6 @@ git diff --check
 
 ## 下一步
 
-1. 等待并复核 POC-003 PR #8 的 PostgreSQL、Web 与 Compose CI。
-2. CI 通过后将评估框架合并，并把真实数据集结论保持为“等待人工验收”。
-3. 在不虚构真实指标的前提下继续 `POC-004` 基础试卷检测与净化；真实样本到位后再运行固定数据集并记录结论。
+1. 合并 POC-003 PR #8，并把真实数据集结论保持为“等待人工验收”。
+2. 创建 `POC-004` 工作分支，开始基础试卷检测、保守净化和原图回退。
+3. 真实透视样本到位后运行固定数据集并记录结论；未达到 `95%` 时保持门禁关闭。
