@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M5 Android |
 | 当前工作包 | `AND-003` CameraX 拍摄 |
-| 工作包状态 | 进行中，三模式拍摄与自动测试已实现，等待门禁 |
+| 工作包状态 | 进行中，PR #33 已创建，等待最终头 CI 与合并 |
 | 当前分支 | `codex/and-003-camerax-capture` |
 | 最后验证基线 | `60bac1e`（AND-002 PR #32 已合并） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `302dc89`（最新验证提交） |
+| PR | [#33](https://github.com/j4meshub/SmartScan/pull/33) |
 | 下一工作包 | `AND-004` 离线与续传 |
 
 ## 当前工作包进展
@@ -47,6 +47,8 @@ git diff --check
 首轮推送 CI 的 API、Web 和容器门禁通过；Android 编译发现 `:app` 移除旧 Room 依赖后仍直接调用 `Room.databaseBuilder`。修复把数据库创建工厂收回 `:data:local`，应用层只调用 `SmartScanDatabase.open`，不把 Room API 再泄漏回应用模块，等待重跑验证。
 
 第二轮 Android 编译确认返回 `SmartScanDatabase` 仍会让应用编译器解析其 `RoomDatabase` 父类。修复进一步把公开工厂返回类型收窄为 `UserScopedCache`，数据库与 DAO 类型完全停留在 `:data:local`，应用层不再感知 Room，等待第三轮验证。
+
+第三轮提交 `302dc89` 的 API、Web、容器和 Android CI 已全部通过，PR #33 已创建。Android 在固定 JDK 17、Gradle 8.9 与 SDK 35 环境执行 187 个任务，完成拍摄状态机/质量评估、既有模块与应用单元测试、应用编译和 `lintDebug`，`BUILD SUCCESSFUL`；该结果不替代 CameraX 真机验收。
 
 - AND-001 已由 PR #31 合并到主线，中文 squash 提交为 `41bf07d`；领域、网络、仓储与应用模块、Compose 导航、HTTPS 配置和 Android CI 基线已完成。
 - AND-002 已核对并接入服务端注册、登录、刷新、注销与 `/v1/me` 契约。
