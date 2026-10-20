@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M0 工程基础 |
 | 当前工作包 | `ARC-001` API 分层 |
-| 工作包状态 | 进行中，本地实现与验证完成，待提交和 PR |
+| 工作包状态 | 进行中，本地实现与验证完成，PR CI 验证中 |
 | 当前分支 | `codex/arc-001-api-layers` |
 | 最后验证基线 | `91ff720`（DB-001 PR #2 已合并） |
-| 工作包提交 | 待创建 |
-| PR | 待创建 |
+| 工作包提交 | `d7d9036`、`3b70296` |
+| PR | [#3 完成 API 路由职责拆分](https://github.com/j4meshub/SmartScan/pull/3) |
 | 下一工作包 | `QA-001` 测试与 CI 基线 |
 
 ## 当前工作包进展
@@ -79,6 +79,6 @@ git diff --check
 
 ## 下一步
 
-1. 提交并推送 `ARC-001`，创建中文 PR。
-2. 等待 PR CI 的 PostgreSQL、API、Web 和 Compose 检查全部通过后合并。
+1. 等待 `ARC-001` PR #3 的 PostgreSQL、API、Web 和 Compose 检查全部通过。
+2. CI 通过后合并 PR #3。
 3. 从最新 `main` 创建 `codex/qa-001-test-ci-baseline`，继续 M0 测试隔离与 CI 基线。
