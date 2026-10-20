@@ -32,6 +32,7 @@ jobs:
       - run: ruff check services migrations tests tools
       - run: ruff format --check services migrations tests tools
       - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+      - run: python tools/api_compatibility.py
       - run: python -m services.api.app.migrations upgrade
       - run: python -m services.api.app.migrations drift
   web:

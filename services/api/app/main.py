@@ -15,6 +15,8 @@ from .migrations import ensure_database_current, upgrade_database
 from .scan_routes import router as scan_router
 
 settings = get_settings()
+API_MAJOR_VERSION = "v1"
+CONTRACT_REVISION = "2026-10-20.1"
 
 
 @asynccontextmanager
@@ -29,9 +31,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="SmartScan API",
-    version="0.1.0",
-    description="Unified account, RBAC, scanning projects, uploads and CPU processing queue.",
+    title="SmartScan 接口",
+    version=CONTRACT_REVISION,
+    description="统一账号、权限、扫描项目、上传、处理、导出与文件生命周期接口。",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -53,4 +55,6 @@ async def request_id_middleware(request: Request, call_next):
     response.headers["x-request-id"] = request.state.request_id
     response.headers["x-content-type-options"] = "nosniff"
     response.headers["referrer-policy"] = "same-origin"
+    response.headers["x-smartscan-api-version"] = API_MAJOR_VERSION
+    response.headers["x-smartscan-contract-revision"] = CONTRACT_REVISION
     return response

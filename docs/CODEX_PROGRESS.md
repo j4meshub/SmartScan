@@ -7,21 +7,44 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
-| 当前工作包 | `FILE-001` 文件生命周期 |
+| 当前工作包 | `API-001` v1 契约冻结 |
 | 工作包状态 | 完成，PR CI 已通过，等待合并 |
-| 当前分支 | `codex/file-001-lifecycle` |
-| 最后验证基线 | `4e10b2e`（EXPORT-001 PR #23 已合并） |
-| 工作包提交 | `f97763b`（实现提交） |
-| PR | #24，CI 通过，等待合并 |
-| 下一工作包 | `API-001` v1 契约冻结 |
+| 当前分支 | `codex/api-001-contract-freeze` |
+| 最后验证基线 | `d8025b8`（FILE-001 PR #24 已合并） |
+| 工作包提交 | `9b9219f`（实现提交） |
+| PR | `#25`，CI 已通过，等待合并 |
+| 下一工作包 | `H5-001` 登录与企业微信绑定 |
 
 ## 当前工作包进展
 
-- EXPORT-001 已由 PR #23 合并到主线，中文 squash 提交为 `4e10b2e`；真实 PDF 视觉、超大项目内存和中文复制继续保留人工/容量验收。
-- FILE-001 已增加导出制品鉴权下载、强格式 ETag、私有缓存策略和标准 Range；Compose 使用只读卷与 Nginx `internal` X-Accel 发送。
-- 未完成上传支持幂等取消，Worker 会回收已取消及过期上传的临时分片；已完成上传禁止取消。
-- 项目删除先持久化规范文件清单并事务删除关联资源，文件系统失败保持 `cleanup_pending`，由 Worker 重试至完成。
-- 跨用户下载、取消和删除继续统一返回 `404` 并记录拒绝审计；账号合并遇到待清理项目时拒绝，账号删除覆盖对应清理记录。
+- FILE-001 已由 PR #24 合并到主线，中文 squash 提交为 `d8025b8`；生产 TLS、大文件并发、磁盘满和备份恢复继续保留 OPS staging 门禁。
+- API-001 使用 `openapi.json` 固定当前运行时契约，并以独立 `openapi-baseline.json` 固定仍受支持的上一代客户端基线。
+- 机器可读兼容策略只登记 H5 和管理后台当前实际消费的 `operationId`；Android/iOS 仍是骨架，不虚报已接通接口。
+- 兼容检查允许新增端点和可选字段，禁止删除旧能力、增加必填项、修改类型/引用/枚举或静默缩短支持窗口。
+- 弃用必须同时更新 OpenAPI 与策略，提供替代方案并保留至少 90 天；当前没有登记弃用。
+- API 响应新增 `X-SmartScan-API-Version` 和契约修订号，GitHub/GitLab CI 都显式运行兼容检查器。
+
+`API-001` 本地门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python tools/api_compatibility.py
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`152 passed, 5 skipped`，应用代码覆盖率 `88.28%`；127 个 Python 文件格式、Ruff、当前/上一代 OpenAPI 兼容检查、删除端点/新增必填字段/枚举变化反例、运行时精确快照、版本响应头、迁移升级/漂移/版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 复核。
+
+PR #25 CI 结果：PostgreSQL 17 环境 `157 passed`，应用代码覆盖率 `88.55%`；OpenAPI 当前契约兼容上一代客户端基线，数据库未检测到遗漏迁移，Web 与容器门禁均通过。
 
 `FILE-001` 本地门禁：
 
@@ -372,10 +395,11 @@ git diff --check
 | 完整任务状态机 | `1f5094b` | PR CI 在 PostgreSQL 17 环境 130 项通过、覆盖率 89.00%；租约、心跳、过期抢占、指数退避、取消/重试、单结果幂等、IDOR、迁移、Web 与 Compose/容器检查通过；PR #21 已合并 |
 | 基础 OCR 与安全命名 | `cff564c` | PR CI 在 PostgreSQL 17 环境 145 项通过、覆盖率 89.11%；固定离线适配、四方向融合、版本关联结果、敏感命名过滤、IDOR、迁移、Web 与 Compose/容器检查通过；PR #22 已合并，真实模型指标待人工验收 |
 | JPG/PDF 多格式导出 | `4e10b2e` | 本地 143 项通过、覆盖率 88.46%；PR CI 在 PostgreSQL 17 环境 148 项通过、覆盖率 88.75%；多页制品、三档质量、当前 OCR 文本层、过期回退、IDOR、账号合并/删除、迁移、Web 与容器检查通过；PR #23 已合并 |
-| 文件生命周期管理 | `f97763b` | 本地 149 项通过、覆盖率 88.23%；PR CI 在 PostgreSQL 17 环境 154 项通过、覆盖率 88.49%；鉴权下载、Range/X-Accel、上传取消、过期回收、项目清理重试、IDOR、迁移、Web 与容器检查通过；PR #24 等待合并 |
+| 文件生命周期管理 | `d8025b8` | 本地 149 项通过、覆盖率 88.23%；PR CI 在 PostgreSQL 17 环境 154 项通过、覆盖率 88.49%；鉴权下载、Range/X-Accel、上传取消、过期回收、项目清理重试、IDOR、迁移、Web 与容器检查通过；PR #24 已合并 |
+| v1 API 契约冻结 | `9b9219f` | 本地 152 项通过、覆盖率 88.28%；PR CI 在 PostgreSQL 17 环境 157 项通过、覆盖率 88.55%；双快照兼容检查、破坏性反例、版本响应头、Web 与容器检查通过；PR #25 等待合并 |
 
 ## 下一步
 
-1. 合并 PR #24；生产 TLS、大文件 Range 并发、磁盘满和备份恢复保留 OPS staging 门禁。
-2. 从 `API-001` 继续冻结 v1 OpenAPI、客户端兼容矩阵和弃用规则。
-3. 梳理当前/上一客户端兼容字段、错误码和弃用窗口，生成可执行契约检查。
+1. 合并已通过全部 CI 的 PR #25。
+2. 从 `H5-001` 继续，把统一登录、刷新令牌和企业微信绑定接入双语 H5。
+3. 使用 Mock 验证本地契约；真实企业微信租户继续保留人工验收门禁。

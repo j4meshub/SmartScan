@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "api_major": "v1",
+  "current_contract_revision": "2026-10-20.1",
+  "previous_contract_revision": "2026-10-20.0",
+  "supported_client_generations": [
+    "current",
+    "previous"
+  ],
+  "minimum_deprecation_days": 90,
+  "clients": {
+    "h5": {
+      "status": "active",
+      "consumed_operation_ids": [
+        "login_v1_auth_login_post",
+        "list_projects_v1_projects_get",
+        "create_project_v1_projects_post",
+        "create_upload_v1_uploads_post",
+        "get_upload_v1_uploads__upload_id__get",
+        "put_upload_chunk_v1_uploads__upload_id__chunks__chunk_index__put",
+        "complete_upload_v1_uploads__upload_id__complete_post"
+      ]
+    },
+    "admin_web": {
+      "status": "active",
+      "consumed_operation_ids": [
+        "login_v1_auth_login_post",
+        "me_v1_me_get",
+        "admin_users_v1_admin_users_get",
+        "audit_logs_v1_admin_audit_get"
+      ]
+    },
+    "android": {
+      "status": "skeleton",
+      "consumed_operation_ids": []
+    },
+    "ios": {
+      "status": "skeleton",
+      "consumed_operation_ids": []
+    }
+  },
+  "deprecations": []
+}
