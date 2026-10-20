@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from sqlalchemy import or_, select
 
+from services.api.app.account_deletion import process_next_due_account_deletion
 from services.api.app.config import get_settings
 from services.api.app.database import SessionLocal
 from services.api.app.migrations import ensure_database_current
@@ -111,11 +112,25 @@ def process(job_id: str) -> None:
             db.commit()
 
 
+def process_account_deletion_queue() -> bool:
+    with SessionLocal() as db:
+        result = process_next_due_account_deletion(db, settings=settings)
+        return result is not None
+
+
 def main() -> None:
     ensure_database_current()
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
+    next_deletion_sweep = 0.0
     while running:
+        now_monotonic = time.monotonic()
+        if now_monotonic >= next_deletion_sweep:
+            try:
+                process_account_deletion_queue()
+            except Exception as exc:
+                print(f"账号删除任务失败：{type(exc).__name__}", flush=True)
+            next_deletion_sweep = now_monotonic + 30.0
         job_id = claim_job()
         if job_id:
             process(job_id)

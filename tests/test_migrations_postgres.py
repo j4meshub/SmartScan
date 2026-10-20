@@ -5,6 +5,7 @@ import os
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from alembic import command
@@ -12,6 +13,8 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
+from services.api.app.account_deletion import process_account_deletion
+from services.api.app.config import Settings
 from services.api.app.migrations import (
     BASELINE_REVISION,
     alembic_config,
@@ -20,7 +23,10 @@ from services.api.app.migrations import (
     upgrade_database,
 )
 from services.api.app.models import (
+    AccountDeletionRequest,
+    AccountDeletionStatus,
     PhoneEncryptionStatus,
+    PhoneReuseQuarantine,
     RefreshToken,
     SessionToken,
     User,
@@ -54,6 +60,69 @@ def reset_postgres_schema() -> Iterator[None]:
         connection.execute(text("DROP SCHEMA public CASCADE"))
         connection.execute(text("CREATE SCHEMA public"))
     cleanup_engine.dispose()
+
+
+def test_postgresql_concurrent_account_deletion_is_idempotent(tmp_path: Path) -> None:
+    url = isolated_postgres_url()
+    upgrade_database(url)
+    engine = create_engine(url)
+    now = datetime.now(UTC)
+    with Session(engine) as session:
+        user = User(
+            id="deletion-race-user",
+            username="deletion-race",
+            password_hash="hash",
+            phone_hmac="7" * 64,
+            phone_masked="+86******0007",
+            status="deleting",
+        )
+        session.add(user)
+        session.flush()
+        session.add(
+            VerifiedPhone(
+                user_id=user.id,
+                phone_hmac="7" * 64,
+                hmac_key_id="legacy-v1",
+                phone_masked="+86******0007",
+                encryption_status=PhoneEncryptionStatus.unavailable,
+                verification_source="legacy",
+            )
+        )
+        session.add(
+            AccountDeletionRequest(
+                id="deletion-race-request",
+                user_id=user.id,
+                status=AccountDeletionStatus.pending,
+                requested_at=now - timedelta(days=8),
+                execute_after=now - timedelta(days=1),
+            )
+        )
+        session.commit()
+
+    settings = Settings(database_url=url, storage_root=tmp_path)
+
+    def delete_once() -> str:
+        with Session(engine) as session:
+            result = process_account_deletion(
+                session,
+                "deletion-race-request",
+                now=now,
+                settings=settings,
+            )
+            return result.status.value
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = sorted(executor.map(lambda _: delete_once(), range(2)))
+
+    assert outcomes == ["completed", "completed"]
+    with Session(engine) as session:
+        deletion = session.get(AccountDeletionRequest, "deletion-race-request")
+        user = session.get(User, "deletion-race-user")
+        quarantines = session.scalars(select(PhoneReuseQuarantine)).all()
+        assert deletion is not None and deletion.status == AccountDeletionStatus.completed
+        assert user is not None and user.status == "deleted"
+        assert len(quarantines) == 1
+    engine.dispose()
 
 
 def assert_postgresql_guards_installed() -> None:

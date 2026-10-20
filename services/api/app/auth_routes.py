@@ -7,6 +7,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .account_deletion import (
+    AccountDeletionError,
+    cancel_account_deletion,
+    phone_reuse_blocked,
+    request_account_deletion,
+)
 from .account_merge import AccountMergeError, merge_accounts
 from .audit import record_audit
 from .config import get_settings
@@ -21,9 +27,12 @@ from .identity_services import (
     user_view,
     verified_phone_by_hmacs,
 )
-from .models import SessionToken, User, UserStatus
+from .models import AccountDeletionRequest, SessionToken, User, UserStatus
 from .phone_protection import protect_phone
 from .schemas import (
+    AccountDeletionCancelPayload,
+    AccountDeletionRequestPayload,
+    AccountDeletionView,
     AccountMergeRequest,
     AccountMergeView,
     DeviceSessionView,
@@ -83,6 +92,17 @@ def _issue_session(db: Session, user: User, request: Request) -> TokenResponse:
     except SessionFlowError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
     return issue_session(db, user, metadata)
+
+
+def _deletion_view(deletion: AccountDeletionRequest) -> AccountDeletionView:
+    return AccountDeletionView(
+        id=deletion.id,
+        status=deletion.status,
+        requested_at=deletion.requested_at,
+        execute_after=deletion.execute_after,
+        canceled_at=deletion.canceled_at,
+        completed_at=deletion.completed_at,
+    )
 
 
 @router.post("/v1/auth/account-merges", response_model=AccountMergeView)
@@ -304,6 +324,8 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     existing_identity = local_identity_by_username(db, payload.username)
     if existing_identity:
         raise HTTPException(status_code=409, detail="username already exists")
+    if phone_reuse_blocked(db, payload.phone):
+        raise HTTPException(status_code=403, detail="phone temporarily unavailable")
     if existing_phone:
         phone_owner = db.get(User, existing_phone.user_id)
         if not phone_owner or phone_owner.status != UserStatus.active:
@@ -423,6 +445,79 @@ def logout(
 @router.get("/v1/me", response_model=UserView)
 def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
     return user_view(db, user)
+
+
+@router.post(
+    "/v1/me/account-deletion",
+    response_model=AccountDeletionView,
+    status_code=202,
+)
+def create_account_deletion(
+    payload: AccountDeletionRequestPayload,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        deletion = request_account_deletion(
+            db,
+            actor=user,
+            phone=payload.phone,
+            challenge_id=payload.sms_challenge_id,
+            code=payload.sms_code,
+        )
+    except AccountDeletionError as exc:
+        record_audit(
+            db, request, user, "request_account_deletion", "account_deletion", result="denied"
+        )
+        db.commit()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    record_audit(
+        db,
+        request,
+        user,
+        "request_account_deletion",
+        "account_deletion",
+        deletion.id,
+        user.id,
+    )
+    db.commit()
+    return _deletion_view(deletion)
+
+
+@router.post(
+    "/v1/auth/account-deletion/cancel",
+    response_model=AccountDeletionView,
+)
+def cancel_pending_account_deletion(
+    payload: AccountDeletionCancelPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        deletion = cancel_account_deletion(
+            db,
+            phone=payload.phone,
+            challenge_id=payload.sms_challenge_id,
+            code=payload.sms_code,
+        )
+    except AccountDeletionError as exc:
+        record_audit(
+            db, request, None, "cancel_account_deletion", "account_deletion", result="denied"
+        )
+        db.commit()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    record_audit(
+        db,
+        request,
+        None,
+        "cancel_account_deletion",
+        "account_deletion",
+        deletion.id,
+        deletion.user_id,
+    )
+    db.commit()
+    return _deletion_view(deletion)
 
 
 @router.get("/v1/me/sessions", response_model=list[DeviceSessionView])

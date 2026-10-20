@@ -1,6 +1,123 @@
 {
   "components": {
     "schemas": {
+      "AccountDeletionCancelPayload": {
+        "properties": {
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "sms_challenge_id": {
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Sms Challenge Id",
+            "type": "string"
+          },
+          "sms_code": {
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "sms_challenge_id",
+          "sms_code"
+        ],
+        "title": "AccountDeletionCancelPayload",
+        "type": "object"
+      },
+      "AccountDeletionRequestPayload": {
+        "properties": {
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "sms_challenge_id": {
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Sms Challenge Id",
+            "type": "string"
+          },
+          "sms_code": {
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "sms_challenge_id",
+          "sms_code"
+        ],
+        "title": "AccountDeletionRequestPayload",
+        "type": "object"
+      },
+      "AccountDeletionStatus": {
+        "enum": [
+          "pending",
+          "cleanup_pending",
+          "completed",
+          "canceled"
+        ],
+        "title": "AccountDeletionStatus",
+        "type": "string"
+      },
+      "AccountDeletionView": {
+        "properties": {
+          "canceled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canceled At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "execute_after": {
+            "format": "date-time",
+            "title": "Execute After",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountDeletionStatus"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "requested_at",
+          "execute_after"
+        ],
+        "title": "AccountDeletionView",
+        "type": "object"
+      },
       "AccountMergeRequest": {
         "properties": {
           "idempotency_key": {
@@ -510,7 +627,7 @@
           },
           "purpose": {
             "default": "registration",
-            "pattern": "^(registration|wecom_binding|account_merge)$",
+            "pattern": "^(registration|wecom_binding|account_merge|account_deletion|account_deletion_cancel)$",
             "title": "Purpose",
             "type": "string"
           }
@@ -1275,6 +1392,44 @@
         "summary": "Change Status"
       }
     },
+    "/v1/auth/account-deletion/cancel": {
+      "post": {
+        "operationId": "cancel_pending_account_deletion_v1_auth_account_deletion_cancel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletionCancelPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Pending Account Deletion"
+      }
+    },
     "/v1/auth/account-merges": {
       "post": {
         "operationId": "account_merge_v1_auth_account_merges_post",
@@ -1717,6 +1872,62 @@
           }
         },
         "summary": "Me"
+      }
+    },
+    "/v1/me/account-deletion": {
+      "post": {
+        "operationId": "create_account_deletion_v1_me_account_deletion_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletionRequestPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Account Deletion"
       }
     },
     "/v1/me/password": {

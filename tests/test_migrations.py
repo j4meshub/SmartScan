@@ -322,3 +322,35 @@ def test_device_session_migration_backfills_legacy_tokens_and_can_downgrade(
         assert "last_seen_at" not in session_columns
     finally:
         downgraded.dispose()
+
+
+def test_account_deletion_migration_can_downgrade_to_device_sessions(tmp_path: Path) -> None:
+    url = sqlite_url(tmp_path / "account-deletion.db")
+    command.upgrade(alembic_config(url), "20261020_0009")
+    engine = create_engine(url)
+    try:
+        assert "account_deletion_requests" not in inspect(engine).get_table_names()
+        assert "phone_reuse_quarantines" not in inspect(engine).get_table_names()
+    finally:
+        engine.dispose()
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        schema = inspect(migrated)
+        assert "account_deletion_requests" in schema.get_table_names()
+        assert "phone_reuse_quarantines" in schema.get_table_names()
+        request_columns = {item["name"] for item in schema.get_columns("account_deletion_requests")}
+        assert {"execute_after", "completed_at", "resource_counts"}.issubset(request_columns)
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0009")
+    downgraded = create_engine(url)
+    try:
+        tables = inspect(downgraded).get_table_names()
+        assert "account_deletion_requests" not in tables
+        assert "phone_reuse_quarantines" not in tables
+        assert "refresh_tokens" in tables
+    finally:
+        downgraded.dispose()

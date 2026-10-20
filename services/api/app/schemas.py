@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import JobStatus, Role, UploadStatus, UserStatus
+from .models import AccountDeletionStatus, JobStatus, Role, UploadStatus, UserStatus
 
 
 class RegisterRequest(BaseModel):
@@ -19,7 +19,11 @@ class RegisterRequest(BaseModel):
 class SmsChallengeRequest(BaseModel):
     phone: str
     purpose: str = Field(
-        default="registration", pattern=r"^(registration|wecom_binding|account_merge)$"
+        default="registration",
+        pattern=(
+            r"^(registration|wecom_binding|account_merge|account_deletion|"
+            r"account_deletion_cancel)$"
+        ),
     )
 
 
@@ -102,6 +106,25 @@ class DeviceSessionView(BaseModel):
     created_at: datetime
     last_seen_at: datetime
     access_expires_at: datetime
+
+
+class AccountDeletionRequestPayload(BaseModel):
+    phone: str
+    sms_challenge_id: str = Field(min_length=36, max_length=36)
+    sms_code: str = Field(min_length=4, max_length=8)
+
+
+class AccountDeletionCancelPayload(AccountDeletionRequestPayload):
+    pass
+
+
+class AccountDeletionView(BaseModel):
+    id: str
+    status: AccountDeletionStatus
+    requested_at: datetime
+    execute_after: datetime
+    canceled_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class UserView(BaseModel):
