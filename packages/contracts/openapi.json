@@ -307,6 +307,19 @@
             "title": "Phone",
             "type": "string"
           },
+          "sms_challenge_id": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Challenge Id"
+          },
           "sms_code": {
             "maxLength": 8,
             "minLength": 4,
@@ -347,6 +360,49 @@
           "role"
         ],
         "title": "RoleChange",
+        "type": "object"
+      },
+      "SmsChallengeRequest": {
+        "properties": {
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "registration",
+            "pattern": "^registration$",
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "title": "SmsChallengeRequest",
+        "type": "object"
+      },
+      "SmsChallengeView": {
+        "properties": {
+          "challenge_id": {
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "retry_after_seconds": {
+            "title": "Retry After Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "expires_at",
+          "retry_after_seconds"
+        ],
+        "title": "SmsChallengeView",
         "type": "object"
       },
       "StatusChange": {
@@ -1028,6 +1084,44 @@
           }
         },
         "summary": "Register"
+      }
+    },
+    "/v1/auth/sms/challenges": {
+      "post": {
+        "operationId": "request_sms_challenge_v1_auth_sms_challenges_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmsChallengeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmsChallengeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Sms Challenge"
       }
     },
     "/v1/jobs": {

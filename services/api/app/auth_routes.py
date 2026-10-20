@@ -21,7 +21,15 @@ from .identity_services import (
 )
 from .models import SessionToken, User, UserStatus
 from .phone_protection import protect_phone
-from .schemas import LoginRequest, PasswordChange, RegisterRequest, TokenResponse, UserView
+from .schemas import (
+    LoginRequest,
+    PasswordChange,
+    RegisterRequest,
+    SmsChallengeRequest,
+    SmsChallengeView,
+    TokenResponse,
+    UserView,
+)
 from .security import (
     hash_password,
     mask_phone,
@@ -30,15 +38,65 @@ from .security import (
     token_hash,
     verify_password,
 )
+from .sms import (
+    SmsProviderError,
+    SmsRateLimitError,
+    consume_sms_challenge,
+    create_sms_challenge,
+    create_sms_provider,
+)
 
 settings = get_settings()
 router = APIRouter()
 
 
+@router.post(
+    "/v1/auth/sms/challenges",
+    response_model=SmsChallengeView,
+    status_code=201,
+)
+def request_sms_challenge(
+    payload: SmsChallengeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    requester_ip = request.client.host if request.client else "unknown"
+    try:
+        challenge = create_sms_challenge(
+            db,
+            phone=payload.phone,
+            purpose=payload.purpose,
+            requester_ip=requester_ip,
+            provider=create_sms_provider(),
+        )
+    except SmsRateLimitError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=429,
+            detail=str(exc),
+            headers={"Retry-After": str(settings.sms_rate_window_seconds)},
+        ) from exc
+    except SmsProviderError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    record_audit(
+        db,
+        request,
+        None,
+        "request_sms_challenge",
+        "sms_challenge",
+        challenge.id,
+    )
+    db.commit()
+    return SmsChallengeView(
+        challenge_id=challenge.id,
+        expires_at=challenge.expires_at,
+        retry_after_seconds=settings.sms_rate_window_seconds,
+    )
+
+
 @router.post("/v1/auth/register", response_model=TokenResponse, status_code=201)
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
-    if settings.env != "development" or payload.sms_code != settings.dev_sms_code:
-        raise HTTPException(status_code=400, detail="invalid verification code")
     candidates = phone_hmac_candidates(payload.phone)
     digest = phone_hmac(payload.phone)
     existing_phone = verified_phone_by_hmacs(db, list(candidates.values()))
@@ -50,6 +108,30 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         if not phone_owner or phone_owner.status != UserStatus.active:
             raise HTTPException(status_code=403, detail="phone is linked to an unavailable account")
         raise HTTPException(status_code=409, detail="phone already registered; use account binding")
+    verification_source = "development_sms"
+    if payload.sms_challenge_id:
+        verification = consume_sms_challenge(
+            db,
+            challenge_id=payload.sms_challenge_id,
+            phone=payload.phone,
+            code=payload.sms_code,
+            purpose="registration",
+        )
+        if not verification.accepted:
+            record_audit(
+                db,
+                request,
+                None,
+                "verify_sms_challenge",
+                "sms_challenge",
+                payload.sms_challenge_id,
+                result="denied",
+            )
+            db.commit()
+            raise HTTPException(status_code=400, detail=verification.reason)
+        verification_source = verification.verification_source or "sms"
+    elif settings.env != "development" or payload.sms_code != settings.dev_sms_code:
+        raise HTTPException(status_code=400, detail="invalid verification code")
     try:
         password_hash = hash_password(payload.password)
     except ValueError as exc:
@@ -74,7 +156,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         db,
         user,
         protected=protected,
-        verification_source="development_sms",
+        verification_source=verification_source,
     )
     record_audit(db, request, user, "register", "user", user.id, user.id)
     return issue_session(db, user)

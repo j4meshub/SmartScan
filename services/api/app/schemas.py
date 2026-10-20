@@ -10,9 +10,21 @@ from .models import JobStatus, Role, UploadStatus, UserStatus
 class RegisterRequest(BaseModel):
     phone: str
     sms_code: str = Field(min_length=4, max_length=8)
+    sms_challenge_id: str | None = Field(default=None, min_length=36, max_length=36)
     username: str = Field(pattern=r"^[A-Za-z0-9_.-]{3,32}$")
     password: str = Field(min_length=10, max_length=128)
     locale: str = "zh-CN"
+
+
+class SmsChallengeRequest(BaseModel):
+    phone: str
+    purpose: str = Field(default="registration", pattern=r"^registration$")
+
+
+class SmsChallengeView(BaseModel):
+    challenge_id: str
+    expires_at: datetime
+    retry_after_seconds: int
 
 
 class LoginRequest(BaseModel):
