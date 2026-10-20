@@ -73,6 +73,8 @@ node --check apps/admin-web/app.js
 
 ## 安全基线
 
+当前资源的普通用户、管理员和超级管理员权限测试见[资源权限与 IDOR 测试矩阵](docs/SECURITY_TEST_MATRIX.md)。
+
 - 不得提交 `.env`、短信/企业微信/AI 密钥、签名材料或用户扫描文件。
 - 数据路径使用服务端生成的 ID，且不由 Nginx 直接公开。
 - 未授权和不存在的对象 ID 均返回 `404`。
