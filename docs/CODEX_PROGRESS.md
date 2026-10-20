@@ -12,7 +12,7 @@
 | 当前分支 | `codex/and-001-layered-foundation` |
 | 最后验证基线 | `6d20db5`（H5-005 PR #30 已合并） |
 | 工作包提交 | `3cc567e`（实现提交） |
-| PR | 待创建 |
+| PR | `#31`，等待 CI |
 | 下一工作包 | `AND-002` 身份与缓存 |
 
 ## 当前工作包进展
@@ -52,7 +52,7 @@ git diff --check
 
 本机结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；133 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法、CI YAML、Android Manifest、兼容策略 JSON、密钥模式和差异检查均通过。5 项 PostgreSQL 专属测试及 Android 编译等待 PR CI 复核。本机未安装 JDK、Gradle 与 Android SDK，Android JVM 单元测试、应用单元测试和 Lint 将由固定 JDK 17、Gradle 8.9 与 Android 35 SDK 的 GitHub CI 执行；这不等同于模拟器或真机验收。
 
-PR CI 结果：等待创建 PR。
+PR #31 CI 结果：等待 PostgreSQL、Web/Chromium、Android 与容器门禁。
 
 `H5-005` 本地结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；132 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法和差异检查均通过。PR #30 CI 在 PostgreSQL 17 环境 `161 passed`，覆盖率 `88.54%`；Web 的 33 项单元测试和 3 项 Chromium E2E/axe、容器门禁全部通过。
 
