@@ -49,14 +49,15 @@ interface CachedProjectDao {
 @Database(entities = [CachedProjectEntity::class], version = 1, exportSchema = false)
 abstract class SmartScanDatabase : RoomDatabase() {
     abstract fun cachedProjects(): CachedProjectDao
+}
 
-    companion object {
-        fun open(context: Context): SmartScanDatabase = Room.databaseBuilder(
-            context.applicationContext,
-            SmartScanDatabase::class.java,
-            "smartscan-cache.db",
-        ).build()
-    }
+fun openUserScopedCache(context: Context): UserScopedCache {
+    val database = Room.databaseBuilder(
+        context.applicationContext,
+        SmartScanDatabase::class.java,
+        "smartscan-cache.db",
+    ).build()
+    return RoomUserScopedCache(database.cachedProjects())
 }
 
 class RoomUserScopedCache(private val dao: CachedProjectDao) : UserScopedCache {

@@ -6,8 +6,7 @@ import com.smartscan.core.auth.SessionStore
 import com.smartscan.core.network.ApiClientConfig
 import com.smartscan.core.network.SmartScanApiFactory
 import com.smartscan.core.security.AndroidKeystoreSessionStore
-import com.smartscan.data.local.RoomUserScopedCache
-import com.smartscan.data.local.SmartScanDatabase
+import com.smartscan.data.local.openUserScopedCache
 import com.smartscan.data.repository.AuthenticationRepository
 import com.smartscan.data.repository.DefaultAuthenticationRepository
 import com.smartscan.data.repository.DefaultProjectRepository
@@ -32,8 +31,7 @@ class SmartScanApplication : Application() {
             ),
             tokenProvider = { sessionStore.current()?.accessToken },
         )
-        val database = SmartScanDatabase.open(this)
-        val userCache = RoomUserScopedCache(database.cachedProjects())
+        val userCache = openUserScopedCache(this)
         container = DefaultAppContainer(
             authenticationRepository = DefaultAuthenticationRepository(
                 api = api,

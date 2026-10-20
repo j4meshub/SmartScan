@@ -46,6 +46,8 @@ git diff --check
 
 首轮推送 CI 的 API、Web 和容器门禁通过；Android 编译发现 `:app` 移除旧 Room 依赖后仍直接调用 `Room.databaseBuilder`。修复把数据库创建工厂收回 `:data:local`，应用层只调用 `SmartScanDatabase.open`，不把 Room API 再泄漏回应用模块，等待重跑验证。
 
+第二轮 Android 编译确认返回 `SmartScanDatabase` 仍会让应用编译器解析其 `RoomDatabase` 父类。修复进一步把公开工厂返回类型收窄为 `UserScopedCache`，数据库与 DAO 类型完全停留在 `:data:local`，应用层不再感知 Room，等待第三轮验证。
+
 - AND-001 已由 PR #31 合并到主线，中文 squash 提交为 `41bf07d`；领域、网络、仓储与应用模块、Compose 导航、HTTPS 配置和 Android CI 基线已完成。
 - AND-002 已核对并接入服务端注册、登录、刷新、注销与 `/v1/me` 契约。
 - 注册、登录、验证码申请、启动恢复、一次性刷新与注销已进入认证仓储和 Compose 产品入口；认证失败不保留半完成会话。
