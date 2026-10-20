@@ -1,6 +1,80 @@
 {
   "components": {
     "schemas": {
+      "AccountMergeRequest": {
+        "properties": {
+          "idempotency_key": {
+            "maxLength": 100,
+            "minLength": 16,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "sms_challenge_id": {
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Sms Challenge Id",
+            "type": "string"
+          },
+          "sms_code": {
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Sms Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "sms_challenge_id",
+          "sms_code",
+          "idempotency_key"
+        ],
+        "title": "AccountMergeRequest",
+        "type": "object"
+      },
+      "AccountMergeView": {
+        "properties": {
+          "canonical_user_id": {
+            "title": "Canonical User Id",
+            "type": "string"
+          },
+          "merge_id": {
+            "title": "Merge Id",
+            "type": "string"
+          },
+          "merged_at": {
+            "format": "date-time",
+            "title": "Merged At",
+            "type": "string"
+          },
+          "require_reauthentication": {
+            "default": true,
+            "title": "Require Reauthentication",
+            "type": "boolean"
+          },
+          "result": {
+            "title": "Result",
+            "type": "string"
+          },
+          "source_user_id": {
+            "title": "Source User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merge_id",
+          "canonical_user_id",
+          "source_user_id",
+          "result",
+          "merged_at"
+        ],
+        "title": "AccountMergeView",
+        "type": "object"
+      },
       "Body_upload_page_v1_projects__project_id__pages_post": {
         "properties": {
           "file": {
@@ -370,7 +444,7 @@
           },
           "purpose": {
             "default": "registration",
-            "pattern": "^(registration|wecom_binding)$",
+            "pattern": "^(registration|wecom_binding|account_merge)$",
             "title": "Purpose",
             "type": "string"
           }
@@ -1088,6 +1162,62 @@
           }
         },
         "summary": "Change Status"
+      }
+    },
+    "/v1/auth/account-merges": {
+      "post": {
+        "operationId": "account_merge_v1_auth_account_merges_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMergeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Account Merge"
       }
     },
     "/v1/auth/login": {

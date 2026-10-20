@@ -501,7 +501,8 @@ class MixedLoadRunner:
                 return
         counter = 0
         next_relogin = time.monotonic() + 30
-        while time.monotonic() < deadline:
+        ran_operation = False
+        while not ran_operation or time.monotonic() < deadline:
             if account.role == "browse":
                 if time.monotonic() >= next_relogin:
                     refreshed = await self._login(account)
@@ -509,11 +510,13 @@ class MixedLoadRunner:
                         token, user_id = refreshed
                     next_relogin = time.monotonic() + 30
                 await self._browse_once(account, token, user_id)
+                ran_operation = True
                 await asyncio.sleep(self.browse_interval_seconds)
             else:
                 counter += 1
                 assert project_id is not None
                 await self._upload_once(account, token, project_id, counter)
+                ran_operation = True
                 await asyncio.sleep(self.upload_interval_seconds)
 
     async def run(self) -> dict[str, Any]:

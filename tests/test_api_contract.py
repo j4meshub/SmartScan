@@ -14,6 +14,7 @@ EXPECTED_OPERATIONS = {
     ("POST", "/v1/auth/wecom/authorize", 201),
     ("GET", "/v1/auth/wecom/callback", 200),
     ("POST", "/v1/auth/wecom/bind-phone", 200),
+    ("POST", "/v1/auth/account-merges", 200),
     ("POST", "/v1/auth/login", 200),
     ("POST", "/v1/auth/logout", 204),
     ("GET", "/v1/me", 200),
@@ -62,6 +63,7 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
         "UploadView",
         "ChunkReceipt",
         "JobView",
+        "AccountMergeView",
     }.issubset(component_schemas)
     assert "securitySchemes" not in schema["components"]
     assert schema["paths"]["/v1/uploads/{upload_id}/complete"]["post"]["responses"]["202"]

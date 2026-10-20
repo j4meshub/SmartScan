@@ -59,13 +59,14 @@ def assert_postgresql_guards_installed() -> None:
                 text(
                     "SELECT count(*) FROM pg_trigger "
                     "WHERE NOT tgisinternal AND tgname IN "
-                    "('users_protect_super_admin', 'audit_logs_no_mutation')"
+                    "('users_protect_super_admin', 'audit_logs_no_mutation', "
+                    "'account_merge_audits_no_mutation')"
                 )
             )
     finally:
         engine.dispose()
     assert index_count == 1
-    assert trigger_count == 2
+    assert trigger_count == 3
 
 
 def test_postgresql_empty_database_upgrades_with_guards() -> None:
