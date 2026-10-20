@@ -28,3 +28,16 @@ test("项目页包含四角、旋转、滤镜、排序和质量复核入口", as
   assert.equal((html.match(/data-page-filter=/g) || []).length, 4);
   assert.equal((html.match(/data-corner=/g) || []).length, 4);
 });
+
+test("项目恢复界面包含任务状态、导出、下载与分享入口", async () => {
+  const html = await readFile(htmlPath, "utf8");
+  for (const id of [
+    "projectJobList",
+    "refreshProjectFiles",
+    "exportFormat",
+    "exportQuality",
+    "exportOcr",
+    "createExport",
+    "exportList",
+  ]) assert.match(html, new RegExp(`id=["']${id}["']`));
+});

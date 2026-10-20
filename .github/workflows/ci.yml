@@ -45,6 +45,7 @@ jobs:
       - run: node --check apps/h5/auth-client.js
       - run: node --check apps/h5/camera.js
       - run: node --check apps/h5/page-editor.js
+      - run: node --check apps/h5/project-files.js
       - run: node --check apps/h5/resumable-upload.js
       - run: node --test apps/h5/tests/*.test.js
       - run: node --check apps/admin-web/app.js
