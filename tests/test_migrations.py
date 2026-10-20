@@ -387,3 +387,122 @@ def test_account_deletion_migration_can_downgrade_to_device_sessions(tmp_path: P
         assert "refresh_tokens" in tables
     finally:
         downgraded.dispose()
+
+
+def test_page_version_migration_separates_review_from_job_status(tmp_path: Path) -> None:
+    url = sqlite_url(tmp_path / "page-versions.db")
+    command.upgrade(alembic_config(url), "20261020_0012")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('legacy-page-user', 'legacy-page', 'hash', :phone_hmac, '+86******0013', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "3" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_projects "
+                "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) VALUES "
+                "('legacy-project', 'legacy-page-user', '旧页面', 'document', 'ltr', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_pages "
+                "(id, project_id, owner_user_id, page_number, original_path, processed_path, "
+                "sha256, size_bytes, mime_type, quality_warning, created_at) VALUES "
+                "('legacy-page-id', 'legacy-project', 'legacy-page-user', 1, "
+                "'users/legacy-page-user/originals/legacy-project/legacy-page-id.png', "
+                "'users/legacy-page-user/processed/legacy-project/legacy-page-id.jpg', "
+                ":sha256, 1234, 'image/jpeg', 'low_resolution', CURRENT_TIMESTAMP)"
+            ),
+            {"sha256": "4" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO processing_jobs "
+                "(id, owner_user_id, project_id, page_id, kind, status, attempts, created_at, "
+                "updated_at) VALUES ('legacy-job', 'legacy-page-user', 'legacy-project', "
+                "'legacy-page-id', 'document', 'needs_review', 1, CURRENT_TIMESTAMP, "
+                "CURRENT_TIMESTAMP)"
+            )
+        )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        schema = inspect(migrated)
+        assert "page_results" in schema.get_table_names()
+        page_columns = {item["name"] for item in schema.get_columns("scan_pages")}
+        assert {
+            "original_mime_type",
+            "quality_score",
+            "quality_details",
+            "rotation_degrees",
+            "active_result_version",
+            "review_status",
+            "review_reason",
+            "reviewed_by_user_id",
+            "reviewed_at",
+            "updated_at",
+        }.issubset(page_columns)
+        with migrated.connect() as connection:
+            page = (
+                connection.execute(
+                    text(
+                        "SELECT original_mime_type, active_result_version, review_status, "
+                        "review_reason FROM scan_pages WHERE id = 'legacy-page-id'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            job_status = connection.scalar(
+                text("SELECT status FROM processing_jobs WHERE id = 'legacy-job'")
+            )
+            result = (
+                connection.execute(
+                    text(
+                        "SELECT version, result_type, processor_version FROM page_results "
+                        "WHERE page_id = 'legacy-page-id'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        assert page == {
+            "original_mime_type": "image/png",
+            "active_result_version": 1,
+            "review_status": "pending",
+            "review_reason": "low_resolution",
+        }
+        assert job_status == "completed"
+        assert result == {
+            "version": 1,
+            "result_type": "baseline",
+            "processor_version": "legacy-baseline",
+        }
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0012")
+    downgraded = create_engine(url)
+    try:
+        schema = inspect(downgraded)
+        assert "page_results" not in schema.get_table_names()
+        page_columns = {item["name"] for item in schema.get_columns("scan_pages")}
+        assert "review_status" not in page_columns
+        with downgraded.connect() as connection:
+            assert (
+                connection.scalar(
+                    text("SELECT status FROM processing_jobs WHERE id = 'legacy-job'")
+                )
+                == "needs_review"
+            )
+    finally:
+        downgraded.dispose()

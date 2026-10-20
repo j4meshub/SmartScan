@@ -16,6 +16,7 @@ from .config import Settings, get_settings
 from .models import (
     AccountMergeAudit,
     JobStatus,
+    PageResult,
     ProcessingJob,
     Role,
     ScanPage,
@@ -145,6 +146,7 @@ def _load_merge_resources(
     list[UserIdentity],
     list[ScanProject],
     list[ScanPage],
+    list[PageResult],
     list[UploadSession],
     list[UploadChunk],
     list[ProcessingJob],
@@ -163,6 +165,11 @@ def _load_merge_resources(
     )
     pages = list(
         db.scalars(select(ScanPage).where(ScanPage.owner_user_id == source_id).with_for_update())
+    )
+    page_results = list(
+        db.scalars(
+            select(PageResult).where(PageResult.owner_user_id == source_id).with_for_update()
+        )
     )
     uploads = list(
         db.scalars(
@@ -188,7 +195,7 @@ def _load_merge_resources(
             select(ProcessingJob).where(ProcessingJob.owner_user_id == source_id).with_for_update()
         )
     )
-    return identities, projects, pages, uploads, chunks, jobs
+    return identities, projects, pages, page_results, uploads, chunks, jobs
 
 
 def merge_accounts(
@@ -236,7 +243,7 @@ def merge_accounts(
         raise AccountMergeError("account_merge_conflict")
     canonical, source = sorted(users, key=lambda item: (item.created_at, item.id))
 
-    identities, projects, pages, uploads, chunks, jobs = _load_merge_resources(
+    identities, projects, pages, page_results, uploads, chunks, jobs = _load_merge_resources(
         db, source.id, canonical.id
     )
     source_identities = [item for item in identities if item.user_id == source.id]
@@ -258,8 +265,12 @@ def merge_accounts(
     references: list[_FileReference] = []
     for page in pages:
         references.append(_FileReference(page, "original_path", page.sha256, True))
-        if page.processed_path:
+        if page.processed_path and not any(
+            result.file_path == page.processed_path for result in page_results
+        ):
             references.append(_FileReference(page, "processed_path", None, True))
+    for result in page_results:
+        references.append(_FileReference(result, "file_path", result.sha256, True))
     upload_by_id = {item.id: item for item in source_uploads}
     for chunk in chunks:
         upload = upload_by_id[chunk.upload_id]
@@ -283,6 +294,13 @@ def merge_accounts(
             created_destinations=created_destinations,
             sources_to_remove=sources_to_remove,
         )
+        result_path_by_page_version = {
+            (result.page_id, result.version): result.file_path for result in page_results
+        }
+        for page in pages:
+            active_path = result_path_by_page_version.get((page.id, page.active_result_version))
+            if active_path is not None:
+                page.processed_path = active_path
         for identity in source_identities:
             identity.user_id = canonical.id
             if identity.provider == "local":
@@ -292,6 +310,8 @@ def merge_accounts(
             project.owner_user_id = canonical.id
         for page in pages:
             page.owner_user_id = canonical.id
+        for result in page_results:
+            result.owner_user_id = canonical.id
         for upload in source_uploads:
             upload.owner_user_id = canonical.id
         for job in jobs:
@@ -306,6 +326,7 @@ def merge_accounts(
             "identities": len(source_identities),
             "projects": len(projects),
             "pages": len(pages),
+            "page_results": len(page_results),
             "uploads": len(source_uploads),
             "chunks": len(chunks),
             "jobs": len(jobs),

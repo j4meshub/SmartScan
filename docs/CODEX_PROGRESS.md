@@ -6,22 +6,43 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M2 统一账号与安全 |
-| 当前工作包 | `ADMIN-001` 完整管理与审计 |
-| 工作包状态 | 完成，PR #19 全部 CI 已通过，等待合并 |
-| 当前分支 | `codex/admin-001-management-audit` |
-| 最后验证基线 | `495576b`（ACC-005 PR #18 已合并） |
-| 工作包提交 | `30d6f1b`（实现与本地验证） |
-| PR | [#19](https://github.com/j4meshub/SmartScan/pull/19) |
-| 下一工作包 | `SCAN-001` 页面版本与复核 |
+| 当前里程碑 | M3 扫描与输出平台 |
+| 当前工作包 | `SCAN-001` 页面版本与复核 |
+| 工作包状态 | 完成，PR #20 全部 CI 已通过，等待合并 |
+| 当前分支 | `codex/scan-001-page-review` |
+| 最后验证基线 | `5d73afa`（ADMIN-001 PR #19 已合并） |
+| 工作包提交 | `2a3a64d`（实现与本地验证） |
+| PR | [#20](https://github.com/j4meshub/SmartScan/pull/20) |
+| 下一工作包 | `JOB-001` 完整任务状态机 |
 
 ## 当前工作包进展
 
-- 已完成用户、删除请求和审计列表的角色范围、分页与过滤，并通过 `X-Total-Count` 暴露过滤后总数。
-- 已补充跨用户会话撤销、受控删除申请与撤销接口；删除继续复用 ACC-005 的 7 天冷静期和可重入 Worker，不提供直接物理删除捷径。
-- 管理员只管理普通用户，超级管理员可管理非超级管理员目标；自操作、同级越权和不可见目标统一返回 `404` 并写入失败审计。
-- 已增加 `0011` 管理删除元数据和 `0012` 撤销原因迁移。后加字段使用新迁移，未修改本地已应用的迁移历史。
-- 已固定管理 API 的 OpenAPI 快照，并补齐成功、拒绝、会话撤销、删除状态机和审计过滤集成测试。
+- 已新增追加式 `page_results`、原图类型、结构化质量、累计旋转、活动版本和独立复核状态；旧 `processed_path` 与 `mime_type` 继续作为兼容指针。
+- Worker 将处理图写入 `results/<项目>/<页面>/vNNNN.jpg`，作业成功统一为 `completed`；低质量页面改为 `review_status=pending`，不再混入作业生命周期。
+- 已新增页面详情、版本列表、原图/活动/指定版本读取、所有者旋转和复核接口；管理员保持只读，越权与不存在统一 `404`，成功及拒绝修改均审计。
+- `0013` 会把旧处理图登记为 `legacy-baseline`，把旧 `needs_review` 迁移成“作业完成、页面待复核”，并提供降级恢复旧语义。
+- 账号合并已覆盖每个结果版本的所有权与文件补偿；账号删除显式计数并清理页面结果。
+
+`SCAN-001` 提交前全量检查：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`121 passed, 4 skipped`，应用代码覆盖率 `88.57%`；104 个 Python 文件格式、Ruff、`0013` 空库/旧版本升级与降级测试、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法和差异检查均通过。4 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。
+
+PR #20 CI 结果：PostgreSQL 17 环境 `125 passed`，应用代码覆盖率 `88.63%`；两组 API、Web/H5 和 Compose/容器检查共 6 项全部通过。该绿灯证明页面版本、复核语义和 `0013` 迁移可在隔离 PostgreSQL 上运行，不代表真实相机质量、授权固定数据集或生产存储门禁已经通过。
 
 `ADMIN-001` 提交前全量检查：
 
@@ -237,10 +258,11 @@ git diff --check
 | 账号合并与冲突处理 | `5f07000` | PR CI 在 PostgreSQL 17 环境 103 项通过、覆盖率 87.36%；强身份、canonical user、资源与文件补偿、幂等、跨用户阻断、不可变审计、Web 与 Compose/容器检查通过；PR #16 已合并 |
 | 设备会话与刷新令牌 | `0d617f2` | PR CI 在 PostgreSQL 17 环境 109 项通过、覆盖率 87.75%；短期访问令牌、一次性刷新轮换、重放整族吊销、设备撤销、旧客户端兼容、迁移、Web 与 Compose/容器检查通过；PR #17 已合并 |
 | 账号删除与手机号隔离 | `495576b` | PR CI 在 PostgreSQL 17 环境 117 项通过、覆盖率 86.86%；强验证、7 天冷静期、可重入清理、文件补偿、30 天复用隔离、并发 Worker、Web 与 Compose/容器检查通过；PR #18 已合并 |
-| 完整管理与审计 | `30d6f1b` | PR CI 在 PostgreSQL 17 环境 121 项通过、覆盖率 87.75%；角色层级、分页过滤、会话撤销、受控删除、失败审计、迁移、Web 与 Compose/容器检查通过；PR #19 待合并 |
+| 完整管理与审计 | `5d73afa` | PR CI 在 PostgreSQL 17 环境 121 项通过、覆盖率 87.75%；角色层级、分页过滤、会话撤销、受控删除、失败审计、迁移、Web 与 Compose/容器检查通过；PR #19 已合并 |
+| 页面版本与独立复核 | `2a3a64d` | PR CI 在 PostgreSQL 17 环境 125 项通过、覆盖率 88.63%；原图保护、追加式结果、质量/旋转/复核、旧状态迁移、IDOR、Web 与 Compose/容器检查通过；PR #20 待合并 |
 
 ## 下一步
 
-1. 合并已经通过全部 CI 的 PR #19。
-2. 从 `SCAN-001` 开始建立页面原图、处理版本、质量、旋转和独立复核状态。
-3. 保持原图不可覆盖，并为旧 `needs_review` 数据设计兼容迁移。
+1. 合并已经通过全部 CI 的 PR #20。
+2. 从 `JOB-001` 开始扩展完整任务状态机、心跳和租约恢复。
+3. 验证 Worker 崩溃重入不会重复生成页面或已提交结果版本。

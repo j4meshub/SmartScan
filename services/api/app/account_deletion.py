@@ -19,6 +19,7 @@ from .models import (
     AccountDeletionStatus,
     AuditLog,
     JobStatus,
+    PageResult,
     PhoneReuseQuarantine,
     ProcessingJob,
     RefreshToken,
@@ -322,6 +323,11 @@ def _purge_database_resources(
     page_ids = list(
         db.scalars(select(ScanPage.id).where(ScanPage.owner_user_id == user.id).with_for_update())
     )
+    page_result_ids = list(
+        db.scalars(
+            select(PageResult.id).where(PageResult.owner_user_id == user.id).with_for_update()
+        )
+    )
     upload_ids = list(
         db.scalars(
             select(UploadSession.id).where(UploadSession.owner_user_id == user.id).with_for_update()
@@ -364,6 +370,7 @@ def _purge_database_resources(
         "identities": len(identity_ids),
         "projects": len(project_ids),
         "pages": len(page_ids),
+        "page_results": len(page_result_ids),
         "uploads": len(upload_ids),
         "chunks": len(chunk_ids),
         "jobs": len(job_ids),
@@ -376,6 +383,8 @@ def _purge_database_resources(
         db.execute(delete(ProcessingJob).where(ProcessingJob.id.in_(job_ids)))
     if upload_ids:
         db.execute(delete(UploadSession).where(UploadSession.id.in_(upload_ids)))
+    if page_result_ids:
+        db.execute(delete(PageResult).where(PageResult.id.in_(page_result_ids)))
     if page_ids:
         db.execute(delete(ScanPage).where(ScanPage.id.in_(page_ids)))
     if project_ids:
