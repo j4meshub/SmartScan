@@ -276,6 +276,7 @@ def test_production_live_mode_requires_all_wecom_secrets() -> None:
         phone_encryption_keys={"v1": base64.urlsafe_b64encode(b"k" * 32).decode()},
         phone_encryption_active_key_id="v1",
         superadmin_password="strong-bootstrap-password",
+        sms_mode="disabled",
         wecom_mode="live",
         wecom_corp_id="corp-test",
     )

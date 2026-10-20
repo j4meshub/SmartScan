@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     superadmin_password: str = ""
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:8080"])
     dev_sms_code: str = "246810"
+    sms_mode: str = "mock"
+    sms_challenge_ttl_seconds: int = Field(default=300, ge=60, le=900)
+    sms_max_attempts: int = Field(default=5, ge=1, le=10)
+    sms_rate_window_seconds: int = Field(default=900, ge=60, le=3600)
+    sms_phone_rate_limit: int = Field(default=3, ge=1, le=20)
+    sms_ip_rate_limit: int = Field(default=10, ge=1, le=100)
     wecom_mode: str = "disabled"
     wecom_corp_id: str = ""
     wecom_agent_id: str = ""
@@ -51,6 +57,13 @@ class Settings(BaseSettings):
     def validate_wecom_mode(cls, value: str) -> str:
         if value not in {"disabled", "mock", "live"}:
             raise ValueError("SMARTSCAN_WECOM_MODE must be disabled, mock or live")
+        return value
+
+    @field_validator("sms_mode")
+    @classmethod
+    def validate_sms_mode(cls, value: str) -> str:
+        if value not in {"disabled", "mock"}:
+            raise ValueError("SMARTSCAN_SMS_MODE must be disabled or mock")
         return value
 
     @staticmethod
@@ -121,6 +134,8 @@ class Settings(BaseSettings):
                 )
             if self.wecom_mode == "mock":
                 raise RuntimeError("SMARTSCAN_WECOM_MODE=mock is forbidden in production")
+            if self.sms_mode == "mock":
+                raise RuntimeError("SMARTSCAN_SMS_MODE=mock is forbidden in production")
             if self.wecom_mode == "live" and not all(
                 (self.wecom_corp_id, self.wecom_agent_id, self.wecom_secret)
             ):

@@ -10,6 +10,7 @@ OPENAPI_SNAPSHOT = Path(__file__).parents[1] / "packages" / "contracts" / "opena
 EXPECTED_OPERATIONS = {
     ("GET", "/health", 200),
     ("POST", "/v1/auth/register", 201),
+    ("POST", "/v1/auth/sms/challenges", 201),
     ("POST", "/v1/auth/login", 200),
     ("POST", "/v1/auth/logout", 204),
     ("GET", "/v1/me", 200),

@@ -137,6 +137,37 @@ class VerifiedPhone(Base):
     user: Mapped[User] = relationship(back_populates="verified_phone")
 
 
+class SmsChallenge(Base):
+    __tablename__ = "sms_challenges"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    phone_hmac: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    hmac_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    requester_ip_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_receipt: Mapped[str | None] = mapped_column(String(128))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+
+
+class SmsRateLimit(Base):
+    __tablename__ = "sms_rate_limits"
+
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    count: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class SessionToken(Base):
     __tablename__ = "sessions"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
