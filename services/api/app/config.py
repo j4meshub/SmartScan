@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     wecom_corp_id: str = ""
     wecom_agent_id: str = ""
     wecom_secret: str = ""
+    wecom_redirect_uri: str = ""
+    wecom_state_ttl_seconds: int = Field(default=600, ge=60, le=1800)
+    wecom_binding_ttl_seconds: int = Field(default=600, ge=60, le=1800)
     wecom_timeout_seconds: float = Field(default=5.0, ge=1.0, le=30.0)
     session_hours: int = 24
     max_upload_bytes: int = 25 * 1024 * 1024
@@ -137,7 +140,12 @@ class Settings(BaseSettings):
             if self.sms_mode == "mock":
                 raise RuntimeError("SMARTSCAN_SMS_MODE=mock is forbidden in production")
             if self.wecom_mode == "live" and not all(
-                (self.wecom_corp_id, self.wecom_agent_id, self.wecom_secret)
+                (
+                    self.wecom_corp_id,
+                    self.wecom_agent_id,
+                    self.wecom_secret,
+                    self.wecom_redirect_uri,
+                )
             ):
                 raise RuntimeError("live WeCom configuration is incomplete")
 

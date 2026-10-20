@@ -7,24 +7,23 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M2 统一账号与安全 |
-| 当前工作包 | `SMS-001` 验证码挑战、限频与 Provider |
-| 工作包状态 | 完成，PR #14 的 PostgreSQL 17、API、Web 与容器检查已通过，等待合并 |
-| 当前分支 | `codex/sms-001-verification-service` |
-| 最后验证基线 | `07d13a4`（SMS-001 PR #14 CI 已通过） |
-| 工作包提交 | `b8f2ae8`（启动记录）、`6312365`（实现与本地验证）、`07d13a4`（PR 断点） |
-| PR | [#14](https://github.com/j4meshub/SmartScan/pull/14)（CI 已通过，等待合并） |
-| 下一工作包 | `WECOM-001` 企业微信正式登录与绑定 |
+| 当前工作包 | `WECOM-001` 企业微信 OAuth 登录与安全绑定 |
+| 工作包状态 | 完成，PR #15 的 6 项 CI 全部通过，等待合并 |
+| 当前分支 | `codex/wecom-001-oauth-binding` |
+| 最后验证基线 | `4a1e8fc`（SMS-001 PR #14 已合并） |
+| 工作包提交 | `b04a541`（实现） |
+| PR | [#15](https://github.com/j4meshub/SmartScan/pull/15) |
+| 下一工作包 | `ACC-003` 账号合并与冲突处理 |
 
 ## 当前工作包进展
 
-- 验证码仅保存绑定挑战 ID 的 HMAC；挑战 5 分钟有效、最多 5 次尝试，成功后原子消费。
-- 手机号和直接连接 IP 使用唯一伪名窗口计数与行锁，默认 15 分钟分别限制 3 次和 10 次。
-- 新增 challenge 申请接口与注册消费；development 暂留旧固定码兼容，生产继续拒绝。
-- Provider 提供 development Mock 和默认关闭模式，真实短信供应商仍保持人工验收。
+- 已实现绑定发起浏览器 Cookie 的 10 分钟一次性 OAuth state、固定官方授权 URL 和先消费 state 后访问 Provider 的回调顺序。
+- 已绑定 Provider 身份回到原用户；可信手机号只允许唯一候选自动绑定，多候选或一用户多企微身份冲突拒绝并审计。
+- 无可信手机号时返回一次性 binding ticket，并通过 `wecom_binding` 短信挑战完成绑定或新建用户。
+- code、state/ticket 原文、Secret、access token 和完整手机号不进入数据库明文字段、审计或错误响应。
+- 真实 CorpId、AgentId、Secret、可信域名和成员权限缺失，因此 live 流程只能保持“等待人工验收”。
 
-本地全量结果：`94 passed, 2 skipped`，应用代码覆盖率 `87.53%`；Ruff、58 个 Python 文件格式、迁移升级/漂移/版本、OpenAPI 契约、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试等待 PR CI 复核。
-
-PR #14 CI 结果：PostgreSQL 17 环境 `96 passed`，应用代码覆盖率 `87.53%`；Ruff、58 个 Python 文件格式、迁移升级/漂移、H5 `8 passed`、Web 与 Compose/容器检查全部通过。该绿灯证明挑战、行锁限频和迁移在隔离 PostgreSQL 可运行，不代表真实短信供应商、签名、模板和回执已通过。
+本地全量结果：`97 passed, 2 skipped`，应用代码覆盖率 `87.32%`；Ruff、61 个 Python 文件格式、迁移升级/漂移/版本、OpenAPI 契约、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试等待 PR CI 复核；本机未安装 Docker，Compose 配置等待 CI 复核。
 
 `ACC-002` 提交前 Python 与迁移检查：
 
@@ -219,10 +218,11 @@ git diff --check
 | 16 用户混合负载工具 | `4fa566a` | PR CI 77 项通过、覆盖率 85.50%；16 会话 Mock、目标防护、资源门禁、Web 与 Compose/容器检查通过；PR #11 已合并，目标服务器 30 分钟正式容量仍阻塞 |
 | 统一身份模型 | `d097a17` | PR CI 82 项通过、覆盖率 87.24%；用户主体、登录身份、已验证手机号、旧库回填、降级、Web 与 Compose/容器检查通过；PR #12 已合并 |
 | 手机号数据保护 | `9041001` | PR CI 91 项通过、覆盖率 87.18%；AES-GCM、版本化 HMAC、旧数据状态、轮换、迁移、Web 与 Compose/容器检查通过；PR #13 已合并 |
-| 短信验证码服务 | `6312365` | PR CI 96 项通过、覆盖率 87.53%；一次性挑战、尝试上限、并发限频、Provider、迁移、Web 与 Compose/容器检查通过；PR #14 待合并，真实短信待人工验收 |
+| 短信验证码服务 | `4a1e8fc` | PR CI 96 项通过、覆盖率 87.53%；一次性挑战、尝试上限、并发限频、Provider、迁移、Web 与 Compose/容器检查通过；PR #14 已合并，真实短信待人工验收 |
+| 企业微信 OAuth 登录 | `b04a541` | PR CI 在 PostgreSQL 17 环境 99 项通过、覆盖率 87.32%；浏览器绑定 state、可信手机号唯一绑定、短信回退、迁移、Web 与 Compose/容器检查通过；PR #15，真实租户待人工验收 |
 
 ## 下一步
 
-1. 合并 PR #14，并从最新 `main` 创建 `codex/wecom-001-oauth-binding`。
-2. 在 POC-001 适配器与统一账号模型上实现 OAuth 回调、可信手机号和安全绑定流程。
-3. 保持真实企微租户为人工门禁；Mock 只验证本地契约，不标记真实权限通过。
+1. 合并 PR #15，并从最新 `main` 创建 `codex/acc-003-account-merge`。
+2. 实现 canonical user 合并事务、身份/项目/文件归属迁移、会话撤销和合并审计。
+3. 对冲突、事务回滚、重复请求和跨用户归属补充集成测试；自动合并只接受已验证的强身份，复杂冲突保持人工处理。

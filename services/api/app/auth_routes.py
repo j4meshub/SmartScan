@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import hmac
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,9 @@ from .schemas import (
     SmsChallengeView,
     TokenResponse,
     UserView,
+    WeComAuthorizeView,
+    WeComCallbackView,
+    WeComPhoneBindRequest,
 )
 from .security import (
     hash_password,
@@ -45,9 +49,145 @@ from .sms import (
     create_sms_challenge,
     create_sms_provider,
 )
+from .wecom import WeComAdapterError, WeComIdentity, create_wecom_adapter
+from .wecom_auth import (
+    WeComAuthError,
+    consume_binding_ticket,
+    consume_oauth_state,
+    create_oauth_start,
+    resolve_wecom_identity,
+)
 
 settings = get_settings()
 router = APIRouter()
+WECOM_OAUTH_COOKIE = "smartscan_wecom_oauth_state"
+
+
+@router.post("/v1/auth/wecom/authorize", response_model=WeComAuthorizeView, status_code=201)
+def wecom_authorize(response: Response, db: Session = Depends(get_db)):
+    try:
+        start = create_oauth_start(db)
+    except WeComAuthError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    db.commit()
+    response.set_cookie(
+        WECOM_OAUTH_COOKIE,
+        start.state,
+        max_age=settings.wecom_state_ttl_seconds,
+        path="/v1/auth/wecom/callback",
+        secure=settings.env != "development",
+        httponly=True,
+        samesite="lax",
+    )
+    return WeComAuthorizeView(
+        authorization_url=start.authorization_url,
+        expires_at=start.expires_at,
+    )
+
+
+@router.get("/v1/auth/wecom/callback", response_model=WeComCallbackView)
+def wecom_callback(
+    request: Request,
+    code: str = Query(min_length=1, max_length=512),
+    state: str = Query(min_length=20, max_length=256),
+    db: Session = Depends(get_db),
+):
+    try:
+        intent_state = request.cookies.get(WECOM_OAUTH_COOKIE)
+        if intent_state is None or not hmac.compare_digest(intent_state, state):
+            raise WeComAuthError("wecom_intent_invalid")
+        consume_oauth_state(db, state)
+        db.commit()
+        identity = create_wecom_adapter(settings).resolve(code)
+        outcome = resolve_wecom_identity(db, identity)
+    except (WeComAuthError, WeComAdapterError) as exc:
+        record_audit(db, request, None, "wecom_callback", "wecom_identity", result="denied")
+        db.commit()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if outcome.user is not None:
+        record_audit(
+            db,
+            request,
+            outcome.user,
+            "wecom_login",
+            "user",
+            outcome.user.id,
+            outcome.user.id,
+        )
+        token = issue_session(db, outcome.user)
+        return WeComCallbackView(
+            action=outcome.decision.action,
+            access_token=token.access_token,
+            expires_at=token.expires_at,
+        )
+    db.commit()
+    if outcome.decision.action == "require_conflict_review":
+        record_audit(
+            db,
+            request,
+            None,
+            "wecom_identity_conflict",
+            "wecom_identity",
+            result="denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=409, detail="wecom_identity_conflict")
+    return WeComCallbackView(
+        action=outcome.decision.action,
+        binding_ticket=outcome.binding_ticket,
+        binding_expires_at=outcome.binding_expires_at,
+    )
+
+
+@router.post("/v1/auth/wecom/bind-phone", response_model=TokenResponse)
+def wecom_bind_phone(
+    payload: WeComPhoneBindRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        ticket = consume_binding_ticket(db, payload.binding_ticket)
+    except WeComAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    verification = consume_sms_challenge(
+        db,
+        challenge_id=payload.sms_challenge_id,
+        phone=payload.phone,
+        code=payload.sms_code,
+        purpose="wecom_binding",
+    )
+    if not verification.accepted:
+        db.commit()
+        raise HTTPException(status_code=400, detail=verification.reason)
+    corp_id, separator, user_id = ticket.provider_subject.partition(":")
+    if not separator or not corp_id or not user_id:
+        db.commit()
+        raise HTTPException(status_code=400, detail="wecom_binding_ticket_invalid")
+    identity = WeComIdentity(
+        corp_id=corp_id,
+        user_id=user_id,
+        phone_e164=payload.phone,
+        assurance=ticket.assurance,
+    )
+    try:
+        outcome = resolve_wecom_identity(db, identity)
+    except WeComAuthError as exc:
+        db.commit()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if outcome.user is None:
+        db.commit()
+        raise HTTPException(status_code=409, detail="wecom_identity_conflict")
+    ticket.consumed_at = datetime.now(UTC)
+    record_audit(
+        db,
+        request,
+        outcome.user,
+        "bind_wecom_identity",
+        "user",
+        outcome.user.id,
+        outcome.user.id,
+    )
+    return issue_session(db, outcome.user)
 
 
 @router.post(

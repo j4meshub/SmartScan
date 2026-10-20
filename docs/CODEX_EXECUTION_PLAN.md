@@ -56,7 +56,7 @@ M1 门禁：本地 POC 达到 v1.4 指标；真实企微、真机弱网和目标
 | `ACC-001` 统一身份模型 | 完成 | M0 | 用户主体、登录身份和已验证手机号已完成 expand/migrate、兼容访问层与降级保护；PR #12 的 PostgreSQL 17、API、Web 与 Compose CI 通过 |
 | `ACC-002` 手机号保护 | 完成 | ACC-001 | AES-256-GCM、HMAC 版本、旧数据状态、轮换命令与严格配置已完成；PR #13 的 PostgreSQL 17、API、Web 与 Compose CI 通过 |
 | `SMS-001` 验证码服务 | 完成 | ACC-002 | 一次性挑战、5 分钟有效期、5 次尝试、手机号/IP 并发限频和可替换 Provider 已完成；PR #14 的 PostgreSQL 17、API、Web 与 Compose CI 通过，真实短信仍待人工验收 |
-| `WECOM-001` 企业微信登录 | 未开始 | POC-001, ACC-002 | OAuth、可信成员手机号、安全绑定和无手机号回退；真实租户门禁独立记录 |
+| `WECOM-001` 企业微信登录 | 完成 | POC-001, ACC-002 | 浏览器绑定的一次性 OAuth state、可信手机号唯一绑定、短信回退和冲突拒绝已完成；PR #15 的 PostgreSQL 17、API、Web 与 Compose CI 通过，真实租户仍待人工验收 |
 | `ACC-003` 合并与冲突 | 未开始 | WECOM-001 | canonical user、身份/项目/文件迁移、事务回滚、会话撤销和合并审计 |
 | `ACC-004` 设备会话 | 未开始 | ACC-001 | 刷新令牌、设备列表、单设备/全设备撤销和停用即时失效 |
 | `ACC-005` 账号删除 | 未开始 | ACC-003, ACC-004 | 7 天冷静期、删除任务、身份与数据清理、30 天手机号复用隔离 |
