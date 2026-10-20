@@ -8,10 +8,10 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `API-001` v1 契约冻结 |
-| 工作包状态 | 进行中，正在冻结双快照、客户端矩阵和弃用规则 |
+| 工作包状态 | 进行中，实现与本地门禁完成，等待 PR CI |
 | 当前分支 | `codex/api-001-contract-freeze` |
 | 最后验证基线 | `d8025b8`（FILE-001 PR #24 已合并） |
-| 工作包提交 | 待创建 |
+| 工作包提交 | `9b9219f`（实现提交） |
 | PR | 待创建 |
 | 下一工作包 | `H5-001` 登录与企业微信绑定 |
 
@@ -23,6 +23,26 @@
 - 兼容检查允许新增端点和可选字段，禁止删除旧能力、增加必填项、修改类型/引用/枚举或静默缩短支持窗口。
 - 弃用必须同时更新 OpenAPI 与策略，提供替代方案并保留至少 90 天；当前没有登记弃用。
 - API 响应新增 `X-SmartScan-API-Version` 和契约修订号，GitHub/GitLab CI 都显式运行兼容检查器。
+
+`API-001` 本地门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python tools/api_compatibility.py
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`152 passed, 5 skipped`，应用代码覆盖率 `88.28%`；127 个 Python 文件格式、Ruff、当前/上一代 OpenAPI 兼容检查、删除端点/新增必填字段/枚举变化反例、运行时精确快照、版本响应头、迁移升级/漂移/版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 复核。
 
 `FILE-001` 本地门禁：
 
