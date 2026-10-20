@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: 准备 Compose 校验环境变量
+        run: cp .env.example .env
       - run: docker compose -f deploy/compose/docker-compose.yml config
         env:
           POSTGRES_PASSWORD: ci-only-password
