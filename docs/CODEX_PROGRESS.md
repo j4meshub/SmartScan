@@ -7,16 +7,22 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M5 Android |
-| 当前工作包 | `AND-001` 分层工程与 API 客户端 |
-| 工作包状态 | 进行中，本机与最终 CI 门禁通过，等待合并 |
-| 当前分支 | `codex/and-001-layered-foundation` |
-| 最后验证基线 | `6d20db5`（H5-005 PR #30 已合并） |
-| 工作包提交 | `3cc567e`（实现提交） |
-| PR | `#31`，等待 CI |
-| 下一工作包 | `AND-002` 身份与缓存 |
+| 当前工作包 | `AND-002` 身份与缓存 |
+| 工作包状态 | 进行中，PR #32 已创建，等待最终头 CI 与合并 |
+| 当前分支 | `codex/and-002-identity-cache` |
+| 最后验证基线 | `41bf07d`（AND-001 PR #31 已合并） |
+| 工作包提交 | `f435d3b`（最新验证提交） |
+| PR | [#32](https://github.com/j4meshub/SmartScan/pull/32) |
+| 下一工作包 | `AND-003` CameraX 拍摄 |
 
 ## 当前工作包进展
 
+- AND-001 已由 PR #31 合并到主线，中文 squash 提交为 `41bf07d`；领域、网络、仓储与应用模块、Compose 导航、HTTPS 配置和 Android CI 基线已完成。
+- AND-002 已核对并接入服务端注册、登录、刷新、注销与 `/v1/me` 契约。
+- 注册、登录、验证码申请、启动恢复、一次性刷新与注销已进入认证仓储和 Compose 产品入口；认证失败不保留半完成会话。
+- Keystore 使用 AES-GCM 信封加密会话；损坏密文自清理，令牌不进入 Room、URL 或日志。
+- Room 项目缓存使用 `(owner_user_id, id)` 复合主键，所有访问显式传入用户 ID；远端失败只回退当前用户缓存。
+- 远端注销失败仍清理加密会话与当前用户缓存，本地两项清理互不跳过。
 - H5-005 已由 PR #30 合并到主线，中文 squash 提交为 `6d20db5`；M4 桌面自动化门禁完成，真实企微、短信、相机、弱网、系统分享和屏幕阅读器继续保留人工验收。
 - Android 工程已拆分 `:core:model`、`:core:network`、`:data:repository` 和 `:app`，依赖方向保持从应用到仓储/网络再到领域模型。
 - Compose 已建立首页、项目和设置三个稳定导航入口；项目与设置业务页由后续工作包接入，不以占位界面宣称功能完成。
@@ -24,6 +30,27 @@
 - 远端 API 根地址强制 HTTPS，禁止凭据、查询与片段；HTTP 仅能在测试显式允许回环地址。默认使用不可解析的 `.invalid` 域名，不携带真实令牌。
 - `MockWebServer` 验证项目请求路径、设备头、Bearer 头和新增可选字段兼容；兼容矩阵只登记已进入仓储产品链路的项目列表接口。
 - 提交前自审发现通用 `data/` 忽略规则误伤 Android 仓储模块，已增加仅针对 `apps/android/data` 的例外并核对实现提交包含全部 34 个预期文件。
+
+`AND-002` 计划门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python tools/api_compatibility.py
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm --prefix apps/h5 ci
+npm --prefix apps/h5 test
+npm --prefix apps/h5 run test:e2e
+gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :data:repository:test :data:local:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
+git diff --check
+```
+
+本机结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；134 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法、配置解析、密钥模式和差异检查均通过。5 项 PostgreSQL 专属测试及 Android 编译、Room/Robolectric、应用单元测试和 Lint 等待 PR CI；本机未安装 JDK、Gradle 与 Android SDK。
+
+首轮推送 CI 的 API、Web 和容器门禁通过；Android 在 `:data:local:kaptDebugKotlin` 暴露 Room 2.6.1 只能读取 Kotlin 2.0 元数据、无法处理工程 Kotlin 2.1 元数据的问题。修复统一升级 Room runtime、KTX、compiler 和 testing 到 2.7.2，保留全部 Android 测试与 Lint 门禁。修复提交 `f435d3b` 的 API、Web、容器与 Android CI 已全部通过，PR #32 已创建；Android 使用固定 JDK 17、Gradle 8.9 与 SDK 35 完成 network/security/repository/local/app 单元测试和 `lintDebug`。
 
 `AND-001` 计划门禁：
 
@@ -475,10 +502,11 @@ git diff --check
 | H5 页面编辑 | `1868eea` | 本地 156 项通过、覆盖率 88.28%，H5 25 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；四角裁切、滤镜、旋转、页序、复核、IDOR、OpenAPI、Web 与容器检查通过；PR #28 已合并 |
 | H5 项目恢复与文件分享 | `a43deb9` | 本地 156 项通过、覆盖率 88.28%，H5 29 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；项目恢复、任务轮询、导出、鉴权下载、Web Share 回退、Web 与容器检查通过；PR #29 已合并 |
 | H5 双语与浏览器 E2E | `6d20db5` | 本地 156 项通过、覆盖率 88.28%，H5 33 项、Chromium E2E/axe 3 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；中英文、键盘编辑、真实模块加载、分享回退、无障碍、Web 与容器检查通过；PR #30 已合并 |
+| Android 分层工程与 API 客户端 | `41bf07d` | 本地后端与 H5 回归通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%，Android JDK 17/Gradle 8.9/SDK 35 的网络与仓储测试、应用单元测试和 Lint 通过，Web 与容器通过；PR #31 已合并，模拟器和真机待后续门禁 |
 
 ## 下一步
 
-1. 完成 `AND-001` 本机可执行门禁并提交，创建中文 PR。
-2. 由 GitHub CI 的固定 Android 工具链执行 JVM 单元测试、应用单元测试与 Lint；失败时先定位、修复并重跑。
-3. CI 通过且自审完成后合并，回填最终提交与验证证据，再从 `AND-002` 身份与缓存继续。
+1. 为 `AND-002` 增加注册、登录、刷新、注销和当前用户 DTO/仓储，令牌不得写入 URL 或普通日志。
+2. 使用 Android Keystore 保护会话密钥，使用 Room 建立强制 `user_id` 分区的本地缓存，并在退出时清理当前用户缓存。
+3. 补充令牌轮换、损坏密文、跨用户缓存隔离和退出失败仍本地清理的自动测试，再运行完整 Android 与仓库门禁。
 4. Android 模拟器、真机、正式签名，以及真实企业微信、短信、相机和弱网继续保留人工验收门禁，不以 Mock 结果代替。

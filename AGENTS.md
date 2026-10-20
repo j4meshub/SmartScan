@@ -50,7 +50,7 @@ node --check apps/h5/resumable-upload.js
 npm --prefix apps/h5 test
 npm --prefix apps/h5 run test:e2e
 node --check apps/admin-web/app.js
-gradle -p apps/android :core:network:test :data:repository:test :app:testDebugUnitTest :app:lintDebug
+gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :data:repository:test :data:local:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
 docker compose -f deploy/compose/docker-compose.yml config
 ```
 

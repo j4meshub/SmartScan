@@ -12,6 +12,9 @@
   ├─ 应用级依赖装配
   └─ BuildConfig 环境入口
         │
+        ├─ :core:auth ── 设备会话模型与存储抽象
+        ├─ :core:security ── Android Keystore 加密实现
+        ├─ :data:local ── Room 用户分区缓存
         ├─ :data:repository ── 领域模型映射与稳定失败分类
         │       │
         │       ├─ :core:model
@@ -56,7 +59,7 @@ gradle -p apps/android -PSMARTSCAN_API_BASE_URL=https://staging.example.com/ :ap
 本机具备 JDK 17、Gradle 8.9 与 Android 35 SDK 时运行：
 
 ```text
-gradle -p apps/android :core:network:test :data:repository:test :app:testDebugUnitTest :app:lintDebug
+gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :data:repository:test :data:local:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
 ```
 
 GitHub CI 会安装固定工具链并执行同一命令。网络单元测试使用本地 `MockWebServer`，只验证请求头、路径和兼容解析，不访问开发、staging 或生产 API。模拟器、真机、身份缓存和后台恢复分别由 `AND-002` 至 `AND-005` 验收。

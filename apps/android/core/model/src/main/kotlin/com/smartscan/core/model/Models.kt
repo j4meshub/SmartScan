@@ -1,5 +1,16 @@
 package com.smartscan.core.model
 
+data class UserProfile(
+    val id: String,
+    val username: String,
+    val phoneMasked: String,
+    val role: String,
+    val status: String,
+    val locale: String,
+    val mustChangePassword: Boolean,
+    val createdAt: String,
+)
+
 data class ScanProject(
     val id: String,
     val title: String,

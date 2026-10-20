@@ -9,4 +9,13 @@ sealed interface ApiResult<out T> {
     ) : ApiResult<Nothing>
 }
 
-enum class FailureKind { UNAUTHORIZED, NOT_FOUND, RATE_LIMITED, SERVER, NETWORK, INVALID_RESPONSE, UNKNOWN }
+enum class FailureKind {
+    UNAUTHORIZED,
+    NOT_FOUND,
+    RATE_LIMITED,
+    SERVER,
+    NETWORK,
+    INVALID_RESPONSE,
+    LOCAL_STORAGE,
+    UNKNOWN,
+}

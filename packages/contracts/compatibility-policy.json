@@ -49,6 +49,12 @@
     "android": {
       "status": "foundation",
       "consumed_operation_ids": [
+        "request_sms_challenge_v1_auth_sms_challenges_post",
+        "register_v1_auth_register_post",
+        "login_v1_auth_login_post",
+        "refresh_session_v1_auth_refresh_post",
+        "logout_v1_auth_logout_post",
+        "me_v1_me_get",
         "list_projects_v1_projects_get"
       ]
     },

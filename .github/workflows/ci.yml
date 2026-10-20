@@ -75,7 +75,7 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: Android 分层、单元测试与 Lint
-        run: gradle -p apps/android :core:network:test :data:repository:test :app:testDebugUnitTest :app:lintDebug --stacktrace
+        run: gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :data:repository:test :data:local:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug --stacktrace
   containers:
     runs-on: ubuntu-latest
     steps:

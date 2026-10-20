@@ -3,10 +3,34 @@ package com.smartscan.core.network
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Path
+import retrofit2.http.POST
 
-interface SmartScanApi {
+interface SmartScanApi : AuthenticationApi, ScanApi
+
+interface AuthenticationApi {
+    @POST("v1/auth/sms-challenges")
+    suspend fun requestSmsChallenge(@Body request: SmsChallengeRequestDto): SmsChallengeDto
+
+    @POST("v1/auth/register")
+    suspend fun register(@Body request: RegisterRequestDto): TokenDto
+
+    @POST("v1/auth/login")
+    suspend fun login(@Body request: LoginRequestDto): TokenDto
+
+    @POST("v1/auth/refresh")
+    suspend fun refresh(@Body request: RefreshRequestDto): TokenDto
+
+    @POST("v1/auth/logout")
+    suspend fun logout()
+
+    @GET("v1/me")
+    suspend fun me(): UserDto
+}
+
+interface ScanApi {
     @GET("v1/projects")
     suspend fun listProjects(): List<ProjectDto>
 
@@ -19,6 +43,63 @@ interface SmartScanApi {
     @GET("v1/projects/{projectId}/exports")
     suspend fun listExports(@Path("projectId") projectId: String): List<ExportDto>
 }
+
+@Serializable
+data class SmsChallengeRequestDto(
+    val phone: String,
+    val purpose: String = "registration",
+)
+
+@Serializable
+data class SmsChallengeDto(
+    @SerialName("challenge_id") val challengeId: String,
+    @SerialName("expires_at") val expiresAt: String,
+    @SerialName("retry_after_seconds") val retryAfterSeconds: Int,
+)
+
+@Serializable
+data class RegisterRequestDto(
+    val phone: String,
+    @SerialName("sms_code") val smsCode: String,
+    @SerialName("sms_challenge_id") val smsChallengeId: String? = null,
+    val username: String,
+    val password: String,
+    val locale: String,
+)
+
+@Serializable
+data class LoginRequestDto(
+    val username: String,
+    val password: String,
+)
+
+@Serializable
+data class RefreshRequestDto(
+    @SerialName("refresh_token") val refreshToken: String,
+)
+
+@Serializable
+data class TokenDto(
+    @SerialName("access_token") val accessToken: String,
+    @SerialName("token_type") val tokenType: String,
+    @SerialName("expires_at") val expiresAt: String,
+    @SerialName("refresh_token") val refreshToken: String? = null,
+    @SerialName("refresh_expires_at") val refreshExpiresAt: String? = null,
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("device_id") val deviceId: String? = null,
+)
+
+@Serializable
+data class UserDto(
+    val id: String,
+    val username: String,
+    @SerialName("phone_masked") val phoneMasked: String,
+    val role: String,
+    val status: String,
+    val locale: String,
+    @SerialName("must_change_password") val mustChangePassword: Boolean,
+    @SerialName("created_at") val createdAt: String,
+)
 
 @Serializable
 data class ProjectDto(
