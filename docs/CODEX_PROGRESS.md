@@ -50,6 +50,8 @@ git diff --check
 
 本机结果：`156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；134 个 Python 文件格式、Ruff、OpenAPI 兼容、迁移升级/漂移/版本、H5 `33 passed`、Chromium E2E 与 axe `3 passed`、JavaScript 语法、配置解析、密钥模式和差异检查均通过。5 项 PostgreSQL 专属测试及 Android 编译、Room/Robolectric、应用单元测试和 Lint 等待 PR CI；本机未安装 JDK、Gradle 与 Android SDK。
 
+首轮推送 CI 的 API、Web 和容器门禁通过；Android 在 `:data:local:kaptDebugKotlin` 暴露 Room 2.6.1 只能读取 Kotlin 2.0 元数据、无法处理工程 Kotlin 2.1 元数据的问题。修复统一升级 Room runtime、KTX、compiler 和 testing 到 2.7.2，保留全部 Android 测试与 Lint 门禁，等待修复提交 CI 复核。
+
 `AND-001` 计划门禁：
 
 ```text
