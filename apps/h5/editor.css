@@ -1,0 +1,109 @@
+.project {
+  width: 100%;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-dialog {
+  width: min(96vw, 940px);
+}
+
+.editor-card {
+  display: grid;
+  gap: 16px;
+  max-height: 92vh;
+  overflow: auto;
+  padding: 24px;
+  border-radius: 28px;
+  background: var(--paper);
+}
+
+.editor-page-list,
+.editor-toolbar,
+.filter-row,
+.editor-actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.page-chip,
+.filter-chip {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 9px 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.page-chip.active,
+.filter-chip.active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+
+.page-chip small {
+  margin-left: 5px;
+  color: #b45309;
+}
+
+.quality-message {
+  min-height: 20px;
+  margin: 0;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.editor-stage {
+  position: relative;
+  display: inline-block;
+  justify-self: center;
+  max-width: 100%;
+  min-height: 220px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #d9d5ce;
+}
+
+.editor-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 56vh;
+  object-fit: contain;
+}
+
+.editor-stage svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.editor-stage polygon {
+  fill: rgba(183, 247, 212, .12);
+  stroke: #34d399;
+  stroke-width: 6;
+  vector-effect: non-scaling-stroke;
+}
+
+.editor-stage circle {
+  fill: #fff;
+  stroke: #111827;
+  stroke-width: 8;
+  cursor: grab;
+  vector-effect: non-scaling-stroke;
+}
+
+.editor-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+  .editor-card { padding: 18px; }
+  .editor-toolbar > *, .editor-actions > * { flex: 1 1 42%; }
+}

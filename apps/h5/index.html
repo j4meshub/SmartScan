@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="camera.css">
   <link rel="stylesheet" href="auth.css">
   <link rel="stylesheet" href="capture.css">
+  <link rel="stylesheet" href="editor.css">
   <title>SmartScan</title>
 </head>
 <body>
@@ -124,6 +125,43 @@
       <button id="submitCapture" class="primary" type="submit" value="default" data-i18n="createUpload">创建并上传</button>
       <p id="captureMessage" class="message" role="status"></p>
     </form>
+  </dialog>
+
+  <dialog id="editorDialog" class="editor-dialog">
+    <div class="editor-card">
+      <div class="dialog-head">
+        <div><p class="eyebrow" data-editor-i18n="title">页面编辑</p><h2 id="editorProjectTitle">页面编辑</h2></div>
+        <button id="closeEditor" type="button" aria-label="Close">×</button>
+      </div>
+      <div id="editorPageList" class="editor-page-list" aria-label="Pages"></div>
+      <p id="qualityMessage" class="quality-message" role="status"></p>
+      <div class="editor-stage">
+        <img id="editorImage" alt="当前编辑页面">
+        <svg id="cornerOverlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="四角裁切区域">
+          <polygon id="cornerPolygon"></polygon>
+          <circle data-corner="0" r="24"></circle><circle data-corner="1" r="24"></circle>
+          <circle data-corner="2" r="24"></circle><circle data-corner="3" r="24"></circle>
+        </svg>
+      </div>
+      <div class="editor-toolbar">
+        <button id="rotatePageLeft" class="secondary" type="button" data-editor-i18n="rotateLeft">左转</button>
+        <button id="rotatePageRight" class="secondary" type="button" data-editor-i18n="rotateRight">右转</button>
+        <button id="movePageLeft" class="secondary" type="button" data-editor-i18n="moveLeft">前移</button>
+        <button id="movePageRight" class="secondary" type="button" data-editor-i18n="moveRight">后移</button>
+      </div>
+      <div class="filter-row">
+        <button class="filter-chip active" data-page-filter="original" type="button" data-editor-i18n="original">原图</button>
+        <button class="filter-chip" data-page-filter="enhance" type="button" data-editor-i18n="enhance">增强</button>
+        <button class="filter-chip" data-page-filter="grayscale" type="button" data-editor-i18n="grayscale">灰度</button>
+        <button class="filter-chip" data-page-filter="bw" type="button" data-editor-i18n="bw">黑白</button>
+      </div>
+      <div class="editor-actions">
+        <button id="resetCorners" class="secondary" type="button" data-editor-i18n="resetCorners">重置四角</button>
+        <button id="confirmReview" class="secondary hidden" type="button" data-editor-i18n="confirm">确认已复核</button>
+        <button id="savePageEdit" class="primary" type="button" data-editor-i18n="save">应用裁切与滤镜</button>
+      </div>
+      <p id="editorMessage" class="message" role="status"></p>
+    </div>
   </dialog>
 
   <script src="app.js" type="module"></script>

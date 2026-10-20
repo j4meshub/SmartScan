@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageEnhance, ImageOps
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -110,6 +110,144 @@ def page_for_owner(db: Session, actor: User, page_id: str, *, lock: bool = False
     return page
 
 
+def _ensure_page_mutable(db: Session, page: ScanPage) -> None:
+    active_job = db.scalar(
+        select(ProcessingJob.id).where(
+            ProcessingJob.page_id == page.id,
+            ProcessingJob.status.in_(
+                [
+                    JobStatus.queued,
+                    JobStatus.baseline_processing,
+                    JobStatus.baseline_ready,
+                    JobStatus.optional_enhancing,
+                    JobStatus.failed_retryable,
+                ]
+            ),
+        )
+    )
+    if active_job is not None:
+        raise PageMutationError("page_processing_in_progress")
+
+
+def _invalidate_ocr(page: ScanPage) -> None:
+    page.ocr_status = "stale"
+    page.ocr_result_version = None
+    page.ocr_text = None
+    page.ocr_model_version = None
+    page.ocr_confidence = None
+    page.ocr_rotation_degrees = None
+    page.ocr_details = None
+    page.ocr_title_candidate = None
+    page.ocr_error_code = None
+    page.ocr_updated_at = datetime.now(UTC)
+
+
+def _perspective_crop(
+    image: Image.Image,
+    corners: list[tuple[float, float]],
+) -> Image.Image:
+    if len(corners) != 4:
+        raise PageMutationError("page_corners_invalid", status_code=422)
+    width, height = image.size
+    points = [(x * width, y * height) for x, y in corners]
+    crosses = []
+    for index in range(4):
+        current = points[index]
+        following = points[(index + 1) % 4]
+        after = points[(index + 2) % 4]
+        crosses.append(
+            (following[0] - current[0]) * (after[1] - following[1])
+            - (following[1] - current[1]) * (after[0] - following[0])
+        )
+    area = abs(
+        sum(
+            points[index][0] * points[(index + 1) % 4][1]
+            - points[(index + 1) % 4][0] * points[index][1]
+            for index in range(4)
+        )
+        / 2
+    )
+    if not (all(value > 0 for value in crosses) or all(value < 0 for value in crosses)):
+        raise PageMutationError("page_corners_invalid", status_code=422)
+    if area < width * height * 0.02:
+        raise PageMutationError("page_corners_too_small", status_code=422)
+
+    top_left, top_right, bottom_right, bottom_left = points
+
+    def distance(first: tuple[float, float], second: tuple[float, float]) -> float:
+        return ((first[0] - second[0]) ** 2 + (first[1] - second[1]) ** 2) ** 0.5
+
+    output_width = round(max(distance(top_left, top_right), distance(bottom_left, bottom_right)))
+    output_height = round(max(distance(top_left, bottom_left), distance(top_right, bottom_right)))
+    if output_width < 32 or output_height < 32:
+        raise PageMutationError("page_corners_too_small", status_code=422)
+    return image.transform(
+        (output_width, output_height),
+        Image.Transform.QUAD,
+        data=(
+            *top_left,
+            *bottom_left,
+            *bottom_right,
+            *top_right,
+        ),
+        resample=Image.Resampling.BICUBIC,
+    )
+
+
+def _apply_filter(image: Image.Image, filter_name: str) -> Image.Image:
+    if filter_name == "original":
+        return image.convert("RGB")
+    if filter_name == "enhance":
+        contrasted = ImageOps.autocontrast(image.convert("RGB"), cutoff=1)
+        return ImageEnhance.Sharpness(contrasted).enhance(1.25)
+    gray = ImageOps.autocontrast(image.convert("L"), cutoff=1)
+    if filter_name == "grayscale":
+        return gray.convert("RGB")
+    if filter_name == "bw":
+        return gray.point(lambda value: 255 if value >= 180 else 0).convert("RGB")
+    raise PageMutationError("page_filter_invalid", status_code=422)
+
+
+def edit_page(
+    db: Session,
+    *,
+    actor: User,
+    page_id: str,
+    corners: list[tuple[float, float]] | None,
+    filter_name: str,
+    settings: Settings | None = None,
+) -> tuple[ScanPage, Path]:
+    settings = settings or get_settings()
+    page = page_for_owner(db, actor, page_id, lock=True)
+    _ensure_page_mutable(db, page)
+    active = active_page_result(db, page)
+    source_relative = active.file_path if active is not None else page.original_path
+    source = _safe_storage_path(settings, source_relative)
+    if not source.is_file():
+        raise PageMutationError("page_file_missing", status_code=404)
+    try:
+        with Image.open(source) as raw:
+            edited = ImageOps.exif_transpose(raw).convert("RGB")
+            if corners is not None:
+                edited = _perspective_crop(edited, corners)
+            edited = _apply_filter(edited, filter_name)
+            _, destination = save_page_result(
+                db,
+                page=page,
+                image=edited,
+                result_type="manual_edit",
+                processor_version="manual-v1",
+                rotation_degrees=page.rotation_degrees,
+                settings=settings,
+            )
+            _invalidate_ocr(page)
+    except PageMutationError:
+        raise
+    except Exception as exc:
+        raise PageMutationError("page_edit_failed", status_code=422) from exc
+    return page, destination
+
+
 def save_page_result(
     db: Session,
     *,
@@ -169,22 +307,7 @@ def rotate_page(
 ) -> tuple[ScanPage, Path]:
     settings = settings or get_settings()
     page = page_for_owner(db, actor, page_id, lock=True)
-    active_job = db.scalar(
-        select(ProcessingJob.id).where(
-            ProcessingJob.page_id == page.id,
-            ProcessingJob.status.in_(
-                [
-                    JobStatus.queued,
-                    JobStatus.baseline_processing,
-                    JobStatus.baseline_ready,
-                    JobStatus.optional_enhancing,
-                    JobStatus.failed_retryable,
-                ]
-            ),
-        )
-    )
-    if active_job is not None:
-        raise PageMutationError("page_processing_in_progress")
+    _ensure_page_mutable(db, page)
     active = active_page_result(db, page)
     source_relative = active.file_path if active is not None else page.original_path
     source = _safe_storage_path(settings, source_relative)
@@ -203,16 +326,7 @@ def rotate_page(
                 rotation_degrees=cumulative_rotation,
                 settings=settings,
             )
-            page.ocr_status = "stale"
-            page.ocr_result_version = None
-            page.ocr_text = None
-            page.ocr_model_version = None
-            page.ocr_confidence = None
-            page.ocr_rotation_degrees = None
-            page.ocr_details = None
-            page.ocr_title_candidate = None
-            page.ocr_error_code = None
-            page.ocr_updated_at = datetime.now(UTC)
+            _invalidate_ocr(page)
     except PageMutationError:
         raise
     except Exception as exc:

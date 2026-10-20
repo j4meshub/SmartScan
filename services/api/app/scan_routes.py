@@ -53,6 +53,7 @@ from .models import (
 )
 from .page_service import (
     PageMutationError,
+    edit_page,
     page_for_owner,
     page_view,
     rotate_page,
@@ -70,6 +71,8 @@ from .schemas import (
     ExportCreate,
     ExportView,
     JobView,
+    PageEditRequest,
+    PageOrderUpdate,
     PageResultView,
     PageReviewUpdate,
     PageRotationRequest,
@@ -204,6 +207,55 @@ def list_pages(
         select(ScanPage).where(ScanPage.project_id == project.id).order_by(ScanPage.page_number)
     ).all()
     return [page_view(db, page) for page in pages]
+
+
+@router.patch("/v1/projects/{project_id}/pages/order", response_model=list[PageView])
+def reorder_pages(
+    project_id: str,
+    payload: PageOrderUpdate,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanProject, project_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "reorder_pages",
+            "project",
+            project_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="project not found")
+    project = project_for_actor(db, user, project_id)
+    if project.owner_user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+    if len(set(payload.page_ids)) != len(payload.page_ids):
+        raise HTTPException(status_code=422, detail="page_order_contains_duplicates")
+    pages = list(
+        db.scalars(
+            select(ScanPage)
+            .where(ScanPage.project_id == project.id)
+            .order_by(ScanPage.page_number)
+            .with_for_update()
+        )
+    )
+    by_id = {page.id: page for page in pages}
+    if set(payload.page_ids) != set(by_id):
+        raise HTTPException(status_code=422, detail="page_order_must_include_all_pages")
+    ordered = []
+    for page_number, page_id in enumerate(payload.page_ids, start=1):
+        page = by_id[page_id]
+        page.page_number = page_number
+        ordered.append(page)
+    project.updated_at = datetime.now(UTC)
+    record_audit(db, request, user, "reorder_pages", "project", project.id, user.id)
+    db.commit()
+    return [page_view(db, page) for page in ordered]
 
 
 @router.get("/v1/projects/{project_id}/exports", response_model=list[ExportView])
@@ -769,6 +821,56 @@ def create_page_rotation(
             settings=settings,
         )
         record_audit(db, request, user, "rotate_page", "page", page.id, page.owner_user_id)
+        db.commit()
+    except PageMutationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    except Exception:
+        db.rollback()
+        if destination is not None:
+            destination.unlink(missing_ok=True)
+        raise
+    db.refresh(page)
+    return page_view(db, page)
+
+
+@router.post("/v1/pages/{page_id}/edits", response_model=PageView)
+def create_page_edit(
+    page_id: str,
+    payload: PageEditRequest,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanPage, page_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "edit_page",
+            "page",
+            page_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="page not found")
+    destination = None
+    try:
+        page, destination = edit_page(
+            db,
+            actor=user,
+            page_id=page_id,
+            corners=(
+                [(corner.x, corner.y) for corner in payload.corners]
+                if payload.corners is not None
+                else None
+            ),
+            filter_name=payload.filter,
+            settings=settings,
+        )
+        record_audit(db, request, user, "edit_page", "page", page.id, page.owner_user_id)
         db.commit()
     except PageMutationError as exc:
         db.rollback()
