@@ -77,6 +77,12 @@ class UploadStatus(str, enum.Enum):
     expired = "expired"
 
 
+class ExportStatus(str, enum.Enum):
+    generating = "generating"
+    ready = "ready"
+    failed = "failed"
+
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (UniqueConstraint("username", name="uq_users_username"),)
@@ -313,6 +319,9 @@ class ScanProject(Base):
     pages: Mapped[list[ScanPage]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
+    exports: Mapped[list[ScanExport]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 class ScanPage(Base):
@@ -412,6 +421,81 @@ class PageResult(Base):
     processor_version: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     page: Mapped[ScanPage] = relationship(back_populates="results")
+
+
+class ScanExport(Base):
+    __tablename__ = "scan_exports"
+    __table_args__ = (
+        CheckConstraint("format IN ('jpg', 'pdf')", name="ck_scan_exports_format"),
+        CheckConstraint(
+            "quality IN ('clear', 'balanced', 'small')", name="ck_scan_exports_quality"
+        ),
+        CheckConstraint(
+            "status IN ('generating', 'ready', 'failed')", name="ck_scan_exports_status"
+        ),
+        CheckConstraint("page_count >= 1", name="ck_scan_exports_page_count"),
+        CheckConstraint(
+            "ocr_pages_used >= 0 AND ocr_pages_used <= page_count",
+            name="ck_scan_exports_ocr_pages_used",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    format: Mapped[str] = mapped_column(String(8), nullable=False)
+    quality: Mapped[str] = mapped_column(String(16), nullable=False)
+    include_ocr_text: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[ExportStatus] = mapped_column(
+        Enum(ExportStatus, native_enum=False, length=16),
+        default=ExportStatus.generating,
+        nullable=False,
+        index=True,
+    )
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    ocr_pages_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    base_file_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    page_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    processor_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    project: Mapped[ScanProject] = relationship(back_populates="exports")
+    artifacts: Mapped[list[ExportArtifact]] = relationship(
+        back_populates="export", cascade="all, delete-orphan", order_by="ExportArtifact.sequence"
+    )
+
+
+class ExportArtifact(Base):
+    __tablename__ = "export_artifacts"
+    __table_args__ = (
+        UniqueConstraint("export_id", "sequence", name="uq_export_artifact_sequence"),
+        CheckConstraint("sequence >= 1", name="ck_export_artifacts_sequence"),
+        CheckConstraint("size_bytes >= 0", name="ck_export_artifacts_size"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    export_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_exports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    page_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scan_pages.id", ondelete="SET NULL"), nullable=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    export: Mapped[ScanExport] = relationship(back_populates="artifacts")
 
 
 class UploadSession(Base):

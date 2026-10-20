@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .models import (
     AccountDeletionStatus,
+    ExportStatus,
     JobStatus,
     PageReviewStatus,
     Role,
@@ -315,6 +316,45 @@ class JobView(BaseModel):
     result_version: int | None
     created_at: datetime
     updated_at: datetime
+
+
+class ExportCreate(BaseModel):
+    format: Literal["jpg", "pdf"]
+    quality: Literal["clear", "balanced", "small"] = "balanced"
+    include_ocr_text: bool = False
+    page_ids: list[str] | None = Field(default=None, min_length=1, max_length=500)
+
+
+class ExportArtifactView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    page_id: str | None
+    sequence: int
+    file_name: str
+    mime_type: str
+    sha256: str
+    size_bytes: int
+    created_at: datetime
+
+
+class ExportView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    format: str
+    quality: str
+    include_ocr_text: bool
+    status: ExportStatus
+    page_count: int
+    ocr_pages_used: int
+    base_file_name: str
+    processor_version: str
+    error_code: str | None
+    artifacts: list[ExportArtifactView]
+    created_at: datetime
+    completed_at: datetime | None
 
 
 class RoleChange(BaseModel):

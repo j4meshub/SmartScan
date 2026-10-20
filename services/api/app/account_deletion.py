@@ -18,12 +18,14 @@ from .models import (
     AccountDeletionRequest,
     AccountDeletionStatus,
     AuditLog,
+    ExportArtifact,
     JobStatus,
     PageResult,
     PhoneReuseQuarantine,
     ProcessingJob,
     RefreshToken,
     Role,
+    ScanExport,
     ScanPage,
     ScanProject,
     SessionToken,
@@ -344,6 +346,18 @@ def _purge_database_resources(
             select(ProcessingJob.id).where(ProcessingJob.owner_user_id == user.id).with_for_update()
         )
     )
+    export_ids = list(
+        db.scalars(
+            select(ScanExport.id).where(ScanExport.owner_user_id == user.id).with_for_update()
+        )
+    )
+    export_artifact_ids = list(
+        db.scalars(
+            select(ExportArtifact.id)
+            .where(ExportArtifact.owner_user_id == user.id)
+            .with_for_update()
+        )
+    )
     chunk_ids = (
         list(
             db.scalars(
@@ -374,6 +388,8 @@ def _purge_database_resources(
         "uploads": len(upload_ids),
         "chunks": len(chunk_ids),
         "jobs": len(job_ids),
+        "exports": len(export_ids),
+        "export_artifacts": len(export_artifact_ids),
         "sessions": len(session_ids),
         "refresh_tokens": len(refresh_ids),
     }
@@ -381,6 +397,10 @@ def _purge_database_resources(
         db.execute(delete(UploadChunk).where(UploadChunk.id.in_(chunk_ids)))
     if job_ids:
         db.execute(delete(ProcessingJob).where(ProcessingJob.id.in_(job_ids)))
+    if export_artifact_ids:
+        db.execute(delete(ExportArtifact).where(ExportArtifact.id.in_(export_artifact_ids)))
+    if export_ids:
+        db.execute(delete(ScanExport).where(ScanExport.id.in_(export_ids)))
     if upload_ids:
         db.execute(delete(UploadSession).where(UploadSession.id.in_(upload_ids)))
     if page_result_ids:

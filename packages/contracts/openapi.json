@@ -965,6 +965,183 @@
         }
       }
     },
+    "/v1/projects/{project_id}/exports": {
+      "get": {
+        "summary": "List Exports",
+        "operationId": "list_exports_v1_projects__project_id__exports_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExportView"
+                  },
+                  "title": "Response List Exports V1 Projects  Project Id  Exports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Project Export",
+        "operationId": "create_project_export_v1_projects__project_id__exports_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exports/{export_id}": {
+      "get": {
+        "summary": "Get Export",
+        "operationId": "get_export_v1_exports__export_id__get",
+        "parameters": [
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Export Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/uploads": {
       "post": {
         "summary": "Create Upload",
@@ -3044,6 +3221,215 @@
           "access_expires_at"
         ],
         "title": "DeviceSessionView"
+      },
+      "ExportArtifactView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "page_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Id"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "page_id",
+          "sequence",
+          "file_name",
+          "mime_type",
+          "sha256",
+          "size_bytes",
+          "created_at"
+        ],
+        "title": "ExportArtifactView"
+      },
+      "ExportCreate": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "jpg",
+              "pdf"
+            ],
+            "title": "Format"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "clear",
+              "balanced",
+              "small"
+            ],
+            "title": "Quality",
+            "default": "balanced"
+          },
+          "include_ocr_text": {
+            "type": "boolean",
+            "title": "Include Ocr Text",
+            "default": false
+          },
+          "page_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 500,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "format"
+        ],
+        "title": "ExportCreate"
+      },
+      "ExportStatus": {
+        "type": "string",
+        "enum": [
+          "generating",
+          "ready",
+          "failed"
+        ],
+        "title": "ExportStatus"
+      },
+      "ExportView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "format": {
+            "type": "string",
+            "title": "Format"
+          },
+          "quality": {
+            "type": "string",
+            "title": "Quality"
+          },
+          "include_ocr_text": {
+            "type": "boolean",
+            "title": "Include Ocr Text"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExportStatus"
+          },
+          "page_count": {
+            "type": "integer",
+            "title": "Page Count"
+          },
+          "ocr_pages_used": {
+            "type": "integer",
+            "title": "Ocr Pages Used"
+          },
+          "base_file_name": {
+            "type": "string",
+            "title": "Base File Name"
+          },
+          "processor_version": {
+            "type": "string",
+            "title": "Processor Version"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ExportArtifactView"
+            },
+            "type": "array",
+            "title": "Artifacts"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "format",
+          "quality",
+          "include_ocr_text",
+          "status",
+          "page_count",
+          "ocr_pages_used",
+          "base_file_name",
+          "processor_version",
+          "error_code",
+          "artifacts",
+          "created_at",
+          "completed_at"
+        ],
+        "title": "ExportView"
       },
       "HTTPValidationError": {
         "properties": {

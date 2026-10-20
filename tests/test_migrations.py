@@ -709,3 +709,65 @@ def test_ocr_metadata_migration_preserves_legacy_text_and_can_downgrade(
             )
     finally:
         downgraded.dispose()
+
+
+def test_export_tables_migrate_and_downgrade_without_touching_existing_data(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "exports.db")
+    command.upgrade(alembic_config(url), "20261020_0015")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('export-user', 'export-user', 'hash', :phone_hmac, '+86******0016', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "9" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_projects "
+                "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) VALUES "
+                "('export-project', 'export-user', '导出迁移', 'document', 'ltr', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        schema = inspect(migrated)
+        assert {"scan_exports", "export_artifacts"}.issubset(schema.get_table_names())
+        with migrated.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO scan_exports "
+                    "(id, owner_user_id, project_id, format, quality, include_ocr_text, status, "
+                    "page_count, ocr_pages_used, base_file_name, page_snapshot, processor_version, "
+                    "created_at) VALUES ('export-1', 'export-user', 'export-project', 'pdf', "
+                    "'balanced', 1, 'ready', 1, 0, '导出迁移_20261020', '[]', 'export-v1', "
+                    "CURRENT_TIMESTAMP)"
+                )
+            )
+            assert connection.scalar(text("SELECT count(*) FROM scan_exports")) == 1
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0015")
+    downgraded = create_engine(url)
+    try:
+        schema = inspect(downgraded)
+        assert "scan_exports" not in schema.get_table_names()
+        assert "export_artifacts" not in schema.get_table_names()
+        with downgraded.connect() as connection:
+            assert (
+                connection.scalar(
+                    text("SELECT title FROM scan_projects WHERE id = 'export-project'")
+                )
+                == "导出迁移"
+            )
+    finally:
+        downgraded.dispose()

@@ -17,10 +17,13 @@ from services.api.app.models import (
     AccountDeletionRequest,
     AccountDeletionStatus,
     AuditLog,
+    ExportArtifact,
+    ExportStatus,
     JobStatus,
     PhoneReuseQuarantine,
     ProcessingJob,
     Role,
+    ScanExport,
     ScanProject,
     SessionToken,
     UploadChunk,
@@ -178,6 +181,42 @@ def test_due_deletion_purges_resources_and_quarantines_phone() -> None:
             content=pending_image,
         )
         assert chunk.status_code == 200, chunk.text
+        export_relative = f"users/{user_id}/exports/{project.json()['id']}/deleted.pdf"
+        export_path = main.settings.storage_root / export_relative
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        export_payload = b"%PDF-account-deletion-export"
+        export_path.write_bytes(export_payload)
+        with SessionLocal() as db:
+            export = ScanExport(
+                owner_user_id=user_id,
+                project_id=project.json()["id"],
+                format="pdf",
+                quality="balanced",
+                include_ocr_text=False,
+                status=ExportStatus.ready,
+                page_count=1,
+                ocr_pages_used=0,
+                base_file_name="deleted",
+                page_snapshot="[]",
+                processor_version="export-v1",
+                completed_at=datetime.now(UTC),
+            )
+            db.add(export)
+            db.flush()
+            export_id = export.id
+            db.add(
+                ExportArtifact(
+                    export_id=export.id,
+                    owner_user_id=user_id,
+                    sequence=1,
+                    file_name="deleted.pdf",
+                    file_path=export_relative,
+                    mime_type="application/pdf",
+                    sha256=hashlib.sha256(export_payload).hexdigest(),
+                    size_bytes=len(export_payload),
+                )
+            )
+            db.commit()
         deletion = request_deletion(client, phone=phone, headers=headers)
 
     now = datetime.now(UTC) + timedelta(days=8)
@@ -206,6 +245,10 @@ def test_due_deletion_purges_resources_and_quarantines_phone() -> None:
         assert db.scalar(select(VerifiedPhone).where(VerifiedPhone.user_id == user_id)) is None
         assert db.scalar(select(SessionToken).where(SessionToken.user_id == user_id)) is None
         assert db.scalar(select(ScanProject).where(ScanProject.owner_user_id == user_id)) is None
+        assert db.get(ScanExport, export_id) is None
+        assert (
+            db.scalar(select(ExportArtifact).where(ExportArtifact.owner_user_id == user_id)) is None
+        )
         assert (
             db.scalar(select(ProcessingJob).where(ProcessingJob.owner_user_id == user_id)) is None
         )

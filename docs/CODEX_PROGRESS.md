@@ -7,15 +7,46 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
-| 当前工作包 | `OCR-001` 基础 OCR |
-| 工作包状态 | 等待人工验收，代码及 PR #22 六项 CI 已通过，等待合并；真实模型门禁未提供 |
-| 当前分支 | `codex/ocr-001-cpu-ocr` |
-| 最后验证基线 | `1f5094b`（JOB-001 PR #21 已合并） |
-| 工作包提交 | `de63f0d`（实现提交） |
-| PR | [#22](https://github.com/j4meshub/SmartScan/pull/22)（六项 CI 已通过，等待合并） |
-| 下一工作包 | `EXPORT-001` JPG/PDF 导出 |
+| 当前工作包 | `EXPORT-001` JPG/PDF 导出 |
+| 工作包状态 | 完成，PR CI 已通过，等待合并 |
+| 当前分支 | `codex/export-001-jpg-pdf` |
+| 最后验证基线 | `cff564c`（OCR-001 PR #22 已合并） |
+| 工作包提交 | `e00bc95`（实现提交） |
+| PR | #23，CI 通过，等待合并 |
+| 下一工作包 | `FILE-001` 文件生命周期 |
 
 ## 当前工作包进展
+
+- OCR-001 已由 PR #22 合并到主线，合并提交为 `cff564c`；真实模型质量和 CPU 容量继续保持“等待人工验收”。
+- EXPORT-001 将实现所有者隔离的导出资源和可恢复状态，支持单页/多页 JPG/PDF、清晰/均衡/小文件三档及稳定建议文件名。
+- 可选 OCR 文本层只使用与活动页面结果版本一致的行框；缺失、过期或低置信 OCR 时仍生成纯图像 PDF，不伪造文本。
+- 导出文件继续放在用户隔离目录，数据库保存哈希、大小、页序、质量、OCR 使用证据与生成版本，为后续鉴权 Range/X-Accel 下载预留边界。
+- `0016` 已增加导出请求与制品表；多页 JPG 保持有序多制品，多页 PDF 生成单一制品，三档质量均不放大原图。
+- 创建、列表和详情接口已纳入 OpenAPI；跨用户创建和读取统一返回 `404` 并写拒绝审计，管理员只读写成功审计。
+- 导出文件已接入账号合并的复制/哈希/原子落位和账号删除的显式数据库清理，用户目录仍由既有隔离擦除流程处理。
+
+`EXPORT-001` 本地门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`143 passed, 5 skipped`，应用代码覆盖率 `88.46%`；118 个 Python 文件格式、Ruff、`0016` 空库升级与降级、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核。首次 Web 命令误在仓库根目录执行，因根目录无 `package.json` 返回 `ENOENT`；切换到 `apps/h5` 后同一测试命令 8 项全部通过，这不是产品回归。
+
+PR #23 CI 结果：PostgreSQL 17 环境 `148 passed`，应用代码覆盖率 `88.75%`；API、Web/H5 和 Compose/容器 3 项全部通过，迁移模型漂移为 `No new upgrade operations detected`。该绿灯证明 `0016` 在 PostgreSQL、ReportLab 依赖安装、导出契约和容器配置下通过；不替代真实 PDF 视觉、超大项目内存峰值或真实中文文本复制验收。
+
+上一工作包完成摘要：
 
 - JOB-001 已由 PR #21 合并到主线，合并提交为 `1f5094b`。
 - OCR-001 使用固定 `paddleocr==3.7.0`、`paddlepaddle==3.3.1` 的 CPU 本地适配器；模型包从只读目录加载并按版本与全部文件 SHA-256 校验，生产启动禁止关闭或首次请求联网下载。
@@ -317,10 +348,11 @@ git diff --check
 | 完整管理与审计 | `5d73afa` | PR CI 在 PostgreSQL 17 环境 121 项通过、覆盖率 87.75%；角色层级、分页过滤、会话撤销、受控删除、失败审计、迁移、Web 与 Compose/容器检查通过；PR #19 已合并 |
 | 页面版本与独立复核 | `7e501ff` | PR CI 在 PostgreSQL 17 环境 125 项通过、覆盖率 88.63%；原图保护、追加式结果、质量/旋转/复核、旧状态迁移、IDOR、Web 与 Compose/容器检查通过；PR #20 已合并 |
 | 完整任务状态机 | `1f5094b` | PR CI 在 PostgreSQL 17 环境 130 项通过、覆盖率 89.00%；租约、心跳、过期抢占、指数退避、取消/重试、单结果幂等、IDOR、迁移、Web 与 Compose/容器检查通过；PR #21 已合并 |
-| 基础 OCR 与安全命名 | `de63f0d` | PR CI 在 PostgreSQL 17 环境 145 项通过、覆盖率 89.11%；固定离线适配、四方向融合、版本关联结果、敏感命名过滤、IDOR、迁移、Web 与 Compose/容器检查通过；PR #22 等待合并，真实模型指标待人工验收 |
+| 基础 OCR 与安全命名 | `cff564c` | PR CI 在 PostgreSQL 17 环境 145 项通过、覆盖率 89.11%；固定离线适配、四方向融合、版本关联结果、敏感命名过滤、IDOR、迁移、Web 与 Compose/容器检查通过；PR #22 已合并，真实模型指标待人工验收 |
+| JPG/PDF 多格式导出 | `e00bc95` | 本地 143 项通过、覆盖率 88.46%；PR CI 在 PostgreSQL 17 环境 148 项通过、覆盖率 88.75%；多页制品、三档质量、当前 OCR 文本层、过期回退、IDOR、账号合并/删除、迁移、Web 与容器检查通过；PR #23 等待合并 |
 
 ## 下一步
 
-1. 合并 PR #22；真实模型质量保持“等待人工验收”，不得记为已通过。
-2. 同步主线并创建 `codex/export-001-jpg-pdf` 工作分支。
-3. 从 `EXPORT-001` 继续 JPG/PDF、多页、三档质量、稳定文件名和可选 OCR 文本层。
+1. 合并 PR #23；真实 PDF 视觉、超大项目内存和真实中文文本复制保留后续人工/容量验收。
+2. 从 `FILE-001` 继续，实现鉴权下载、HTTP Range、取消上传和项目清理。
+3. 冻结导出制品下载审计、缓存头、文件名编码和删除补偿契约。
