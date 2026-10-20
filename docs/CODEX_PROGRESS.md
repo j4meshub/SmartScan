@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
 | 当前工作包 | `FILE-001` 文件生命周期 |
-| 工作包状态 | 进行中，实现与本地门禁完成，等待 PR CI |
+| 工作包状态 | 完成，PR CI 已通过，等待合并 |
 | 当前分支 | `codex/file-001-lifecycle` |
 | 最后验证基线 | `4e10b2e`（EXPORT-001 PR #23 已合并） |
 | 工作包提交 | `f97763b`（实现提交） |
-| PR | 待创建 |
+| PR | #24，CI 通过，等待合并 |
 | 下一工作包 | `API-001` v1 契约冻结 |
 
 ## 当前工作包进展
@@ -42,6 +42,8 @@ git diff --check
 ```
 
 本地结果：`149 passed, 5 skipped`，应用代码覆盖率 `88.23%`；124 个 Python 文件格式、Ruff、`0017` 空库/旧版本升级与降级、上传取消降级映射、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法、Compose X-Accel 映射和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核；本机无 Docker，完整 `docker compose config` 由 PR CI 执行。
+
+PR #24 CI 结果：PostgreSQL 17 环境 `154 passed`，应用代码覆盖率 `88.49%`；API、Web/H5 和 Compose/容器 3 项全部通过，迁移模型漂移为 `No new upgrade operations detected`。该绿灯证明 `0017` 原生枚举转换、PostgreSQL 项目清理状态、Nginx 配置和只读存储卷通过，不替代真实 TLS、大文件 Range 并发、磁盘满或备份恢复验收。
 
 上一工作包完成摘要：
 
@@ -370,9 +372,10 @@ git diff --check
 | 完整任务状态机 | `1f5094b` | PR CI 在 PostgreSQL 17 环境 130 项通过、覆盖率 89.00%；租约、心跳、过期抢占、指数退避、取消/重试、单结果幂等、IDOR、迁移、Web 与 Compose/容器检查通过；PR #21 已合并 |
 | 基础 OCR 与安全命名 | `cff564c` | PR CI 在 PostgreSQL 17 环境 145 项通过、覆盖率 89.11%；固定离线适配、四方向融合、版本关联结果、敏感命名过滤、IDOR、迁移、Web 与 Compose/容器检查通过；PR #22 已合并，真实模型指标待人工验收 |
 | JPG/PDF 多格式导出 | `4e10b2e` | 本地 143 项通过、覆盖率 88.46%；PR CI 在 PostgreSQL 17 环境 148 项通过、覆盖率 88.75%；多页制品、三档质量、当前 OCR 文本层、过期回退、IDOR、账号合并/删除、迁移、Web 与容器检查通过；PR #23 已合并 |
+| 文件生命周期管理 | `f97763b` | 本地 149 项通过、覆盖率 88.23%；PR CI 在 PostgreSQL 17 环境 154 项通过、覆盖率 88.49%；鉴权下载、Range/X-Accel、上传取消、过期回收、项目清理重试、IDOR、迁移、Web 与容器检查通过；PR #24 等待合并 |
 
 ## 下一步
 
-1. 执行 FILE-001 全量 Python、迁移、Web、JavaScript、Compose 与差异门禁并修复失败。
-2. 记录本地证据，使用中文提交并创建 PR，等待 PostgreSQL 17 和容器 CI。
-3. 合并后从 `API-001` 继续冻结 v1 OpenAPI、客户端兼容矩阵和弃用规则。
+1. 合并 PR #24；生产 TLS、大文件 Range 并发、磁盘满和备份恢复保留 OPS staging 门禁。
+2. 从 `API-001` 继续冻结 v1 OpenAPI、客户端兼容矩阵和弃用规则。
+3. 梳理当前/上一客户端兼容字段、错误码和弃用窗口，生成可执行契约检查。
