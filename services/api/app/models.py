@@ -217,6 +217,10 @@ class AccountDeletionRequest(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    requested_by_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    request_source: Mapped[str] = mapped_column(String(20), nullable=False, default="self_service")
+    reason: Mapped[str | None] = mapped_column(String(500))
+    cancellation_reason: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[AccountDeletionStatus] = mapped_column(
         Enum(AccountDeletionStatus),
         default=AccountDeletionStatus.pending,

@@ -127,6 +127,46 @@ class AccountDeletionView(BaseModel):
     completed_at: datetime | None = None
 
 
+class AdminAccountDeletionRequestPayload(BaseModel):
+    confirm_username: str = Field(min_length=3, max_length=64)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class AdminAccountDeletionCancelPayload(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class AdminAccountDeletionView(BaseModel):
+    id: str
+    user_id: str
+    username: str
+    status: AccountDeletionStatus
+    request_source: str
+    requested_by_user_id: str
+    reason: str | None
+    cancellation_reason: str | None
+    requested_at: datetime
+    execute_after: datetime
+    canceled_at: datetime | None
+    completed_at: datetime | None
+    attempts: int
+    last_error: str | None
+
+
+class AuditLogView(BaseModel):
+    id: str
+    actor_user_id: str | None
+    target_user_id: str | None
+    object_type: str
+    object_id: str | None
+    action: str
+    result: str
+    request_id: str | None
+    ip: str | None
+    user_agent: str | None
+    created_at: datetime
+
+
 class UserView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str

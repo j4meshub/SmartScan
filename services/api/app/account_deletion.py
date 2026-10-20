@@ -145,6 +145,10 @@ def request_account_deletion(
     else:
         deletion = existing
     deletion.status = AccountDeletionStatus.pending
+    deletion.requested_by_user_id = user.id
+    deletion.request_source = "self_service"
+    deletion.reason = None
+    deletion.cancellation_reason = None
     deletion.requested_at = now
     deletion.execute_after = now + timedelta(days=settings.account_deletion_grace_days)
     deletion.processing_started_at = None
@@ -156,6 +160,71 @@ def request_account_deletion(
     user.status = UserStatus.deleting
     revoke_user_sessions(db, user.id)
     db.flush()
+    return deletion
+
+
+def request_admin_account_deletion(
+    db: Session,
+    *,
+    actor: User,
+    target: User,
+    reason: str,
+    now: datetime | None = None,
+    settings: Settings | None = None,
+) -> AccountDeletionRequest:
+    settings = settings or get_settings()
+    now = now or datetime.now(UTC)
+    user = db.scalar(select(User).where(User.id == target.id).with_for_update())
+    if user is None or user.status not in (UserStatus.active, UserStatus.disabled):
+        raise AccountDeletionError("account_unavailable", status_code=409)
+    if user.role == Role.super_admin:
+        raise AccountDeletionError("super_admin_protected", status_code=403)
+    existing = db.scalar(
+        select(AccountDeletionRequest)
+        .where(AccountDeletionRequest.user_id == user.id)
+        .with_for_update()
+    )
+    if existing is not None and existing.status != AccountDeletionStatus.canceled:
+        raise AccountDeletionError("account_deletion_already_exists")
+    if existing is None:
+        deletion = AccountDeletionRequest(user_id=user.id)
+        db.add(deletion)
+    else:
+        deletion = existing
+    deletion.requested_by_user_id = actor.id
+    deletion.request_source = "admin"
+    deletion.reason = reason
+    deletion.cancellation_reason = None
+    deletion.status = AccountDeletionStatus.pending
+    deletion.requested_at = now
+    deletion.execute_after = now + timedelta(days=settings.account_deletion_grace_days)
+    deletion.processing_started_at = None
+    deletion.canceled_at = None
+    deletion.completed_at = None
+    deletion.attempts = 0
+    deletion.last_error = None
+    deletion.resource_counts = None
+    user.status = UserStatus.deleting
+    revoke_user_sessions(db, user.id)
+    db.flush()
+    return deletion
+
+
+def cancel_account_deletion_by_admin(
+    db: Session,
+    *,
+    deletion: AccountDeletionRequest,
+    target: User,
+    reason: str,
+    now: datetime | None = None,
+) -> AccountDeletionRequest:
+    now = now or datetime.now(UTC)
+    if deletion.status != AccountDeletionStatus.pending or target.status != UserStatus.deleting:
+        raise AccountDeletionError("account_deletion_not_pending")
+    deletion.status = AccountDeletionStatus.canceled
+    deletion.canceled_at = now
+    deletion.cancellation_reason = reason
+    target.status = UserStatus.active
     return deletion
 
 
@@ -196,6 +265,7 @@ def cancel_account_deletion(
         raise AccountDeletionError("account_deletion_not_found", status_code=404)
     deletion.status = AccountDeletionStatus.canceled
     deletion.canceled_at = now
+    deletion.cancellation_reason = "self_service_sms_verified"
     user.status = UserStatus.active
     return deletion
 

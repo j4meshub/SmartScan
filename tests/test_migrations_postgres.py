@@ -92,6 +92,8 @@ def test_postgresql_concurrent_account_deletion_is_idempotent(tmp_path: Path) ->
             AccountDeletionRequest(
                 id="deletion-race-request",
                 user_id=user.id,
+                requested_by_user_id=user.id,
+                request_source="self_service",
                 status=AccountDeletionStatus.pending,
                 requested_at=now - timedelta(days=8),
                 execute_after=now - timedelta(days=1),

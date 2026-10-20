@@ -334,6 +334,17 @@ def test_account_deletion_migration_can_downgrade_to_device_sessions(tmp_path: P
     finally:
         engine.dispose()
 
+    command.upgrade(alembic_config(url), "20261020_0010")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO account_deletion_requests "
+                "(id, user_id, status, requested_at, execute_after, attempts) VALUES "
+                "('legacy-deletion-request', 'legacy-deletion-user', 'pending', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)"
+            )
+        )
+
     command.upgrade(alembic_config(url), "head")
     migrated = create_engine(url)
     try:
@@ -341,7 +352,29 @@ def test_account_deletion_migration_can_downgrade_to_device_sessions(tmp_path: P
         assert "account_deletion_requests" in schema.get_table_names()
         assert "phone_reuse_quarantines" in schema.get_table_names()
         request_columns = {item["name"] for item in schema.get_columns("account_deletion_requests")}
-        assert {"execute_after", "completed_at", "resource_counts"}.issubset(request_columns)
+        assert {
+            "execute_after",
+            "completed_at",
+            "resource_counts",
+            "requested_by_user_id",
+            "request_source",
+            "reason",
+            "cancellation_reason",
+        }.issubset(request_columns)
+        with migrated.connect() as connection:
+            metadata = (
+                connection.execute(
+                    text(
+                        "SELECT requested_by_user_id, request_source "
+                        "FROM account_deletion_requests "
+                        "WHERE id = 'legacy-deletion-request'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        assert metadata["requested_by_user_id"] == "legacy-deletion-user"
+        assert metadata["request_source"] == "self_service"
     finally:
         migrated.dispose()
 
