@@ -3,11 +3,19 @@ default: {interruptible: true}
 python-lint:
   stage: lint
   image: python:3.12
-  script: ["pip install -e .[dev,vision]", "ruff check services"]
+  script: ["pip install -e .[dev,vision]", "ruff check services migrations tests", "ruff format --check services migrations tests"]
 unit-test:
   stage: unit-test
   image: python:3.12
-  script: ["pip install -e .[dev,vision]", "pytest"]
+  services:
+    - name: postgres:17-alpine
+      alias: postgres
+  variables:
+    POSTGRES_DB: smartscan_test
+    POSTGRES_USER: smartscan
+    POSTGRES_PASSWORD: ci-only-password
+    SMARTSCAN_TEST_POSTGRES_URL: postgresql+psycopg://smartscan:ci-only-password@postgres:5432/smartscan_test
+  script: ["pip install -e .[dev,vision]", "pytest", "python -m alembic check"]
 web-check:
   stage: lint
   image: node:22

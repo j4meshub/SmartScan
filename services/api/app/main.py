@@ -18,8 +18,9 @@ from sqlalchemy.orm import Session
 
 from .audit import record_audit
 from .config import get_settings
-from .database import Base, SessionLocal, engine, get_db
+from .database import SessionLocal, get_db
 from .dependencies import current_user
+from .migrations import ensure_database_current, upgrade_database
 from .models import (
     AuditLog,
     ProcessingJob,
@@ -88,7 +89,10 @@ def ensure_superadmin(db: Session) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(engine)
+    if settings.auto_migrate:
+        upgrade_database(settings.database_url)
+    else:
+        ensure_database_current(settings.database_url)
     with SessionLocal() as db:
         ensure_superadmin(db)
     yield

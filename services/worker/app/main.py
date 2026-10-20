@@ -9,7 +9,8 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from sqlalchemy import or_, select
 
 from services.api.app.config import get_settings
-from services.api.app.database import Base, SessionLocal, engine
+from services.api.app.database import SessionLocal
+from services.api.app.migrations import ensure_database_current
 from services.api.app.models import JobStatus, ProcessingJob, ScanPage
 from services.worker.app.vision import correct_document_perspective
 
@@ -111,7 +112,7 @@ def process(job_id: str) -> None:
 
 
 def main() -> None:
-    Base.metadata.create_all(engine)
+    ensure_database_current()
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     while running:

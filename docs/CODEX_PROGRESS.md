@@ -7,29 +7,32 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M0 工程基础 |
-| 当前工作包 | `GOV-001` 长任务治理 |
-| 工作包状态 | 完成，PR 验证中 |
-| 当前分支 | `codex/gov-001-long-task-docs` |
-| 最后验证基线 | `1d5a9d6` |
-| 工作包提交 | `da8d627` |
-| PR | [#1 建立长期开发与断点续接机制](https://github.com/j4meshub/SmartScan/pull/1) |
-| 下一工作包 | `DB-001` 版本化迁移 |
+| 当前工作包 | `DB-001` 版本化迁移 |
+| 工作包状态 | 进行中，本地验证完成，待提交和 PR |
+| 当前分支 | `codex/db-001-versioned-migrations` |
+| 最后验证基线 | `dde779e`（GOV-001 PR #1 已合并） |
+| 工作包提交 | 待创建 |
+| PR | 待创建 |
+| 下一工作包 | `ARC-001` API 分层 |
 
 ## 本工作包完成内容
 
-- 扩展仓库规则，加入事实来源、目录职责、续接流程、安全边界、验证命令和完成定义。
-- 建立完整工作包路线、依赖关系、状态和里程碑门禁。
-- 建立断点进度与决策记录，使后续任务不依赖单次对话上下文。
-- 明确 Mock、真实外部验收、Windows/Mac 分工、服务器阻塞和 PR 工作流。
+- 引入 Alembic 初始基线，统一管理 SQLite 与 PostgreSQL 表结构。
+- 空库可以升级到最新版本；旧 `create_all` 基线经完整表列校验后无损接管。
+- API 开发启动使用版本化迁移；Worker 只检查版本，不再运行 `create_all`。
+- 生产 Compose 先运行一次性迁移服务，再启动 API 和 Worker。
+- PostgreSQL 超级管理员和审计保护约束纳入迁移版本。
 
 ## 已执行验证
 
 本工作包执行了以下检查：
 
 ```text
-python -m ruff check services
-python -m ruff format --check services
-python -m pytest -q
+python -m ruff check services migrations tests
+python -m ruff format --check services migrations tests
+python -m pytest --cov=services --cov-report=term-missing
+python -m alembic check
+python -m services.api.app.migrations check
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js
 git diff --check
@@ -37,11 +40,15 @@ git diff --check
 
 验证结果：
 
-- Ruff 检查通过，22 个 Python 文件格式检查通过。
-- Pytest 通过：`10 passed`；存在 1 条 FastAPI TestClient 上游弃用警告，不影响本工作包。
+- Ruff 检查通过，28 个 Python 文件格式检查通过。
+- 本地 Pytest 通过：`15 passed, 2 skipped`，服务端覆盖率 `79%`；新增 5 项 SQLite 迁移测试，覆盖空库、旧基线、残缺基线、版本门禁和回滚再升级。2 项 PostgreSQL 测试因本机未提供隔离测试库而跳过，将由 PR CI 的 PostgreSQL 17 服务执行。
+- Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
+- 当前本地数据库版本检查通过。
+- PostgreSQL 离线迁移 SQL 生成通过，包含 `0001` 结构基线与 `0002` 保护约束。
 - H5 和管理后台 JavaScript 语法检查通过。
 - `git diff --check` 通过，仅有 Windows LF/CRLF 提示。
-- 当前 Windows 环境未安装 Docker，Compose 配置检查未执行；GOV-001 不修改 Compose，后续涉及部署的工作包必须在具备 Docker 的 CI 或环境中验证。
+- GitHub Actions、GitLab CI 和 Compose YAML 语法解析通过。
+- 当前 Windows 环境未安装 Docker，Compose 语义检查和镜像构建等待 PR CI；真实 PostgreSQL 迁移仍保留外部门禁。
 
 ## 外部阻塞
 
@@ -63,10 +70,10 @@ git diff --check
 | 中文文档规范 | `13903b3` | 中文说明文档和提交规范 |
 | 分片上传与断点续传 | `38df17a` | 7 项测试通过；分片、哈希、幂等和隔离 |
 | 文档透视校正 POC | `1d5a9d6` | 10 项测试通过；OpenCV 透视和保守回退 |
-| 长任务治理 | `da8d627` | Ruff、格式、10 项 Pytest、H5 与后台 JavaScript 语法检查通过；PR #1 |
+| 长任务治理 | `dde779e` | Ruff、格式、10 项 Pytest、H5、后台及 Compose CI 通过；PR #1 已合并 |
 
 ## 下一步
 
-1. 等待 `GOV-001` PR #1 的 CI 通过并合并。
-2. 从最新 `main` 创建 `codex/db-001-versioned-migrations`。
-3. `DB-001` 先盘点当前 SQLite/PostgreSQL 差异，再引入 Alembic 基线和升级测试。
+1. 提交并推送 `DB-001`，创建中文 PR 并等待 CI。
+2. 在 CI 通过后合并，并从最新 `main` 创建 `codex/arc-001-api-layers`。
+3. 公司 PostgreSQL 环境恢复后复核真实升级、保护约束和回滚演练；在此之前不得宣称该外部门禁通过。

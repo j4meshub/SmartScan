@@ -28,6 +28,7 @@ python -m venv .venv
 # macOS/Linux：source .venv/bin/activate
 pip install -e ".[dev,vision]"
 copy .env.example .env   # macOS/Linux 使用 cp
+python -m services.api.app.migrations upgrade
 uvicorn services.api.app.main:app --reload
 ```
 
@@ -55,13 +56,15 @@ python -m http.server 8081 --directory apps/admin-web
 docker compose -f deploy/compose/docker-compose.yml up --build
 ```
 
-使用 PostgreSQL 时，应在应用表结构创建后执行 `deploy/postgres/001_guards.sql`。正式上线前必须将该初始化方式替换为版本化数据库迁移，并配置 TLS、加密备份和生产密钥管理。
+Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API 和 Worker。数据库版本管理、旧基线接管和回滚要求详见[数据库迁移说明](docs/DATABASE_MIGRATIONS.md)。正式上线前仍需配置 TLS、加密备份和生产密钥管理。
 
 ## 测试
 
 ```bash
-ruff check services
+ruff check services migrations tests
+ruff format --check services migrations tests
 pytest
+python -m alembic check
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js
 ```
