@@ -7,25 +7,44 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
-| 当前工作包 | `POC-003` 文档透视真实样本评估框架 |
-| 工作包状态 | 框架已通过 PR CI，真实固定数据集指标等待人工验收；待合并 PR |
-| 当前分支 | `codex/poc-003-perspective-evaluation` |
-| 最后验证基线 | `fd82c30`（POC-002 PR #7 已合并） |
-| 工作包提交 | `3cd84dd`（评估框架与合成回归） |
-| PR | [#8](https://github.com/j4meshub/SmartScan/pull/8) |
-| 下一工作包 | `POC-004` 基础试卷检测与净化 |
+| 当前工作包 | `POC-004` 基础试卷检测与净化 |
+| 工作包状态 | POC 已通过 PR CI，真实固定数据集指标等待人工验收；待合并 PR |
+| 当前分支 | `codex/poc-004-exam-cleanup` |
+| 最后验证基线 | `2371cd7`（POC-003 PR #8 已合并） |
+| 工作包提交 | `6466e81`（规则检测、保守净化与专项测试） |
+| PR | [#9](https://github.com/j4meshub/SmartScan/pull/9) |
+| 下一工作包 | `POC-005` 双页检测、拆分与去弯曲回退 |
 
 ## 当前工作包进展
 
-- 当前透视算法在缩放副本上执行 Canny、形态学闭运算和轮廓筛选，选取面积最大的凸四边形并映射回原图。
-- 置信度当前仅按四边形面积比例计算；未检测到可信边缘时保留完整画面并进入复核。
-- 已增加授权固定数据集清单及 JSON Schema，强制检查授权、脱敏、用途、审批引用、SHA-256、路径边界和人工四角标注；图片与预览目录均不进入 Git。
-- 已实现批量评估器，报告检测召回、透视可用率、负样本误检率、归一化角点误差、P50/P95/最大耗时和进程峰值 RSS，且报告不包含原始路径。
-- 默认门禁要求至少 `100` 个正样本且可用率 `≥95%`；合成样本即使全部可用，也会因数量不足保持门禁关闭。
-- 已增加合成数据回归，覆盖成功报告、角点质量未达标、样本数不足、授权/哈希错误、路径穿越和现有保守回退。
-- 仓库目前仍没有授权真实样本；在固定数据集评估和人工复核前，不得宣称达到 v1.4 指标。
+- v1.4 要求规则与轻量模型融合识别题号、选项、答题线和版式；高置信建议净化，中置信询问，低置信保持普通扫描。
+- 无模板基础净化应分离彩色与黑色笔迹、保护印刷 OCR/版式区域，并在疑似覆盖印刷内容时保留或弱化，不能生成虚假原文。
+- 已实现不依赖外部 AI 的规则检测与保守彩色笔迹 POC；黑色笔迹在没有可靠分割模型时不自动擦除。
+- POC 返回候选、实际处理和低置信复核掩膜；风险过高时整页回退原图，并以合成试卷覆盖印刷保护、彩色笔迹、灰度原图和大面积异常。
+- 专项 Ruff 与格式检查通过，试卷模块 `12 passed`；首次测试暴露并修复了大面积/深色候选被过早过滤的问题，现会进入原图回退而不是被当作无候选。
+- `EXAM-001` 至 `EXAM-003` 后续负责接入 OCR/轻量模型、用户私有模板、固定数据集指标和产品数据模型，本 POC 不提前宣称产品化完成。
 
 ## 已执行验证
+
+`POC-004` 提交前全量检查：
+
+```text
+python -m ruff check services migrations tests tools
+python -m ruff format --check services migrations tests tools
+python -m pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --test apps/h5/tests/*.test.js
+node --check apps/admin-web/app.js
+git diff --check
+```
+
+本地结果：`53 passed, 2 skipped`，覆盖率 `84.35%`；Ruff、43 个 Python 文件格式、迁移漂移、当前数据库版本、H5 `8 passed`、JavaScript 语法和差异检查均通过。两项 PostgreSQL 专属测试按本地环境预期跳过，当前 Windows 未安装 Docker；两者由 PR CI 复核。
+
+PR #9 CI 结果：PostgreSQL 17 环境 `55 passed`，覆盖率 `84.35%`；Ruff、43 个 Python 文件格式、迁移升级/漂移、Web、H5 `8 passed` 和 Compose/容器检查全部通过。真实试卷固定集不存在，自动化绿灯只证明保守边界和回退逻辑可重复，不代表试卷检出召回率或印刷内容保持率达到 v1.4 指标。
 
 `POC-003` 专项检查已执行：
 
@@ -116,9 +135,10 @@ git diff --check
 | 现有资源越权矩阵 | `1b0e3dd` | PR CI 25 项通过、覆盖率 80.97%；角色、IDOR、审计、Web 与 Compose/容器检查通过；PR #5 已合并 |
 | 企业微信可信身份 POC | `a766af5` | PR CI 38 项通过、覆盖率 82.80%；适配器、Mock、账号决策、Web 与 Compose/容器检查通过；PR #6 已合并，真实租户待人工验收 |
 | H5 相机与弱网 POC | `fd82c30` | PR CI API 38 项、H5 8 项通过，覆盖率 82.80%；相机兜底、续传、Web 与 Compose/容器检查通过；PR #7 已合并，真机弱网待人工验收 |
+| 文档透视评估框架 | `2371cd7` | PR CI 43 项通过、覆盖率 82.81%；授权清单、指标、性能报告、Web 与 Compose/容器检查通过；PR #8 已合并，真实数据集指标待人工验收 |
 
 ## 下一步
 
-1. 合并 POC-003 PR #8，并把真实数据集结论保持为“等待人工验收”。
-2. 创建 `POC-004` 工作分支，开始基础试卷检测、保守净化和原图回退。
-3. 真实透视样本到位后运行固定数据集并记录结论；未达到 `95%` 时保持门禁关闭。
+1. 合并 POC-004 PR #9；真实检出与印刷保持指标继续“等待人工验收”。
+2. 创建 `POC-005` 工作分支，开始双页检测、拆分与去弯曲回退。
+3. 授权试卷固定集到位后补跑真实指标；不以合成样本代替验收结论。
