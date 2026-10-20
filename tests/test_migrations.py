@@ -771,3 +771,70 @@ def test_export_tables_migrate_and_downgrade_without_touching_existing_data(
             )
     finally:
         downgraded.dispose()
+
+
+def test_file_lifecycle_migration_maps_canceled_upload_on_downgrade(tmp_path: Path) -> None:
+    url = sqlite_url(tmp_path / "file-lifecycle.db")
+    command.upgrade(alembic_config(url), "20261020_0016")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('file-user', 'file-user', 'hash', :phone_hmac, '+86******0017', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "a" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_projects "
+                "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) VALUES "
+                "('file-project', 'file-user', '文件生命周期', 'document', 'ltr', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO upload_sessions "
+                "(id, owner_user_id, project_id, idempotency_key, file_name, mime_type, "
+                "size_bytes, expected_sha256, chunk_size, total_chunks, status, expires_at, "
+                "created_at, updated_at) VALUES "
+                "('file-upload', 'file-user', 'file-project', 'file-key', 'file.jpg', "
+                "'image/jpeg', 100, :sha256, 100, 1, 'pending', CURRENT_TIMESTAMP, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"sha256": "b" * 64},
+        )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        assert "project_deletions" in inspect(migrated).get_table_names()
+        with migrated.begin() as connection:
+            connection.execute(
+                text("UPDATE upload_sessions SET status = 'canceled' WHERE id = 'file-upload'")
+            )
+            assert (
+                connection.scalar(
+                    text("SELECT status FROM upload_sessions WHERE id = 'file-upload'")
+                )
+                == "canceled"
+            )
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0016")
+    downgraded = create_engine(url)
+    try:
+        assert "project_deletions" not in inspect(downgraded).get_table_names()
+        with downgraded.connect() as connection:
+            assert (
+                connection.scalar(
+                    text("SELECT status FROM upload_sessions WHERE id = 'file-upload'")
+                )
+                == "expired"
+            )
+    finally:
+        downgraded.dispose()

@@ -33,6 +33,7 @@ services:
     environment:
       SMARTSCAN_DATABASE_URL: postgresql+psycopg://smartscan:${POSTGRES_PASSWORD}@postgres:5432/smartscan
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_INTERNAL_FILE_SEND_PREFIX: /_smartscan_files
       SMARTSCAN_ENV: production
       SMARTSCAN_AUTO_MIGRATE: "false"
     volumes: ["scan-data:/srv/smartscan/data"]
@@ -65,6 +66,7 @@ services:
       - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ../../apps/h5:/var/www/h5:ro
       - ../../apps/admin-web:/var/www/admin:ro
+      - scan-data:/srv/smartscan/data:ro
     depends_on: [api]
 volumes:
   postgres-data:

@@ -49,6 +49,8 @@ Worker 使用数据库行锁和随机租约令牌获取任务，并用心跳延�
 
 导出请求通过 `scan_exports` 冻结页面顺序、活动结果版本、质量档位和实际 OCR 使用证据；`export_artifacts` 保存每个 JPG 或 PDF 制品的所有者、路径、哈希和大小。多页 JPG 保持多制品语义，多页 PDF 合并为单一制品。文本层只消费与活动结果版本一致的 OCR 行框，缺失或过期时生成纯图像 PDF。文件位于用户隔离目录并原子落盘，下载传输边界由后续 `FILE-001` 承担。详见[JPG/PDF 导出与 OCR 文本层](EXPORT_PIPELINE.md)。
 
+文件下载先由 API 完成所有者鉴权和审计：本地直接返回支持 Range 的文件响应，Compose 环境返回指向 Nginx `internal` 位置的 `X-Accel-Redirect`。上传取消与过期分片由 Worker 幂等回收；项目删除先在数据库保存文件清单并删除业务资源，再以 `cleanup_pending` 状态重试文件擦除。详见[文件下载、上传取消与项目清理](FILE_LIFECYCLE.md)。
+
 ## 数据库版本管理
 
 数据库结构由 Alembic 迁移版本管理。开发环境可在 API 启动时自动升级；生产 Compose 将迁移作为独立的一次性服务，只有迁移成功后才允许 API 和 Worker 启动。Worker 自身只检查版本，不创建表也不修改结构，避免多个进程并发迁移。

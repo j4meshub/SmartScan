@@ -10,6 +10,7 @@ from .models import (
     ExportStatus,
     JobStatus,
     PageReviewStatus,
+    ProjectDeletionStatus,
     Role,
     UploadStatus,
     UserStatus,
@@ -354,6 +355,19 @@ class ExportView(BaseModel):
     error_code: str | None
     artifacts: list[ExportArtifactView]
     created_at: datetime
+    completed_at: datetime | None
+
+
+class ProjectDeletionView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    project_title: str
+    status: ProjectDeletionStatus
+    attempts: int
+    last_error: str | None
+    requested_at: datetime
     completed_at: datetime | None
 
 

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./smartscan.db"
     auto_migrate: bool = True
     storage_root: Path = Path("./data")
+    internal_file_send_prefix: str = ""
     secret_key: str = "development-only-secret-change-me"
     phone_pepper: str = "development-only-phone-pepper"
     phone_hmac_active_key_id: str = "legacy-v1"
@@ -83,6 +84,16 @@ class Settings(BaseSettings):
     def validate_sms_mode(cls, value: str) -> str:
         if value not in {"disabled", "mock"}:
             raise ValueError("SMARTSCAN_SMS_MODE must be disabled or mock")
+        return value
+
+    @field_validator("internal_file_send_prefix")
+    @classmethod
+    def validate_internal_file_send_prefix(cls, value: str) -> str:
+        value = value.rstrip("/")
+        if value and (not value.startswith("/") or ".." in value.split("/")):
+            raise ValueError(
+                "SMARTSCAN_INTERNAL_FILE_SEND_PREFIX must be an absolute safe URI path"
+            )
         return value
 
     @staticmethod

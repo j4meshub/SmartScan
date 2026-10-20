@@ -10,8 +10,17 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -27,10 +36,13 @@ from .domain_services import (
     valid_image_signature,
 )
 from .export_service import ExportError, create_export
+from .file_delivery import attachment_response
 from .job_service import JobFlowError, cancel_job, retry_job
 from .models import (
+    ExportArtifact,
     PageResult,
     ProcessingJob,
+    ProjectDeletion,
     ScanExport,
     ScanPage,
     ScanProject,
@@ -47,6 +59,11 @@ from .page_service import (
     update_page_review,
 )
 from .policies import can_read_data
+from .project_cleanup import (
+    ProjectCleanupError,
+    cleanup_project_files,
+    start_project_deletion,
+)
 from .repositories import page_for_actor, project_for_actor, upload_for_owner, upload_view
 from .schemas import (
     ChunkReceipt,
@@ -58,10 +75,12 @@ from .schemas import (
     PageRotationRequest,
     PageView,
     ProjectCreate,
+    ProjectDeletionView,
     ProjectView,
     UploadCreate,
     UploadView,
 )
+from .upload_cleanup import UploadCleanupError, cleanup_upload_chunks
 
 settings = get_settings()
 router = APIRouter()
@@ -109,6 +128,65 @@ def get_project(
         )
         db.commit()
     return project
+
+
+@router.delete("/v1/projects/{project_id}", response_model=ProjectDeletionView, status_code=202)
+def delete_project(
+    project_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanProject, project_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "delete_project",
+            "project",
+            project_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="project not found")
+    project = project_for_actor(db, user, project_id)
+    try:
+        deletion = start_project_deletion(db, actor=user, project=project, settings=settings)
+        record_audit(
+            db, request, user, "delete_project", "project", project.id, project.owner_user_id
+        )
+        db.commit()
+    except ProjectCleanupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    return cleanup_project_files(db, deletion, settings=settings)
+
+
+@router.get("/v1/project-deletions/{deletion_id}", response_model=ProjectDeletionView)
+def get_project_deletion(
+    deletion_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    deletion = db.get(ProjectDeletion, deletion_id)
+    owner = db.get(User, deletion.owner_user_id) if deletion is not None else None
+    if deletion is None or owner is None or not can_read_data(user, owner):
+        raise HTTPException(status_code=404, detail="project deletion not found")
+    if deletion.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "view_project_deletion",
+            "project_deletion",
+            deletion.id,
+            deletion.owner_user_id,
+        )
+        db.commit()
+    return deletion
 
 
 @router.get("/v1/projects/{project_id}/pages", response_model=list[PageView])
@@ -235,6 +313,52 @@ def get_export(
     return export
 
 
+@router.get("/v1/export-artifacts/{artifact_id}/content")
+def export_artifact_content(
+    artifact_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    artifact = db.get(ExportArtifact, artifact_id)
+    owner = db.get(User, artifact.owner_user_id) if artifact is not None else None
+    if artifact is None or owner is None or not can_read_data(user, owner):
+        if artifact is not None and owner is not None:
+            record_audit(
+                db,
+                request,
+                user,
+                "download_export",
+                "export_artifact",
+                artifact.id,
+                artifact.owner_user_id,
+                "denied",
+            )
+            db.commit()
+        raise HTTPException(status_code=404, detail="export artifact not found")
+    absolute = (settings.storage_root / artifact.file_path).resolve()
+    if settings.storage_root.resolve() not in absolute.parents or not absolute.is_file():
+        raise HTTPException(status_code=404, detail="export artifact not found")
+    record_audit(
+        db,
+        request,
+        user,
+        "download_export",
+        "export_artifact",
+        artifact.id,
+        artifact.owner_user_id,
+    )
+    db.commit()
+    return attachment_response(
+        absolute=absolute,
+        relative=artifact.file_path,
+        media_type=artifact.mime_type,
+        file_name=artifact.file_name,
+        settings=settings,
+        sha256=artifact.sha256,
+    )
+
+
 @router.post("/v1/uploads", response_model=UploadView, status_code=201)
 def create_upload(
     payload: UploadCreate,
@@ -306,6 +430,42 @@ def get_upload(
         upload.status = UploadStatus.expired
         db.commit()
     return upload_view(db, upload)
+
+
+@router.delete("/v1/uploads/{upload_id}", status_code=204)
+def cancel_upload(
+    upload_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(UploadSession, upload_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "cancel_upload",
+            "upload",
+            upload_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="upload not found")
+    upload = upload_for_owner(db, user, upload_id, lock=True)
+    if upload.status == UploadStatus.completed:
+        raise HTTPException(status_code=409, detail="completed upload cannot be canceled")
+    if upload.status == UploadStatus.canceled:
+        return Response(status_code=204)
+    upload.status = UploadStatus.canceled
+    record_audit(db, request, user, "cancel_upload", "upload", upload.id, upload.owner_user_id)
+    db.commit()
+    try:
+        cleanup_upload_chunks(db, upload, settings=settings)
+    except UploadCleanupError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return Response(status_code=204)
 
 
 @router.put("/v1/uploads/{upload_id}/chunks/{chunk_index}", response_model=ChunkReceipt)
@@ -710,7 +870,15 @@ def page_content(
     absolute = (settings.storage_root / relative).resolve()
     if settings.storage_root.resolve() not in absolute.parents or not absolute.is_file():
         raise HTTPException(status_code=404, detail="page not found")
-    return FileResponse(absolute, media_type=media_type, filename=f"page-{page.page_number}")
+    sha256 = page.sha256 if variant == "original" else result.sha256 if result else None
+    return attachment_response(
+        absolute=absolute,
+        relative=relative,
+        media_type=media_type,
+        file_name=f"page-{page.page_number}",
+        settings=settings,
+        sha256=sha256,
+    )
 
 
 @router.get("/v1/jobs", response_model=list[JobView])

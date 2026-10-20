@@ -7,23 +7,45 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M3 扫描与输出平台 |
-| 当前工作包 | `EXPORT-001` JPG/PDF 导出 |
+| 当前工作包 | `FILE-001` 文件生命周期 |
 | 工作包状态 | 完成，PR CI 已通过，等待合并 |
-| 当前分支 | `codex/export-001-jpg-pdf` |
-| 最后验证基线 | `cff564c`（OCR-001 PR #22 已合并） |
-| 工作包提交 | `e00bc95`（实现提交） |
-| PR | #23，CI 通过，等待合并 |
-| 下一工作包 | `FILE-001` 文件生命周期 |
+| 当前分支 | `codex/file-001-lifecycle` |
+| 最后验证基线 | `4e10b2e`（EXPORT-001 PR #23 已合并） |
+| 工作包提交 | `f97763b`（实现提交） |
+| PR | #24，CI 通过，等待合并 |
+| 下一工作包 | `API-001` v1 契约冻结 |
 
 ## 当前工作包进展
 
-- OCR-001 已由 PR #22 合并到主线，合并提交为 `cff564c`；真实模型质量和 CPU 容量继续保持“等待人工验收”。
-- EXPORT-001 将实现所有者隔离的导出资源和可恢复状态，支持单页/多页 JPG/PDF、清晰/均衡/小文件三档及稳定建议文件名。
-- 可选 OCR 文本层只使用与活动页面结果版本一致的行框；缺失、过期或低置信 OCR 时仍生成纯图像 PDF，不伪造文本。
-- 导出文件继续放在用户隔离目录，数据库保存哈希、大小、页序、质量、OCR 使用证据与生成版本，为后续鉴权 Range/X-Accel 下载预留边界。
-- `0016` 已增加导出请求与制品表；多页 JPG 保持有序多制品，多页 PDF 生成单一制品，三档质量均不放大原图。
-- 创建、列表和详情接口已纳入 OpenAPI；跨用户创建和读取统一返回 `404` 并写拒绝审计，管理员只读写成功审计。
-- 导出文件已接入账号合并的复制/哈希/原子落位和账号删除的显式数据库清理，用户目录仍由既有隔离擦除流程处理。
+- EXPORT-001 已由 PR #23 合并到主线，中文 squash 提交为 `4e10b2e`；真实 PDF 视觉、超大项目内存和中文复制继续保留人工/容量验收。
+- FILE-001 已增加导出制品鉴权下载、强格式 ETag、私有缓存策略和标准 Range；Compose 使用只读卷与 Nginx `internal` X-Accel 发送。
+- 未完成上传支持幂等取消，Worker 会回收已取消及过期上传的临时分片；已完成上传禁止取消。
+- 项目删除先持久化规范文件清单并事务删除关联资源，文件系统失败保持 `cleanup_pending`，由 Worker 重试至完成。
+- 跨用户下载、取消和删除继续统一返回 `404` 并记录拒绝审计；账号合并遇到待清理项目时拒绝，账号删除覆盖对应清理记录。
+
+`FILE-001` 本地门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm test  # apps/h5
+node --check apps/h5/app.js
+node --check apps/h5/camera.js
+node --check apps/h5/resumable-upload.js
+node --check apps/admin-web/app.js
+python -c "解析 Compose 并断言 X-Accel 前缀与 Nginx 只读存储卷"
+git diff --check
+```
+
+本地结果：`149 passed, 5 skipped`，应用代码覆盖率 `88.23%`；124 个 Python 文件格式、Ruff、`0017` 空库/旧版本升级与降级、上传取消降级映射、模型漂移、迁移版本、OpenAPI 快照、H5 `8 passed`、JavaScript 语法、Compose X-Accel 映射和差异检查均通过。5 项 PostgreSQL 专属测试按本地环境预期跳过，等待 PR CI 的 PostgreSQL 17 服务复核；本机无 Docker，完整 `docker compose config` 由 PR CI 执行。
+
+PR #24 CI 结果：PostgreSQL 17 环境 `154 passed`，应用代码覆盖率 `88.49%`；API、Web/H5 和 Compose/容器 3 项全部通过，迁移模型漂移为 `No new upgrade operations detected`。该绿灯证明 `0017` 原生枚举转换、PostgreSQL 项目清理状态、Nginx 配置和只读存储卷通过，不替代真实 TLS、大文件 Range 并发、磁盘满或备份恢复验收。
+
+上一工作包完成摘要：
 
 `EXPORT-001` 本地门禁：
 
@@ -349,10 +371,11 @@ git diff --check
 | 页面版本与独立复核 | `7e501ff` | PR CI 在 PostgreSQL 17 环境 125 项通过、覆盖率 88.63%；原图保护、追加式结果、质量/旋转/复核、旧状态迁移、IDOR、Web 与 Compose/容器检查通过；PR #20 已合并 |
 | 完整任务状态机 | `1f5094b` | PR CI 在 PostgreSQL 17 环境 130 项通过、覆盖率 89.00%；租约、心跳、过期抢占、指数退避、取消/重试、单结果幂等、IDOR、迁移、Web 与 Compose/容器检查通过；PR #21 已合并 |
 | 基础 OCR 与安全命名 | `cff564c` | PR CI 在 PostgreSQL 17 环境 145 项通过、覆盖率 89.11%；固定离线适配、四方向融合、版本关联结果、敏感命名过滤、IDOR、迁移、Web 与 Compose/容器检查通过；PR #22 已合并，真实模型指标待人工验收 |
-| JPG/PDF 多格式导出 | `e00bc95` | 本地 143 项通过、覆盖率 88.46%；PR CI 在 PostgreSQL 17 环境 148 项通过、覆盖率 88.75%；多页制品、三档质量、当前 OCR 文本层、过期回退、IDOR、账号合并/删除、迁移、Web 与容器检查通过；PR #23 等待合并 |
+| JPG/PDF 多格式导出 | `4e10b2e` | 本地 143 项通过、覆盖率 88.46%；PR CI 在 PostgreSQL 17 环境 148 项通过、覆盖率 88.75%；多页制品、三档质量、当前 OCR 文本层、过期回退、IDOR、账号合并/删除、迁移、Web 与容器检查通过；PR #23 已合并 |
+| 文件生命周期管理 | `f97763b` | 本地 149 项通过、覆盖率 88.23%；PR CI 在 PostgreSQL 17 环境 154 项通过、覆盖率 88.49%；鉴权下载、Range/X-Accel、上传取消、过期回收、项目清理重试、IDOR、迁移、Web 与容器检查通过；PR #24 等待合并 |
 
 ## 下一步
 
-1. 合并 PR #23；真实 PDF 视觉、超大项目内存和真实中文文本复制保留后续人工/容量验收。
-2. 从 `FILE-001` 继续，实现鉴权下载、HTTP Range、取消上传和项目清理。
-3. 冻结导出制品下载审计、缓存头、文件名编码和删除补偿契约。
+1. 合并 PR #24；生产 TLS、大文件 Range 并发、磁盘满和备份恢复保留 OPS staging 门禁。
+2. 从 `API-001` 继续冻结 v1 OpenAPI、客户端兼容矩阵和弃用规则。
+3. 梳理当前/上一客户端兼容字段、错误码和弃用窗口，生成可执行契约检查。

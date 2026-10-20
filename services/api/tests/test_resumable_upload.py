@@ -1,9 +1,14 @@
 import hashlib
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from services.api.app import main
+from services.api.app.database import SessionLocal
+from services.api.app.models import AuditLog, UploadChunk, UploadSession
+from services.api.app.upload_cleanup import process_next_upload_cleanup
 
 
 def register(client: TestClient, prefix: str) -> dict[str, str]:
@@ -119,3 +124,112 @@ def test_chunk_upload_resumes_is_isolated_and_completes_idempotently():
             assert len(matching_jobs) == 1
     finally:
         main.settings.upload_chunk_bytes = original_chunk_size
+
+
+def test_pending_upload_can_be_canceled_idempotently_and_removes_chunks():
+    with TestClient(main.app) as client:
+        owner_headers = register(client, "cancel_owner")
+        other_headers = register(client, "cancel_other")
+        project = client.post(
+            "/v1/projects",
+            json={"title": "取消上传", "mode": "document", "reading_order": "ltr"},
+            headers=owner_headers,
+        )
+        payload = b"\x89PNG\r\n\x1a\n" + b"cancel-me" * 20
+        initiated = client.post(
+            "/v1/uploads",
+            json={
+                "project_id": project.json()["id"],
+                "file_name": "cancel.png",
+                "mime_type": "image/png",
+                "size_bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "idempotency_key": f"cancel-{uuid.uuid4().hex}",
+            },
+            headers=owner_headers,
+        )
+        upload_id = initiated.json()["id"]
+        written = client.put(
+            f"/v1/uploads/{upload_id}/chunks/0",
+            content=payload,
+            headers={
+                **owner_headers,
+                "X-Chunk-Sha256": hashlib.sha256(payload).hexdigest(),
+            },
+        )
+        assert written.status_code == 200, written.text
+        with SessionLocal() as db:
+            chunk = db.scalar(select(UploadChunk).where(UploadChunk.upload_id == upload_id))
+            assert chunk is not None
+            chunk_path = main.settings.storage_root / chunk.relative_path
+            assert chunk_path.is_file()
+
+        assert client.delete(f"/v1/uploads/{upload_id}", headers=other_headers).status_code == 404
+        assert client.delete(f"/v1/uploads/{upload_id}", headers=owner_headers).status_code == 204
+        assert client.delete(f"/v1/uploads/{upload_id}", headers=owner_headers).status_code == 204
+        status = client.get(f"/v1/uploads/{upload_id}", headers=owner_headers)
+        assert status.status_code == 200
+        assert status.json()["status"] == "canceled"
+        assert status.json()["received_chunks"] == []
+        assert not chunk_path.exists()
+        assert (
+            client.post(f"/v1/uploads/{upload_id}/complete", headers=owner_headers).status_code
+            == 409
+        )
+        with SessionLocal() as db:
+            denied_audit = db.scalar(
+                select(AuditLog).where(
+                    AuditLog.object_id == upload_id,
+                    AuditLog.action == "cancel_upload",
+                    AuditLog.result == "denied",
+                )
+            )
+            assert denied_audit is not None
+
+
+def test_expired_upload_chunks_are_reclaimed_by_cleanup_queue():
+    with TestClient(main.app) as client:
+        headers = register(client, "expiry_cleanup")
+        project = client.post(
+            "/v1/projects",
+            json={"title": "过期上传", "mode": "document", "reading_order": "ltr"},
+            headers=headers,
+        )
+        payload = b"\x89PNG\r\n\x1a\n" + b"expired" * 20
+        upload = client.post(
+            "/v1/uploads",
+            json={
+                "project_id": project.json()["id"],
+                "file_name": "expired.png",
+                "mime_type": "image/png",
+                "size_bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "idempotency_key": f"expired-{uuid.uuid4().hex}",
+            },
+            headers=headers,
+        )
+        upload_id = upload.json()["id"]
+        assert (
+            client.put(
+                f"/v1/uploads/{upload_id}/chunks/0",
+                content=payload,
+                headers={
+                    **headers,
+                    "X-Chunk-Sha256": hashlib.sha256(payload).hexdigest(),
+                },
+            ).status_code
+            == 200
+        )
+
+    with SessionLocal() as db:
+        upload_row = db.get(UploadSession, upload_id)
+        chunk = db.scalar(select(UploadChunk).where(UploadChunk.upload_id == upload_id))
+        assert upload_row is not None and chunk is not None
+        chunk_path = main.settings.storage_root / chunk.relative_path
+        upload_row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+        cleaned = process_next_upload_cleanup(db, settings=main.settings)
+        assert cleaned is not None and cleaned.id == upload_id
+        assert cleaned.status.value == "expired"
+        assert db.scalar(select(UploadChunk).where(UploadChunk.upload_id == upload_id)) is None
+    assert not chunk_path.exists()

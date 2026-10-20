@@ -75,12 +75,18 @@ class UploadStatus(str, enum.Enum):
     pending = "pending"
     completed = "completed"
     expired = "expired"
+    canceled = "canceled"
 
 
 class ExportStatus(str, enum.Enum):
     generating = "generating"
     ready = "ready"
     failed = "failed"
+
+
+class ProjectDeletionStatus(str, enum.Enum):
+    cleanup_pending = "cleanup_pending"
+    completed = "completed"
 
 
 class User(Base):
@@ -498,6 +504,36 @@ class ExportArtifact(Base):
     export: Mapped[ScanExport] = relationship(back_populates="artifacts")
 
 
+class ProjectDeletion(Base):
+    __tablename__ = "project_deletions"
+    __table_args__ = (
+        UniqueConstraint("project_id", name="uq_project_deletions_project"),
+        CheckConstraint(
+            "status IN ('cleanup_pending', 'completed')",
+            name="ck_project_deletions_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_title: Mapped[str] = mapped_column(String(160), nullable=False)
+    status: Mapped[ProjectDeletionStatus] = mapped_column(
+        Enum(ProjectDeletionStatus, native_enum=False, length=24),
+        default=ProjectDeletionStatus.cleanup_pending,
+        nullable=False,
+        index=True,
+    )
+    file_manifest: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_counts: Mapped[str] = mapped_column(Text, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(64))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class UploadSession(Base):
     __tablename__ = "upload_sessions"
     __table_args__ = (
@@ -519,7 +555,10 @@ class UploadSession(Base):
     chunk_size: Mapped[int] = mapped_column(Integer, nullable=False)
     total_chunks: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[UploadStatus] = mapped_column(
-        Enum(UploadStatus), default=UploadStatus.pending, nullable=False, index=True
+        Enum(UploadStatus, native_enum=False, length=16),
+        default=UploadStatus.pending,
+        nullable=False,
+        index=True,
     )
     page_id: Mapped[str | None] = mapped_column(
         ForeignKey("scan_pages.id", ondelete="SET NULL"), nullable=True

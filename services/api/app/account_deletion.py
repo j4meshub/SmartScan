@@ -23,6 +23,7 @@ from .models import (
     PageResult,
     PhoneReuseQuarantine,
     ProcessingJob,
+    ProjectDeletion,
     RefreshToken,
     Role,
     ScanExport,
@@ -346,6 +347,13 @@ def _purge_database_resources(
             select(ProcessingJob.id).where(ProcessingJob.owner_user_id == user.id).with_for_update()
         )
     )
+    project_deletion_ids = list(
+        db.scalars(
+            select(ProjectDeletion.id)
+            .where(ProjectDeletion.owner_user_id == user.id)
+            .with_for_update()
+        )
+    )
     export_ids = list(
         db.scalars(
             select(ScanExport.id).where(ScanExport.owner_user_id == user.id).with_for_update()
@@ -388,6 +396,7 @@ def _purge_database_resources(
         "uploads": len(upload_ids),
         "chunks": len(chunk_ids),
         "jobs": len(job_ids),
+        "project_deletions": len(project_deletion_ids),
         "exports": len(export_ids),
         "export_artifacts": len(export_artifact_ids),
         "sessions": len(session_ids),
@@ -397,6 +406,8 @@ def _purge_database_resources(
         db.execute(delete(UploadChunk).where(UploadChunk.id.in_(chunk_ids)))
     if job_ids:
         db.execute(delete(ProcessingJob).where(ProcessingJob.id.in_(job_ids)))
+    if project_deletion_ids:
+        db.execute(delete(ProjectDeletion).where(ProjectDeletion.id.in_(project_deletion_ids)))
     if export_artifact_ids:
         db.execute(delete(ExportArtifact).where(ExportArtifact.id.in_(export_artifact_ids)))
     if export_ids:
