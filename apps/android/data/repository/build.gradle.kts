@@ -5,6 +5,7 @@ plugins {
 kotlin { jvmToolchain(17) }
 
 dependencies {
+    api(project(":core:auth"))
     api(project(":core:model"))
     implementation(project(":core:network"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")

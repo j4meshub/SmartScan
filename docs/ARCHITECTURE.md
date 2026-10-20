@@ -21,6 +21,8 @@ H5 的中英文词条由独立模块统一维护，文本、替代文本和无�
 
 Android 工程按应用、仓储、网络和领域模型分层。Compose 导航与 Android 生命周期留在 `:app`，DTO 和请求头策略位于 `:core:network`，界面只通过仓储消费领域对象。远端 API 强制 HTTPS，默认根地址使用不可解析域名，访问令牌不进入 URL。详见[Android 分层工程与 API 客户端](ANDROID_ARCHITECTURE.md)。
 
+Android 会话密钥由 Keystore 管理，令牌以 AES-GCM 密文保存在应用私有存储；Room 只缓存可重新下载的项目元数据，并以 `owner_user_id` 作为所有查询的显式分区参数。注销远端失败不会阻止本地会话和当前用户缓存清理。详见[Android 身份、Keystore 与用户分区缓存](ANDROID_AUTH_AND_CACHE.md)。
+
 ## 权限与所有权
 
 权限判断以不可变数据所有者的当前角色为依据。管理员读取数据不会改变所有权，并且会写入审计事件。即使当前账号是管理员，用户端项目列表仍始终使用当前用户的所有者 ID 进行限制；跨用户访问只允许通过管理后台接口进行。

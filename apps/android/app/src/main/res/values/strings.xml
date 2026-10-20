@@ -11,5 +11,22 @@
     <string name="projects_description">Your synchronized scan projects will appear here.</string>
     <string name="settings">Settings</string>
     <string name="settings_description">Account, language, and storage controls will appear here.</string>
+    <string name="auth_login_title">Sign in to continue</string>
+    <string name="auth_register_title">Create a verified account</string>
+    <string name="auth_username">Username</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_phone">Phone number</string>
+    <string name="auth_sms_code">Verification code</string>
+    <string name="auth_request_code">Send code</string>
+    <string name="auth_login_action">Sign in</string>
+    <string name="auth_register_action">Register</string>
+    <string name="auth_show_login">Already registered? Sign in</string>
+    <string name="auth_show_register">Create an account</string>
+    <string name="auth_logout">Sign out</string>
+    <string name="auth_code_sent">Verification code sent.</string>
+    <string name="auth_code_required">Request a verification code first.</string>
+    <string name="auth_request_failed">Could not request a code. Try again later.</string>
+    <string name="auth_login_failed">Sign-in failed. Check your credentials.</string>
+    <string name="auth_register_failed">Registration failed. Check the entered information.</string>
 </resources>
 

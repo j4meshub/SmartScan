@@ -5,6 +5,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 
@@ -41,5 +42,30 @@ class SmartScanApiTest {
         assertEquals("Pixel%20%E6%B5%8B%E8%AF%95%E8%AE%BE%E5%A4%87", request.getHeader("X-Device-Name"))
         assertEquals("android", request.getHeader("X-Device-Platform"))
         assertFalse(request.requestUrl!!.queryParameterNames.contains("token"))
+    }
+
+    @Test
+    fun `login credentials stay in JSON body and token response is parsed`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"access_token":"access","token_type":"bearer","expires_at":"2026-10-20T01:00:00Z","refresh_token":"refresh","refresh_expires_at":"2026-11-19T00:00:00Z","session_id":"session","device_id":"android:test-device"}""",
+            ),
+        )
+        val api = SmartScanApiFactory.create(
+            ApiClientConfig(
+                baseUrl = server.url("/").toString(),
+                deviceId = "android:test-device",
+                deviceName = "Android 测试设备",
+                allowInsecureLoopback = true,
+            ),
+        )
+
+        val token = api.login(LoginRequestDto("student", "private-password"))
+        val request = server.takeRequest()
+
+        assertEquals("refresh", token.refreshToken)
+        assertEquals("/v1/auth/login", request.path)
+        assertFalse(request.requestUrl!!.queryParameterNames.contains("password"))
+        assertTrue(request.body.readUtf8().contains("\"password\":\"private-password\""))
     }
 }

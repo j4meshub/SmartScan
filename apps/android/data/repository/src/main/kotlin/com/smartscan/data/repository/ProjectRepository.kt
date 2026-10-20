@@ -2,7 +2,7 @@ package com.smartscan.data.repository
 
 import com.smartscan.core.model.ScanProject
 import com.smartscan.core.network.ProjectDto
-import com.smartscan.core.network.SmartScanApi
+import com.smartscan.core.network.ScanApi
 import java.io.IOException
 import kotlinx.serialization.SerializationException
 import retrofit2.HttpException
@@ -11,9 +11,23 @@ interface ProjectRepository {
     suspend fun listProjects(): ApiResult<List<ScanProject>>
 }
 
-class DefaultProjectRepository(private val api: SmartScanApi) : ProjectRepository {
-    override suspend fun listProjects(): ApiResult<List<ScanProject>> = safeApiCall {
-        api.listProjects().map { it.toModel() }
+class DefaultProjectRepository(
+    private val api: ScanApi,
+    private val cache: UserScopedCache? = null,
+    private val currentUserId: () -> String? = { null },
+) : ProjectRepository {
+    override suspend fun listProjects(): ApiResult<List<ScanProject>> {
+        val userId = currentUserId()
+        return when (val remote = safeApiCall { api.listProjects().map { it.toModel() } }) {
+            is ApiResult.Success -> {
+                if (userId != null) runCatching { cache?.replaceProjects(userId, remote.value) }
+                remote
+            }
+            is ApiResult.Failure -> {
+                val cached = if (userId == null) null else runCatching { cache?.listProjects(userId) }.getOrNull()
+                if (!cached.isNullOrEmpty()) ApiResult.Success(cached) else remote
+            }
+        }
     }
 }
 
