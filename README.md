@@ -9,6 +9,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 ## 当前包含内容
 
 - FastAPI API：本地注册与登录、Argon2id 密码哈希、手机号确定性 HMAC、随机会话令牌和会话撤销。
+- 企业微信可信身份 POC：默认关闭的真实适配器、开发 Mock、可信手机号契约和安全账号决策；真实租户仍待人工验收。
 - 服务端 RBAC：实现 `user`、`admin`、唯一 `super_admin` 的数据可见范围。
 - 只增不改的审计事件：覆盖登录和管理员跨用户访问。
 - 按所有者隔离的扫描项目、安全图片路径、SHA-256 元数据，以及由 PostgreSQL 支持的租约任务队列。
@@ -47,6 +48,8 @@ python -m http.server 8081 --directory apps/admin-web
 - API 文档：`http://localhost:8000/docs`
 
 开发环境注册使用 `SMARTSCAN_DEV_SMS_CODE`，非开发环境会拒绝该验证码。首次启动 API 前应设置 `SMARTSCAN_SUPERADMIN_PASSWORD`，以初始化受保护的超级管理员。生产环境会拒绝缺失或强度不足的核心密钥，仓库中不会硬编码方案文档里的示例密码。
+
+企业微信 POC 默认使用 `SMARTSCAN_WECOM_MODE=disabled`。本地契约说明、运行模式与真实租户验收项见[企业微信可信身份 POC](docs/POC_WECOM_IDENTITY.md)。
 
 ## 容器运行
 
