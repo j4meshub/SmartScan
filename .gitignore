@@ -19,6 +19,8 @@ data/
 uploads/
 datasets/perspective/images/
 reports/perspective/
+reports/load/
+load-tests/accounts.local.json
 smartscan.db
 .DS_Store
 

@@ -1,0 +1,12 @@
+{
+  "source": "隔离 staging 的监控导出",
+  "observed_from": "2026-10-20T00:00:00Z",
+  "observed_to": "2026-10-20T00:30:00Z",
+  "cpu_peak_percent": 0,
+  "memory_peak_bytes": 0,
+  "oom_events": 0,
+  "disk_free_start_bytes": 0,
+  "disk_free_end_bytes": 0,
+  "temp_directory_peak_bytes": 0,
+  "worker_concurrency": 2
+}
