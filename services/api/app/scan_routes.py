@@ -26,10 +26,12 @@ from .domain_services import (
     upload_matches_request,
     valid_image_signature,
 )
+from .export_service import ExportError, create_export
 from .job_service import JobFlowError, cancel_job, retry_job
 from .models import (
     PageResult,
     ProcessingJob,
+    ScanExport,
     ScanPage,
     ScanProject,
     UploadChunk,
@@ -48,6 +50,8 @@ from .policies import can_read_data
 from .repositories import page_for_actor, project_for_actor, upload_for_owner, upload_view
 from .schemas import (
     ChunkReceipt,
+    ExportCreate,
+    ExportView,
     JobView,
     PageResultView,
     PageReviewUpdate,
@@ -122,6 +126,113 @@ def list_pages(
         select(ScanPage).where(ScanPage.project_id == project.id).order_by(ScanPage.page_number)
     ).all()
     return [page_view(db, page) for page in pages]
+
+
+@router.get("/v1/projects/{project_id}/exports", response_model=list[ExportView])
+def list_exports(
+    project_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanProject, project_id)
+    candidate_owner = db.get(User, candidate.owner_user_id) if candidate is not None else None
+    if (
+        candidate is not None
+        and candidate_owner is not None
+        and not can_read_data(user, candidate_owner)
+    ):
+        record_audit(
+            db,
+            request,
+            user,
+            "view_exports",
+            "project",
+            project_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="project not found")
+    project = project_for_actor(db, user, project_id)
+    if project.owner_user_id != user.id:
+        record_audit(
+            db, request, user, "view_exports", "project", project.id, project.owner_user_id
+        )
+        db.commit()
+    return db.scalars(
+        select(ScanExport)
+        .where(ScanExport.project_id == project.id)
+        .order_by(ScanExport.created_at.desc())
+    ).all()
+
+
+@router.post("/v1/projects/{project_id}/exports", response_model=ExportView, status_code=201)
+def create_project_export(
+    project_id: str,
+    payload: ExportCreate,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanProject, project_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "create_export",
+            "project",
+            project_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="project not found")
+    project = project_for_actor(db, user, project_id)
+    if project.owner_user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        return create_export(
+            db,
+            actor=user,
+            project=project,
+            format=payload.format,
+            quality=payload.quality,
+            include_ocr_text=payload.include_ocr_text,
+            page_ids=payload.page_ids,
+        )
+    except ExportError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+
+
+@router.get("/v1/exports/{export_id}", response_model=ExportView)
+def get_export(
+    export_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    export = db.get(ScanExport, export_id)
+    owner = db.get(User, export.owner_user_id) if export is not None else None
+    if export is None or owner is None or not can_read_data(user, owner):
+        if export is not None and owner is not None:
+            record_audit(
+                db,
+                request,
+                user,
+                "view_export",
+                "export",
+                export.id,
+                export.owner_user_id,
+                "denied",
+            )
+            db.commit()
+        raise HTTPException(status_code=404, detail="export not found")
+    if export.owner_user_id != user.id:
+        record_audit(db, request, user, "view_export", "export", export.id, export.owner_user_id)
+        db.commit()
+    return export
 
 
 @router.post("/v1/uploads", response_model=UploadView, status_code=201)

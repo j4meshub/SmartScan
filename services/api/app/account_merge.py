@@ -15,10 +15,12 @@ from sqlalchemy.orm import Session
 from .config import Settings, get_settings
 from .models import (
     AccountMergeAudit,
+    ExportArtifact,
     JobStatus,
     PageResult,
     ProcessingJob,
     Role,
+    ScanExport,
     ScanPage,
     ScanProject,
     UploadChunk,
@@ -150,6 +152,8 @@ def _load_merge_resources(
     list[UploadSession],
     list[UploadChunk],
     list[ProcessingJob],
+    list[ScanExport],
+    list[ExportArtifact],
 ]:
     identities = list(
         db.scalars(
@@ -195,7 +199,19 @@ def _load_merge_resources(
             select(ProcessingJob).where(ProcessingJob.owner_user_id == source_id).with_for_update()
         )
     )
-    return identities, projects, pages, page_results, uploads, chunks, jobs
+    exports = list(
+        db.scalars(
+            select(ScanExport).where(ScanExport.owner_user_id == source_id).with_for_update()
+        )
+    )
+    artifacts = list(
+        db.scalars(
+            select(ExportArtifact)
+            .where(ExportArtifact.owner_user_id == source_id)
+            .with_for_update()
+        )
+    )
+    return identities, projects, pages, page_results, uploads, chunks, jobs, exports, artifacts
 
 
 def merge_accounts(
@@ -243,9 +259,17 @@ def merge_accounts(
         raise AccountMergeError("account_merge_conflict")
     canonical, source = sorted(users, key=lambda item: (item.created_at, item.id))
 
-    identities, projects, pages, page_results, uploads, chunks, jobs = _load_merge_resources(
-        db, source.id, canonical.id
-    )
+    (
+        identities,
+        projects,
+        pages,
+        page_results,
+        uploads,
+        chunks,
+        jobs,
+        exports,
+        artifacts,
+    ) = _load_merge_resources(db, source.id, canonical.id)
     source_identities = [item for item in identities if item.user_id == source.id]
     canonical_providers = {item.provider for item in identities if item.user_id == canonical.id}
     if any(item.provider in canonical_providers for item in source_identities):
@@ -274,6 +298,8 @@ def merge_accounts(
             references.append(_FileReference(page, "processed_path", None, True))
     for result in page_results:
         references.append(_FileReference(result, "file_path", result.sha256, True))
+    for artifact in artifacts:
+        references.append(_FileReference(artifact, "file_path", artifact.sha256, True))
     upload_by_id = {item.id: item for item in source_uploads}
     for chunk in chunks:
         upload = upload_by_id[chunk.upload_id]
@@ -319,6 +345,10 @@ def merge_accounts(
             upload.owner_user_id = canonical.id
         for job in jobs:
             job.owner_user_id = canonical.id
+        for export in exports:
+            export.owner_user_id = canonical.id
+        for artifact in artifacts:
+            artifact.owner_user_id = canonical.id
         db.delete(source_phone)
         now = datetime.now(UTC)
         revoke_user_sessions(db, source.id)
@@ -333,6 +363,8 @@ def merge_accounts(
             "uploads": len(source_uploads),
             "chunks": len(chunks),
             "jobs": len(jobs),
+            "exports": len(exports),
+            "export_artifacts": len(artifacts),
             "files": len(sources_to_remove),
         }
         audit = AccountMergeAudit(

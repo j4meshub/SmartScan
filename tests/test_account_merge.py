@@ -16,11 +16,14 @@ from services.api.app.config import Settings
 from services.api.app.database import SessionLocal
 from services.api.app.models import (
     AccountMergeAudit,
+    ExportArtifact,
+    ExportStatus,
     JobStatus,
     PageResult,
     PhoneEncryptionStatus,
     ProcessingJob,
     Role,
+    ScanExport,
     ScanPage,
     ScanProject,
     SessionToken,
@@ -130,19 +133,24 @@ def create_pair(
             original_relative = f"users/{source_id}/originals/{project_id}/{page_id}.jpg"
             processed_relative = f"users/{source_id}/processed/{project_id}/{page_id}.jpg"
             chunk_relative = f"users/{source_id}/temp/{upload_id}/00000000.part"
+            export_relative = f"users/{source_id}/exports/{project_id}/merged.pdf"
             original = main.settings.storage_root / original_relative
             processed = main.settings.storage_root / processed_relative
             chunk_path = main.settings.storage_root / chunk_relative
+            export_path = main.settings.storage_root / export_relative
             original.parent.mkdir(parents=True, exist_ok=True)
             processed.parent.mkdir(parents=True, exist_ok=True)
             chunk_path.parent.mkdir(parents=True, exist_ok=True)
+            export_path.parent.mkdir(parents=True, exist_ok=True)
             original_data = b"original-account-merge-image"
             processed_data = b"processed-account-merge-image"
             chunk_data = b"completed-upload-chunk"
+            export_data = b"%PDF-account-merge-export"
             original.write_bytes(original_data)
             processed.write_bytes(processed_data)
             chunk_path.write_bytes(chunk_data)
-            paths = [original, processed, chunk_path]
+            export_path.write_bytes(export_data)
+            paths = [original, processed, chunk_path, export_path]
             db.add(ScanProject(id=project_id, owner_user_id=source_id, title="待合并项目"))
             db.add(
                 ScanPage(
@@ -205,6 +213,34 @@ def create_pair(
                     page_id=page_id,
                     kind="document",
                     status=JobStatus.queued,
+                )
+            )
+            export = ScanExport(
+                owner_user_id=source_id,
+                project_id=project_id,
+                format="pdf",
+                quality="balanced",
+                include_ocr_text=False,
+                status=ExportStatus.ready,
+                page_count=1,
+                ocr_pages_used=0,
+                base_file_name="merged",
+                page_snapshot="[]",
+                processor_version="export-v1",
+                completed_at=now,
+            )
+            db.add(export)
+            db.flush()
+            db.add(
+                ExportArtifact(
+                    export_id=export.id,
+                    owner_user_id=source_id,
+                    sequence=1,
+                    file_name="merged.pdf",
+                    file_path=export_relative,
+                    mime_type="application/pdf",
+                    sha256=hashlib.sha256(export_data).hexdigest(),
+                    size_bytes=len(export_data),
                 )
             )
         db.commit()
@@ -303,6 +339,11 @@ def test_merge_moves_resources_files_and_revokes_sessions(monkeypatch: pytest.Mo
         assert upload is not None and upload.owner_user_id == canonical_id
         job = db.scalar(select(ProcessingJob).where(ProcessingJob.project_id == project.id))
         assert job is not None and job.owner_user_id == canonical_id
+        export = db.scalar(select(ScanExport).where(ScanExport.project_id == project.id))
+        assert export is not None and export.owner_user_id == canonical_id
+        artifact = db.scalar(select(ExportArtifact).where(ExportArtifact.export_id == export.id))
+        assert artifact is not None and artifact.owner_user_id == canonical_id
+        assert artifact.file_path.startswith(f"users/{canonical_id}/")
         audit = db.scalar(
             select(AccountMergeAudit).where(AccountMergeAudit.idempotency_key == idempotency_key)
         )
