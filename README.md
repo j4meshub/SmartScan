@@ -11,7 +11,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - 只增不改的审计事件：覆盖登录和管理员跨用户访问。
 - 按所有者隔离的扫描项目、安全图片路径、SHA-256 元数据，以及由 PostgreSQL 支持的租约任务队列。
 - 分片上传、断点续传、分片/整文件哈希校验、幂等完成和跨用户隔离。
-- CPU Worker：保留原图，并在不依赖外部 AI 的情况下完成 EXIF 方向修正、对比度增强和锐化。
+- CPU Worker：保留原图，并在不依赖外部 AI 的情况下完成 EXIF 方向修正、文档边缘检测、透视校正、对比度增强和锐化；边缘检测失败时保留完整画面并进入人工复核。
 - 无需前端构建工具即可运行的双语响应式 H5 与管理后台。
 - Kotlin/Compose Android 和 SwiftUI iOS 工程起点。
 - Docker Compose、Nginx、PostgreSQL 加固 SQL、GitHub Actions 和 GitLab CI。
@@ -24,7 +24,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 python -m venv .venv
 # Windows：.venv\Scripts\activate
 # macOS/Linux：source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,vision]"
 copy .env.example .env   # macOS/Linux 使用 cp
 uvicorn services.api.app.main:app --reload
 ```
@@ -72,6 +72,7 @@ node --check apps/admin-web/app.js
 - 唯一超级管理员同时受 API 逻辑和 PostgreSQL 防护约束保护。
 - 可选 AI 地址必须通过 HTTPS 和公网 IP 的 SSRF 检查；基础扫描链路不依赖外部 AI。
 - 分片仅写入当前用户的临时目录，完成前校验分片大小、分片哈希、整文件哈希和图片文件签名。
+- 文档透视校正只在边缘检测达到面积阈值时执行；检测失败不会裁切原图，而是生成基础增强结果并标记复核。
 
 ## 仓库结构
 

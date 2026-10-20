@@ -3,11 +3,11 @@ default: {interruptible: true}
 python-lint:
   stage: lint
   image: python:3.12
-  script: ["pip install -e .[dev]", "ruff check services"]
+  script: ["pip install -e .[dev,vision]", "ruff check services"]
 unit-test:
   stage: unit-test
   image: python:3.12
-  script: ["pip install -e .[dev]", "pytest"]
+  script: ["pip install -e .[dev,vision]", "pytest"]
 web-check:
   stage: lint
   image: node:22

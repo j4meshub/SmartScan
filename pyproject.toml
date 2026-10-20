@@ -28,7 +28,7 @@ include = ["services*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["services/api/tests"]
+testpaths = ["services/api/tests", "services/worker/tests"]
 
 [tool.ruff]
 line-length = 100

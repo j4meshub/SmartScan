@@ -11,6 +11,7 @@ from sqlalchemy import or_, select
 from services.api.app.config import get_settings
 from services.api.app.database import Base, SessionLocal, engine
 from services.api.app.models import JobStatus, ProcessingJob, ScanPage
+from services.worker.app.vision import correct_document_perspective
 
 settings = get_settings()
 running = True
@@ -43,7 +44,12 @@ def claim_job() -> str | None:
         return job.id
 
 
-def quality_warning(image: Image.Image) -> str | None:
+def quality_warning(
+    image: Image.Image,
+    *,
+    document_edges_required: bool = False,
+    document_edges_detected: bool = True,
+) -> str | None:
     width, height = image.size
     if width * height < 1_000_000:
         return "low_resolution"
@@ -51,6 +57,8 @@ def quality_warning(image: Image.Image) -> str | None:
     extrema = gray.getextrema()
     if extrema[1] - extrema[0] < 45:
         return "low_contrast"
+    if document_edges_required and not document_edges_detected:
+        return "document_edges_not_found"
     return None
 
 
@@ -69,7 +77,21 @@ def process(job_id: str) -> None:
         try:
             with Image.open(source) as raw:
                 image = ImageOps.exif_transpose(raw).convert("RGB")
-                page.quality_warning = quality_warning(image)
+                correct_edges = job.kind in {"document", "exam"}
+                edges_detected = True
+                if correct_edges:
+                    perspective = correct_document_perspective(
+                        image,
+                        min_area_ratio=settings.vision_document_min_area_ratio,
+                        max_detection_dimension=settings.vision_max_detection_dimension,
+                    )
+                    image = perspective.image
+                    edges_detected = perspective.detected
+                page.quality_warning = quality_warning(
+                    image,
+                    document_edges_required=correct_edges,
+                    document_edges_detected=edges_detected,
+                )
                 image = ImageOps.autocontrast(image, cutoff=1)
                 image = ImageEnhance.Sharpness(image).enhance(1.15)
                 image = image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=110, threshold=3))

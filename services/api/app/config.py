@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 25 * 1024 * 1024
     upload_chunk_bytes: int = 4 * 1024 * 1024
     upload_expiry_hours: int = 24
+    vision_document_min_area_ratio: float = Field(default=0.2, gt=0.05, lt=0.95)
+    vision_max_detection_dimension: int = Field(default=1600, ge=640, le=4096)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
