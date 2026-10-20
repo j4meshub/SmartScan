@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M1 阶段 0 风险 POC |
 | 当前工作包 | `POC-001` 企业微信可信身份 |
-| 工作包状态 | 进行中，本地实现与验证完成，等待 PR CI |
+| 工作包状态 | 完成，PR CI 已通过，等待合并；真实租户门禁等待人工验收 |
 | 当前分支 | `codex/poc-001-wecom-adapter` |
 | 最后验证基线 | `1b0e3dd`（SEC-001 PR #5 已合并） |
 | 工作包提交 | `f368c84` |
@@ -44,11 +44,12 @@ git diff --check
 - Ruff 与格式检查通过，39 个 Python 文件纳入检查。
 - 企业微信适配器与账号决策专项测试 `13 passed`。
 - 全量本地测试 `36 passed, 2 skipped`，应用代码覆盖率 `82.80%`，达到 `77%` 门禁。
-- 本地跳过的两项 PostgreSQL 测试等待本工作包 PR CI 执行。
+- 本地跳过的两项 PostgreSQL 测试已由 PR CI 的 PostgreSQL 17 服务执行并通过。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
 - H5 和管理后台 JavaScript 语法检查通过。
 - `git diff --check` 通过。
+- PR CI 在 PostgreSQL 17 环境下通过：`38 passed`、应用代码覆盖率 `82.80%`，Web 与 Compose/容器检查全部通过。
 
 ## 外部阻塞
 
@@ -75,9 +76,10 @@ git diff --check
 | API 路由职责拆分 | `f711e47` | 入口缩减至 56 行；PR CI 19 项通过且覆盖率 81%；PR #3 已合并 |
 | 隔离测试与契约基线 | `11d0a1c` | PR CI 21 项通过、覆盖率 77.67%；隔离、快照与漂移门禁通过；PR #4 已合并 |
 | 现有资源越权矩阵 | `1b0e3dd` | PR CI 25 项通过、覆盖率 80.97%；角色、IDOR、审计、Web 与 Compose/容器检查通过；PR #5 已合并 |
+| 企业微信可信身份 POC | `5c76e07` | PR CI 38 项通过、覆盖率 82.80%；适配器、Mock、账号决策、Web 与 Compose/容器检查通过；PR #6，真实租户待人工验收 |
 
 ## 下一步
 
-1. 等待 `POC-001` PR #6 CI，失败时定位、修复并重跑。
-2. CI 通过后合并，并从最新 `main` 创建 `codex/poc-002-h5-camera-network`。
+1. 合并 `POC-001` PR #6。
+2. 从最新 `main` 创建 `codex/poc-002-h5-camera-network`。
 3. 使用真实 CorpId、AgentId、Secret、可信域名和测试成员执行人工验收；条件未提供前保持“等待人工验收”。
