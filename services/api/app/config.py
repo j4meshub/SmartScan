@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     wecom_timeout_seconds: float = Field(default=5.0, ge=1.0, le=30.0)
     access_token_minutes: int = Field(default=15, ge=5, le=60)
     refresh_token_days: int = Field(default=30, ge=1, le=90)
+    account_deletion_grace_days: int = Field(default=7, ge=1, le=7)
+    phone_reuse_quarantine_days: int = Field(default=30, ge=30, le=365)
     session_hours: int = 24
     max_upload_bytes: int = 25 * 1024 * 1024
     upload_chunk_bytes: int = 4 * 1024 * 1024

@@ -17,8 +17,10 @@ EXPECTED_OPERATIONS = {
     ("POST", "/v1/auth/account-merges", 200),
     ("POST", "/v1/auth/login", 200),
     ("POST", "/v1/auth/refresh", 200),
+    ("POST", "/v1/auth/account-deletion/cancel", 200),
     ("POST", "/v1/auth/logout", 204),
     ("GET", "/v1/me", 200),
+    ("POST", "/v1/me/account-deletion", 202),
     ("POST", "/v1/me/password", 204),
     ("GET", "/v1/me/sessions", 200),
     ("DELETE", "/v1/me/sessions", 204),
@@ -69,6 +71,7 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
         "JobView",
         "AccountMergeView",
         "DeviceSessionView",
+        "AccountDeletionView",
     }.issubset(component_schemas)
     assert "securitySchemes" not in schema["components"]
     assert schema["paths"]["/v1/uploads/{upload_id}/complete"]["post"]["responses"]["202"]

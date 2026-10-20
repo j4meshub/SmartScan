@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .account_deletion import phone_reuse_blocked
 from .config import Settings, get_settings
 from .identity_services import add_verified_phone
 from .models import (
@@ -114,6 +115,8 @@ def _phone_user_ids(db: Session, phone: str) -> list[str]:
 def _create_wecom_user(db: Session, identity: WeComIdentity) -> User:
     if identity.phone_e164 is None:
         raise WeComAuthError("wecom_phone_required")
+    if phone_reuse_blocked(db, identity.phone_e164):
+        raise WeComAuthError("wecom_phone_temporarily_unavailable")
     user_id = str(uuid.uuid4())
     digest = phone_hmac(identity.phone_e164)
     user = User(

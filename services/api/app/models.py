@@ -46,6 +46,13 @@ class PhoneEncryptionStatus(str, enum.Enum):
     encrypted = "encrypted"
 
 
+class AccountDeletionStatus(str, enum.Enum):
+    pending = "pending"
+    cleanup_pending = "cleanup_pending"
+    completed = "completed"
+    canceled = "canceled"
+
+
 class JobStatus(str, enum.Enum):
     pending = "pending"
     running = "running"
@@ -201,6 +208,43 @@ class AccountMergeAudit(Base):
     rule: Mapped[str] = mapped_column(String(64), nullable=False)
     result: Mapped[str] = mapped_column(String(20), nullable=False)
     resource_counts: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AccountDeletionRequest(Base):
+    __tablename__ = "account_deletion_requests"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_account_deletion_user"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    status: Mapped[AccountDeletionStatus] = mapped_column(
+        Enum(AccountDeletionStatus),
+        default=AccountDeletionStatus.pending,
+        nullable=False,
+        index=True,
+    )
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    execute_after: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(64))
+    resource_counts: Mapped[str | None] = mapped_column(Text)
+
+
+class PhoneReuseQuarantine(Base):
+    __tablename__ = "phone_reuse_quarantines"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    phone_hmac: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    hmac_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    deletion_request_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
