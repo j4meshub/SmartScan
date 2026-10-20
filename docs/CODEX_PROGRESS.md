@@ -7,34 +7,31 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M0 工程基础 |
-| 当前工作包 | `ARC-001` API 分层 |
+| 当前工作包 | `QA-001` 测试与 CI 基线 |
 | 工作包状态 | 完成，PR CI 已通过，等待合并 |
-| 当前分支 | `codex/arc-001-api-layers` |
-| 最后验证基线 | `91ff720`（DB-001 PR #2 已合并） |
-| 工作包提交 | `d7d9036`、`3b70296` |
-| PR | [#3 完成 API 路由职责拆分](https://github.com/j4meshub/SmartScan/pull/3) |
-| 下一工作包 | `QA-001` 测试与 CI 基线 |
+| 当前分支 | `codex/qa-001-test-ci-baseline` |
+| 最后验证基线 | `f711e47`（ARC-001 PR #3 已合并） |
+| 工作包提交 | `d5211e7` |
+| PR | [#4 建立隔离测试与契约基线](https://github.com/j4meshub/SmartScan/pull/4) |
+| 下一工作包 | `SEC-001` 现有资源 IDOR 测试 |
 
 ## 当前工作包进展
 
-- 已确认当前 `services/api/app/main.py` 共 795 行，包含启动、认证、项目、上传、文件、任务和管理后台等职责。
-- 已按认证、项目、上传/文件、任务、管理后台划分路由边界；公共查询与业务规则将分别进入存储层和服务层。
-- 拆分必须保持既有路径、状态码、响应模型、依赖注入、统一 `404` 行为和 OpenAPI 行为不变。
-- 新增路由/OpenAPI 契约测试，固定 22 个公开操作的路径、方法、状态码与核心响应模型。
-- 超级管理员初始化、会话签发和上传校验已移入 `domain_services.py`；项目/上传资源查询与上传视图装配已移入 `repositories.py`。
-- 首轮分层后契约与现有 API 回归共 `9 passed`。
-- 原 795 行入口已缩减为 56 行应用装配；认证、扫描、管理路由分别为 113、441、121 行的职责模块。
-- 完整本地回归为 `17 passed, 2 skipped`，服务端覆盖率 `81%`；本地跳过项仍是需要 PostgreSQL 17 的两项迁移测试。
+- 根级 `conftest.py` 在收集测试前强制使用系统临时目录中的 SQLite 数据库和文件存储，并在会话结束时清理。
+- 新增隔离环境断言，阻止测试回退到仓库数据库或数据目录。
+- 保存完整 `packages/contracts/openapi.json`，运行时 OpenAPI 与快照进行结构化全量比较。
+- 覆盖率排除测试代码后最终 CI 基线为 `77.67%`，GitHub/GitLab 统一设置 `77%` 最低门禁。
+- 本地完整回归为 `19 passed, 2 skipped`；两项跳过仍是由 PR CI PostgreSQL 17 服务执行的迁移测试。
 
 ## 已执行验证
 
-`ARC-001` 执行了以下检查：
+`QA-001` 执行了以下检查：
 
 ```text
 python -m ruff check services migrations tests
 python -m ruff format --check services migrations tests
 python -m pytest --cov=services --cov-report=term-missing
-python -m alembic check
+python -m services.api.app.migrations drift
 python -m services.api.app.migrations check
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js
@@ -43,10 +40,13 @@ git diff --check
 
 验证结果：
 
-- Ruff 检查通过，34 个 Python 文件格式检查通过。
-- 本地 Pytest 通过：`17 passed, 2 skipped`，服务端覆盖率 `81%`；新增 2 项 API 路由/OpenAPI 契约测试。
-- 两项本地跳过的 PostgreSQL 迁移测试已由本工作包 PR CI 的 PostgreSQL 17 服务执行。
-- PR CI 使用 PostgreSQL 17 实际执行全部测试：`19 passed`、无跳过、服务端覆盖率 `81%`；Web 与 Compose 检查通过。
+- Ruff 检查通过，36 个 Python 文件纳入检查。
+- 本地 Pytest 通过：`19 passed, 2 skipped`，排除测试代码后的应用覆盖率 `77.77%`，达到 `77%` 门禁。
+- OpenAPI 完整快照与隔离测试环境断言通过。
+- 两项 PostgreSQL 迁移测试等待本工作包 PR CI 的 PostgreSQL 17 服务执行。
+- PR 首轮 API 测试为 `21 passed` 且覆盖率门禁通过，但后续 `alembic check` 因隔离测试正确清理数据库而失败；CI 已改为显式升级独立 `ci-smartscan.db` 后再检查漂移，等待复验。
+- 第二轮确认直接调用 Alembic 未读取 `SMARTSCAN_DATABASE_URL`；已新增应用级 `migrations drift` 命令，使升级和漂移检查使用同一数据库配置，等待复验。
+- 第三轮 PR CI 通过：PostgreSQL 环境下 `21 passed`、无跳过、应用覆盖率 `77.67%`，迁移漂移、Web 与 Compose 检查全部通过。
 - Alembic 元数据漂移检查通过：`No new upgrade operations detected`。
 - 当前本地数据库版本检查通过。
 - PostgreSQL 离线迁移 SQL 生成通过，包含 `0001` 结构基线与 `0002` 保护约束。
@@ -77,9 +77,11 @@ git diff --check
 | 文档透视校正 POC | `1d5a9d6` | 10 项测试通过；OpenCV 透视和保守回退 |
 | 长任务治理 | `dde779e` | Ruff、格式、10 项 Pytest、H5、后台及 Compose CI 通过；PR #1 已合并 |
 | 版本化数据库迁移 | `91ff720` | 本地 15 项通过；PR CI 17 项通过且 PostgreSQL 测试无跳过；PR #2 已合并 |
-| API 路由职责拆分 | `d7d9036`、`3b70296` | 入口缩减至 56 行；PR CI 19 项通过且覆盖率 81%；PR #3 |
+| API 路由职责拆分 | `f711e47` | 入口缩减至 56 行；PR CI 19 项通过且覆盖率 81%；PR #3 已合并 |
+| 隔离测试与契约基线 | `d5211e7`、`9779b8e`、`93b3bd3` | PR CI 21 项通过、覆盖率 77.67%；隔离、快照与漂移门禁通过；PR #4 |
 
 ## 下一步
 
-1. 合并 `ARC-001` PR #3。
-2. 从最新 `main` 创建 `codex/qa-001-test-ci-baseline`，继续 M0 测试隔离与 CI 基线。
+1. 合并 `QA-001` PR #4。
+2. 从最新 `main` 创建 `codex/sec-001-idor-tests`。
+3. 从最新 `main` 创建 `codex/sec-001-idor-tests`。

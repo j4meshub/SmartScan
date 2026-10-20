@@ -103,14 +103,20 @@ def ensure_database_current(database_url: str | None = None) -> None:
         )
 
 
+def check_database_drift(database_url: str | None = None) -> None:
+    command.check(alembic_config(database_url))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="SmartScan 数据库迁移入口")
-    parser.add_argument("action", choices=("upgrade", "check", "current"))
+    parser.add_argument("action", choices=("upgrade", "check", "current", "drift"))
     args = parser.parse_args()
     if args.action == "upgrade":
         upgrade_database()
     elif args.action == "check":
         ensure_database_current()
+    elif args.action == "drift":
+        check_database_drift()
     else:
         print(current_revision() or "未初始化")
 

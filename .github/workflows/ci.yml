@@ -22,6 +22,8 @@ jobs:
           --health-retries 10
     env:
       SMARTSCAN_TEST_POSTGRES_URL: postgresql+psycopg://smartscan:ci-only-password@localhost:5432/smartscan_test
+      SMARTSCAN_DATABASE_URL: sqlite:///./ci-smartscan.db
+      SMARTSCAN_STORAGE_ROOT: ./ci-data
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,8 +31,9 @@ jobs:
       - run: pip install -e ".[dev,vision]"
       - run: ruff check services migrations tests
       - run: ruff format --check services migrations tests
-      - run: pytest --cov=services --cov-report=term-missing
-      - run: python -m alembic check
+      - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+      - run: python -m services.api.app.migrations upgrade
+      - run: python -m services.api.app.migrations drift
   web:
     runs-on: ubuntu-latest
     steps:

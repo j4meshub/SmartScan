@@ -60,11 +60,13 @@ Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API �
 
 ## 测试
 
+完整测试隔离、OpenAPI 快照和覆盖率门禁说明见[测试与 CI 基线](docs/TESTING.md)。
+
 ```bash
 ruff check services migrations tests
 ruff format --check services migrations tests
-pytest
-python -m alembic check
+pytest --cov=services --cov-report=term-missing --cov-fail-under=77
+python -m services.api.app.migrations drift
 node --check apps/h5/app.js
 node --check apps/admin-web/app.js
 ```
