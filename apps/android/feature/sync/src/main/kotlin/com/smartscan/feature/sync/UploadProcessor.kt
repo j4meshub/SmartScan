@@ -81,22 +81,26 @@ class UploadProcessor(
 
         return try {
             val fileHash = upload.sha256 ?: sha256(source)
-            var remoteUpload = upload.serverUploadId?.let(remote::getUpload) ?: remote.createUpload(
-                CreateUploadRequestDto(
-                    projectId = serverProjectId,
-                    fileName = upload.fileName,
-                    mimeType = upload.mimeType,
-                    sizeBytes = upload.sizeBytes,
-                    sha256 = fileHash,
-                    idempotencyKey = upload.idempotencyKey,
-                ),
-            )
+            val remoteUpload = if (upload.serverUploadId != null) {
+                remote.getUpload(upload.serverUploadId)
+            } else {
+                remote.createUpload(
+                    CreateUploadRequestDto(
+                        projectId = serverProjectId,
+                        fileName = upload.fileName,
+                        mimeType = upload.mimeType,
+                        sizeBytes = upload.sizeBytes,
+                        sha256 = fileHash,
+                        idempotencyKey = upload.idempotencyKey,
+                    ),
+                )
+            }
             if (remoteUpload.status == "expired") {
                 store.rotateUploadSession(upload.ownerUserId, upload.id, newIdempotencyKey())
                 return UploadProcessResult.Retry
             }
             if (remoteUpload.status == "completed" && remoteUpload.pageId != null) {
-                store.markCompleted(upload.ownerUserId, upload.id, remoteUpload.pageId)
+                store.markCompleted(upload.ownerUserId, upload.id, requireNotNull(remoteUpload.pageId))
                 return UploadProcessResult.Success
             }
             validateRemoteUpload(remoteUpload, upload)
