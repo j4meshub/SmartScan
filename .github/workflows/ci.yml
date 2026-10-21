@@ -146,6 +146,8 @@ jobs:
           --profile monitoring
           config
       - name: 校验备份配置与 Compose 契约
+        env:
+          SMARTSCAN_STAGING_BACKUP_ENV_FILE: ../../tests/fixtures/staging/backup.env
         run: |
           printf 'ci-restic-password-32-characters-minimum' > "$RUNNER_TEMP/restic-password"
           chmod 600 "$RUNNER_TEMP/restic-password"
