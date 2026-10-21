@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from .config import Settings, get_settings
 from .models import (
     AccountMergeAudit,
+    BookIntegrityDecision,
     ExportArtifact,
     JobStatus,
     PageResult,
@@ -156,6 +157,7 @@ def _load_merge_resources(
     list[ProcessingJob],
     list[ScanExport],
     list[ExportArtifact],
+    list[BookIntegrityDecision],
 ]:
     identities = list(
         db.scalars(
@@ -213,7 +215,25 @@ def _load_merge_resources(
             .with_for_update()
         )
     )
-    return identities, projects, pages, page_results, uploads, chunks, jobs, exports, artifacts
+    integrity_decisions = list(
+        db.scalars(
+            select(BookIntegrityDecision)
+            .where(BookIntegrityDecision.owner_user_id == source_id)
+            .with_for_update()
+        )
+    )
+    return (
+        identities,
+        projects,
+        pages,
+        page_results,
+        uploads,
+        chunks,
+        jobs,
+        exports,
+        artifacts,
+        integrity_decisions,
+    )
 
 
 def merge_accounts(
@@ -271,6 +291,7 @@ def merge_accounts(
         jobs,
         exports,
         artifacts,
+        integrity_decisions,
     ) = _load_merge_resources(db, source.id, canonical.id)
     source_identities = [item for item in identities if item.user_id == source.id]
     canonical_providers = {item.provider for item in identities if item.user_id == canonical.id}
@@ -361,6 +382,9 @@ def merge_accounts(
             export.owner_user_id = canonical.id
         for artifact in artifacts:
             artifact.owner_user_id = canonical.id
+        for decision in integrity_decisions:
+            decision.owner_user_id = canonical.id
+            decision.decided_by_user_id = canonical.id
         db.delete(source_phone)
         now = datetime.now(UTC)
         revoke_user_sessions(db, source.id)
@@ -377,6 +401,7 @@ def merge_accounts(
             "jobs": len(jobs),
             "exports": len(exports),
             "export_artifacts": len(artifacts),
+            "book_integrity_decisions": len(integrity_decisions),
             "files": len(sources_to_remove),
         }
         audit = AccountMergeAudit(

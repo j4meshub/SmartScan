@@ -95,6 +95,69 @@ final class WorkspaceAPITests: XCTestCase {
         XCTAssertEqual(page.bookIsCurrent, true)
     }
 
+    func testBookIntegrityDecisionAndAssemblyUseVersionedEndpoints() async throws {
+        let api = try makeAPI()
+        var requestCount = 0
+        StubURLProtocol.handler = { request in
+            requestCount += 1
+            if requestCount == 1 {
+                XCTAssertEqual(request.url?.path, "/v1/projects/project-1/book-integrity/decision")
+                XCTAssertEqual(request.httpMethod, "PUT")
+                let body = try XCTUnwrap(requestBody(request))
+                let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                XCTAssertEqual(json["issue_key"] as? String, "missing-2")
+                XCTAssertEqual(json["decision"] as? String, "confirmed_absent")
+                return apiResponse(for: request, body: bookIntegrityJSON)
+            }
+            XCTAssertEqual(request.url?.path, "/v1/projects/project-1/book-assemblies")
+            let body = try XCTUnwrap(requestBody(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["quality"] as? String, "balanced")
+            XCTAssertEqual(json["include_ocr_text"] as? Bool, true)
+            return apiResponse(for: request, status: 201, body: bookAssemblyJSON)
+        }
+
+        let report = try await api.decideBookIntegrity(
+            projectID: "project-1",
+            issueKey: "missing-2",
+            decision: "confirmed_absent"
+        )
+        let assembly = try await api.assembleBook(
+            projectID: "project-1",
+            quality: .balanced,
+            includeOCRText: true
+        )
+
+        XCTAssertTrue(report.readyToAssemble)
+        XCTAssertEqual(assembly.bookAssemblyRevision, 2)
+        XCTAssertEqual(assembly.bookPreviousExportID, "export-previous")
+    }
+
+    func testBookSupplementIncludesPositionAndExpectedPrintedNumber() async throws {
+        let api = try makeAPI()
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/projects/project-1/book-supplements")
+            XCTAssertEqual(request.httpMethod, "POST")
+            let text = String(decoding: try XCTUnwrap(requestBody(request)), as: UTF8.self)
+            XCTAssertTrue(text.contains("name=\"insert_at\""))
+            XCTAssertTrue(text.contains("\r\n2\r\n"))
+            XCTAssertTrue(text.contains("name=\"expected_page_label\""))
+            XCTAssertTrue(text.contains("\r\niv\r\n"))
+            return apiResponse(for: request, status: 202, body: bookSupplementPageJSON)
+        }
+
+        let page = try await api.supplementBookPage(
+            projectID: "project-1",
+            data: Data([0xff, 0xd8, 0xff, 0xd9]),
+            mimeType: "image/jpeg",
+            insertAt: 2,
+            expectedPageLabel: "iv"
+        )
+
+        XCTAssertEqual(page.bookExpectedPageLabel, "iv")
+        XCTAssertEqual(page.bookSplitStatus, "supplement")
+    }
+
     func testAccountDeletionUsesAuthenticatedRequestAndSeparateSMSPurpose() async throws {
         let api = try makeAPI()
         var requestCount = 0
@@ -173,5 +236,8 @@ private func apiResponse(
 private let pageJSON = #"{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":2,"review_status":"pending","ocr_status":"ready","exam_result_version":2,"exam_confidence_band":"high","exam_recommendation":"suggest_cleanup","exam_suggestion_visible":false}"#
 private let legacyPageJSON = #"{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":2,"review_status":"pending","ocr_status":"ready"}"#
 private let bookRetakePageJSON = #"{"id":"replacement-page","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":0,"review_status":"not_required","ocr_status":"disabled","book_capture_id":"replacement-page","book_side":"left","book_split_status":"retake","book_split_confidence":null,"book_split_reason":"single_side_retake","book_dewarp_applied":null,"book_dewarp_source_score":null,"book_dewarp_output_score":null,"book_dewarp_reason":null,"book_replaced_by_page_id":null,"book_is_current":true}"#
+private let bookSupplementPageJSON = #"{"id":"supplement-page","project_id":"project-1","page_number":2,"quality_warning":null,"rotation_degrees":0,"active_result_version":0,"review_status":"not_required","ocr_status":"pending","book_split_status":"supplement","book_expected_page_label":"iv","book_is_current":true}"#
+private let bookIntegrityJSON = #"{"project_id":"project-1","pages_checked":2,"included_page_count":2,"visible_page_number_count":2,"processing_page_count":0,"blocking_issue_count":0,"ready_to_assemble":true,"issues":[]}"#
+private let bookAssemblyJSON = #"{"id":"export-2","project_id":"project-1","format":"pdf","quality":"balanced","include_ocr_text":true,"status":"ready","page_count":2,"error_code":null,"artifacts":[],"created_at":"2026-10-21T00:00:00Z","completed_at":"2026-10-21T00:01:00Z","book_assembly_signature":"signature","book_assembly_revision":2,"book_previous_export_id":"export-previous"}"#
 private let exportJSON = #"{"id":"export-1","project_id":"project-1","format":"pdf","quality":"clear","include_ocr_text":true,"status":"ready","page_count":1,"error_code":null,"artifacts":[{"id":"artifact-1","page_id":null,"sequence":1,"file_name":"scan.pdf","mime_type":"application/pdf","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size_bytes":12}],"created_at":"2026-10-21T00:00:00Z","completed_at":"2026-10-21T00:01:00Z"}"#
 private let deletionJSON = #"{"id":"deletion-1","status":"pending","requested_at":"2026-10-21T00:00:00Z","execute_after":"2026-10-28T00:00:00Z","canceled_at":null,"completed_at":null}"#

@@ -3,7 +3,7 @@
   "info": {
     "title": "SmartScan 接口",
     "description": "统一账号、权限、扫描项目、上传、处理、导出与文件生命周期接口。",
-    "version": "2026-10-21.1"
+    "version": "2026-10-21.2"
   },
   "paths": {
     "/v1/auth/account-merges": {
@@ -1125,6 +1125,256 @@
                     "$ref": "#/components/schemas/PageView"
                   },
                   "title": "Response Reorder Pages V1 Projects  Project Id  Pages Order Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/book-integrity": {
+      "get": {
+        "summary": "Get Book Integrity",
+        "operationId": "get_book_integrity_v1_projects__project_id__book_integrity_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookIntegrityReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/book-integrity/decision": {
+      "put": {
+        "summary": "Put Book Integrity Decision",
+        "operationId": "put_book_integrity_decision_v1_projects__project_id__book_integrity_decision_put",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookIntegrityDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookIntegrityReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/book-supplements": {
+      "post": {
+        "summary": "Create Book Supplement",
+        "operationId": "create_book_supplement_v1_projects__project_id__book_supplements_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_book_supplement_v1_projects__project_id__book_supplements_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/book-assemblies": {
+      "post": {
+        "summary": "Create Project Book Assembly",
+        "operationId": "create_project_book_assembly_v1_projects__project_id__book_assemblies_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookAssemblyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportView"
                 }
               }
             }
@@ -3614,6 +3864,38 @@
         ],
         "title": "Body_create_book_side_retake_v1_pages__page_id__book_retakes_post"
       },
+      "Body_create_book_supplement_v1_projects__project_id__book_supplements_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "insert_at": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Insert At"
+          },
+          "expected_page_label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Page Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "insert_at"
+        ],
+        "title": "Body_create_book_supplement_v1_projects__project_id__book_supplements_post"
+      },
       "Body_upload_page_v1_projects__project_id__pages_post": {
         "properties": {
           "file": {
@@ -3627,6 +3909,202 @@
           "file"
         ],
         "title": "Body_upload_page_v1_projects__project_id__pages_post"
+      },
+      "BookAssemblyCreate": {
+        "properties": {
+          "quality": {
+            "type": "string",
+            "enum": [
+              "clear",
+              "balanced",
+              "small"
+            ],
+            "title": "Quality",
+            "default": "balanced"
+          },
+          "include_ocr_text": {
+            "type": "boolean",
+            "title": "Include Ocr Text",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "BookAssemblyCreate"
+      },
+      "BookIntegrityDecisionRequest": {
+        "properties": {
+          "issue_key": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Issue Key"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "ignored",
+              "confirmed_absent",
+              "keep_both",
+              "exclude_duplicate",
+              "reopen"
+            ],
+            "title": "Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "issue_key",
+          "decision"
+        ],
+        "title": "BookIntegrityDecisionRequest"
+      },
+      "BookIntegrityIssueView": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "error"
+            ],
+            "title": "Severity"
+          },
+          "message_code": {
+            "type": "string",
+            "title": "Message Code"
+          },
+          "page_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Id"
+          },
+          "related_page_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Page Id"
+          },
+          "printed_page_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Printed Page Label"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "blocking": {
+            "type": "boolean",
+            "title": "Blocking"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "severity",
+          "message_code",
+          "blocking"
+        ],
+        "title": "BookIntegrityIssueView"
+      },
+      "BookIntegrityReport": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "pages_checked": {
+            "type": "integer",
+            "title": "Pages Checked"
+          },
+          "included_page_count": {
+            "type": "integer",
+            "title": "Included Page Count"
+          },
+          "visible_page_number_count": {
+            "type": "integer",
+            "title": "Visible Page Number Count"
+          },
+          "processing_page_count": {
+            "type": "integer",
+            "title": "Processing Page Count"
+          },
+          "open_issue_count": {
+            "type": "integer",
+            "title": "Open Issue Count"
+          },
+          "blocking_issue_count": {
+            "type": "integer",
+            "title": "Blocking Issue Count"
+          },
+          "ready_to_assemble": {
+            "type": "boolean",
+            "title": "Ready To Assemble"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/BookIntegrityIssueView"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "pages_checked",
+          "included_page_count",
+          "visible_page_number_count",
+          "processing_page_count",
+          "open_issue_count",
+          "blocking_issue_count",
+          "ready_to_assemble",
+          "issues",
+          "generated_at"
+        ],
+        "title": "BookIntegrityReport"
       },
       "ChunkReceipt": {
         "properties": {
@@ -3886,6 +4364,39 @@
           "processor_version": {
             "type": "string",
             "title": "Processor Version"
+          },
+          "book_assembly_signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Assembly Signature"
+          },
+          "book_assembly_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Assembly Revision"
+          },
+          "book_previous_export_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Previous Export Id"
           },
           "error_code": {
             "anyOf": [
@@ -4867,6 +5378,130 @@
             "type": "boolean",
             "title": "Book Is Current",
             "default": true
+          },
+          "book_page_number_status": {
+            "type": "string",
+            "title": "Book Page Number Status",
+            "default": "disabled"
+          },
+          "book_page_number_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Page Number Label"
+          },
+          "book_page_number_value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Page Number Value"
+          },
+          "book_page_number_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "arabic",
+                  "roman"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Page Number Kind"
+          },
+          "book_page_number_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Page Number Confidence"
+          },
+          "book_page_number_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Page Number Reason"
+          },
+          "book_page_number_result_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Page Number Result Version"
+          },
+          "book_expected_page_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Expected Page Label"
+          },
+          "book_content_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Content Fingerprint"
+          },
+          "book_fingerprint_result_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Fingerprint Result Version"
+          },
+          "book_assembly_included": {
+            "type": "boolean",
+            "title": "Book Assembly Included",
+            "default": true
+          },
+          "book_assembly_exclusion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Assembly Exclusion Reason"
           },
           "active_result": {
             "anyOf": [

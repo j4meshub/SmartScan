@@ -81,6 +81,30 @@ interface ScanApi {
 }
 
 interface WorkspaceApi {
+    @GET("v1/projects/{projectId}/book-integrity")
+    suspend fun getBookIntegrity(@Path("projectId") projectId: String): BookIntegrityReportDto
+
+    @PUT("v1/projects/{projectId}/book-integrity/decision")
+    suspend fun decideBookIntegrity(
+        @Path("projectId") projectId: String,
+        @Body request: BookIntegrityDecisionRequestDto,
+    ): BookIntegrityReportDto
+
+    @Multipart
+    @POST("v1/projects/{projectId}/book-supplements")
+    suspend fun supplementBookPage(
+        @Path("projectId") projectId: String,
+        @Part file: MultipartBody.Part,
+        @Part("insert_at") insertAt: RequestBody,
+        @Part("expected_page_label") expectedPageLabel: RequestBody,
+    ): PageDto
+
+    @POST("v1/projects/{projectId}/book-assemblies")
+    suspend fun assembleBook(
+        @Path("projectId") projectId: String,
+        @Body request: BookAssemblyRequestDto,
+    ): ExportDto
+
     @Multipart
     @POST("v1/pages/{pageId}/book-retakes")
     suspend fun retakeBookSide(
@@ -215,6 +239,18 @@ data class ExamSuggestionDismissalRequestDto(
 )
 
 @Serializable
+data class BookIntegrityDecisionRequestDto(
+    @SerialName("issue_key") val issueKey: String,
+    val decision: String,
+)
+
+@Serializable
+data class BookAssemblyRequestDto(
+    val quality: String = "balanced",
+    @SerialName("include_ocr_text") val includeOcrText: Boolean = true,
+)
+
+@Serializable
 data class ExportCreateRequestDto(
     val format: String,
     val quality: String = "balanced",
@@ -317,6 +353,43 @@ data class PageDto(
     @SerialName("book_dewarp_reason") val bookDewarpReason: String? = null,
     @SerialName("book_replaced_by_page_id") val bookReplacedByPageId: String? = null,
     @SerialName("book_is_current") val bookIsCurrent: Boolean = true,
+    @SerialName("book_page_number_status") val bookPageNumberStatus: String = "disabled",
+    @SerialName("book_page_number_label") val bookPageNumberLabel: String? = null,
+    @SerialName("book_page_number_value") val bookPageNumberValue: Int? = null,
+    @SerialName("book_page_number_kind") val bookPageNumberKind: String? = null,
+    @SerialName("book_page_number_confidence") val bookPageNumberConfidence: Double? = null,
+    @SerialName("book_page_number_reason") val bookPageNumberReason: String? = null,
+    @SerialName("book_page_number_result_version") val bookPageNumberResultVersion: Int? = null,
+    @SerialName("book_expected_page_label") val bookExpectedPageLabel: String? = null,
+    @SerialName("book_content_fingerprint") val bookContentFingerprint: String? = null,
+    @SerialName("book_fingerprint_result_version") val bookFingerprintResultVersion: Int? = null,
+    @SerialName("book_assembly_included") val bookAssemblyIncluded: Boolean = true,
+    @SerialName("book_assembly_exclusion_reason") val bookAssemblyExclusionReason: String? = null,
+)
+
+@Serializable
+data class BookIntegrityIssueDto(
+    val key: String,
+    val kind: String,
+    val severity: String,
+    @SerialName("message_code") val messageCode: String,
+    @SerialName("page_id") val pageId: String? = null,
+    @SerialName("related_page_id") val relatedPageId: String? = null,
+    @SerialName("printed_page_label") val printedPageLabel: String? = null,
+    val decision: String? = null,
+    val blocking: Boolean,
+)
+
+@Serializable
+data class BookIntegrityReportDto(
+    @SerialName("project_id") val projectId: String,
+    @SerialName("pages_checked") val pagesChecked: Int,
+    @SerialName("included_page_count") val includedPageCount: Int,
+    @SerialName("visible_page_number_count") val visiblePageNumberCount: Int,
+    @SerialName("processing_page_count") val processingPageCount: Int,
+    @SerialName("blocking_issue_count") val blockingIssueCount: Int,
+    @SerialName("ready_to_assemble") val readyToAssemble: Boolean,
+    val issues: List<BookIntegrityIssueDto>,
 )
 
 @Serializable
@@ -354,4 +427,7 @@ data class ExportDto(
     @SerialName("error_code") val errorCode: String? = null,
     val artifacts: List<ExportArtifactDto>,
     @SerialName("created_at") val createdAt: String,
+    @SerialName("book_assembly_signature") val bookAssemblySignature: String? = null,
+    @SerialName("book_assembly_revision") val bookAssemblyRevision: Int? = null,
+    @SerialName("book_previous_export_id") val bookPreviousExportId: String? = null,
 )

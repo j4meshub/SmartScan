@@ -11,6 +11,20 @@ protocol WorkspaceServicing {
     func review(pageID: String, confirmed: Bool) async throws -> WorkspacePage
     func dismissExamSuggestion(pageID: String, resultVersion: Int) async throws -> WorkspacePage
     func retakeBookSide(pageID: String, data: Data, mimeType: String) async throws -> WorkspacePage
+    func bookIntegrity(projectID: String) async throws -> WorkspaceBookIntegrityReport
+    func decideBookIntegrity(projectID: String, issueKey: String, decision: String) async throws -> WorkspaceBookIntegrityReport
+    func supplementBookPage(
+        projectID: String,
+        data: Data,
+        mimeType: String,
+        insertAt: Int,
+        expectedPageLabel: String
+    ) async throws -> WorkspacePage
+    func assembleBook(
+        projectID: String,
+        quality: WorkspaceExportQuality,
+        includeOCRText: Bool
+    ) async throws -> WorkspaceExport
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -106,6 +120,62 @@ actor WorkspaceRepository: WorkspaceServicing {
         }
         return try await withSingleRefresh {
             try await api.retakeBookSide(id: pageID, data: data, mimeType: mimeType)
+        }
+    }
+
+    func bookIntegrity(projectID: String) async throws -> WorkspaceBookIntegrityReport {
+        try await withSingleRefresh { try await api.bookIntegrity(projectID: projectID) }
+    }
+
+    func decideBookIntegrity(
+        projectID: String,
+        issueKey: String,
+        decision: String
+    ) async throws -> WorkspaceBookIntegrityReport {
+        let allowed = ["ignored", "confirmed_absent", "keep_both", "exclude_duplicate", "reopen"]
+        guard !issueKey.isEmpty, allowed.contains(decision) else {
+            throw WorkspaceError.invalidBookIntegrityDecision
+        }
+        return try await withSingleRefresh {
+            try await api.decideBookIntegrity(projectID: projectID, issueKey: issueKey, decision: decision)
+        }
+    }
+
+    func supplementBookPage(
+        projectID: String,
+        data: Data,
+        mimeType: String,
+        insertAt: Int,
+        expectedPageLabel: String
+    ) async throws -> WorkspacePage {
+        guard !data.isEmpty,
+              ["image/jpeg", "image/png", "image/webp"].contains(mimeType),
+              insertAt > 0,
+              !expectedPageLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw WorkspaceError.invalidBookSupplement
+        }
+        return try await withSingleRefresh {
+            try await api.supplementBookPage(
+                projectID: projectID,
+                data: data,
+                mimeType: mimeType,
+                insertAt: insertAt,
+                expectedPageLabel: expectedPageLabel
+            )
+        }
+    }
+
+    func assembleBook(
+        projectID: String,
+        quality: WorkspaceExportQuality,
+        includeOCRText: Bool
+    ) async throws -> WorkspaceExport {
+        try await withSingleRefresh {
+            try await api.assembleBook(
+                projectID: projectID,
+                quality: quality,
+                includeOCRText: includeOCRText
+            )
         }
     }
 

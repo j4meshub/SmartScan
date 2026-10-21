@@ -44,6 +44,41 @@ data class ScanPage(
     val bookDewarpReason: String? = null,
     val bookReplacedByPageId: String? = null,
     val bookIsCurrent: Boolean = true,
+    val bookPageNumberStatus: String = "disabled",
+    val bookPageNumberLabel: String? = null,
+    val bookPageNumberValue: Int? = null,
+    val bookPageNumberKind: String? = null,
+    val bookPageNumberConfidence: Double? = null,
+    val bookPageNumberReason: String? = null,
+    val bookPageNumberResultVersion: Int? = null,
+    val bookExpectedPageLabel: String? = null,
+    val bookContentFingerprint: String? = null,
+    val bookFingerprintResultVersion: Int? = null,
+    val bookAssemblyIncluded: Boolean = true,
+    val bookAssemblyExclusionReason: String? = null,
+)
+
+data class BookIntegrityIssue(
+    val key: String,
+    val kind: String,
+    val severity: String,
+    val messageCode: String,
+    val pageId: String?,
+    val relatedPageId: String?,
+    val printedPageLabel: String?,
+    val decision: String?,
+    val blocking: Boolean,
+)
+
+data class BookIntegrityReport(
+    val projectId: String,
+    val pagesChecked: Int,
+    val includedPageCount: Int,
+    val visiblePageNumberCount: Int,
+    val processingPageCount: Int,
+    val blockingIssueCount: Int,
+    val readyToAssemble: Boolean,
+    val issues: List<BookIntegrityIssue>,
 )
 
 data class ProcessingJob(
@@ -78,6 +113,9 @@ data class ProjectExport(
     val errorCode: String?,
     val artifacts: List<ExportArtifact>,
     val createdAt: String,
+    val bookAssemblySignature: String? = null,
+    val bookAssemblyRevision: Int? = null,
+    val bookPreviousExportId: String? = null,
 )
 
 data class DownloadedArtifact(

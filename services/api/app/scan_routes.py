@@ -14,6 +14,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     Header,
     HTTPException,
     Query,
@@ -25,7 +26,15 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from services.worker.app.book_integrity import normalize_printed_page_label
+
 from .audit import record_audit
+from .book_integrity import (
+    BookIntegrityError,
+    apply_book_integrity_decision,
+    build_book_integrity_report,
+    create_book_assembly,
+)
 from .config import get_settings
 from .database import get_db
 from .dependencies import current_user
@@ -68,6 +77,9 @@ from .project_cleanup import (
 )
 from .repositories import page_for_actor, project_for_actor, upload_for_owner, upload_view
 from .schemas import (
+    BookAssemblyCreate,
+    BookIntegrityDecisionRequest,
+    BookIntegrityReport,
     ChunkReceipt,
     ExamSuggestionDismissalRequest,
     ExportCreate,
@@ -266,6 +278,257 @@ def reorder_pages(
     record_audit(db, request, user, "reorder_pages", "project", project.id, user.id)
     db.commit()
     return [page_view(db, page) for page in ordered]
+
+
+@router.get(
+    "/v1/projects/{project_id}/book-integrity",
+    response_model=BookIntegrityReport,
+)
+def get_book_integrity(
+    project_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    project = project_for_actor(db, user, project_id)
+    if project.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "view_book_integrity",
+            "project",
+            project.id,
+            project.owner_user_id,
+        )
+        db.commit()
+    try:
+        return build_book_integrity_report(db, project)
+    except BookIntegrityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+
+
+@router.put(
+    "/v1/projects/{project_id}/book-integrity/decision",
+    response_model=BookIntegrityReport,
+)
+def put_book_integrity_decision(
+    project_id: str,
+    payload: BookIntegrityDecisionRequest,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanProject, project_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "decide_book_integrity",
+            "project",
+            project_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="project not found")
+    project = project_for_actor(db, user, project_id)
+    if project.owner_user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        report = apply_book_integrity_decision(
+            db,
+            actor=user,
+            project=project,
+            issue_key=payload.issue_key,
+            decision=payload.decision,
+        )
+        record_audit(
+            db,
+            request,
+            user,
+            "decide_book_integrity",
+            "project",
+            project.id,
+            user.id,
+        )
+        db.commit()
+        return report
+    except BookIntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+
+
+@router.post(
+    "/v1/projects/{project_id}/book-supplements",
+    response_model=PageView,
+    status_code=202,
+)
+async def create_book_supplement(
+    project_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    insert_at: int = Form(..., ge=1),
+    expected_page_label: str | None = Form(default=None, max_length=24),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanProject, project_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "supplement_book_page",
+            "project",
+            project_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="project not found")
+    project = project_for_actor(db, user, project_id)
+    if project.owner_user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+    if project.mode != "book":
+        raise HTTPException(status_code=409, detail="book_supplement_requires_book_project")
+    normalized_expected = None
+    if expected_page_label:
+        normalized = normalize_printed_page_label(expected_page_label)
+        if normalized is None:
+            raise HTTPException(status_code=422, detail="book_expected_page_label_invalid")
+        normalized_expected = normalized[0]
+    if file.content_type not in IMAGE_SUFFIXES:
+        raise HTTPException(status_code=415, detail="unsupported image type")
+    data = await file.read(settings.max_upload_bytes + 1)
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(status_code=413, detail="file too large")
+    if len(data) < 16:
+        raise HTTPException(status_code=400, detail="empty or invalid image")
+    if not valid_image_signature(file.content_type, data[:16]):
+        raise HTTPException(status_code=415, detail="file signature does not match image type")
+    pages = list(
+        db.scalars(
+            select(ScanPage)
+            .where(
+                ScanPage.project_id == project.id,
+                ScanPage.book_replaced_by_page_id.is_(None),
+            )
+            .order_by(ScanPage.page_number.desc(), ScanPage.id.desc())
+            .with_for_update()
+        )
+    )
+    if insert_at > len(pages) + 1:
+        raise HTTPException(status_code=422, detail="book_supplement_position_invalid")
+    page_id = str(uuid.uuid4())
+    relative = (
+        Path("users")
+        / user.id
+        / "originals"
+        / project.id
+        / f"{page_id}{IMAGE_SUFFIXES[file.content_type]}"
+    )
+    destination = settings.storage_root / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    incoming = destination.with_name(f".{destination.name}.incoming")
+    incoming.write_bytes(data)
+    os.replace(incoming, destination)
+    page = ScanPage(
+        id=page_id,
+        project_id=project.id,
+        owner_user_id=user.id,
+        page_number=insert_at,
+        original_path=str(relative).replace("\\", "/"),
+        original_mime_type=file.content_type,
+        sha256=hashlib.sha256(data).hexdigest(),
+        size_bytes=len(data),
+        mime_type=file.content_type,
+        book_capture_id=page_id,
+        book_side="single",
+        book_split_status="supplement",
+        book_split_reason="missing_page_supplement",
+        book_page_number_status="pending",
+        book_expected_page_label=normalized_expected,
+    )
+    try:
+        for existing in pages:
+            if existing.page_number >= insert_at:
+                existing.page_number += 1
+        db.add(page)
+        db.flush()
+        db.add(
+            ProcessingJob(
+                owner_user_id=user.id,
+                project_id=project.id,
+                page_id=page.id,
+                kind="book_supplement",
+                max_attempts=settings.job_max_attempts,
+            )
+        )
+        project.updated_at = datetime.now(UTC)
+        record_audit(
+            db,
+            request,
+            user,
+            "supplement_book_page",
+            "page",
+            page.id,
+            user.id,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        destination.unlink(missing_ok=True)
+        raise
+    db.refresh(page)
+    return page_view(db, page)
+
+
+@router.post(
+    "/v1/projects/{project_id}/book-assemblies",
+    response_model=ExportView,
+    status_code=201,
+)
+def create_project_book_assembly(
+    project_id: str,
+    payload: BookAssemblyCreate,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanProject, project_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "assemble_book",
+            "project",
+            project_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="project not found")
+    project = project_for_actor(db, user, project_id)
+    if project.owner_user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+    try:
+        export = create_book_assembly(
+            db,
+            actor=user,
+            project=project,
+            quality=payload.quality,
+            include_ocr_text=payload.include_ocr_text,
+        )
+        record_audit(db, request, user, "assemble_book", "project", project.id, user.id)
+        db.commit()
+        db.refresh(export)
+        return export
+    except BookIntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
 
 @router.get("/v1/projects/{project_id}/exports", response_model=list[ExportView])
@@ -693,6 +956,7 @@ def complete_upload(
         mime_type=upload.mime_type,
         book_capture_id=page_id if project.mode == "book" else None,
         book_split_status="pending" if project.mode == "book" else "disabled",
+        book_page_number_status="pending" if project.mode == "book" else "disabled",
     )
     db.add(page)
     db.flush()
@@ -806,6 +1070,7 @@ async def upload_page(
         mime_type=file.content_type,
         book_capture_id=page_id if project.mode == "book" else None,
         book_split_status="pending" if project.mode == "book" else "disabled",
+        book_page_number_status="pending" if project.mode == "book" else "disabled",
     )
     db.add(page)
     db.add(
@@ -891,6 +1156,8 @@ async def create_book_side_retake(
         book_side=target.book_side,
         book_split_status="retake",
         book_split_reason="single_side_retake",
+        book_page_number_status="pending",
+        book_expected_page_label=target.book_expected_page_label,
     )
     try:
         db.add(replacement)

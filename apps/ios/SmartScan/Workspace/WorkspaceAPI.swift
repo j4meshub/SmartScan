@@ -10,6 +10,20 @@ protocol SmartScanWorkspaceAPI {
     func reviewPage(id: String, confirmed: Bool) async throws -> WorkspacePage
     func dismissExamSuggestion(id: String, resultVersion: Int) async throws -> WorkspacePage
     func retakeBookSide(id: String, data: Data, mimeType: String) async throws -> WorkspacePage
+    func bookIntegrity(projectID: String) async throws -> WorkspaceBookIntegrityReport
+    func decideBookIntegrity(projectID: String, issueKey: String, decision: String) async throws -> WorkspaceBookIntegrityReport
+    func supplementBookPage(
+        projectID: String,
+        data: Data,
+        mimeType: String,
+        insertAt: Int,
+        expectedPageLabel: String
+    ) async throws -> WorkspacePage
+    func assembleBook(
+        projectID: String,
+        quality: WorkspaceExportQuality,
+        includeOCRText: Bool
+    ) async throws -> WorkspaceExport
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -104,6 +118,72 @@ extension URLSessionSmartScanAPI: SmartScanWorkspaceAPI, SmartScanAccountDeletio
         return try await execute(request)
     }
 
+    func bookIntegrity(projectID: String) async throws -> WorkspaceBookIntegrityReport {
+        try await execute(
+            makeRequest(path: "v1/projects/\(projectID)/book-integrity", method: "GET", authenticated: true)
+        )
+    }
+
+    func decideBookIntegrity(
+        projectID: String,
+        issueKey: String,
+        decision: String
+    ) async throws -> WorkspaceBookIntegrityReport {
+        var request = try makeRequest(
+            path: "v1/projects/\(projectID)/book-integrity/decision",
+            method: "PUT",
+            authenticated: true
+        )
+        request.httpBody = try JSONEncoder().encode(
+            BookIntegrityDecisionRequest(issueKey: issueKey, decision: decision)
+        )
+        return try await execute(request)
+    }
+
+    func supplementBookPage(
+        projectID: String,
+        data: Data,
+        mimeType: String,
+        insertAt: Int,
+        expectedPageLabel: String
+    ) async throws -> WorkspacePage {
+        let boundary = "SmartScan-Book-Supplement-\(UUID().uuidString)"
+        var request = try makeRequest(
+            path: "v1/projects/\(projectID)/book-supplements",
+            method: "POST",
+            authenticated: true
+        )
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = multipartBody(
+            boundary: boundary,
+            fieldName: "file",
+            fileName: "book-supplement.jpg",
+            mimeType: mimeType,
+            data: data,
+            fields: [
+                "insert_at": String(insertAt),
+                "expected_page_label": expectedPageLabel,
+            ]
+        )
+        return try await execute(request)
+    }
+
+    func assembleBook(
+        projectID: String,
+        quality: WorkspaceExportQuality,
+        includeOCRText: Bool
+    ) async throws -> WorkspaceExport {
+        var request = try makeRequest(
+            path: "v1/projects/\(projectID)/book-assemblies",
+            method: "POST",
+            authenticated: true
+        )
+        request.httpBody = try JSONEncoder().encode(
+            BookAssemblyRequest(quality: quality.rawValue, includeOCRText: includeOCRText)
+        )
+        return try await execute(request)
+    }
+
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -182,9 +262,15 @@ private func multipartBody(
     fieldName: String,
     fileName: String,
     mimeType: String,
-    data: Data
+    data: Data,
+    fields: [String: String] = [:]
 ) -> Data {
     var body = Data()
+    for (name, value) in fields.sorted(by: { $0.key < $1.key }) {
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(value)\r\n".data(using: .utf8)!)
+    }
     body.append("--\(boundary)\r\n".data(using: .utf8)!)
     body.append(
         "Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n"
@@ -194,6 +280,26 @@ private func multipartBody(
     body.append(data)
     body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
     return body
+}
+
+private struct BookIntegrityDecisionRequest: Encodable {
+    let issueKey: String
+    let decision: String
+
+    enum CodingKeys: String, CodingKey {
+        case issueKey = "issue_key"
+        case decision
+    }
+}
+
+private struct BookAssemblyRequest: Encodable {
+    let quality: String
+    let includeOCRText: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case quality
+        case includeOCRText = "include_ocr_text"
+    }
 }
 
 private struct PageOrderRequest: Encodable {

@@ -15,6 +15,7 @@ from services.api.app.job_service import claim_job_by_id
 from services.api.app.models import (
     AuditLog,
     JobStatus,
+    PageReviewStatus,
     ProcessingJob,
     Role,
     ScanExport,
@@ -324,3 +325,249 @@ def test_project_cleanup_removes_shared_original_and_all_logical_sources() -> No
         assert deleted.json()["status"] == "completed"
         assert not original.exists()
         assert all(not path.exists() for path in logical_sources)
+
+
+def supplement_page(
+    client: TestClient,
+    headers: dict[str, str],
+    project_id: str,
+    *,
+    insert_at: int,
+    expected_label: str,
+    payload: bytes | None = None,
+) -> str:
+    response = client.post(
+        f"/v1/projects/{project_id}/book-supplements",
+        data={"insert_at": str(insert_at), "expected_page_label": expected_label},
+        files={
+            "file": (
+                "supplement.jpg",
+                payload or single_page_jpeg(),
+                "image/jpeg",
+            )
+        },
+        headers=headers,
+    )
+    assert response.status_code == 202, response.text
+    assert response.json()["book_split_status"] == "supplement"
+    assert response.json()["book_expected_page_label"] == expected_label.lower()
+    return response.json()["id"]
+
+
+def set_integrity_evidence(
+    page_id: str,
+    *,
+    label: str,
+    value: int,
+    kind: str = "arabic",
+    fingerprint: str,
+) -> None:
+    with SessionLocal() as db:
+        page = db.get(ScanPage, page_id)
+        assert page is not None and page.active_result_version > 0
+        page.book_page_number_status = "ready"
+        page.book_page_number_label = label
+        page.book_page_number_value = value
+        page.book_page_number_kind = kind
+        page.book_page_number_confidence = 0.96
+        page.book_page_number_reason = "test_common_region"
+        page.book_page_number_result_version = page.active_result_version
+        page.book_content_fingerprint = fingerprint
+        page.book_fingerprint_result_version = page.active_result_version
+        page.quality_warning = None
+        page.review_status = PageReviewStatus.not_required
+        page.review_reason = None
+        db.commit()
+
+
+def test_book_missing_page_decision_supplement_and_incremental_assembly() -> None:
+    with TestClient(main.app) as client:
+        headers, _ = register(client, "book_integrity")
+        project_id = create_book_project(client, headers)
+        page_one = supplement_page(client, headers, project_id, insert_at=1, expected_label="1")
+        page_three = supplement_page(
+            client,
+            headers,
+            project_id,
+            insert_at=2,
+            expected_label="3",
+            payload=single_page_jpeg((230, 238, 245)),
+        )
+        process_project_jobs(project_id)
+        set_integrity_evidence(page_one, label="1", value=1, fingerprint="0000000000000000")
+        set_integrity_evidence(page_three, label="3", value=3, fingerprint="ffffffffffffffff")
+
+        report = client.get(f"/v1/projects/{project_id}/book-integrity", headers=headers)
+        assert report.status_code == 200, report.text
+        missing = next(
+            issue for issue in report.json()["issues"] if issue["kind"] == "missing_page"
+        )
+        assert missing["printed_page_label"] == "2"
+        assert missing["blocking"] is True
+        blocked = client.post(
+            f"/v1/projects/{project_id}/book-assemblies",
+            json={"quality": "small", "include_ocr_text": False},
+            headers=headers,
+        )
+        assert blocked.status_code == 409
+        assert blocked.json() == {"detail": "book_integrity_unresolved"}
+
+        accepted = client.put(
+            f"/v1/projects/{project_id}/book-integrity/decision",
+            json={"issue_key": missing["key"], "decision": "confirmed_absent"},
+            headers=headers,
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["ready_to_assemble"] is True
+        first = client.post(
+            f"/v1/projects/{project_id}/book-assemblies",
+            json={"quality": "small", "include_ocr_text": False},
+            headers=headers,
+        )
+        assert first.status_code == 201, first.text
+        assert first.json()["book_assembly_revision"] == 1
+        repeated = client.post(
+            f"/v1/projects/{project_id}/book-assemblies",
+            json={"quality": "small", "include_ocr_text": False},
+            headers=headers,
+        )
+        assert repeated.status_code == 201
+        assert repeated.json()["id"] == first.json()["id"]
+
+        page_two = supplement_page(
+            client,
+            headers,
+            project_id,
+            insert_at=2,
+            expected_label="2",
+            payload=single_page_jpeg((245, 235, 225)),
+        )
+        process_project_jobs(project_id)
+        set_integrity_evidence(page_two, label="2", value=2, fingerprint="0f0f0f0f0f0f0f0f")
+        refreshed = client.get(f"/v1/projects/{project_id}/book-integrity", headers=headers).json()
+        assert not any(issue["kind"] == "missing_page" for issue in refreshed["issues"])
+        assert refreshed["ready_to_assemble"] is True
+
+        second = client.post(
+            f"/v1/projects/{project_id}/book-assemblies",
+            json={"quality": "small", "include_ocr_text": False},
+            headers=headers,
+        )
+        assert second.status_code == 201, second.text
+        assert second.json()["book_assembly_revision"] == 2
+        assert second.json()["book_previous_export_id"] == first.json()["id"]
+        assert second.json()["page_count"] == 3
+
+
+def test_book_duplicate_can_be_excluded_and_reopened_without_deleting_original() -> None:
+    with TestClient(main.app) as client:
+        headers, _ = register(client, "book_duplicate")
+        project_id = create_book_project(client, headers)
+        first_id = supplement_page(client, headers, project_id, insert_at=1, expected_label="5")
+        second_id = supplement_page(client, headers, project_id, insert_at=2, expected_label="5")
+        process_project_jobs(project_id)
+        set_integrity_evidence(first_id, label="5", value=5, fingerprint="1111111111111111")
+        set_integrity_evidence(second_id, label="5", value=5, fingerprint="1111111111111111")
+
+        report = client.get(f"/v1/projects/{project_id}/book-integrity", headers=headers).json()
+        duplicate = next(issue for issue in report["issues"] if issue["kind"] == "duplicate_page")
+        excluded = client.put(
+            f"/v1/projects/{project_id}/book-integrity/decision",
+            json={"issue_key": duplicate["key"], "decision": "exclude_duplicate"},
+            headers=headers,
+        )
+        assert excluded.status_code == 200, excluded.text
+        assert excluded.json()["included_page_count"] == 1
+        assert excluded.json()["ready_to_assemble"] is True
+        pages = client.get(f"/v1/projects/{project_id}/pages", headers=headers).json()
+        second = next(page for page in pages if page["id"] == second_id)
+        assert second["book_assembly_included"] is False
+        assert second["book_assembly_exclusion_reason"] == "duplicate_page"
+        with SessionLocal() as db:
+            stored = db.get(ScanPage, second_id)
+            assert stored is not None
+            assert (main.settings.storage_root / stored.original_path).is_file()
+
+        reopened = client.put(
+            f"/v1/projects/{project_id}/book-integrity/decision",
+            json={"issue_key": duplicate["key"], "decision": "reopen"},
+            headers=headers,
+        )
+        assert reopened.status_code == 200, reopened.text
+        assert reopened.json()["blocking_issue_count"] == 1
+        assert reopened.json()["ready_to_assemble"] is False
+
+
+def test_same_printed_number_with_different_content_requires_explicit_decision() -> None:
+    with TestClient(main.app) as client:
+        headers, _ = register(client, "book_number_conflict")
+        project_id = create_book_project(client, headers)
+        first_id = supplement_page(client, headers, project_id, insert_at=1, expected_label="8")
+        second_id = supplement_page(client, headers, project_id, insert_at=2, expected_label="8")
+        process_project_jobs(project_id)
+        set_integrity_evidence(first_id, label="8", value=8, fingerprint="0000000000000000")
+        set_integrity_evidence(second_id, label="8", value=8, fingerprint="ffffffffffffffff")
+
+        report = client.get(f"/v1/projects/{project_id}/book-integrity", headers=headers).json()
+        conflict = next(issue for issue in report["issues"] if issue["kind"] == "number_conflict")
+        assert conflict["blocking"] is True
+        assert conflict["printed_page_label"] == "8"
+
+        resolved = client.put(
+            f"/v1/projects/{project_id}/book-integrity/decision",
+            json={"issue_key": conflict["key"], "decision": "keep_both"},
+            headers=headers,
+        )
+        assert resolved.status_code == 200, resolved.text
+        assert resolved.json()["ready_to_assemble"] is True
+
+
+def test_book_integrity_mutations_are_owner_only_and_denied_actions_are_audited() -> None:
+    with TestClient(main.app) as client:
+        owner_headers, owner_name = register(client, "integrity_owner")
+        attacker_headers, _ = register(client, "integrity_attacker")
+        admin_headers, admin_name = register(client, "integrity_admin")
+        with SessionLocal() as db:
+            owner = db.scalar(select(User).where(User.username == owner_name))
+            admin = db.scalar(select(User).where(User.username == admin_name))
+            assert owner is not None and admin is not None
+            owner_id = owner.id
+            admin.role = Role.admin
+            db.commit()
+        project_id = create_book_project(client, owner_headers)
+
+        assert (
+            client.get(
+                f"/v1/projects/{project_id}/book-integrity", headers=attacker_headers
+            ).status_code
+            == 404
+        )
+        admin_view = client.get(f"/v1/projects/{project_id}/book-integrity", headers=admin_headers)
+        assert admin_view.status_code == 200
+        for headers in (attacker_headers, admin_headers):
+            supplement = client.post(
+                f"/v1/projects/{project_id}/book-supplements",
+                data={"insert_at": "1", "expected_page_label": "1"},
+                files={"file": ("page.jpg", single_page_jpeg(), "image/jpeg")},
+                headers=headers,
+            )
+            assert supplement.status_code == 404
+            assembly = client.post(
+                f"/v1/projects/{project_id}/book-assemblies",
+                json={"quality": "balanced", "include_ocr_text": True},
+                headers=headers,
+            )
+            assert assembly.status_code == 404
+
+        with SessionLocal() as db:
+            denied = list(
+                db.scalars(
+                    select(AuditLog).where(
+                        AuditLog.object_id == project_id,
+                        AuditLog.result == "denied",
+                        AuditLog.action.in_({"supplement_book_page", "assemble_book"}),
+                    )
+                )
+            )
+        assert len(denied) == 4
+        assert {item.target_user_id for item in denied} == {owner_id}

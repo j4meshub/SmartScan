@@ -32,6 +32,10 @@ EXPECTED_OPERATIONS = {
     ("GET", "/v1/projects/{project_id}/pages", 200),
     ("PATCH", "/v1/projects/{project_id}/pages/order", 200),
     ("POST", "/v1/projects/{project_id}/pages", 202),
+    ("GET", "/v1/projects/{project_id}/book-integrity", 200),
+    ("PUT", "/v1/projects/{project_id}/book-integrity/decision", 200),
+    ("POST", "/v1/projects/{project_id}/book-supplements", 202),
+    ("POST", "/v1/projects/{project_id}/book-assemblies", 201),
     ("GET", "/v1/projects/{project_id}/exports", 200),
     ("POST", "/v1/projects/{project_id}/exports", 201),
     ("GET", "/v1/exports/{export_id}", 200),
@@ -100,6 +104,8 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
         "AccountDeletionView",
         "AdminAccountDeletionView",
         "AuditLogView",
+        "BookIntegrityReport",
+        "BookIntegrityIssueView",
     }.issubset(component_schemas)
     assert "securitySchemes" not in schema["components"]
     assert schema["paths"]["/v1/uploads/{upload_id}/complete"]["post"]["responses"]["202"]
@@ -129,7 +135,25 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
         "book_dewarp_reason",
         "book_replaced_by_page_id",
         "book_is_current",
+        "book_page_number_status",
+        "book_page_number_label",
+        "book_page_number_value",
+        "book_page_number_kind",
+        "book_page_number_confidence",
+        "book_page_number_reason",
+        "book_page_number_result_version",
+        "book_expected_page_label",
+        "book_content_fingerprint",
+        "book_fingerprint_result_version",
+        "book_assembly_included",
+        "book_assembly_exclusion_reason",
     }.issubset(page_properties)
+    export_properties = component_schemas["ExportView"]["properties"]
+    assert {
+        "book_assembly_signature",
+        "book_assembly_revision",
+        "book_previous_export_id",
+    }.issubset(export_properties)
     assert {
         "exam_classification_status",
         "exam_result_version",

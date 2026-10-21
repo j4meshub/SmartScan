@@ -1011,3 +1011,100 @@ def test_book_logical_page_migration_backfills_modes_and_can_downgrade(
             assert connection.scalar(text("SELECT count(*) FROM scan_pages")) == 2
     finally:
         downgraded.dispose()
+
+
+def test_book_integrity_migration_backfills_status_and_can_downgrade(tmp_path: Path) -> None:
+    url = sqlite_url(tmp_path / "book-integrity.db")
+    command.upgrade(alembic_config(url), "20261021_0019")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('integrity-user', 'integrity-user', 'hash', :phone_hmac, '+86******0020', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "f" * 64},
+        )
+        for project_id, mode, split_status in (
+            ("book-integrity-project", "book", "legacy"),
+            ("document-integrity-project", "document", "disabled"),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO scan_projects "
+                    "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) "
+                    "VALUES (:id, 'integrity-user', :id, :mode, 'ltr', CURRENT_TIMESTAMP, "
+                    "CURRENT_TIMESTAMP)"
+                ),
+                {"id": project_id, "mode": mode},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO scan_pages "
+                    "(id, project_id, owner_user_id, page_number, original_path, "
+                    "original_mime_type, sha256, size_bytes, mime_type, rotation_degrees, "
+                    "active_result_version, review_status, ocr_status, "
+                    "exam_classification_status, book_split_status, created_at, updated_at) "
+                    "VALUES (:page_id, :project_id, 'integrity-user', 1, :path, 'image/jpeg', "
+                    ":sha256, 100, 'image/jpeg', 0, 0, 'not_required', 'disabled', 'disabled', "
+                    ":split_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "page_id": f"{mode}-integrity-page",
+                    "project_id": project_id,
+                    "path": f"users/integrity-user/originals/{mode}.jpg",
+                    "sha256": ("1" if mode == "book" else "2") * 64,
+                    "split_status": split_status,
+                },
+            )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        schema = inspect(migrated)
+        assert "book_integrity_decisions" in schema.get_table_names()
+        page_columns = {item["name"] for item in schema.get_columns("scan_pages")}
+        assert {
+            "book_page_number_status",
+            "book_page_number_label",
+            "book_content_fingerprint",
+            "book_assembly_included",
+        }.issubset(page_columns)
+        export_columns = {item["name"] for item in schema.get_columns("scan_exports")}
+        assert {
+            "book_assembly_signature",
+            "book_assembly_revision",
+            "book_previous_export_id",
+        }.issubset(export_columns)
+        with migrated.connect() as connection:
+            statuses = dict(
+                connection.execute(
+                    text("SELECT id, book_page_number_status FROM scan_pages ORDER BY id")
+                ).all()
+            )
+            included = connection.scalar(
+                text("SELECT count(*) FROM scan_pages WHERE book_assembly_included = 1")
+            )
+        assert statuses == {
+            "book-integrity-page": "legacy",
+            "document-integrity-page": "disabled",
+        }
+        assert included == 2
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261021_0019")
+    downgraded = create_engine(url)
+    try:
+        schema = inspect(downgraded)
+        assert "book_integrity_decisions" not in schema.get_table_names()
+        page_columns = {item["name"] for item in schema.get_columns("scan_pages")}
+        assert "book_page_number_status" not in page_columns
+        export_columns = {item["name"] for item in schema.get_columns("scan_exports")}
+        assert "book_assembly_signature" not in export_columns
+        with downgraded.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM scan_pages")) == 2
+    finally:
+        downgraded.dispose()

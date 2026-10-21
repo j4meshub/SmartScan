@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartscan.core.model.DownloadedArtifact
+import com.smartscan.core.model.BookIntegrityIssue
+import com.smartscan.core.model.BookIntegrityReport
 import com.smartscan.core.model.ProjectExport
 import com.smartscan.core.model.ScanPage
 import com.smartscan.core.model.ScanProject
@@ -68,6 +70,7 @@ fun ProjectWorkspaceScreen(
     var pages by remember { mutableStateOf<List<ScanPage>>(emptyList()) }
     var selectedPage by remember { mutableStateOf<ScanPage?>(null) }
     var currentExport by remember { mutableStateOf<ProjectExport?>(null) }
+    var bookIntegrity by remember { mutableStateOf<BookIntegrityReport?>(null) }
     var loading by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
 
@@ -91,6 +94,14 @@ fun ProjectWorkspaceScreen(
                 is ApiResult.Success -> pages = result.value
                 is ApiResult.Failure -> failed = true
             }
+            if (project.mode == "book") {
+                when (val result = repository.getBookIntegrity(project.id)) {
+                    is ApiResult.Success -> bookIntegrity = result.value
+                    is ApiResult.Failure -> failed = true
+                }
+            } else {
+                bookIntegrity = null
+            }
             loading = false
         }
     }
@@ -107,6 +118,7 @@ fun ProjectWorkspaceScreen(
                 selectedProject = it
                 selectedPage = null
                 currentExport = null
+                bookIntegrity = null
                 loadPages(it)
             },
         )
@@ -115,6 +127,7 @@ fun ProjectWorkspaceScreen(
             pages = pages,
             selectedPage = selectedPage,
             currentExport = currentExport,
+            bookIntegrity = bookIntegrity,
             previewDirectory = previewDirectory,
             busy = loading,
             failed = failed,
@@ -122,6 +135,7 @@ fun ProjectWorkspaceScreen(
                 selectedProject = null
                 selectedPage = null
                 currentExport = null
+                bookIntegrity = null
             },
             onRefresh = { loadPages(requireNotNull(selectedProject)) },
             onSelectPage = { selectedPage = it },
@@ -140,6 +154,9 @@ fun ProjectWorkspaceScreen(
                 pages = pages.map { if (it.id == updated.id) updated else it }.sortedBy { it.pageNumber }
                 selectedPage = updated
             },
+            onBookIntegrityUpdated = { bookIntegrity = it },
+            onBookSupplemented = { loadPages(requireNotNull(selectedProject)) },
+            onBookAssembled = { currentExport = it },
             onCreateExport = { format, quality, includeOcr ->
                 scope.launch {
                     loading = true
@@ -205,11 +222,165 @@ private fun ProjectList(
 }
 
 @Composable
+private fun BookIntegrityPanel(
+    project: ScanProject,
+    report: BookIntegrityReport?,
+    pages: List<ScanPage>,
+    busy: Boolean,
+    repository: ProjectRepository,
+    onReportUpdated: (BookIntegrityReport) -> Unit,
+    onSupplemented: () -> Unit,
+    onAssembled: (ProjectExport) -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var pendingSupplement by remember { mutableStateOf<BookIntegrityIssue?>(null) }
+    var actionFailed by remember { mutableStateOf(false) }
+    var actionBusy by remember { mutableStateOf(false) }
+    val supplementLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val issue = pendingSupplement
+        if (uri != null && issue != null) scope.launch {
+            actionBusy = true
+            actionFailed = false
+            val temporary = File.createTempFile("book-supplement-", ".image", context.cacheDir)
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    temporary.outputStream().use { output -> input.copyTo(output) }
+                } ?: error("book_supplement_stream_unavailable")
+                val insertAt = pages.firstOrNull { it.id == issue.relatedPageId }?.pageNumber
+                    ?: (pages.size + 1)
+                val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+                when (
+                    repository.supplementBookPage(
+                        project.id,
+                        temporary,
+                        mimeType,
+                        insertAt,
+                        requireNotNull(issue.printedPageLabel),
+                    )
+                ) {
+                    is ApiResult.Success -> onSupplemented()
+                    is ApiResult.Failure -> actionFailed = true
+                }
+            } catch (_: Exception) {
+                actionFailed = true
+            } finally {
+                temporary.delete()
+                pendingSupplement = null
+                actionBusy = false
+            }
+        }
+    }
+
+    fun decide(issue: BookIntegrityIssue, decision: String) {
+        scope.launch {
+            actionBusy = true
+            actionFailed = false
+            when (val result = repository.decideBookIntegrity(project.id, issue.key, decision)) {
+                is ApiResult.Success -> onReportUpdated(result.value)
+                is ApiResult.Failure -> actionFailed = true
+            }
+            actionBusy = false
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.workspace_book_integrity), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        if (report == null) {
+            Text(stringResource(R.string.workspace_busy))
+            return@Column
+        }
+        Text(
+            if (report.readyToAssemble) stringResource(R.string.workspace_book_ready)
+            else stringResource(R.string.workspace_book_blocking, report.blockingIssueCount),
+        )
+        report.issues.forEach { issue ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(bookIssueText(issue), fontWeight = FontWeight.Bold)
+                    if (issue.decision != null) {
+                        Text(stringResource(R.string.workspace_book_handled, issue.decision))
+                        TextButton(onClick = { decide(issue, "reopen") }, enabled = !busy && !actionBusy) {
+                            Text(stringResource(R.string.workspace_book_reopen))
+                        }
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (issue.kind == "missing_page" && issue.printedPageLabel != null) {
+                                TextButton(
+                                    onClick = {
+                                        pendingSupplement = issue
+                                        supplementLauncher.launch("image/*")
+                                    },
+                                    enabled = !busy && !actionBusy,
+                                ) { Text(stringResource(R.string.workspace_book_supplement)) }
+                                TextButton(
+                                    onClick = { decide(issue, "confirmed_absent") },
+                                    enabled = !busy && !actionBusy,
+                                ) { Text(stringResource(R.string.workspace_book_confirm_absent)) }
+                            } else if (issue.kind in setOf("duplicate_page", "number_conflict")) {
+                                TextButton(
+                                    onClick = { decide(issue, "exclude_duplicate") },
+                                    enabled = !busy && !actionBusy,
+                                ) { Text(stringResource(R.string.workspace_book_exclude_duplicate)) }
+                                TextButton(
+                                    onClick = { decide(issue, "keep_both") },
+                                    enabled = !busy && !actionBusy,
+                                ) { Text(stringResource(R.string.workspace_book_keep_both)) }
+                            }
+                            TextButton(
+                                onClick = { decide(issue, "ignored") },
+                                enabled = !busy && !actionBusy,
+                            ) { Text(stringResource(R.string.workspace_book_ignore)) }
+                        }
+                    }
+                }
+            }
+        }
+        Button(
+            onClick = {
+                scope.launch {
+                    actionBusy = true
+                    actionFailed = false
+                    when (val result = repository.assembleBook(project.id, "balanced", true)) {
+                        is ApiResult.Success -> onAssembled(result.value)
+                        is ApiResult.Failure -> actionFailed = true
+                    }
+                    actionBusy = false
+                }
+            },
+            enabled = report.readyToAssemble && !busy && !actionBusy,
+        ) { Text(stringResource(R.string.workspace_book_complete)) }
+        if (actionFailed) {
+            Text(stringResource(R.string.workspace_action_failed), color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+@Composable
+private fun bookIssueText(issue: BookIntegrityIssue): String {
+    val label = stringResource(
+        when (issue.kind) {
+            "missing_page" -> R.string.workspace_book_issue_missing
+            "duplicate_page" -> R.string.workspace_book_issue_duplicate
+            "number_conflict" -> R.string.workspace_book_issue_conflict
+            "number_order_conflict" -> R.string.workspace_book_issue_order
+            "number_gap_uncertain" -> R.string.workspace_book_issue_gap
+            "number_ambiguous" -> R.string.workspace_book_issue_ambiguous
+            "expected_number_mismatch" -> R.string.workspace_book_issue_expected
+            "missing_side" -> R.string.workspace_book_issue_side
+            else -> R.string.workspace_book_issue_quality
+        },
+    )
+    return issue.printedPageLabel?.let { "$label · $it" } ?: label
+}
+
+@Composable
 private fun ProjectDetail(
     project: ScanProject,
     pages: List<ScanPage>,
     selectedPage: ScanPage?,
     currentExport: ProjectExport?,
+    bookIntegrity: BookIntegrityReport?,
     previewDirectory: File,
     busy: Boolean,
     failed: Boolean,
@@ -218,6 +389,9 @@ private fun ProjectDetail(
     onSelectPage: (ScanPage) -> Unit,
     onMove: (ScanPage, Int) -> Unit,
     onPageUpdated: (ScanPage) -> Unit,
+    onBookIntegrityUpdated: (BookIntegrityReport) -> Unit,
+    onBookSupplemented: () -> Unit,
+    onBookAssembled: (ProjectExport) -> Unit,
     onCreateExport: (String, String, Boolean) -> Unit,
     onShareArtifact: (com.smartscan.core.model.ExportArtifact) -> Unit,
     repository: ProjectRepository,
@@ -252,6 +426,19 @@ private fun ProjectDetail(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                    page.bookPageNumberLabel?.let { label ->
+                        Text(
+                            stringResource(R.string.workspace_book_printed_page, label),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (!page.bookAssemblyIncluded) {
+                        Text(
+                            stringResource(R.string.workspace_book_excluded),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     Text("${page.reviewStatus} · ${page.ocrStatus}", style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TextButton(onClick = { onMove(page, -1) }, enabled = page.pageNumber > 1 && !busy) {
@@ -269,6 +456,21 @@ private fun ProjectDetail(
             item {
                 HorizontalDivider()
                 PageEditor(page, previewDirectory, repository, busy, onPageUpdated)
+            }
+        }
+        if (project.mode == "book") {
+            item {
+                HorizontalDivider()
+                BookIntegrityPanel(
+                    project = project,
+                    report = bookIntegrity,
+                    pages = pages,
+                    busy = busy,
+                    repository = repository,
+                    onReportUpdated = onBookIntegrityUpdated,
+                    onSupplemented = onBookSupplemented,
+                    onAssembled = onBookAssembled,
+                )
             }
         }
         item {

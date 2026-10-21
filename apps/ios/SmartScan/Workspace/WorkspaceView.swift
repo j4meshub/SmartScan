@@ -84,6 +84,16 @@ private struct ProjectWorkspaceView: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
+                                if let printedPage = page.bookPageNumberLabel {
+                                    Text(String(format: String(localized: "Printed page %@"), printedPage))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if page.bookAssemblyIncluded == false {
+                                    Text(String(localized: "Excluded from book assembly"))
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
+                                }
                                 Text(pageSummary(page))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -100,6 +110,30 @@ private struct ProjectWorkspaceView: View {
                             .disabled(store.busy || page.pageNumber >= store.pages.count)
                         }
                         .buttonStyle(.borderless)
+                    }
+                }
+            }
+
+            if project.mode == "book" {
+                Section(String(localized: "Page numbers and integrity")) {
+                    if let report = store.bookIntegrity {
+                        Text(
+                            report.readyToAssemble
+                                ? String(localized: "The book is ready to assemble.")
+                                : String(
+                                    format: String(localized: "%d blocking issues require attention."),
+                                    report.blockingIssueCount
+                                )
+                        )
+                        ForEach(report.issues) { issue in
+                            BookIntegrityIssueRow(issue: issue, pages: store.pages, store: store)
+                        }
+                        Button(String(localized: "Complete book")) {
+                            Task { await store.assembleBook(quality: exportQuality, includeOCRText: true) }
+                        }
+                        .disabled(store.busy || !report.readyToAssemble)
+                    } else {
+                        ProgressView()
                     }
                 }
             }
@@ -225,6 +259,80 @@ private struct ProjectWorkspaceView: View {
         case "legacy": return String(localized: "Legacy result")
         default: return String(localized: "Pending")
         }
+    }
+}
+
+private struct BookIntegrityIssueRow: View {
+    let issue: WorkspaceBookIntegrityIssue
+    let pages: [WorkspacePage]
+    @ObservedObject var store: WorkspaceStore
+    @State private var supplementItem: PhotosPickerItem?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(issueText).font(.headline)
+            if let decision = issue.decision {
+                Text(String(format: String(localized: "Handled: %@"), decision))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button(String(localized: "Reopen")) {
+                    Task { await store.decideBookIntegrity(issueKey: issue.key, decision: "reopen") }
+                }
+            } else {
+                HStack {
+                    if issue.kind == "missing_page", issue.printedPageLabel != nil {
+                        PhotosPicker(selection: $supplementItem, matching: .images) {
+                            Text(String(localized: "Supplement page"))
+                        }
+                        Button(String(localized: "Confirm page does not exist")) {
+                            decide("confirmed_absent")
+                        }
+                    } else if ["duplicate_page", "number_conflict"].contains(issue.kind) {
+                        Button(String(localized: "Exclude duplicate")) { decide("exclude_duplicate") }
+                        Button(String(localized: "Keep both")) { decide("keep_both") }
+                    }
+                    Button(String(localized: "Ignore")) { decide("ignored") }
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .onChange(of: supplementItem) { _, item in
+            guard let item, let label = issue.printedPageLabel else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    let insertAt = pages.first(where: { $0.id == issue.relatedPageID })?.pageNumber
+                        ?? (pages.count + 1)
+                    await store.supplementBookPage(
+                        data: data,
+                        mimeType: "image/jpeg",
+                        insertAt: insertAt,
+                        expectedPageLabel: label
+                    )
+                }
+                supplementItem = nil
+            }
+        }
+    }
+
+    private var issueText: String {
+        let text: String
+        switch issue.kind {
+        case "missing_page": text = String(localized: "Missing printed page")
+        case "duplicate_page": text = String(localized: "Possible duplicate page")
+        case "number_conflict": text = String(localized: "Page number conflict")
+        case "number_order_conflict": text = String(localized: "Page number order conflict")
+        case "number_gap_uncertain": text = String(localized: "Large page number gap")
+        case "number_ambiguous": text = String(localized: "Ambiguous page number")
+        case "expected_number_mismatch": text = String(localized: "Supplement page number mismatch")
+        case "missing_side": text = String(localized: "A side is missing")
+        default: text = String(localized: "Page quality requires review")
+        }
+        if let label = issue.printedPageLabel { return "\(text) · \(label)" }
+        return text
+    }
+
+    private func decide(_ decision: String) {
+        Task { await store.decideBookIntegrity(issueKey: issue.key, decision: decision) }
     }
 }
 

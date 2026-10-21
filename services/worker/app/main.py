@@ -35,6 +35,7 @@ from services.api.app.page_service import save_page_result
 from services.api.app.project_cleanup import process_next_project_cleanup
 from services.api.app.upload_cleanup import process_next_upload_cleanup
 from services.worker.app.book import BookSplitResult, LogicalBookPage, split_book_spread
+from services.worker.app.book_integrity import extract_printed_page_number, image_dhash
 from services.worker.app.exam import (
     ExamClassificationResult,
     LightweightExamClassifier,
@@ -335,6 +336,14 @@ def process(
                 explicit_exam_mode=job_kind == "exam",
                 model=exam_model,
             )
+        printed_page_number = None
+        book_fingerprint = None
+        if job_kind in {"book", "book_logical", "book_retake", "book_supplement"}:
+            printed_page_number = extract_printed_page_number(
+                analysis,
+                minimum_confidence=settings.ocr_min_confidence,
+            )
+            book_fingerprint = image_dhash(rendered)
         if book_logical_images:
             assert (
                 book_capture_id is not None and owner_user_id is not None and project_id is not None
@@ -454,12 +463,12 @@ def process(
                 image=rendered,
                 result_type=(
                     "book_logical"
-                    if job_kind in {"book", "book_logical", "book_retake"}
+                    if job_kind in {"book", "book_logical", "book_retake", "book_supplement"}
                     else "baseline"
                 ),
                 processor_version=(
-                    "book-split-v1"
-                    if job_kind in {"book", "book_logical", "book_retake"}
+                    "book-integrity-v1"
+                    if job_kind in {"book", "book_logical", "book_retake", "book_supplement"}
                     else "baseline-v2"
                 ),
                 rotation_degrees=final_rotation,
@@ -490,6 +499,16 @@ def process(
                 page.ocr_title_candidate = None
                 page.ocr_error_code = None
                 page.ocr_updated_at = now
+            if printed_page_number is not None and book_fingerprint is not None:
+                page.book_page_number_status = printed_page_number.status
+                page.book_page_number_label = printed_page_number.label
+                page.book_page_number_value = printed_page_number.value
+                page.book_page_number_kind = printed_page_number.kind
+                page.book_page_number_confidence = printed_page_number.confidence
+                page.book_page_number_reason = printed_page_number.reason
+                page.book_page_number_result_version = result.version
+                page.book_content_fingerprint = book_fingerprint
+                page.book_fingerprint_result_version = result.version
             if exam_classification is not None:
                 page.exam_classification_status = "ready"
                 page.exam_result_version = result.version

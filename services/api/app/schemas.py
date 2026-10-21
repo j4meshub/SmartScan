@@ -279,6 +279,18 @@ class PageView(BaseModel):
     book_dewarp_reason: str | None = None
     book_replaced_by_page_id: str | None = None
     book_is_current: bool = True
+    book_page_number_status: str = "disabled"
+    book_page_number_label: str | None = None
+    book_page_number_value: int | None = None
+    book_page_number_kind: Literal["arabic", "roman"] | None = None
+    book_page_number_confidence: float | None = None
+    book_page_number_reason: str | None = None
+    book_page_number_result_version: int | None = None
+    book_expected_page_label: str | None = None
+    book_content_fingerprint: str | None = None
+    book_fingerprint_result_version: int | None = None
+    book_assembly_included: bool = True
+    book_assembly_exclusion_reason: str | None = None
     active_result: PageResultView | None
     created_at: datetime
     updated_at: datetime
@@ -316,6 +328,42 @@ class PageReviewUpdate(BaseModel):
 class ExamSuggestionDismissalRequest(BaseModel):
     result_version: int = Field(ge=1)
     reason: str | None = Field(default=None, max_length=160)
+
+
+class BookIntegrityIssueView(BaseModel):
+    key: str
+    kind: str
+    severity: Literal["warning", "error"]
+    message_code: str
+    page_id: str | None = None
+    related_page_id: str | None = None
+    printed_page_label: str | None = None
+    decision: str | None = None
+    blocking: bool
+    details: dict[str, object] = Field(default_factory=dict)
+
+
+class BookIntegrityReport(BaseModel):
+    project_id: str
+    pages_checked: int
+    included_page_count: int
+    visible_page_number_count: int
+    processing_page_count: int
+    open_issue_count: int
+    blocking_issue_count: int
+    ready_to_assemble: bool
+    issues: list[BookIntegrityIssueView]
+    generated_at: datetime
+
+
+class BookIntegrityDecisionRequest(BaseModel):
+    issue_key: str = Field(min_length=1, max_length=160)
+    decision: Literal["ignored", "confirmed_absent", "keep_both", "exclude_duplicate", "reopen"]
+
+
+class BookAssemblyCreate(BaseModel):
+    quality: Literal["clear", "balanced", "small"] = "balanced"
+    include_ocr_text: bool = True
 
 
 class UploadCreate(BaseModel):
@@ -407,6 +455,9 @@ class ExportView(BaseModel):
     ocr_pages_used: int
     base_file_name: str
     processor_version: str
+    book_assembly_signature: str | None = None
+    book_assembly_revision: int | None = None
+    book_previous_export_id: str | None = None
     error_code: str | None
     artifacts: list[ExportArtifactView]
     created_at: datetime

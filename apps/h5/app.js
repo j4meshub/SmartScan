@@ -1,6 +1,7 @@
 import {AuthClient} from "./auth-client.js";
 import {analyzeBookLuma, initialBookAutoCaptureState, lumaFromImageData, reduceBookAutoCapture} from "./book-auto-capture.js";
 import {bindCameraLifecycle, cameraBlobToFile, captureCameraPhoto, openEnvironmentCamera, stopCamera} from "./camera.js";
+import {integrityDecisionOptions, integrityIssueLabel, pageNumberBadge, supplementDefaults} from "./book-integrity.js";
 import {copy, editorCopy} from "./i18n.js";
 import {bookSideLabel, canDismissExamSuggestion, canRetakeBookSide, defaultCorners, examSuggestionPrompt, filterPreview, movePage, qualityPrompt, updateCorner} from "./page-editor.js";
 import {downloadBlob, exportQualityLabel, exportStatusLabel, jobKindLabel, jobStatusLabel, projectJobs, shareOrDownload, shouldPollJobs} from "./project-files.js";
@@ -31,12 +32,14 @@ let draggedCorner = null;
 let editorJobs = [];
 let editorExports = [];
 let editorArtifacts = [];
+let editorBookIntegrity = null;
+let pendingBookSupplement = null;
 let editorPollTimer = null;
 let restoredProjectId = new URLSearchParams(location.hash.slice(1)).get("project");
 let preserveEditorRestore = false;
 const $ = selector => document.querySelector(selector);
 function t(key){ return copy[locale][key] || key; }
-function renderLocale(){ document.documentElement.lang=locale; document.querySelectorAll("[data-i18n]").forEach(el=>el.textContent=t(el.dataset.i18n)); document.querySelectorAll("[data-editor-i18n]").forEach(el=>el.textContent=editorCopy[locale][el.dataset.editorI18n]); document.querySelectorAll("[data-i18n-aria-label]").forEach(el=>el.setAttribute("aria-label",t(el.dataset.i18nAriaLabel))); document.querySelectorAll("[data-i18n-alt]").forEach(el=>el.setAttribute("alt",t(el.dataset.i18nAlt))); renderBookAutoStatus(); if(editorProject){ if(editorIndex>=0) renderEditorState(); renderProjectFiles(); } }
+function renderLocale(){ document.documentElement.lang=locale; document.querySelectorAll("[data-i18n]").forEach(el=>el.textContent=t(el.dataset.i18n)); document.querySelectorAll("[data-editor-i18n]").forEach(el=>el.textContent=editorCopy[locale][el.dataset.editorI18n]); document.querySelectorAll("[data-i18n-aria-label]").forEach(el=>el.setAttribute("aria-label",t(el.dataset.i18nAriaLabel))); document.querySelectorAll("[data-i18n-alt]").forEach(el=>el.setAttribute("alt",t(el.dataset.i18nAlt))); renderBookAutoStatus(); if(editorProject){ if(editorIndex>=0) renderEditorState(); renderProjectFiles(); renderBookIntegrity(); } }
 function browserDeviceName(){ const platform=navigator.userAgentData?.platform||navigator.platform||"Web"; return `SmartScan H5 · ${platform}`.slice(0,100); }
 const auth=new AuthClient({api:API,fetchImpl:fetch,sessionStorage,deviceStorage:localStorage,deviceName:browserDeviceName(),onAuthLost:()=>{ showAuth(); $("#authMessage").textContent=locale==="zh-CN"?"登录已失效，请重新登录。":"Your session expired. Please sign in again."; }});
 function localizedError(error){ const messages={"invalid credentials":["用户名或密码错误。","Incorrect username or password."],account_unavailable:["账号当前不可用。","This account is unavailable."],wecom_disabled:["企业微信登录尚未配置。","WeCom sign-in is not configured."],wecom_identity_conflict:["账号身份存在冲突，请联系管理员处理。","This identity needs administrator review."],wecom_intent_invalid:["登录状态已失效，请重新发起企业微信登录。","The sign-in state expired. Start WeCom sign-in again."],sms_provider_disabled:["短信服务尚未配置。","SMS service is not configured."],sms_challenge_invalid:["验证码无效，请重新获取。","The SMS code is invalid. Request a new one."],sms_challenge_expired:["验证码已过期，请重新获取。","The SMS code expired. Request a new one."],refresh_token_replayed:["会话存在异常，所有令牌已撤销，请重新登录。","The session was revoked. Please sign in again."],camera_insecure_context:["实时相机需要 HTTPS，请改用系统相机或选择文件。","Live camera requires HTTPS. Use the system camera or choose a file."],camera_not_supported:["当前浏览器不支持实时相机，请使用系统相机。","This browser does not support live camera. Use the system camera."],camera_permission_denied:["相机权限被拒绝，可在浏览器设置中允许或使用系统相机。","Camera permission was denied. Allow it in browser settings or use the system camera."],camera_not_found:["未找到可用相机，请使用系统相机或选择文件。","No camera was found. Use the system camera or choose a file."],camera_in_use:["相机正被其他应用占用，请关闭后重试或使用系统相机。","The camera is in use. Close the other app or use the system camera."],camera_open_failed:["实时相机打开失败，请使用系统相机或选择文件。","Live camera could not open. Use the system camera or choose a file."],camera_capture_failed:["拍摄失败，请重试或使用系统相机。","Capture failed. Try again or use the system camera."],camera_frame_unavailable:["相机画面尚未就绪，请重试。","The camera frame is not ready. Try again."]}; const pair=messages[error.message]; return pair?pair[locale==="zh-CN"?0:1]:error.message; }
@@ -44,7 +47,7 @@ async function request(path,options={}){ return auth.request(path,options); }
 function showAuth(){ if(editorProject){ restoredProjectId=editorProject.id; preserveEditorRestore=true; if($("#editorDialog").open) $("#editorDialog").close(); } $("#authView").classList.remove("hidden"); $("#homeView").classList.add("hidden"); $(".bottom-nav").classList.add("hidden"); $("#logoutButton").classList.add("hidden"); $("#loginForm").classList.remove("hidden"); $("#wecomActions").classList.remove("hidden"); $("#phoneBindingForm").classList.add("hidden"); }
 function showPhoneBinding(ticket){ bindingTicket=ticket; bindingChallengeId=null; $("#authMessage").textContent=""; $("#bindingMessage").textContent=""; $("#authView").classList.remove("hidden"); $("#homeView").classList.add("hidden"); $(".bottom-nav").classList.add("hidden"); $("#logoutButton").classList.add("hidden"); $("#loginForm").classList.add("hidden"); $("#wecomActions").classList.add("hidden"); $("#phoneBindingForm").classList.remove("hidden"); }
 function showHome(){ $("#authView").classList.add("hidden"); $("#homeView").classList.remove("hidden"); $(".bottom-nav").classList.remove("hidden"); $("#logoutButton").classList.remove("hidden"); loadProjects(); }
-async function loadProjects(){ try{ const projects=await request("/v1/projects"); const list=$("#projectList"); if(!projects.length){ list.innerHTML=`<div class="empty-state"><span>⌁</span><b>${t("empty")}</b><small>${t("emptyHint")}</small></div>`; return; } list.innerHTML=projects.map(p=>`<button class="project" type="button" data-project-id="${p.id}"><div class="project-top"><span class="project-icon"></span><small>${t(p.mode==="document"?"smartScan":p.mode)}</small></div><div><h3>${escapeHtml(p.title)}</h3><small>${new Date(p.updated_at).toLocaleDateString(locale)}</small></div></button>`).join(""); if(restoredProjectId){ const restored=projects.find(project=>project.id===restoredProjectId); restoredProjectId=null; if(restored) openProjectEditor(restored.id,restored.title); } }catch(error){ $("#projectList").innerHTML=`<div class="empty-state"><b>${escapeHtml(localizedError(error))}</b></div>`; } }
+async function loadProjects(){ try{ const projects=await request("/v1/projects"); const list=$("#projectList"); if(!projects.length){ list.innerHTML=`<div class="empty-state"><span>⌁</span><b>${t("empty")}</b><small>${t("emptyHint")}</small></div>`; return; } list.innerHTML=projects.map(p=>`<button class="project" type="button" data-project-id="${p.id}" data-project-mode="${p.mode}"><div class="project-top"><span class="project-icon"></span><small>${t(p.mode==="document"?"smartScan":p.mode)}</small></div><div><h3>${escapeHtml(p.title)}</h3><small>${new Date(p.updated_at).toLocaleDateString(locale)}</small></div></button>`).join(""); if(restoredProjectId){ const restored=projects.find(project=>project.id===restoredProjectId); restoredProjectId=null; if(restored) openProjectEditor(restored.id,restored.title,restored.mode); } }catch(error){ $("#projectList").innerHTML=`<div class="empty-state"><b>${escapeHtml(localizedError(error))}</b></div>`; } }
 function escapeHtml(value){ const node=document.createElement("div"); node.textContent=value; return node.innerHTML; }
 
 function clearEditorImage(){ if(editorImageUrl) URL.revokeObjectURL(editorImageUrl); editorImageUrl=null; $("#editorImage").removeAttribute("src"); }
@@ -65,6 +68,7 @@ function renderEditorState(){
   document.querySelectorAll("[data-page-filter]").forEach(button=>button.classList.toggle("active",button.dataset.pageFilter===editorFilter));
   $("#editorImage").style.filter=filterPreview(editorFilter);
   renderEditorCorners();
+  if(editorProject?.mode==="book") renderBookIntegrity();
 }
 function formatBytes(size){ if(size<1024) return `${size} B`; if(size<1024*1024) return `${(size/1024).toFixed(1)} KB`; return `${(size/1024/1024).toFixed(1)} MB`; }
 function renderProjectFiles(){
@@ -75,6 +79,26 @@ function renderProjectFiles(){
     return `<article class="export-card"><div><b>${item.format.toUpperCase()} · ${escapeHtml(exportQualityLabel(item.quality,locale))}</b><small> · ${escapeHtml(exportStatusLabel(item.status,locale))} · ${new Date(item.created_at).toLocaleString(locale)}</small></div>${artifacts}</article>`;
   }).join(""):`<div class="empty-state"><small>${editorCopy[locale].noExports}</small></div>`;
 }
+function bookDecisionLabel(action){ return editorCopy[locale][{ignored:"bookIgnore",confirmed_absent:"bookConfirmAbsent",keep_both:"bookKeepBoth",exclude_duplicate:"bookExcludeDuplicate",reopen:"bookReopen"}[action]]||action; }
+function renderBookIntegrity(){
+  const section=$("#bookIntegrity");
+  const visible=editorProject?.mode==="book";
+  section.classList.toggle("hidden",!visible);
+  if(!visible) return;
+  const summary=$("#bookIntegritySummary"),list=$("#bookIntegrityList"),button=$("#completeBook");
+  if(!editorBookIntegrity){ summary.textContent=editorCopy[locale].bookIntegrityLoading; list.innerHTML=""; button.disabled=true; return; }
+  summary.textContent=editorBookIntegrity.ready_to_assemble
+    ?editorCopy[locale].bookReady
+    :`${editorCopy[locale].bookNeedsReview} ${editorBookIntegrity.blocking_issue_count}`;
+  list.innerHTML=editorBookIntegrity.issues.length?editorBookIntegrity.issues.map((issue,index)=>{
+    const actions=integrityDecisionOptions(issue).map(action=>`<button class="secondary" type="button" data-book-decision-index="${index}" data-book-decision="${action}">${escapeHtml(bookDecisionLabel(action))}</button>`).join("");
+    const supplement=issue.kind==="missing_page"&&!issue.decision?`<button class="secondary" type="button" data-book-supplement-index="${index}">${editorCopy[locale].bookSupplement}</button>`:"";
+    return `<article class="export-card"><div><b>${escapeHtml(integrityIssueLabel(issue,locale))}</b><br><small>${issue.blocking?editorCopy[locale].bookBlocking:editorCopy[locale].bookHandled}</small></div><div class="artifact-actions">${supplement}${actions}</div></article>`;
+  }).join(""):`<div class="empty-state"><small>${editorCopy[locale].bookNoIssues}</small></div>`;
+  button.disabled=!editorBookIntegrity.ready_to_assemble;
+  const page=editorPages[editorIndex];
+  $("#bookPageNumber").textContent=page?pageNumberBadge(page,locale):"";
+}
 function stopProjectFilePolling(){ if(editorPollTimer!==null) clearTimeout(editorPollTimer); editorPollTimer=null; }
 function scheduleProjectFilePolling(){ stopProjectFilePolling(); if(editorProject&&shouldPollJobs(editorJobs)) editorPollTimer=setTimeout(()=>loadProjectFiles({silent:true}),3000); }
 async function loadProjectFiles({silent=false}={}){
@@ -82,7 +106,7 @@ async function loadProjectFiles({silent=false}={}){
   const projectId=editorProject.id;
   if(!silent) $("#projectFilesMessage").textContent=editorCopy[locale].loading;
   stopProjectFilePolling();
-  try{ const [jobs,exports]=await Promise.all([request("/v1/jobs"),request(`/v1/projects/${projectId}/exports`)]); if(editorProject?.id!==projectId) return; editorJobs=projectJobs(jobs,projectId); editorExports=exports; renderProjectFiles(); if(!silent) $("#projectFilesMessage").textContent=""; }
+  try{ const [jobs,exports,integrity]=await Promise.all([request("/v1/jobs"),request(`/v1/projects/${projectId}/exports`),editorProject.mode==="book"?request(`/v1/projects/${projectId}/book-integrity`):Promise.resolve(null)]); if(editorProject?.id!==projectId) return; editorJobs=projectJobs(jobs,projectId); editorExports=exports; editorBookIntegrity=integrity; renderProjectFiles(); renderBookIntegrity(); if(!silent) $("#projectFilesMessage").textContent=""; }
   catch(error){ if(editorProject?.id===projectId) $("#projectFilesMessage").textContent=localizedError(error); }
   finally{ if(editorProject?.id===projectId) scheduleProjectFilePolling(); }
 }
@@ -105,8 +129,8 @@ async function selectEditorPage(index){
   try{ const blob=await auth.requestBlob(`/v1/pages/${expectedId}/content`); if(editorPages[editorIndex]?.id!==expectedId) return; editorImageUrl=URL.createObjectURL(blob); $("#editorImage").src=editorImageUrl; $("#editorMessage").textContent=""; }
   catch(error){ $("#editorMessage").textContent=localizedError(error); }
 }
-async function openProjectEditor(projectId,title){
-  editorProject={id:projectId,title}; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorIndex=-1; clearEditorImage(); history.replaceState(null,"",`#project=${encodeURIComponent(projectId)}`); $("#editorDialog").showModal(); $("#editorMessage").textContent=editorCopy[locale].loading; renderProjectFiles(); loadProjectFiles();
+async function openProjectEditor(projectId,title,projectMode="document"){
+  editorProject={id:projectId,title,mode:projectMode}; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorBookIntegrity=null; pendingBookSupplement=null; editorIndex=-1; clearEditorImage(); history.replaceState(null,"",`#project=${encodeURIComponent(projectId)}`); $("#editorDialog").showModal(); $("#editorMessage").textContent=editorCopy[locale].loading; renderProjectFiles(); renderBookIntegrity(); loadProjectFiles();
   try{ editorPages=await request(`/v1/projects/${projectId}/pages`); if(!editorPages.length){ $("#editorPageList").innerHTML=""; $("#editorMessage").textContent=editorCopy[locale].empty; return; } await selectEditorPage(0); }
   catch(error){ $("#editorMessage").textContent=localizedError(error); }
 }
@@ -114,6 +138,9 @@ async function rotateEditorPage(degrees){ const page=editorPages[editorIndex]; i
 async function reorderEditorPage(delta){ const moved=movePage(editorPages,editorIndex,delta); if(moved.index===editorIndex) return; try{ const ordered=await request(`/v1/projects/${editorProject.id}/pages/order`,{method:"PATCH",body:JSON.stringify({page_ids:moved.pages.map(page=>page.id)})}); editorPages=ordered; editorIndex=moved.index; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].ordered; }catch(error){ $("#editorMessage").textContent=localizedError(error); } }
 async function saveEditorPage(){ const page=editorPages[editorIndex]; if(!page) return; if(!editorCornersDirty&&editorFilter==="original"){ $("#editorMessage").textContent=editorCopy[locale].noChange; return; } const payload={filter:editorFilter}; if(editorCornersDirty) payload.corners=editorCorners; try{ const updated=await request(`/v1/pages/${page.id}/edits`,{method:"POST",body:JSON.stringify(payload)}); editorPages[editorIndex]=updated; await selectEditorPage(editorIndex); $("#editorMessage").textContent=editorCopy[locale].saved; }catch(error){ $("#editorMessage").textContent=localizedError(error); } }
 async function retakeBookSide(file){ const page=editorPages[editorIndex]; if(!canRetakeBookSide(page)||!file) return; const form=new FormData(); form.append("file",file,file.name); $("#retakeBookSide").disabled=true; $("#editorMessage").textContent=editorCopy[locale].retakingBookSide; try{ const replacement=await request(`/v1/pages/${page.id}/book-retakes`,{method:"POST",body:form}); editorPages[editorIndex]=replacement; await selectEditorPage(editorIndex); await loadProjectFiles({silent:true}); $("#editorMessage").textContent=editorCopy[locale].retakenBookSide; }catch(error){ $("#editorMessage").textContent=localizedError(error); }finally{ $("#retakeBookSide").disabled=false; $("#bookRetakeFile").value=""; } }
+async function decideBookIntegrity(issue,decision){ if(!editorProject||!issue) return; try{ editorBookIntegrity=await request(`/v1/projects/${editorProject.id}/book-integrity/decision`,{method:"PUT",body:JSON.stringify({issue_key:issue.key,decision})}); renderBookIntegrity(); }catch(error){ $("#bookIntegrityMessage").textContent=localizedError(error); } }
+async function uploadBookSupplement(file){ if(!editorProject||!pendingBookSupplement||!file) return; const form=new FormData(); form.append("file",file,file.name); form.append("insert_at",String(pendingBookSupplement.insertAt)); form.append("expected_page_label",pendingBookSupplement.expectedPageLabel); try{ $("#bookIntegrityMessage").textContent=editorCopy[locale].bookSupplementing; await request(`/v1/projects/${editorProject.id}/book-supplements`,{method:"POST",body:form}); editorPages=await request(`/v1/projects/${editorProject.id}/pages`); pendingBookSupplement=null; await loadProjectFiles({silent:true}); renderEditorState(); $("#bookIntegrityMessage").textContent=editorCopy[locale].bookSupplemented; }catch(error){ $("#bookIntegrityMessage").textContent=localizedError(error); }finally{ $("#bookSupplementFile").value=""; } }
+async function completeBook(){ if(!editorProject||!editorBookIntegrity?.ready_to_assemble) return; const button=$("#completeBook"); button.disabled=true; try{ $("#bookIntegrityMessage").textContent=editorCopy[locale].bookAssembling; await request(`/v1/projects/${editorProject.id}/book-assemblies`,{method:"POST",body:JSON.stringify({quality:$("#exportQuality").value,include_ocr_text:$("#exportOcr").checked})}); await loadProjectFiles({silent:true}); $("#bookIntegrityMessage").textContent=editorCopy[locale].bookAssembled; }catch(error){ $("#bookIntegrityMessage").textContent=localizedError(error); }finally{ renderBookIntegrity(); } }
 function setUploadProgress(uploaded,total){ const percent=Math.min(100,Math.round(uploaded/total*100)); $("#uploadProgressWrap").classList.remove("hidden"); $("#uploadProgress").value=percent; $("#uploadPercent").textContent=`${percent}%`; }
 function bookAutoStatusKey(){ const blocker=bookAutoState.blocker; return blocker?{waiting_for_page_change:"bookAutoWaitPage",page_moving:"bookAutoWaitStable",needs_focus:"bookAutoWaitFocus",exposure_invalid:"bookAutoExposure",boundary_incomplete:"bookAutoBoundary",spine_not_found:"bookAutoSpine",occlusion_detected:"bookAutoOcclusion",verifying:"bookAutoVerifying",retry_required:"bookAutoRetry"}[blocker]:bookAutoState.phase==="CAPTURE"?"bookAutoCapturing":"bookAutoChecking"; }
 function renderBookAutoStatus(){ $("#bookAutoStatus").textContent=t(bookAutoStatusKey()); }
@@ -131,10 +158,10 @@ $("#backToLogin").addEventListener("click",()=>{ bindingTicket=null; bindingChal
 $("#logoutButton").addEventListener("click",async()=>{ try{ await auth.logout(); }catch{ /* 本地令牌仍会被清理。 */ } restoredProjectId=null; preserveEditorRestore=false; if($("#editorDialog").open) $("#editorDialog").close(); showAuth(); $("#authMessage").textContent=locale==="zh-CN"?"已安全退出当前设备。":"Signed out on this device."; });
 document.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>openCapture(button.dataset.mode)));
 $("#quickScan").addEventListener("click",()=>openCapture()); $("#refreshButton").addEventListener("click",loadProjects);
-$("#projectList").addEventListener("click",event=>{ const project=event.target.closest("[data-project-id]"); if(project) openProjectEditor(project.dataset.projectId,project.querySelector("h3")?.textContent||""); });
+$("#projectList").addEventListener("click",event=>{ const project=event.target.closest("[data-project-id]"); if(project) openProjectEditor(project.dataset.projectId,project.querySelector("h3")?.textContent||"",project.dataset.projectMode); });
 $("#editorPageList").addEventListener("click",event=>{ const page=event.target.closest("[data-page-index]"); if(page) selectEditorPage(Number(page.dataset.pageIndex)); });
 $("#closeEditor").addEventListener("click",()=>$("#editorDialog").close());
-$("#editorDialog").addEventListener("close",()=>{ clearEditorImage(); stopProjectFilePolling(); editorProject=null; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorIndex=-1; if(!preserveEditorRestore) restoredProjectId=null; preserveEditorRestore=false; history.replaceState(null,"","#home"); });
+$("#editorDialog").addEventListener("close",()=>{ clearEditorImage(); stopProjectFilePolling(); editorProject=null; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorBookIntegrity=null; pendingBookSupplement=null; editorIndex=-1; if(!preserveEditorRestore) restoredProjectId=null; preserveEditorRestore=false; history.replaceState(null,"","#home"); });
 $("#rotatePageLeft").addEventListener("click",()=>rotateEditorPage(270));
 $("#rotatePageRight").addEventListener("click",()=>rotateEditorPage(90));
 $("#movePageLeft").addEventListener("click",()=>reorderEditorPage(-1));
@@ -145,6 +172,9 @@ $("#confirmReview").addEventListener("click",async()=>{ const page=editorPages[e
 $("#dismissExamSuggestion").addEventListener("click",async()=>{ const page=editorPages[editorIndex]; if(!canDismissExamSuggestion(page)) return; try{ const updated=await request(`/v1/pages/${page.id}/exam-suggestion-dismissal`,{method:"PUT",body:JSON.stringify({result_version:page.exam_result_version,reason:"user_dismissed"})}); editorPages[editorIndex]=updated; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].examDismissed; }catch(error){ $("#editorMessage").textContent=localizedError(error); } });
 $("#retakeBookSide").addEventListener("click",()=>$("#bookRetakeFile").click());
 $("#bookRetakeFile").addEventListener("change",event=>retakeBookSide(event.target.files[0]));
+$("#bookIntegrityList").addEventListener("click",event=>{ const supplement=event.target.closest("[data-book-supplement-index]"); if(supplement){ pendingBookSupplement=supplementDefaults(editorBookIntegrity.issues[Number(supplement.dataset.bookSupplementIndex)],editorPages); if(pendingBookSupplement) $("#bookSupplementFile").click(); return; } const button=event.target.closest("[data-book-decision-index]"); if(button) decideBookIntegrity(editorBookIntegrity.issues[Number(button.dataset.bookDecisionIndex)],button.dataset.bookDecision); });
+$("#bookSupplementFile").addEventListener("change",event=>uploadBookSupplement(event.target.files[0]));
+$("#completeBook").addEventListener("click",completeBook);
 document.querySelectorAll("[data-page-filter]").forEach(button=>button.addEventListener("click",()=>{ editorFilter=button.dataset.pageFilter; renderEditorState(); }));
 $("#cornerOverlay").addEventListener("pointerdown",event=>{ const handle=event.target.closest("[data-corner]"); if(!handle) return; draggedCorner=Number(handle.dataset.corner); event.currentTarget.setPointerCapture?.(event.pointerId); });
 $("#cornerOverlay").addEventListener("pointermove",event=>{ if(draggedCorner===null) return; const rect=event.currentTarget.getBoundingClientRect(); editorCorners=updateCorner(editorCorners,draggedCorner,(event.clientX-rect.left)/rect.width,(event.clientY-rect.top)/rect.height); editorCornersDirty=true; renderEditorState(); });
