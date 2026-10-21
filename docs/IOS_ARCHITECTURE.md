@@ -47,4 +47,4 @@ AVFoundation 拍摄状态机、Vision 提示、原图和方向证据见[iOS AVFo
 
 ## 外部门禁
 
-Runner 不能替代以下验收：AVFoundation 相机、Vision 方向与矩形检测、Keychain 真机行为、BackgroundTasks、内存压力、系统分享、签名、Archive、TestFlight 和 App Store 审核。IOS-005 已在仓库公开后通过两套 macOS Simulator 门禁；IOS-006 的新增链接与隐私清单仍需本工作包 PR 的 macOS CI。Mac 只在无法由 Simulator 证明的门禁中使用，日常源码和规范仍可在 Windows 开发。
+Runner 不能替代以下验收：AVFoundation 相机、Vision 方向与矩形检测、Keychain 真机行为、BackgroundTasks、内存压力、系统分享、签名、Archive、TestFlight 和 App Store 审核。IOS-005 与 IOS-006 均已在仓库公开后通过两套 macOS Simulator 门禁，包含隐私清单打包和新增链接测试。Mac 只在无法由 Simulator 证明的门禁中使用，日常源码和规范仍可在 Windows 开发。
