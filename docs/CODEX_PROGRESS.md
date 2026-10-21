@@ -6,13 +6,13 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M5 Android |
-| 当前工作包 | `AND-006` 安全更新 |
-| 工作包状态 | 进行中，安全更新完整代码与本地回归已完成，等待推送 CI |
+| 当前里程碑 | M5 Android（自动化代码门禁完成，真机与正式分发待人工验收） |
+| 当前工作包 | `AND-006` 安全更新（完成） |
+| 工作包状态 | 完成，PR #36 最终代码头两套 CI 共 8 项通过，等待最终文档 CI 后合并 |
 | 当前分支 | `codex/and-006-secure-update` |
 | 最后验证基线 | `649b441`（AND-005 PR #35 已合并） |
-| 工作包提交 | `8b98466`（初始校验核心，推送 CI 4 项通过）；完整实现待提交 |
-| PR | 待创建 |
+| 工作包提交 | `8b98466`、`c36b42c`、`4676b90` |
+| PR | #36（已创建，等待最终文档 CI 后合并） |
 | 下一工作包 | `IOS-001` 可复现工程 |
 
 ## 当前工作包进展
@@ -25,7 +25,9 @@
 - APK 下载到应用私有临时文件并校验精确大小、SHA-256、包名、版本和发布/已安装证书，提交后在打开系统安装器前再次校验；应用不执行静默安装。
 - 设置页提供每日自动检查、手动检查、下载和明确安装动作；未知来源权限缺失时只打开本应用授权页，异常时返回稳定拒绝结果。
 - 新增 Python 清单生成器，使用独立 ECDSA P-256 私钥签署规范 JSON；正式私钥、APK keystore、带令牌地址和真实发布清单不得进入仓库。
-- 本地通过 Ruff/格式、`162 passed, 5 skipped`、覆盖率 `88.28%`、API 兼容、迁移升级/漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法、双语资源键和差异检查。当前机器没有 Gradle、JDK/Android SDK 与 Docker 命令，Android 编译/Lint和 Compose 配置等待 GitHub CI。
+- 本地通过 Ruff/格式、`162 passed, 5 skipped`、覆盖率 `88.28%`、API 兼容、迁移升级/漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法、双语资源键和差异检查。当前机器没有 Gradle、JDK/Android SDK 与 Docker 命令，这些本地缺项已由 GitHub CI 覆盖。
+- 完整实现首轮提交 `c36b42c` 的 API、Web 与容器通过；Android 编译发现 `:core:update` 的公开构造签名暴露 `Json` 类型但依赖仍为内部实现。提交 `4676b90` 将该依赖改为 API 边界，不跳过测试。
+- `4676b90` 的推送与 PR 两套 API、Web、容器和 Android 共 8 项检查全部通过；Android 完成核心/更新功能/Robolectric/应用测试、应用编译和 `lintDebug`。
 - GitLab 项目、更新域名、正式公钥和签名材料尚未冻结，继续作为外部门禁；默认配置不得指向任何真实发布源。
 
 - AND-004 已由 PR #34 合并到主线，中文 squash 提交为 `9b19932`；最终头的 API、Web、容器与 Android 共 8 项 CI 检查通过。
@@ -629,10 +631,11 @@ git diff --check
 | Android 身份与用户分区缓存 | `60bac1e` | 本地后端 156 项、H5 33 项和 Chromium E2E/axe 3 项通过；PR #32 最终头两套 CI 的 API、Web、容器与 Android 共 8 项通过；首轮 Room/Kotlin 元数据失败已升级 Room 2.7.2 后修复，真实 Keystore、短信和真机待人工验收 |
 | Android CameraX 手动拍摄 | `b238992` | 本地后端 156 项、H5 33 项和 Chromium E2E/axe 3 项通过；PR #33 最终头两套 CI 的 8 项检查通过，Android 执行拍摄状态机/质量评估、应用编译与 Lint；相机真机门禁待人工验收 |
 | Android 离线队列与分片续传 | `9b19932` | PR #34 最终头两套 CI 的 8 项检查通过；Room v1→v2 迁移、用户隔离队列、WorkManager、服务端确认分片续传、应用编译和 Lint 通过；真实弱网、进程强杀和 staging 重启待人工验收 |
+| Android 编辑、分享与账号删除 | `649b441` | PR #35 最终头两套 CI 的 8 项检查通过；页面编辑、鉴权导出、受限 FileProvider 分享、删除冷静期与用户级本地清理通过；真机分享、删除并发和真实短信待人工验收 |
+| Android 安全更新 | `4676b90` | PR #36 最终代码头两套 CI 的 8 项检查通过；ECDSA 清单、受控下载、APK 身份/哈希/证书复检、每日检查、Robolectric、应用编译和 Lint 通过；正式签名分发与真机安装/回滚待人工验收 |
 
 ## 下一步
 
-1. 提交并推送 AND-006 完整实现，使用 GitHub CI 验证 Android 编译、Robolectric 单元测试、应用测试与 Lint，以及 API、Web 和容器回归。
-2. 修复所有 CI 失败，更新最终提交与验证证据，创建中文 PR；CI 全绿和自审完成后合并。
+1. 等待 PR #36 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
+2. 从 `IOS-001` 建立固定 XcodeGen 版本的可复现工程与 GitHub macOS Simulator 构建门禁。
 3. 正式 GitLab 发布源、公钥、APK keystore、未知来源授权、系统安装器升级和回滚继续保留人工验收，不以 Mock 或 CI 结果代替。
-4. AND-006 合并后从 `IOS-001` 可复现 XcodeGen 工程继续。
