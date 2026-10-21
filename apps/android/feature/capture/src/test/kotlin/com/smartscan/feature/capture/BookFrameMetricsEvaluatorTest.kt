@@ -11,10 +11,10 @@ class BookFrameMetricsEvaluatorTest {
         val first = ByteArray(48 * 48) { 220.toByte() }
         val changed = ByteArray(48 * 48) { index -> if (index % 2 == 0) 40.toByte() else 220.toByte() }
 
-        assertEquals(0.0, evaluator.evaluate(first, 48, 48, 48, 1).motionScore)
+        assertEquals(0.0, evaluator.evaluate(first, 48, 48, 48, 1).motionScore, 0.0)
         assertTrue(evaluator.evaluate(changed, 48, 48, 48, 1).motionScore > 0.08)
         evaluator.reset()
-        assertEquals(0.0, evaluator.evaluate(changed, 48, 48, 48, 1).motionScore)
+        assertEquals(0.0, evaluator.evaluate(changed, 48, 48, 48, 1).motionScore, 0.0)
     }
 
     @Test
