@@ -10,7 +10,8 @@ from services.api.app.database import Base
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # 迁移可在 API、Worker 和 AI 网关进程内启动；不得关闭业务运行 logger。
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

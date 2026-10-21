@@ -30,7 +30,23 @@ PERMANENTLY_FORBIDDEN_ADDRESSES = frozenset(
 
 
 class NetworkSecurityError(RuntimeError):
-    """出站请求没有通过网络安全门禁。"""
+    """出站请求失败或没有通过网络安全门禁，仅携带稳定错误码。"""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        retryable: bool = False,
+        immediate_circuit_open: bool = False,
+        counts_toward_circuit: bool = False,
+        request_sent: bool = False,
+    ) -> None:
+        super().__init__(code)
+        self.code = code
+        self.retryable = retryable
+        self.immediate_circuit_open = immediate_circuit_open
+        self.counts_toward_circuit = counts_toward_circuit or immediate_circuit_open
+        self.request_sent = request_sent
 
 
 class OutboundMediaReference(BaseModel):
@@ -123,7 +139,11 @@ class SystemHostResolver:
                 proto=socket.IPPROTO_TCP,
             )
         except OSError as exc:
-            raise NetworkSecurityError("provider_dns_resolution_failed") from exc
+            raise NetworkSecurityError(
+                "provider_dns_resolution_failed",
+                retryable=True,
+                counts_toward_circuit=True,
+            ) from exc
         return tuple(record[4][0] for record in records)
 
 
@@ -207,6 +227,22 @@ class StdlibPinnedRequestSender:
             response = connection.getresponse()
             if 300 <= response.status < 400:
                 raise NetworkSecurityError("provider_redirect_rejected")
+            if response.status in {401, 403}:
+                raise NetworkSecurityError("provider_auth_rejected", immediate_circuit_open=True)
+            if response.status == 402:
+                raise NetworkSecurityError("provider_payment_required", immediate_circuit_open=True)
+            if response.status == 408:
+                raise NetworkSecurityError(
+                    "provider_timeout", retryable=True, counts_toward_circuit=True
+                )
+            if response.status == 429:
+                raise NetworkSecurityError(
+                    "provider_rate_limited", retryable=True, counts_toward_circuit=True
+                )
+            if response.status >= 500:
+                raise NetworkSecurityError(
+                    "provider_http_5xx", retryable=True, counts_toward_circuit=True
+                )
             if not 200 <= response.status < 300:
                 raise NetworkSecurityError("provider_http_error")
             content_encoding = (response.getheader("Content-Encoding") or "identity").lower()
@@ -246,10 +282,30 @@ class StdlibPinnedRequestSender:
                 raise NetworkSecurityError("provider_response_empty")
             headers = {key.lower(): value for key, value in response.getheaders()}
             return WireResponse(status=response.status, headers=headers, body=body)
-        except NetworkSecurityError:
-            raise
+        except NetworkSecurityError as exc:
+            if exc.request_sent:
+                raise
+            raise NetworkSecurityError(
+                exc.code,
+                retryable=exc.retryable,
+                immediate_circuit_open=exc.immediate_circuit_open,
+                counts_toward_circuit=exc.counts_toward_circuit,
+                request_sent=True,
+            ) from exc
+        except TimeoutError as exc:
+            raise NetworkSecurityError(
+                "provider_timeout",
+                retryable=True,
+                counts_toward_circuit=True,
+                request_sent=True,
+            ) from exc
         except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
-            raise NetworkSecurityError("provider_transport_failed") from exc
+            raise NetworkSecurityError(
+                "provider_transport_failed",
+                retryable=True,
+                counts_toward_circuit=True,
+                request_sent=True,
+            ) from exc
         finally:
             connection.close()
 
@@ -338,6 +394,7 @@ class SecureProviderTransport:
         task: StructuredTask,
         plan: ProviderRequestPlan,
         media: OutboundMediaReference,
+        timeout_seconds: float | None = None,
     ) -> SecureNetworkResult:
         definition = adapter.definition
         if not definition.outbound_policy_configured or not definition.base_url:
@@ -424,10 +481,10 @@ class SecureProviderTransport:
                 body=body,
                 max_response_bytes=definition.max_response_bytes,
             ),
-            timeout_seconds=self._timeout_seconds,
+            timeout_seconds=timeout_seconds or self._timeout_seconds,
         )
         if not 200 <= response.status < 300:
-            raise NetworkSecurityError("provider_http_error")
+            raise NetworkSecurityError("provider_http_error", request_sent=True)
         if len(response.body) > definition.max_response_bytes:
             raise NetworkSecurityError("provider_response_too_large")
         return SecureNetworkResult(

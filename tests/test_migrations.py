@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,16 @@ def test_empty_database_upgrades_to_head(tmp_path: Path) -> None:
     assert current_revision(url) == head_revision(url)
     ensure_database_current(url)
     check_database_drift(url)
+
+
+def test_migration_logging_keeps_existing_application_loggers_enabled(tmp_path: Path) -> None:
+    url = sqlite_url(tmp_path / "logging.db")
+    application_logger = logging.getLogger("smartscan.ai.reliability")
+    application_logger.disabled = False
+
+    upgrade_database(url)
+
+    assert application_logger.disabled is False
 
 
 def test_legacy_create_all_database_is_adopted_without_data_loss(tmp_path: Path) -> None:
@@ -161,6 +172,33 @@ def test_initial_migration_can_downgrade_and_upgrade_again(tmp_path: Path) -> No
 
     upgrade_database(url)
     assert current_revision(url) == head_revision(url)
+
+
+def test_ai_reliability_migration_can_downgrade_without_touching_previous_schema(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "ai-reliability.db")
+    command.upgrade(alembic_config(url), "head")
+    engine = create_engine(url)
+    try:
+        assert {
+            "ai_provider_states",
+            "ai_provider_calls",
+            "ai_provider_attempts",
+        }.issubset(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
+
+    command.downgrade(alembic_config(url), "20261021_0020")
+    downgraded = create_engine(url)
+    try:
+        tables = set(inspect(downgraded).get_table_names())
+        assert "ai_provider_states" not in tables
+        assert "ai_provider_calls" not in tables
+        assert "ai_provider_attempts" not in tables
+        assert "book_integrity_decisions" in tables
+    finally:
+        downgraded.dispose()
 
 
 def test_exam_classification_migration_marks_legacy_pages_and_can_downgrade(

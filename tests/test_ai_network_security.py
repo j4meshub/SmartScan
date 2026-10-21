@@ -496,6 +496,34 @@ def test_stdlib_sender_preserves_hostname_for_tls_and_never_follows_redirects() 
 
 
 @pytest.mark.parametrize(
+    ("status", "code", "retryable", "immediate_open"),
+    [
+        (401, "provider_auth_rejected", False, True),
+        (402, "provider_payment_required", False, True),
+        (408, "provider_timeout", True, False),
+        (429, "provider_rate_limited", True, False),
+        (503, "provider_http_5xx", True, False),
+    ],
+)
+def test_stdlib_sender_classifies_provider_failures_for_retry_and_circuit(
+    status: int,
+    code: str,
+    retryable: bool,
+    immediate_open: bool,
+) -> None:
+    connection = FakeHttpConnection(FakeHttpResponse(status=status))
+    sender = network.StdlibPinnedRequestSender(lambda *_: connection)
+
+    with pytest.raises(network.NetworkSecurityError, match=code) as raised:
+        sender.send(pinned_request(), timeout_seconds=12.0)
+
+    assert raised.value.retryable is retryable
+    assert raised.value.immediate_circuit_open is immediate_open
+    assert raised.value.counts_toward_circuit is True
+    assert raised.value.request_sent is True
+
+
+@pytest.mark.parametrize(
     ("response", "error_code"),
     [
         (

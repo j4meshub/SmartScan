@@ -808,3 +808,90 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
     )
+
+
+class AiProviderState(Base):
+    __tablename__ = "ai_provider_states"
+    __table_args__ = (
+        CheckConstraint(
+            "circuit_state IN ('closed', 'open', 'half_open')",
+            name="ck_ai_provider_states_circuit_state",
+        ),
+        CheckConstraint(
+            "consecutive_failures >= 0",
+            name="ck_ai_provider_states_consecutive_failures",
+        ),
+    )
+
+    provider_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    circuit_state: Mapped[str] = mapped_column(String(16), default="closed", nullable=False)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    open_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    half_open_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class AiProviderCall(Base):
+    __tablename__ = "ai_provider_calls"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('in_progress', 'succeeded', 'failed', 'rejected', 'expired')",
+            name="ck_ai_provider_calls_status",
+        ),
+        CheckConstraint("attempt_count >= 0", name="ck_ai_provider_calls_attempt_count"),
+        CheckConstraint(
+            "reserved_cost_microusd >= 0 AND charged_cost_microusd >= 0",
+            name="ck_ai_provider_calls_cost",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    provider_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    task_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reserved_cost_microusd: Mapped[int] = mapped_column(Integer, nullable=False)
+    charged_cost_microusd: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    request_body_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    response_body_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    lease_expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AiProviderAttempt(Base):
+    __tablename__ = "ai_provider_attempts"
+    __table_args__ = (
+        UniqueConstraint("call_id", "attempt_number", name="uq_ai_provider_attempt_number"),
+        CheckConstraint("attempt_number >= 1", name="ck_ai_provider_attempt_number"),
+        CheckConstraint(
+            "outcome IN ('in_progress', 'succeeded', 'failed')",
+            name="ck_ai_provider_attempts_outcome",
+        ),
+        CheckConstraint("charged_cost_microusd >= 0", name="ck_ai_provider_attempts_cost"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    call_id: Mapped[str] = mapped_column(
+        ForeignKey("ai_provider_calls.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    charged_cost_microusd: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_body_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    response_body_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
