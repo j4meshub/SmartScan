@@ -31,7 +31,9 @@ def test_xcodegen_download_is_versioned_and_digest_pinned() -> None:
     assert (IOS_ROOT / ".xcodegen-version").read_text(encoding="utf-8").strip() == XCODEGEN_VERSION
     assert f'EXPECTED_VERSION="{XCODEGEN_VERSION}"' in script
     assert f'XCODEGEN_SHA256="{XCODEGEN_SHA256}"' in script
+    assert 'TOOL_PATH="$TOOL_DIR/bin/xcodegen"' in script
     assert "shasum -a 256 --check" in script
+    assert 'cp -R "$TEMP_DIR/extracted/xcodegen/." "$TOOL_DIR/"' in script
     assert "generate --spec project.yml" in script
 
 

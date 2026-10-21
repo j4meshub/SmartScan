@@ -7,7 +7,7 @@ XCODEGEN_VERSION=$(tr -d '[:space:]' < "$IOS_ROOT/.xcodegen-version")
 EXPECTED_VERSION="2.46.0"
 XCODEGEN_SHA256="4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
 TOOL_DIR="$IOS_ROOT/.tools/xcodegen/$XCODEGEN_VERSION"
-TOOL_PATH="$TOOL_DIR/xcodegen"
+TOOL_PATH="$TOOL_DIR/bin/xcodegen"
 
 if [ "$XCODEGEN_VERSION" != "$EXPECTED_VERSION" ]; then
   echo "XcodeGen 版本文件与安装脚本不一致" >&2
@@ -24,7 +24,8 @@ if [ ! -x "$TOOL_PATH" ]; then
   printf '%s  %s\n' "$XCODEGEN_SHA256" "$ARCHIVE_PATH" | shasum -a 256 --check
   unzip -q "$ARCHIVE_PATH" -d "$TEMP_DIR/extracted"
   mkdir -p "$TOOL_DIR"
-  install -m 0755 "$TEMP_DIR/extracted/xcodegen" "$TOOL_PATH"
+  cp -R "$TEMP_DIR/extracted/xcodegen/." "$TOOL_DIR/"
+  chmod 0755 "$TOOL_PATH"
 fi
 
 ACTUAL_VERSION=$($TOOL_PATH --version)
