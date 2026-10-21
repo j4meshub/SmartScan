@@ -34,15 +34,18 @@ API、Worker、AI 网关和 Web 镜像必须由 CI 从同一个已验证提交�
 
 - `deploy/compose/staging.env.example`：Compose 插值、目录、域名、端口、镜像 digest 和 staging 数据库密码。
 - `deploy/compose/staging.runtime.env.example`：应用运行配置、手机号 Keyring、超级管理员初始密码和外部服务关闭状态。
+- `deploy/compose/backup.env.example`：加密异机仓库、保留周期及 RPO/RTO；真实凭据和密码不进入仓库。
 
 真实文件建议放在：
 
 ```text
 /etc/smartscan/staging/deploy.env
 /etc/smartscan/staging/runtime.env
+/etc/smartscan/staging/backup.env
+/etc/smartscan/staging/restic-password
 ```
 
-两者必须位于仓库外且权限为 `0600`。数据库密码只使用 URL 与 Compose 均安全的高熵字符；运行配置中的 PostgreSQL URL 必须使用同一个密码。`SMARTSCAN_CORS_ORIGINS` 是 JSON 数组，OPS-001 只允许其中唯一的 staging HTTPS 域名。不得把 `docker compose config` 的完整输出上传到工单，因为展开后的内容含 Secret。
+四个文件必须位于仓库外且权限为 `0600`。数据库密码只使用 URL 与 Compose 均安全的高熵字符；运行配置中的 PostgreSQL URL 必须使用同一个密码。`SMARTSCAN_CORS_ORIGINS` 是 JSON 数组，OPS-001 只允许其中唯一的 staging HTTPS 域名。不得把 `docker compose config` 的完整输出上传到工单，因为展开后的内容含 Secret。
 
 ## 服务器准备与校验
 
@@ -55,12 +58,19 @@ sudo install -d -m 0750 \
   /srv/smartscan/staging/data \
   /srv/smartscan/staging/models/ocr \
   /srv/smartscan/staging/monitoring/prometheus \
-  /srv/smartscan/staging/monitoring/alertmanager
+  /srv/smartscan/staging/monitoring/alertmanager \
+  /srv/smartscan/staging/wal \
+  /srv/smartscan/staging/backup-work \
+  /srv/smartscan/staging/backup-evidence \
+  /srv/smartscan/staging/restore-drills
 sudo install -d -m 0750 /etc/smartscan/staging/monitoring
 sudo install -m 0600 deploy/compose/staging.env.example \
   /etc/smartscan/staging/deploy.env
 sudo install -m 0600 deploy/compose/staging.runtime.env.example \
   /etc/smartscan/staging/runtime.env
+sudo install -m 0600 deploy/compose/backup.env.example \
+  /etc/smartscan/staging/backup.env
+sudo install -m 0600 /dev/null /etc/smartscan/staging/restic-password
 ```
 
 随后替换全部模板值，并按固定镜像内实际 UID/GID 设置目录所有权；不得猜测 PostgreSQL 或应用用户 UID。OCR 模型目录必须放置已校验的固定模型包。
@@ -105,6 +115,8 @@ docker compose \
 不要使用 `down -v`，也不要递归删除 `/srv/smartscan`。首次启动后从主机本地检查 `http://127.0.0.1:<独立端口>/api/health`，再核对 Compose 项目、容器标签、网络、挂载源和数据库名称均属于 staging。
 
 应用核心流程验证后，再按照[监控、容量配额与磁盘保护](MONITORING_AND_CAPACITY.md)生成独立指标 Token、渲染监控配置、运行 `promtool`/`amtool` 校验，并以额外 `docker-compose.monitoring.yml` 和显式 `monitoring` Profile 启动。监控服务不发布主机端口，告警 Webhook 与渲染配置均留在仓库外。
+
+数据库首次写入真实 staging 数据前，必须按照[加密异机备份与恢复演练](BACKUP_AND_RECOVERY.md)配置 WAL、异机 Restic 仓库、每日备份和月度恢复演练。备份成功证据不能替代恢复证据，CI 本地仓库回环不能替代真实异机验收。
 
 ## 回滚与验收
 

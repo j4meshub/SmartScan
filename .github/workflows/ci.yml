@@ -145,6 +145,42 @@ jobs:
           -f deploy/compose/docker-compose.monitoring.yml
           --profile monitoring
           config
+      - name: 校验备份配置与 Compose 契约
+        run: |
+          printf 'ci-restic-password-32-characters-minimum' > "$RUNNER_TEMP/restic-password"
+          chmod 600 "$RUNNER_TEMP/restic-password"
+          python tools/validate_backup_config.py \
+            --deploy-env tests/fixtures/staging/deploy.env \
+            --backup-env tests/fixtures/staging/backup.env \
+            --password-file "$RUNNER_TEMP/restic-password" \
+            --ci-fixture
+          docker compose \
+            --env-file tests/fixtures/staging/deploy.env \
+            -f deploy/compose/docker-compose.staging.yml \
+            -f deploy/compose/docker-compose.backup.yml \
+            --profile backup --profile restore config
+      - name: 执行 PostgreSQL 与文件加密仓库恢复回环
+        run: |
+          set -euo pipefail
+          compose='docker compose -f deploy/compose/docker-compose.backup-test.yml'
+          $compose up -d --wait source-db
+          $compose run --rm seed-db
+          $compose run --rm seed-files
+          $compose run --rm basebackup
+          $compose run --rm restic init
+          $compose run --rm restic backup /source/database /source/files
+          $compose run --rm restic check --read-data
+          snapshot="$($compose run --rm restic snapshots --latest 1 --json | python -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')"
+          test "${#snapshot}" -eq 64
+          $compose run --rm restic restore "$snapshot" --target /restore
+          $compose run --rm verify-basebackup
+          $compose up -d --wait restored-db
+          $compose run --rm verify-restore
+      - name: 清理备份恢复回环环境
+        if: always()
+        run: |
+          docker compose -f deploy/compose/docker-compose.backup-test.yml logs --no-color
+          docker compose -f deploy/compose/docker-compose.backup-test.yml down -v --remove-orphans
       - name: 构建 staging Web 镜像基线
         run: >-
           docker build
