@@ -7,12 +7,12 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M6 iOS |
-| 当前工作包 | `IOS-003` 拍摄与 Vision（进行中） |
-| 工作包状态 | AVFoundation、Vision、原图证据与测试已实现，等待 macOS Simulator 编译验证 |
+| 当前工作包 | `IOS-003` 拍摄与 Vision（完成） |
+| 工作包状态 | 完成，PR #39 最终代码头两套 CI 共 10 项通过，等待最终文档 CI 后合并 |
 | 当前分支 | `codex/ios-003-camera-vision` |
 | 最后验证基线 | `2944430`（IOS-002 PR #38 已合并） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `d19c7ee`、`2449395` |
+| PR | #39（已创建，等待最终文档 CI 后合并） |
 | 下一工作包 | `IOS-004` 后台恢复 |
 
 ## 当前工作包进展
@@ -21,8 +21,9 @@
 - IOS-003 三个首页模式已进入同一 AVFoundation 后摄拍摄页，包含权限、预览、点按对焦、曝光补偿、手动快门和连续拍摄状态机；质量警告不禁用快门。
 - 视频帧每 250 毫秒抽样亮度、梯度清晰度和高光比例，Vision 同时提供文档矩形与置信度；阈值只生成提示，不声称替代服务端复核或真实样本校准。
 - 拍照使用 `fileDataRepresentation()` 的 JPEG 原始数据，不进行裁切或增强；原图与 JSON 方向/尺寸/质量/矩形证据成对写入当前用户摘要目录，任一写入失败都会清理残留。
-- 新增相机用途双语说明、状态机、质量指标、方向映射、用户隔离原图存储测试和 iOS 工程安全契约；Windows 本地契约 `7 passed`，Swift 编译及 Simulator 单元测试等待 macOS CI。
+- 新增相机用途双语说明、状态机、质量指标、方向映射、用户隔离原图存储测试和 iOS 工程安全契约；本地通过 Ruff/格式、iOS 契约 `7 passed`、全量 Python `169 passed, 5 skipped`、覆盖率 `88.28%`、API 兼容、迁移升级/漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法和差异检查。
 - 首轮提交 `d19c7ee` 的 macOS 编译发现多语句计算属性缺少显式返回；修复同时改用 iOS 17 的 `videoRotationAngle` API，避免继续依赖已弃用的 `AVCaptureVideoOrientation`。
+- 修复提交 `2449395` 的推送与 PR 两套 API、Web、Android、iOS 和容器共 10 项检查全部通过；两个 iOS 作业均完成工程生成、Xcode 16.4 Simulator 编译和全部 Swift 单元测试。
 
 - IOS-001 已由 PR #37 合并到主线，中文 squash 提交为 `4cc0a18`；最终代码头两套 API、Web、Android、iOS 与容器共 10 项 CI 检查通过。
 - IOS-002 已接入注册、短信挑战、本地登录、`/v1/me` 会话恢复、一次性刷新令牌轮换和退出；接口字段与现有 H5/Android 客户端保持一致。
@@ -661,9 +662,10 @@ git diff --check
 | Android 安全更新 | `4676b90` | PR #36 最终代码头两套 CI 的 8 项检查通过；ECDSA 清单、受控下载、APK 身份/哈希/证书复检、每日检查、Robolectric、应用编译和 Lint 通过；正式签名分发与真机安装/回滚待人工验收 |
 | iOS 可复现工程 | `51b182c` | PR #37 最终代码头两套 CI 的 10 项检查通过；固定 XcodeGen/Xcode、工程生成、双语资源、Simulator 应用编译和 Swift 单元测试通过；正式 Bundle ID、签名、真机与发布待后续门禁 |
 | iOS 身份、Keychain 与网络 | `284da8e` | PR #38 最终代码头两套 10 项检查通过；注册登录、会话恢复、Keychain、设备头、刷新轮换、用户缓存隔离和双语界面的 Simulator 测试通过；真实短信与 Keychain 真机行为待人工验收 |
+| iOS AVFoundation 与 Vision 拍摄 | `2449395` | PR #39 最终代码头两套 10 项检查通过；状态机、质量阈值、Vision 矩形、iOS 17 旋转角、原图与方向证据的 Simulator 编译/测试通过；真实相机与阈值仍待人工验收 |
 
 ## 下一步
 
-1. 等待 PR #38 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
-2. 创建 `codex/ios-003-camera-vision` 分支，实现 AVFoundation 拍摄、Vision 矩形/清晰度提示、手动快门和方向证据。
-3. Keychain、相机、Apple Team、正式 Bundle ID、签名、真机和发布继续保留外部门禁，不以 Simulator 结果替代。
+1. 等待 PR #39 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
+2. 创建 `codex/ios-004-background-upload` 分支，实现用户分区本地队列、允许范围内的后台恢复和服务端确认分片续传。
+3. Keychain、相机、后台执行、Apple Team、正式 Bundle ID、签名、真机和发布继续保留外部门禁，不以 Simulator 结果替代。
