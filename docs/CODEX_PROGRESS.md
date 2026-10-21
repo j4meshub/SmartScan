@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M6 iOS |
 | 当前工作包 | `IOS-006` 审核准备（进行中） |
-| 工作包状态 | 进行中：基于 IOS-005 堆叠开发；可执行本地校验，macOS CI 仍受 GitHub 账户付款/额度阻塞 |
+| 工作包状态 | 进行中：IOS-005 已通过 CI 并合并，IOS-006 本地回归完成，等待推送与 PR CI |
 | 当前分支 | `codex/ios-006-review-readiness` |
-| 最后验证基线 | `33f6754`（IOS-004 PR #40 已合并） |
-| 工作包提交 | 待提交（基于 IOS-005 头 `7dcf197`） |
-| PR | 待创建；将以 `codex/ios-005-edit-share` 为基线，明确依赖 #41 |
+| 最后验证基线 | `af6fab7`（IOS-005 PR #41 已合并） |
+| 工作包提交 | `30c76df` |
+| PR | 待创建，基线为 `main` 的 `af6fab7` |
 | 下一工作包 | `EXAM-001` 试卷分类 |
 
 ## 当前工作包进展
@@ -22,7 +22,7 @@
 - `tools/validate_ios_release.py` 提供草稿与 `--release` 两级门禁。草稿检查可在普通 CI 运行；正式门禁拒绝 `.invalid`、开发 Bundle ID、空截图以及缺失的签名/审核账号环境变量，并且不会读取或打印 Secret 值。
 - 当前固定 Xcode 16.4 只用于既有 Simulator 可复现回归；Apple 2026 上传要求已单独记录为 Xcode 26 或更高版本，Archive 时必须再次核对，不改写现有测试基线冒充上传工具链。
 - 本地通过 Ruff/格式、发布草稿校验、全量 Python `177 passed, 5 skipped`、覆盖率 `88.28%`、API 兼容、迁移升级/漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法和差异检查。Windows 不能提供 Swift 编译证据。
-- 仓库改为公开后已重新触发 PR #41 的两套失败工作流；attempt 2 已获得真实 Runner，API、Web 与容器先行通过，Android/iOS 正在执行。必须等待最终结果后才解除 IOS-005 阻塞。
+- 仓库改为公开后重新触发 PR #41 的两套失败工作流，attempt 2 均获得真实 Runner；API、Web、Android、iOS 与容器共 10 项检查全部通过，PR #41 已以中文 squash 提交 `af6fab7` 合并。IOS-006 已从旧堆叠基线重基到该主线提交。
 
 - IOS-004 已由 PR #40 squash 合并到主线，中文提交为 `33f6754`；最终文档头两套 API、Web、Android、iOS 与容器共 10 项 CI 检查通过。
 - IOS-005 新增项目/页面工作区，支持完整页序上移下移、活动版本预览、90 度旋转、四角归一化调整、四档滤镜和页面复核；编辑继续调用服务端版本化接口，不覆盖原图。
@@ -30,7 +30,7 @@
 - 账号删除要求 E.164 手机号、独立 `account_deletion` 短信挑战和完全匹配的用户名；服务端接受并撤销会话后，本机按用户清除项目缓存、捕获原图、上传队列和下载文件。未登录取消流程使用独立 `account_deletion_cancel` 挑战，不把重新登录误作取消。
 - 新增页面/导出/账号删除请求契约、非法页序与四角、下载大小/摘要、离线项目缓存、用户分区清理和删除/取消流程测试。
 - 本地通过 Ruff/格式、iOS 配置契约 `10 passed`、全量 Python `172 passed, 5 skipped`、覆盖率 `88.28%`、迁移漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法、双语资源键和差异检查。Windows 没有 XcodeGen、Swift、Xcode、Gradle 和 Docker；Swift 编译、PDFKit 链接和 Simulator 测试必须等待 macOS CI。
-- PR #41 的推送与 PR 两套工作流共 10 个作业都在 3 至 6 秒内失败，`runner_name` 为空且没有作业日志；GitHub 检查注释明确为“recent account payments have failed or your spending limit needs to be increased”。这不是测试失败，必须在 GitHub `Billing & plans` 恢复付款或支出上限后重跑，当前不得标记 IOS-005 完成或合并。
+- PR #41 最初的推送与 PR 两套工作流因私有仓库账户付款/额度问题未分配 Runner；仓库改为公开后执行 attempt 2，10 项作业全部通过并完成合并。该历史保留为外部 CI 故障证据，不再是当前阻塞。
 - 账单阻塞期间继续静态自审，提交 `c148d77` 补齐 `WorkspaceStore` 的 Combine 导入、统一 SwiftUI 条件样式类型，并让账号删除在 `401` 时只刷新一次再重试；本地 iOS 契约仍为 `10 passed`。
 
 - IOS-003 已由 PR #39 合并到主线，中文 squash 提交为 `5977b44`；最终文档头两套 API、Web、Android、iOS 与容器共 10 项 CI 检查通过。

@@ -63,6 +63,6 @@ Apple 的要求会变化。2026-10-21 查阅[上传构建版本](https://develop
 ## 未通过门禁
 
 - 正式 Bundle ID、Team、App Store Connect App、签名材料与公开 URL 未冻结。
-- GitHub Actions 当前因账户付款/额度问题未分配 Runner，PR #41 及本工作包无法取得 macOS 编译证据。
+- IOS-005 已在仓库公开后通过 macOS Runner；IOS-006 的新增链接与隐私清单仍需本工作包 PR 取得编译证据。
 - Archive、TestFlight、真机相机/后台/分享、真实短信与企业微信均未验收。
 - 截图文件尚未生成；仓库只包含场景和尺寸清单。
