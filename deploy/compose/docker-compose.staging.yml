@@ -68,6 +68,9 @@ services:
       SMARTSCAN_AUTO_MIGRATE: "false"
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_INTERNAL_FILE_SEND_PREFIX: /_smartscan_files
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    tmpfs:
+      - /tmp/prometheus:rw,noexec,nosuid,nodev,size=32m,mode=0770,uid=10001,gid=10001
     volumes:
       - type: bind
         source: ${SMARTSCAN_STAGING_DATA_ROOT:?必须设置独立数据目录}

@@ -19,7 +19,11 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_COMPOSE_FILE = PROJECT_ROOT / "deploy" / "compose" / "docker-compose.staging.yml"
+DEFAULT_MONITORING_COMPOSE_FILE = (
+    PROJECT_ROOT / "deploy" / "compose" / "docker-compose.monitoring.yml"
+)
 STAGING_ROOT = PurePosixPath("/srv/smartscan/staging")
+MONITORING_CONFIG_ROOT = PurePosixPath("/etc/smartscan/staging/monitoring")
 ISOLATION_ACK = "staging-only-no-production-data"
 SAFE_PROJECT = re.compile(r"^[a-z0-9][a-z0-9_-]{2,62}$")
 SAFE_HOST = re.compile(
@@ -34,11 +38,15 @@ IMAGE_KEYS = (
     "SMARTSCAN_STAGING_WORKER_IMAGE",
     "SMARTSCAN_STAGING_AI_GATEWAY_IMAGE",
     "SMARTSCAN_STAGING_WEB_IMAGE",
+    "SMARTSCAN_STAGING_PROMETHEUS_IMAGE",
+    "SMARTSCAN_STAGING_ALERTMANAGER_IMAGE",
+    "SMARTSCAN_STAGING_NODE_EXPORTER_IMAGE",
 )
 PATH_KEYS = (
     "SMARTSCAN_STAGING_POSTGRES_ROOT",
     "SMARTSCAN_STAGING_DATA_ROOT",
     "SMARTSCAN_STAGING_MODEL_ROOT",
+    "SMARTSCAN_STAGING_MONITORING_DATA_ROOT",
 )
 DEPLOY_KEYS = {
     "SMARTSCAN_DEPLOYMENT_TIER",
@@ -47,6 +55,8 @@ DEPLOY_KEYS = {
     "SMARTSCAN_STAGING_HOST",
     "SMARTSCAN_STAGING_HTTP_PORT",
     "SMARTSCAN_STAGING_RUNTIME_ENV_FILE",
+    "SMARTSCAN_STAGING_MONITORING_CONFIG_ROOT",
+    "SMARTSCAN_STAGING_METRICS_TOKEN_FILE",
     "POSTGRES_PASSWORD",
     *IMAGE_KEYS,
     *PATH_KEYS,
@@ -69,6 +79,15 @@ RUNTIME_KEYS = {
     "SMARTSCAN_OCR_ENABLED",
     "SMARTSCAN_OCR_MODEL_ROOT",
     "SMARTSCAN_AI_PROVIDERS",
+    "SMARTSCAN_QUEUE_HIGH_WATER_JOBS",
+    "SMARTSCAN_MAX_ACTIVE_JOBS_PER_USER",
+    "SMARTSCAN_STORAGE_MIN_FREE_BYTES",
+    "SMARTSCAN_STORAGE_MIN_FREE_PERCENT",
+    "SMARTSCAN_USER_STORAGE_QUOTA_BYTES",
+    "SMARTSCAN_WORKER_HEARTBEAT_INTERVAL_SECONDS",
+    "SMARTSCAN_WORKER_STALE_SECONDS",
+    "SMARTSCAN_OPS_METRICS_ENABLED",
+    "SMARTSCAN_OPS_METRICS_TOKEN",
 }
 
 
@@ -233,6 +252,31 @@ def _validate_runtime(
     _require(runtime["SMARTSCAN_SMS_MODE"] == "disabled", "OPS-001 基线必须关闭短信供应商")
     _require(runtime["SMARTSCAN_WECOM_MODE"] == "disabled", "OPS-001 基线必须关闭企业微信")
     _require(not runtime.get("SMARTSCAN_DEV_SMS_CODE", ""), "staging 禁止设置开发验证码")
+    _require(
+        runtime["SMARTSCAN_OPS_METRICS_ENABLED"].casefold() == "true", "staging 必须启用指标端点"
+    )
+    _strong_secret(
+        runtime["SMARTSCAN_OPS_METRICS_TOKEN"],
+        "SMARTSCAN_OPS_METRICS_TOKEN",
+        ci_fixture=ci_fixture,
+    )
+    try:
+        queue_high_water = int(runtime["SMARTSCAN_QUEUE_HIGH_WATER_JOBS"])
+        per_user_jobs = int(runtime["SMARTSCAN_MAX_ACTIVE_JOBS_PER_USER"])
+        reserve_bytes = int(runtime["SMARTSCAN_STORAGE_MIN_FREE_BYTES"])
+        free_percent = float(runtime["SMARTSCAN_STORAGE_MIN_FREE_PERCENT"])
+        user_quota = int(runtime["SMARTSCAN_USER_STORAGE_QUOTA_BYTES"])
+        heartbeat_interval = int(runtime["SMARTSCAN_WORKER_HEARTBEAT_INTERVAL_SECONDS"])
+        stale_seconds = int(runtime["SMARTSCAN_WORKER_STALE_SECONDS"])
+    except ValueError as exc:
+        raise StagingConfigError("容量与 Worker 阈值必须是有效数字") from exc
+    _require(1 <= queue_high_water <= 100_000, "任务队列高水位无效")
+    _require(1 <= per_user_jobs <= 4, "每用户活跃任务限制无效")
+    _require(reserve_bytes >= 2 * 25 * 1024**2, "磁盘预留不足以完成上传临时副本")
+    _require(1 <= free_percent <= 50, "磁盘最小可用比例无效")
+    _require(user_quota >= 25 * 1024**2, "用户存储配额不足以容纳单次最大上传")
+    _require(2 <= heartbeat_interval <= 60, "Worker 心跳间隔无效")
+    _require(stale_seconds > heartbeat_interval * 2, "Worker 失联阈值必须超过两个心跳间隔")
     try:
         cors_origins = json.loads(runtime["SMARTSCAN_CORS_ORIGINS"])
     except json.JSONDecodeError as exc:
@@ -344,6 +388,41 @@ def validate_compose_contract(path: Path = DEFAULT_COMPOSE_FILE) -> None:
     _require(networks.get("edge", {}).get("internal") is True, "入口网络必须隔离")
 
 
+def validate_monitoring_compose_contract(
+    path: Path = DEFAULT_MONITORING_COMPOSE_FILE,
+) -> None:
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise StagingConfigError("无法读取 monitoring Compose 文件") from exc
+    _require(isinstance(document, dict), "monitoring Compose 根节点无效")
+    services = document.get("services")
+    _require(isinstance(services, dict), "monitoring Compose 缺少 services")
+    expected_images = {
+        "prometheus": "${SMARTSCAN_STAGING_PROMETHEUS_IMAGE:",
+        "alertmanager": "${SMARTSCAN_STAGING_ALERTMANAGER_IMAGE:",
+        "node-exporter": "${SMARTSCAN_STAGING_NODE_EXPORTER_IMAGE:",
+    }
+    _require(set(services) == set(expected_images), "monitoring Compose 服务集合不完整")
+    for name, image_prefix in expected_images.items():
+        service = services[name]
+        _require(
+            "build" not in service and "ports" not in service,
+            f"监控服务禁止现场构建或暴露端口：{name}",
+        )
+        _require(str(service.get("image", "")).startswith(image_prefix), f"{name} 必须固定镜像")
+        _require(service.get("profiles") == ["monitoring"], f"{name} 必须使用 monitoring Profile")
+        _require(service.get("networks") == ["data"], f"{name} 只能连接数据网络")
+        _require(service.get("read_only") is True, f"{name} 根文件系统必须只读")
+        _require(service.get("cap_drop") == ["ALL"], f"{name} 必须删除全部 capabilities")
+        _require(
+            service.get("security_opt") == ["no-new-privileges:true"],
+            f"{name} 必须禁止提权",
+        )
+    for volume in services["node-exporter"].get("volumes", []):
+        _require(volume.get("read_only") is True, "Node Exporter 主机挂载必须只读")
+
+
 def _resolve_runtime_path(deploy: dict[str, str], *, ci_fixture: bool) -> Path:
     configured = Path(deploy["SMARTSCAN_STAGING_RUNTIME_ENV_FILE"])
     if configured.is_absolute():
@@ -357,6 +436,7 @@ def validate_staging_config(
     *,
     runtime_env_path: Path | None = None,
     compose_file: Path = DEFAULT_COMPOSE_FILE,
+    monitoring_compose_file: Path = DEFAULT_MONITORING_COMPOSE_FILE,
     ci_fixture: bool = False,
     require_host_paths: bool = False,
 ) -> ValidatedStagingConfig:
@@ -400,6 +480,15 @@ def validate_staging_config(
     )
     digests = tuple(_validate_image(deploy[key], key, ci_fixture=ci_fixture) for key in IMAGE_KEYS)
     roots = tuple(str(_validate_staging_path(deploy[key], key)) for key in PATH_KEYS)
+    _require(
+        PurePosixPath(deploy["SMARTSCAN_STAGING_MONITORING_CONFIG_ROOT"]) == MONITORING_CONFIG_ROOT,
+        "监控配置目录必须使用固定 staging 路径",
+    )
+    _require(
+        PurePosixPath(deploy["SMARTSCAN_STAGING_METRICS_TOKEN_FILE"])
+        == MONITORING_CONFIG_ROOT / "ops-metrics.token",
+        "指标令牌文件路径不匹配",
+    )
     root_paths = [PurePosixPath(root) for root in roots]
     for index, left in enumerate(root_paths):
         for right in root_paths[index + 1 :]:
@@ -422,6 +511,7 @@ def validate_staging_config(
     _validate_permissions(runtime_path, ci_fixture=ci_fixture)
     _validate_runtime(runtime, deploy, host, ci_fixture=ci_fixture)
     validate_compose_contract(compose_file.resolve())
+    validate_monitoring_compose_contract(monitoring_compose_file.resolve())
 
     if require_host_paths:
         _require(os.name != "nt", "主机目录检查必须在目标 Linux staging 主机执行")

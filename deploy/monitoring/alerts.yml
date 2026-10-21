@@ -1,0 +1,116 @@
+groups:
+  - name: smartscan-core
+    rules:
+      - alert: SmartScanApiUnavailable
+        expr: up{job="smartscan-api"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "SmartScan API 指标端点不可用"
+
+      - alert: SmartScanApiP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(smartscan_api_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "SmartScan API P95 超过 1 秒"
+
+      - alert: SmartScanApiErrorRateHigh
+        expr: sum(rate(smartscan_api_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(smartscan_api_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "SmartScan API 五分钟 5xx 比例超过 5%"
+
+      - alert: SmartScanDatabaseUnavailable
+        expr: smartscan_database_up == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "SmartScan 数据库探测失败"
+
+      - alert: SmartScanQueueNearHighWater
+        expr: smartscan_active_jobs > on() smartscan_capacity_limit{limit="queue_jobs"} * 0.8
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "SmartScan 任务队列接近高水位"
+
+      - alert: SmartScanQueueWaitHigh
+        expr: smartscan_queue_oldest_age_seconds > 300
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "SmartScan 最老任务等待超过 5 分钟"
+
+      - alert: SmartScanExpiredWorkerLease
+        expr: smartscan_expired_worker_leases > 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "SmartScan 存在过期 Worker 租约"
+
+      - alert: SmartScanWorkerCountLow
+        expr: smartscan_workers{state="active"} < 2
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "SmartScan 活跃 Worker 少于 staging 基线"
+
+      - alert: SmartScanStorageProtectionActive
+        expr: smartscan_storage_protection_active == 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "SmartScan 已触发磁盘写入保护"
+
+      - alert: SmartScanStorageFreeLow
+        expr: smartscan_storage_free_percent < 10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "SmartScan 数据盘可用比例低于 10%"
+
+      - alert: SmartScanAuditDeniedBurst
+        expr: sum(smartscan_audit_denied_events_5m) > 100
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "SmartScan 拒绝审计事件异常增加"
+
+      - alert: SmartScanAiCircuitOpen
+        expr: smartscan_ai_provider_circuits{state="open"} > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "SmartScan 可选 AI Provider 熔断"
+
+  - name: smartscan-host
+    rules:
+      - alert: SmartScanHostMetricsUnavailable
+        expr: up{job="smartscan-node"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "SmartScan 主机指标不可用"
+
+      - alert: SmartScanHostCpuHigh
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 90
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "SmartScan 主机 CPU 持续超过 90%"
+
+      - alert: SmartScanHostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "SmartScan 主机可用内存低于 10%"
+
+      - alert: SmartScanHostFilesystemReadOnly
+        expr: node_filesystem_readonly{mountpoint="/"} == 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "SmartScan 主机根文件系统只读"

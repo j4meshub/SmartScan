@@ -7,7 +7,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     job_lease_seconds: int = Field(default=300, ge=30, le=1800)
     job_retry_base_seconds: int = Field(default=5, ge=1, le=300)
     job_max_attempts: int = Field(default=3, ge=1, le=10)
+    queue_high_water_jobs: int = Field(default=1000, ge=1, le=100_000)
+    max_active_jobs_per_user: int = Field(default=2, ge=1, le=16)
+    storage_min_free_bytes: int = Field(default=2 * 1024**3, ge=64 * 1024**2)
+    storage_min_free_percent: float = Field(default=5.0, ge=1.0, le=50.0)
+    user_storage_quota_bytes: int = Field(default=0, ge=0)
+    worker_heartbeat_interval_seconds: int = Field(default=10, ge=2, le=60)
+    worker_stale_seconds: int = Field(default=45, ge=10, le=600)
+    ops_metrics_enabled: bool = False
+    ops_metrics_token: SecretStr = SecretStr("")
     vision_document_min_area_ratio: float = Field(default=0.2, gt=0.05, lt=0.95)
     vision_max_detection_dimension: int = Field(default=1600, ge=640, le=4096)
     ocr_enabled: bool = False
@@ -177,6 +186,24 @@ class Settings(BaseSettings):
                 raise RuntimeError("live WeCom configuration is incomplete")
             if not self.ocr_enabled:
                 raise RuntimeError("SMARTSCAN_OCR_ENABLED=true is required in production")
+            if self.storage_min_free_bytes < self.max_upload_bytes * 2:
+                raise RuntimeError(
+                    "SMARTSCAN_STORAGE_MIN_FREE_BYTES must reserve at least two uploads"
+                )
+            if self.user_storage_quota_bytes and (
+                self.user_storage_quota_bytes < self.max_upload_bytes
+            ):
+                raise RuntimeError(
+                    "SMARTSCAN_USER_STORAGE_QUOTA_BYTES must cover at least one upload"
+                )
+            if self.worker_stale_seconds <= self.worker_heartbeat_interval_seconds * 2:
+                raise RuntimeError(
+                    "SMARTSCAN_WORKER_STALE_SECONDS must exceed two heartbeat intervals"
+                )
+            if self.ops_metrics_enabled and len(self.ops_metrics_token.get_secret_value()) < 32:
+                raise RuntimeError(
+                    "SMARTSCAN_OPS_METRICS_TOKEN must be at least 32 characters when enabled"
+                )
 
 
 @lru_cache

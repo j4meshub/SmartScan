@@ -47,6 +47,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - 无需前端构建工具即可运行的双语响应式 H5 与管理后台。
 - Kotlin/Compose Android 和 SwiftUI iOS 工程起点。
 - Docker Compose、Nginx、PostgreSQL 加固 SQL、GitHub Actions 和 GitLab CI。
+- 运维保护：受保护的 Prometheus 多进程指标、Worker 数据库心跳、队列/用户并发/存储配额/磁盘预留，以及默认不暴露端口的 monitoring Profile。
 
 ## 本地运行
 
@@ -174,6 +175,8 @@ AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置�
 隔离 staging 的固定镜像、独立数据目录、回环端口、Secret 文件、启动顺序、严格校验和人工门禁见[隔离 staging 部署基线](docs/STAGING_DEPLOYMENT.md)。仓库模板与 CI 只证明配置可重建，不代表公司服务器已部署或允许生产发布。
 
 主机 TLS 入口、证书/私钥校验、Nginx `internal`/Range 容器链路、BBR 只读基线与精确回滚见[TLS、内部文件发送与 BBR 基线](docs/NETWORK_AND_FILE_DELIVERY.md)。真实域名、可信证书、公网链路、手机网络和内核对照仍需在隔离 staging 人工验收。
+
+内部指标、Worker 心跳、队列与用户并发、存储配额、磁盘写入保护、Prometheus/Alertmanager/Node Exporter 和真实告警门禁见[监控、容量配额与磁盘保护](docs/MONITORING_AND_CAPACITY.md)。监控 Profile 默认不启动，也不向主机发布端口。
 
 ## 测试
 
