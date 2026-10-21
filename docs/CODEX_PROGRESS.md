@@ -7,15 +7,24 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI |
-| 当前工作包 | `AI-001` Provider 注册与配置 |
-| 工作包状态 | 完成：实现、本地回归和 GitHub Runner 均通过；全部 Provider 保持默认关闭 |
-| 当前分支 | `codex/ai-001-provider-registry` |
-| 最后验证基线 | `9cb65d9`（已合并 BOOK-003；主线工作流 `39586048685` 五项全部通过） |
-| 工作包提交 | `df18491` |
-| PR | [#47](https://github.com/j4meshub/SmartScan/pull/47) |
-| 下一工作包 | `AI-002` 结构化任务；`EXAM-002`/`EXAM-003` 继续等待 EXAM-001 固定数据集闸门 |
+| 当前工作包 | `AI-002` 结构化任务与结果契约 |
+| 工作包状态 | 完成：七类 Schema、严格输出解析、保守业务规则、模型证据及 CI 均通过；真实出站保持关闭 |
+| 当前分支 | `codex/ai-002-structured-tasks` |
+| 最后验证基线 | `61a6dae`（已合并 AI-001；主线工作流 `39591095919` 五项全部通过） |
+| 工作包提交 | `af44c89` |
+| PR | [#48](https://github.com/j4meshub/SmartScan/pull/48) |
+| 下一工作包 | `AI-003` 网络安全；`EXAM-002`/`EXAM-003` 继续等待 EXAM-001 固定数据集闸门 |
 
 ## 当前工作包进展
+
+- AI-002 为分类、方向、标题、页码、公式/表格/版面、净化掩膜复核和双页复核建立 `1.0` 版严格任务与结果模型；任务只接受类型化参数、固定零温度和有限输出，不接受任意 Prompt。
+- Provider 原始输出限制为 64 KiB UTF-8 JSON 对象；Markdown、重复键、非有限数、额外字段、任务错配和越界值均失败关闭。印刷/未知内容禁止删除，删除置信度至少 `0.9`，无页码和非双页结果禁止虚构内容或几何。
+- OpenAI Responses、Chat Completions 和自定义协议均可生成嵌入严格 JSON Schema 的请求计划；计划不含密钥、Provider 地址、页面/用户标识，媒体保持 `$SMARTSCAN_MEDIA` 占位且 `network_ready=false`。
+- 验证结果只生成带 Provider、模型、结果 Schema 摘要、页面基础版本和媒体摘要的 `candidate/review` 证据，`business_mutation_allowed=false`；实际出站和业务增强版本保存必须等待 AI-003 并再次核对活动版本。
+- `packages/contracts/ai-tasks-v1.json` 固定七类 Schema，GitHub/GitLab CI 新增快照一致性检查。当前 AI-001/AI-002 联合专项 `48 passed`；全量 Python `251 passed, 5 skipped`，应用代码覆盖率 `88.93%`；H5 `40 passed`、Chromium E2E/axe `3 passed`；Ruff、格式、Schema 快照、OpenAPI 兼容、迁移升级/漂移/版本、JavaScript 语法、iOS 发布草稿和差异检查均通过。
+- 提交 `af44c89` 的 push 工作流 `39595238962` 与 PR 工作流 `39595288206` 共 10 项全部通过：API 使用 PostgreSQL 17 完成全量测试、迁移和 AI Schema 快照检查，Web 完成浏览器 E2E，Android 完成 Gradle 测试/编译/Lint，iOS 完成固定 XcodeGen、Xcode 16.4 Simulator 编译与单测，两套容器作业成功构建 AI 网关镜像。
+
+以下保留已合并 AI-001 的近期证据：
 
 - AI-001 使用 `SMARTSCAN_AI_PROVIDERS` JSON 在启动时构建不可变注册表；专业 OCR、OpenAI Chat/Responses-compatible 和自定义协议分别选择明确适配器，重复 ID、危险字段和启用但缺少必要配置会启动失败。
 - 默认三类 Provider 全部关闭；密钥只以环境变量名引用。脱敏状态只报告是否存在凭据，不返回引用名称或值；关闭的 Provider 拒绝读取密钥，缺少凭据的启用项保持不可用。
@@ -739,9 +748,10 @@ git diff --check
 | iOS 身份、Keychain 与网络 | `284da8e` | PR #38 最终代码头两套 10 项检查通过；注册登录、会话恢复、Keychain、设备头、刷新轮换、用户缓存隔离和双语界面的 Simulator 测试通过；真实短信与 Keychain 真机行为待人工验收 |
 | iOS AVFoundation 与 Vision 拍摄 | `2449395` | PR #39 最终代码头两套 10 项检查通过；状态机、质量阈值、Vision 矩形、iOS 17 旋转角、原图与方向证据的 Simulator 编译/测试通过；真实相机与阈值仍待人工验收 |
 | 可选视觉 AI Provider 注册 | `df18491` | PR #47 代码头两套 10 项 CI 全部通过；默认关闭、三类适配器、密钥引用隔离、脱敏状态、Compose Profile 和 AI 网关镜像构建通过；真实供应商与出站安全由后续工作包承担 |
+| 视觉 AI 结构化任务契约 | `af44c89` | PR #48 代码头两套 10 项 CI 全部通过；七类 Schema、严格输出解析、保守业务规则、模型版本证据、快照门禁和无网络请求计划通过；真实出站继续等待 AI-003 |
 
 ## 下一步
 
-1. 等待 PR #47 最终文档提交的 GitHub Actions 通过后 squash 合并，并同步主线。
-2. 从主线创建 `codex/ai-002-structured-tasks` 分支，实现结构化任务与结果契约，但在 AI-003 完成前不发送真实用户媒体。
-3. 外部 AI 默认关闭；真实供应商密钥、费用和固定数据集验收继续保留人工门禁，不以配置状态或 Mock 替代。
+1. 等待 PR #48 最终文档提交的 GitHub Actions 通过后 squash 合并，并同步主线。
+2. 从主线创建 `codex/ai-003-network-security` 分支，实现安全媒体资源、DNS 重绑定、连接固定、禁重定向和请求限制。
+3. 外部 AI 默认关闭；真实供应商密钥、费用和固定数据集验收继续保留人工门禁，不以 Schema、配置状态或 Mock 替代。
