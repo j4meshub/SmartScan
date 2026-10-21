@@ -7,15 +7,24 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 部署与发布 |
-| 当前工作包 | `OPS-001` 隔离 staging |
-| 工作包状态 | 等待人工验收：仓库侧隔离 Compose、配置校验、示例、测试、中文文档和两套 CI 已完成；真实服务器、域名、镜像、目录、迁移与业务流程仍阻塞 |
-| 当前分支 | `codex/ops-001-staging-baseline` |
-| 最后验证基线 | `063d875`（已合并 AI-005；主线工作流 `39629325878` 五项全部通过） |
-| 工作包提交 | `59a0ae5`、`31441eb` |
-| PR | [#52](https://github.com/j4meshub/SmartScan/pull/52) |
-| 下一工作包 | `OPS-002` 依赖真实 OPS-001 staging；服务器恢复前继续审计可独立完成的网络与文件发送仓库基线 |
+| 当前工作包 | `OPS-002` 网络与文件发送 |
+| 工作包状态 | 进行中：仓库侧 TLS/Nginx、内部文件发送容器链路、BBR 基线/回滚工具和中文文档已实现；全量测试与 CI 待完成，真实服务器仍阻塞 |
+| 当前分支 | `codex/ops-002-network-file-delivery` |
+| 最后验证基线 | `7dc3c53`（已合并 OPS-001；主线工作流 `39638319368` 五项全部通过） |
+| 工作包提交 | 待本工作包验证后填写 |
+| PR | 待创建 |
+| 下一工作包 | `OPS-003` 依赖真实 OPS-001 staging；服务器恢复前继续实现不依赖主机的监控与磁盘保护仓库基线 |
 
 ## 当前工作包进展
+
+- 新增主机 TLS Nginx 模板与失败关闭渲染器：只代理 staging 回环端口，启用 TLS 1.2/1.3、HTTP/2、短期 HSTS、认证限频、不含查询字符串的日志及上传/下载流式代理。
+- 新增 TLS 材料离线校验：要求精确 staging SAN、证书/私钥匹配、当前有效且至少 14 天剩余、非 SHA-1/MD5 签名摘要和私钥 `0600`；安全摘要不包含私钥或证书正文。
+- 容器 Nginx 启用 `sendfile`、公平分块、符号链接阻断和压缩类型边界；认证限频从错误保留 `/api` 前缀的正则 location 改为 `$uri` 空键映射，普通 API 不计数且 FastAPI 继续收到 `/v1/...`。
+- 新增隔离容器集成链路：假 API 只产生 `X-Accel-Redirect`，真实 Web 镜像验证内部路径直访 `404`、完整下载、内部头不泄露、附件/ETag/私有缓存以及单区间 `206 Content-Range`。
+- 新增 BBR 只读 procfs 快照、启用前后比较和按原值生成回滚配置；工具不执行 `modprobe`、`sysctl`、覆盖或删除。只有同一内核、BBR 可用/生效且 qdisc 为 `fq` 时才允许进入真实网络对照，核心验收始终保持未完成。
+- OPS-002 Python 专项当前 `12 passed, 1 skipped`；全量 Python `369 passed, 7 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、131 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、iOS 发布草稿、JavaScript 语法和差异检查均通过。本机没有 Docker，因此 Nginx/TLS 语法与真实 internal/Range 容器集成等待 GitHub Runner 补证。真实域名、可信证书、防火墙、公网/手机链路、大文件和 BBR 前后指标没有被合成夹具标记为通过。
+
+以下保留已合并 OPS-001 的近期证据：
 
 - 新增独立 staging Compose：目标服务器只拉取固定 digest 镜像，不含 `build`，不挂载仓库源码；PostgreSQL、API 和 Worker 使用独立数据网络，Nginx 只在主机回环独立端口暴露 Web 入口。
 - PostgreSQL、业务数据和 OCR 模型必须位于 `/srv/smartscan/staging/` 下互不重叠的主机目录；严格模式可在 Linux 目标主机拒绝缺失目录、符号链接和解析后越界。
@@ -787,6 +796,6 @@ git diff --check
 
 ## 下一步
 
-1. 等待 PR #52 最终证据文档提交的 API、Web、Android、iOS 与容器 CI 通过后 squash 合并，并同步主线。
-2. 公司服务器恢复后按隔离清单准备域名、目录、Secret、模型和固定镜像，完成迁移及核心流程；仓库合并不得被解释为真实 staging 已部署。
-3. 服务器恢复前继续审计 OPS-002 中不依赖服务器的 TLS/Nginx、内部文件发送和 BBR 仓库基线，同时保持真实链路验收阻塞。
+1. 完成 OPS-002 全量本地回归、自审与中文提交，推送 `codex/ops-002-network-file-delivery` 并创建中文 PR。
+2. 由 GitHub Docker Runner 实际执行 TLS Nginx `nginx -t`、internal/Range 容器集成，同时补齐 PostgreSQL、Android 与 iOS 平台证据；CI 通过后合并仓库侧基线。
+3. 公司服务器恢复后验证真实域名、可信证书、防火墙、鉴权下载、大文件、公网/手机链路和相同条件 BBR 前后对照；此前 OPS-002 保持等待人工验收，并继续推进 OPS-003 的独立仓库工作。

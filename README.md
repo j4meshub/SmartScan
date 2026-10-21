@@ -173,6 +173,8 @@ AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置�
 
 隔离 staging 的固定镜像、独立数据目录、回环端口、Secret 文件、启动顺序、严格校验和人工门禁见[隔离 staging 部署基线](docs/STAGING_DEPLOYMENT.md)。仓库模板与 CI 只证明配置可重建，不代表公司服务器已部署或允许生产发布。
 
+主机 TLS 入口、证书/私钥校验、Nginx `internal`/Range 容器链路、BBR 只读基线与精确回滚见[TLS、内部文件发送与 BBR 基线](docs/NETWORK_AND_FILE_DELIVERY.md)。真实域名、可信证书、公网链路、手机网络和内核对照仍需在隔离 staging 人工验收。
+
 ## 测试
 
 完整测试隔离、OpenAPI 快照和覆盖率门禁说明见[测试与 CI 基线](docs/TESTING.md)。
