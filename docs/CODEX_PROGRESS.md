@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI |
 | 当前工作包 | `AI-003` 出站网络与媒体安全 |
-| 工作包状态 | 进行中：代码、专项测试和中文说明已落地；等待全量回归、提交、PR 与 CI |
+| 工作包状态 | 完成：固定目标、DNS/IP 连接固定、TLS、禁重定向、媒体允许列表、大小门禁及 CI 均通过 |
 | 当前分支 | `codex/ai-003-network-security` |
 | 最后验证基线 | `4765487`（已合并 AI-002；主线工作流 `39598236916` 五项全部通过） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `26b9063` |
+| PR | [#49](https://github.com/j4meshub/SmartScan/pull/49) |
 | 下一工作包 | `AI-004` 可靠性与费用；`EXAM-002`/`EXAM-003` 继续等待 EXAM-001 固定数据集闸门 |
 
 ## 当前工作包进展
@@ -24,6 +24,7 @@
 - Compose AI 网关容器改为只读、删除全部 capabilities、启用 `no-new-privileges` 和受限临时目录；网关仍使用显式 `ai` Profile 且不经 Nginx 暴露。
 - 初版专项首次运行 `92 passed`、4 项失败：两项旧 Provider 夹具缺少新增媒体前缀，一项 TLS 假上下文缺少标准属性，一项测试把 `SecretStr` 的掩码当成原令牌提交。修正夹具并完成安全自审反例后，AI-001～AI-003 联合专项 `107 passed`；没有放宽安全规则或跳过测试。
 - 当前本地全量 Python `310 passed, 5 skipped`，应用代码覆盖率 `88.60%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、116 个 Python 文件格式、AI Schema 快照、OpenAPI 当前/上一代兼容、迁移升级/漂移/版本、JavaScript 语法、iOS 发布草稿和差异检查均通过。当前 Windows 没有 Docker，Compose 语义与加固后的 AI 网关镜像由 PR CI 补证。
+- 提交 `26b9063` 的 push 工作流 `39602627492` 与 PR 工作流 `39602693538` 共 10 项全部通过：API 在 PostgreSQL 17 环境完成全量测试、迁移和 AI Schema 快照检查，Web 完成 Chromium E2E，Android 完成 Gradle 测试/编译/Lint，iOS 完成固定 XcodeGen、Xcode 16.4 Simulator 编译与单测；两套容器作业均成功解析加固后的 Compose 并实际构建 AI 网关镜像。
 
 以下保留已合并 AI-001 的近期证据：
 
@@ -750,9 +751,10 @@ git diff --check
 | iOS AVFoundation 与 Vision 拍摄 | `2449395` | PR #39 最终代码头两套 10 项检查通过；状态机、质量阈值、Vision 矩形、iOS 17 旋转角、原图与方向证据的 Simulator 编译/测试通过；真实相机与阈值仍待人工验收 |
 | 可选视觉 AI Provider 注册 | `df18491` | PR #47 代码头两套 10 项 CI 全部通过；默认关闭、三类适配器、密钥引用隔离、脱敏状态、Compose Profile 和 AI 网关镜像构建通过；真实供应商与出站安全由后续工作包承担 |
 | 视觉 AI 结构化任务契约 | `af44c89` | PR #48 代码头两套 10 项 CI 全部通过；七类 Schema、严格输出解析、保守业务规则、模型版本证据、快照门禁和无网络请求计划通过；安全出站由 AI-003 承接 |
+| 视觉 AI 出站网络与媒体安全 | `26b9063` | PR #49 代码头两套 10 项 CI 全部通过；固定 HTTPS 目标、全部 DNS 答案校验、IP 固定 TLS、禁重定向、媒体前缀/令牌、请求限制和容器加固通过；真实 Provider 与出口防火墙待人工验收 |
 
 ## 下一步
 
-1. 完成 AI-003 全量回归、自审和中文提交，推送 `codex/ai-003-network-security` 并创建 PR。
-2. 等待 API、Web、Android、iOS 与容器 CI 全部通过后补充最终证据、合并并同步主线。
-3. 下一独立工作包为 `AI-004`；真实供应商密钥、媒体撤销联调、出口防火墙、费用和固定数据集验收继续保留人工门禁。
+1. 等待 PR #49 最终证据提交的 API、Web、Android、iOS 与容器 CI 通过后 squash 合并，并同步主线。
+2. 从主线创建 `codex/ai-004-reliability-cost`，实现超时、一次重试、熔断、并发/频率/日费用上限和脱敏日志。
+3. 真实供应商密钥、媒体撤销联调、出口防火墙、费用参数和固定数据集验收继续保留人工门禁。
