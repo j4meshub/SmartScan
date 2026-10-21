@@ -11,7 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
-from tools.validate_staging_config import PROJECT_ROOT, load_env_file
+if __package__:
+    from tools.validate_staging_config import PROJECT_ROOT, load_env_file
+else:
+    from validate_staging_config import PROJECT_ROOT, load_env_file
 
 MONITORING_CONFIG_ROOT = PurePosixPath("/etc/smartscan/staging/monitoring")
 TEMPLATE_ROOT = PROJECT_ROOT / "deploy" / "monitoring"

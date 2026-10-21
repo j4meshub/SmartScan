@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
+import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -437,6 +439,17 @@ def test_monitoring_renderer_requires_matching_secret_and_refuses_overwrite(
             target_dir=tmp_path / "mismatch",
             ci_fixture=True,
         )
+
+
+def test_monitoring_renderer_can_run_as_repository_script() -> None:
+    result = subprocess.run(
+        [sys.executable, "tools/render_monitoring_config.py", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--metrics-token-file" in result.stdout
 
 
 @pytest.mark.parametrize(
