@@ -7,12 +7,12 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M6 iOS |
-| 当前工作包 | `IOS-002` 身份与网络（进行中） |
-| 工作包状态 | 核心实现与本地契约检查完成，等待 macOS Simulator 编译与单元测试 |
+| 当前工作包 | `IOS-002` 身份与网络（完成） |
+| 工作包状态 | 完成，PR #38 最终代码头两套 CI 共 10 项通过，等待最终文档 CI 后合并 |
 | 当前分支 | `codex/ios-002-auth-network` |
 | 最后验证基线 | `4cc0a18`（IOS-001 PR #37 已合并） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `8dbad86`、`284da8e` |
+| PR | #38（已创建，等待最终文档 CI 后合并） |
 | 下一工作包 | `IOS-003` 拍摄与 Vision |
 
 ## 当前工作包进展
@@ -23,8 +23,9 @@
 - API 客户端默认使用不可解析的 `https://api.invalid/`，只接受 HTTPS 或显式回环 HTTP；统一发送设备 ID、百分号编码设备名和 `ios` 平台头，认证请求才附带 Bearer 令牌。
 - 项目缓存按用户 ID 的 SHA-256 目录分区，退出时即使服务端不可达也清除当前用户会话和缓存，不清除其他用户数据。
 - SwiftUI 增加中英文登录/注册界面、短信挑战状态、会话恢复和本地退出提示；当前尚未加入企业微信入口，该能力不在 IOS-002 交付范围。
-- 新增身份模型、Keychain、API 请求头/错误、刷新恢复、注销失败清理和用户缓存隔离单元测试；本地 iOS 工程契约 `5 passed`、Ruff 和格式检查通过。Windows 无法执行 Swift 编译，等待固定 macOS CI 生成工程并运行 Simulator 测试。
+- 新增身份模型、Keychain、API 请求头/错误、刷新恢复、注销失败清理和用户缓存隔离单元测试；本地通过 Ruff/格式、iOS 工程契约 `5 passed`、全量 Python `167 passed, 5 skipped`、覆盖率 `88.28%`、API 兼容、迁移升级/漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法和差异检查。
 - 首轮提交 `8dbad86` 已在两套 macOS 作业成功完成 Swift 编译；Simulator 仅有请求体断言失败。`URLProtocol` 接收的上传体可能转换为 `httpBodyStream`，测试读取逻辑同时支持 `httpBody` 与流后重跑，不修改产品请求协议。
+- 修复提交 `284da8e` 的推送与 PR 两套 API、Web、Android、iOS 和容器共 10 项检查全部通过；两个 iOS 作业均完成工程生成、Xcode 16.4 Simulator 编译和全部 Swift 单元测试。
 
 - AND-006 已由 PR #36 合并到主线，中文 squash 提交为 `4709c61`；最终文档头两套 API、Web、容器与 Android 共 8 项 CI 检查通过。
 - IOS-001 使用 `project.yml` 作为唯一工程规范，固定 XcodeGen `2.46.0` 官方发布 ZIP 与 SHA-256；生成的 `.xcodeproj` 和本地工具目录不提交。
@@ -652,9 +653,10 @@ git diff --check
 | Android 编辑、分享与账号删除 | `649b441` | PR #35 最终头两套 CI 的 8 项检查通过；页面编辑、鉴权导出、受限 FileProvider 分享、删除冷静期与用户级本地清理通过；真机分享、删除并发和真实短信待人工验收 |
 | Android 安全更新 | `4676b90` | PR #36 最终代码头两套 CI 的 8 项检查通过；ECDSA 清单、受控下载、APK 身份/哈希/证书复检、每日检查、Robolectric、应用编译和 Lint 通过；正式签名分发与真机安装/回滚待人工验收 |
 | iOS 可复现工程 | `51b182c` | PR #37 最终代码头两套 CI 的 10 项检查通过；固定 XcodeGen/Xcode、工程生成、双语资源、Simulator 应用编译和 Swift 单元测试通过；正式 Bundle ID、签名、真机与发布待后续门禁 |
+| iOS 身份、Keychain 与网络 | `284da8e` | PR #38 最终代码头两套 10 项检查通过；注册登录、会话恢复、Keychain、设备头、刷新轮换、用户缓存隔离和双语界面的 Simulator 测试通过；真实短信与 Keychain 真机行为待人工验收 |
 
 ## 下一步
 
-1. 等待 PR #37 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
-2. 创建 `codex/ios-002-auth-network` 分支，实现身份、Keychain、API 客户端和用户缓存分区。
-3. Apple Team、正式 Bundle ID、签名、真机和发布继续保留外部门禁，不以 Simulator 结果替代。
+1. 等待 PR #38 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
+2. 创建 `codex/ios-003-camera-vision` 分支，实现 AVFoundation 拍摄、Vision 矩形/清晰度提示、手动快门和方向证据。
+3. Keychain、相机、Apple Team、正式 Bundle ID、签名、真机和发布继续保留外部门禁，不以 Simulator 结果替代。
