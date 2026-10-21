@@ -24,6 +24,7 @@
 - 项目缓存按用户 ID 的 SHA-256 目录分区，退出时即使服务端不可达也清除当前用户会话和缓存，不清除其他用户数据。
 - SwiftUI 增加中英文登录/注册界面、短信挑战状态、会话恢复和本地退出提示；当前尚未加入企业微信入口，该能力不在 IOS-002 交付范围。
 - 新增身份模型、Keychain、API 请求头/错误、刷新恢复、注销失败清理和用户缓存隔离单元测试；本地 iOS 工程契约 `5 passed`、Ruff 和格式检查通过。Windows 无法执行 Swift 编译，等待固定 macOS CI 生成工程并运行 Simulator 测试。
+- 首轮提交 `8dbad86` 已在两套 macOS 作业成功完成 Swift 编译；Simulator 仅有请求体断言失败。`URLProtocol` 接收的上传体可能转换为 `httpBodyStream`，测试读取逻辑同时支持 `httpBody` 与流后重跑，不修改产品请求协议。
 
 - AND-006 已由 PR #36 合并到主线，中文 squash 提交为 `4709c61`；最终文档头两套 API、Web、容器与 Android 共 8 项 CI 检查通过。
 - IOS-001 使用 `project.yml` 作为唯一工程规范，固定 XcodeGen `2.46.0` 官方发布 ZIP 与 SHA-256；生成的 `.xcodeproj` 和本地工具目录不提交。

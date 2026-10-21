@@ -23,7 +23,7 @@ final class SmartScanAPITests: XCTestCase {
             XCTAssertEqual(request.value(forHTTPHeaderField: "X-Device-Platform"), "ios")
             XCTAssertNotNil(request.value(forHTTPHeaderField: "X-Device-Name"))
             XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
-            let body = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(Self.bodyData(from: request))
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
             XCTAssertEqual(json["username"], "student")
             XCTAssertEqual(json["password"], "private-password")
@@ -89,6 +89,22 @@ final class SmartScanAPITests: XCTestCase {
             headerFields: ["Content-Type": "application/json"]
         )!
         return (response, Data(body.utf8))
+    }
+
+    private static func bodyData(from request: URLRequest) -> Data? {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { return nil }
+            if count == 0 { break }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+        return data
     }
 
     private static let tokenJSON = #"{"access_token":"access-1","token_type":"bearer","expires_at":"2026-10-21T01:00:00Z","refresh_token":"refresh-1","refresh_expires_at":"2026-11-21T01:00:00Z","session_id":"session-1","device_id":"ios:test-device"}"#
