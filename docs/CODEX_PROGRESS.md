@@ -6,14 +6,14 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M9 部署与发布 |
-| 当前工作包 | `REL-002` iOS 发布 |
-| 工作包状态 | 等待人工验收：仓库侧受保护标签、Environment 审批、签名 Archive/IPA 实包门禁、显式 TestFlight 上传和脱敏报告已实现，PR #57 代码头两套十项 CI 已通过；真实 Apple 参数、截图、签名、处理状态、真机与审核仍为人工门禁 |
-| 当前分支 | `codex/rel-002-ios-release` |
-| 最后验证基线 | `c79f89b`（push 工作流 `39683400628` 与 PR 工作流 `39683405368` 的 API、Web、Android、iOS 和容器共十项全部通过） |
-| 工作包提交 | `376bdd8`（正式签名归档、实包校验、显式上传和中文发布说明）；`c79f89b`（修正 Actions 上下文范围） |
-| PR | [#57](https://github.com/j4meshub/SmartScan/pull/57)，等待最终进度证据提交后合并 |
-| 下一工作包 | REL-002 合并后审计剩余外部门禁；`OPS-005` 在公司服务器恢复前保持阻塞，算法真实指标等待授权固定数据集 |
+| 当前里程碑 | M7 与 M9 外部门禁 |
+| 当前工作包 | 外部门禁审计（当前无依赖满足的独立工作包） |
+| 工作包状态 | 等待人工验收：`EXAM-002/003` 必须等待授权固定数据集通过分类与基础净化闸门；`OPS-005` 必须等待公司服务器和 staging；正式企微、短信、移动端签名、真机与商店发布同样需要外部条件 |
+| 当前分支 | `main`（仓库侧可独立推进的计划工作包已完成） |
+| 最后验证基线 | `c61fceb`（PR #57 合并后的主分支工作流 `39685863787` 的 API、Web、Android、iOS 和容器五项全部通过） |
+| 工作包提交 | `c61fceb`（REL-002 中文 squash 合并提交） |
+| PR | [#57](https://github.com/j4meshub/SmartScan/pull/57)，已合并 |
+| 下一工作包 | 固定数据集到位后先完成 `EXAM-001`/`POC-004` 指标再进入 `EXAM-002/003`；公司服务器恢复后执行 `OPS-005`，其余外部门禁按可用条件验收 |
 
 ## 当前工作包进展
 
@@ -22,6 +22,7 @@
 - 新增实包校验器，核对 Bundle、版本、构建号、Team、精确 App ID、发行身份、描述文件类型/有效期、后台任务标识、三个 HTTPS 地址、Archive/IPA 描述文件一致性、`codesign`、Xcode 门禁、IPA SHA-256 与大小。合成归档及发布准备专项 `21 passed`；全量 Python `408 passed, 7 skipped`、覆盖率 `88.42%`，H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、148 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、AI Schema、Android/iOS 发布草稿、JavaScript 语法和差异检查均通过。本机没有 Bash/Xcode，Shell 语法和真实 Simulator 由 GitHub Runner 补证。
 - 首次推送的发布工作流运行 `39682892179` 在解析阶段失败且没有启动作业：作业级 `env` 不能读取 `runner.temp`。没有删除报告门禁或改用仓库目录；修复提交 `c79f89b` 将路径限定在归档步骤，并以官方 actionlint 复验两个工作流零报错。
 - 修复后的 push 工作流 `39683400628` 与 PR 工作流 `39683405368` 共十项全部通过：API 在 PostgreSQL 17 完成全量回归并由 Ubuntu Bash 校验归档脚本语法，Web 完成 Chromium E2E，Android 完成单元/Lint/Release 组装，iOS 在固定 Xcode 16.4 Simulator 编译和测试，容器恢复回环同步通过。正式 `macos-26` 签名工作流仍需真实 Environment、受保护标签、截图和 Secret，因此没有被普通 CI 或合成制品冒充执行。
+- REL-002 已由 PR #57 合并到主线，中文 squash 提交为 `c61fceb`；最终文档头 push 工作流 `39684567201` 与 PR 工作流 `39684574041` 共十项全部通过，合并后的主分支工作流 `39685863787` 五项再次全部通过。GitHub API 已确认仓库为公开状态，公开 Runner 已恢复，不再把额度作为当前阻塞项。
 - REL-001 已由 PR #56 合并到主线，中文 squash 提交为 `c070826`；主分支工作流 `39679501026` 的 API、Web、Android、iOS 和容器五项全部通过。真实 GitLab、正式 Android 密钥、无凭据下载、真机升级与数据保留仍保持人工门禁。
 
 以下保留已合并 REL-001 的近期证据：
@@ -831,6 +832,6 @@ git diff --check
 
 ## 下一步
 
-1. 完成 REL-002 全量本地检查、中文提交、PR 和 GitHub Actions；API 作业必须执行 iOS 发布草稿与 Shell 语法门禁，iOS Runner 必须实际完成现有 Simulator 编译和测试。
-2. 准备正式 Apple 参数、截图、Environment、Ruleset、签名与目标设备后，先运行 `validate-only`，再由人工明确选择上传并完成 Apple 处理和 TestFlight/App Review 门禁。
-3. 公司服务器恢复后执行 OPS-005 的 30 分钟 16 用户容量门禁，并在隔离 staging 补做 OPS-001～OPS-004 的真实外部验收；另行提供授权固定数据集后完成算法指标门禁。
+1. 提供授权且脱敏的固定数据集后，先执行 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005` 的真实指标门禁；只有分类与基础净化指标通过后才启动 `EXAM-002/003`，失败时先调整算法路线或产品范围。
+2. 公司服务器恢复后，先部署隔离 staging 并补做 OPS-001～OPS-004 的真实域名、证书、告警、备份恢复与故障注入验收，再执行 `OPS-005` 的 30 分钟 16 用户容量门禁，禁止直接在生产环境开发。
+3. 外部账号和材料到位后，分别完成真实短信/企微、Android 正式分发、iOS `validate-only`、TestFlight、目标真机和商店审核；任何 Mock、Simulator 或合成制品证据不得解除对应门禁。

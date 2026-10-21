@@ -192,8 +192,7 @@ class AndroidUpdateManager private constructor(
                 .build(),
             clock: () -> Long = System::currentTimeMillis,
         ): AndroidUpdateManager? {
-            if (manifestUrl.isBlank() || signatureUrl.isBlank() || publicKeyBase64.isBlank()) return null
-            if (!isSafeHttpsUrl(manifestUrl) || !isSafeHttpsUrl(signatureUrl)) return null
+            if (!isValidUpdateConfiguration(manifestUrl, signatureUrl, publicKeyBase64)) return null
             return runCatching {
                 AndroidUpdateManager(
                     context.applicationContext,
@@ -215,6 +214,16 @@ class AndroidUpdateManager private constructor(
 
 internal fun shouldCheckForUpdate(lastCheckAt: Long, now: Long): Boolean =
     lastCheckAt <= 0 || now < lastCheckAt || now - lastCheckAt >= TimeUnit.DAYS.toMillis(1)
+
+internal fun isValidUpdateConfiguration(
+    manifestUrl: String,
+    signatureUrl: String,
+    publicKeyBase64: String,
+): Boolean {
+    if (manifestUrl.isBlank() || signatureUrl.isBlank() || publicKeyBase64.isBlank()) return false
+    if (!isSafeHttpsUrl(manifestUrl) || !isSafeHttpsUrl(signatureUrl)) return false
+    return runCatching { UpdateManifestVerifier(publicKeyBase64) }.isSuccess
+}
 
 private fun isSafeHttpsUrl(value: String): Boolean = runCatching {
     val uri = URI(value)
