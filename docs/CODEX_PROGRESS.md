@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI |
 | 当前工作包 | `AI-004` 可靠性与费用 |
-| 工作包状态 | 进行中：代码、迁移、中文文档和本地专项已完成，等待全量验证与 PR CI |
+| 工作包状态 | 完成：代码、迁移、中文文档、本地全量门禁和代码头两套 10 项 CI 均通过 |
 | 当前分支 | `codex/ai-004-reliability-cost` |
 | 最后验证基线 | `277635e`（已合并 AI-003；主线工作流 `39605265370` 五项全部通过） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `1d7eb72` |
+| PR | [#50](https://github.com/j4meshub/SmartScan/pull/50) |
 | 下一工作包 | `AI-005` 固定评估集；`EXAM-002`/`EXAM-003` 继续等待 EXAM-001 固定数据集闸门 |
 
 ## 当前工作包进展
@@ -23,7 +23,8 @@
 - 脱敏数据库证据、JSON 运行日志和内部运行状态只记录 Provider、任务类型、随机调用 ID、稳定错误、次数、耗时、字节数和保守费用，不保存用户/任务/页面 ID、媒体 URL/令牌、密钥或模型原文。
 - Alembic `0021` 新增三张 AI 可靠性表；AI 网关在开发环境自动迁移、生产仅检查版本，并等待 Compose `migrate` 完成后启动。AI/迁移专项 `141 passed`，覆盖一次重试、立即/阈值熔断、半开恢复、租约、并发、频率、费用、日志脱敏和迁移升降级。
 - 首次全量门禁为 `323 passed, 5 skipped, 1 failed`：Alembic `fileConfig` 在同一进程执行迁移后禁用了已存在的 AI 可靠性 logger，导致专项单独通过但完整应用链路丢失脱敏日志。修正为 `disable_existing_loggers=False` 并增加回归测试；自审又补齐“重试被限频时仍累计原供应商失败”和“本地门禁拒绝不占半开探针”后，全量 Python `327 passed, 5 skipped`、覆盖率 `88.63%`。Ruff、119 个 Python 文件格式、迁移升级/漂移/版本和差异检查通过；H5 `40 passed`、Chromium E2E/axe `3 passed`，JavaScript 语法通过。
-- 本机没有 Docker、Android SDK、XcodeGen 或 Xcode；PostgreSQL 17 迁移、Compose 解析/AI 网关镜像、Android 和 iOS 将由 PR 的真实 GitHub Runner 补证，不能以本地 SQLite 或静态检查替代。
+- 本机没有 Docker、Android SDK、XcodeGen 或 Xcode；PostgreSQL 17 迁移、Compose 解析/AI 网关镜像、Android 和 iOS 已由 PR 的真实 GitHub Runner 补证，没有以本地 SQLite 或静态检查替代。
+- 提交 `1d7eb72` 的 push 工作流 `39611742874` 与 PR 工作流 `39611817771` 共 10 项全部通过：API 在 PostgreSQL 17 完成全量测试、`0021` 升降级和漂移检查；容器作业成功解析 Compose 并构建连接数据库的 AI 网关镜像；Web、Android 和固定 Xcode 16.4 iOS Simulator 编译/测试均通过。公开仓库 Runner 已恢复，没有再出现额度阻塞。
 
 以下保留已合并 AI-003 的近期证据：
 
@@ -762,9 +763,10 @@ git diff --check
 | 可选视觉 AI Provider 注册 | `df18491` | PR #47 代码头两套 10 项 CI 全部通过；默认关闭、三类适配器、密钥引用隔离、脱敏状态、Compose Profile 和 AI 网关镜像构建通过；真实供应商与出站安全由后续工作包承担 |
 | 视觉 AI 结构化任务契约 | `af44c89` | PR #48 代码头两套 10 项 CI 全部通过；七类 Schema、严格输出解析、保守业务规则、模型版本证据、快照门禁和无网络请求计划通过；安全出站由 AI-003 承接 |
 | 视觉 AI 出站网络与媒体安全 | `26b9063` | PR #49 代码头两套 10 项 CI 全部通过；固定 HTTPS 目标、全部 DNS 答案校验、IP 固定 TLS、禁重定向、媒体前缀/令牌、请求限制和容器加固通过；真实 Provider 与出口防火墙待人工验收 |
+| 视觉 AI 可靠性与费用门禁 | `1d7eb72` | PR #50 代码头两套 10 项 CI 全部通过；超时/一次重试、PostgreSQL 共享熔断/租约、并发/频率/UTC 日费用和脱敏证据通过；真实价格、账单、告警与供应商 SLA 待 AI-005/人工验收 |
 
 ## 下一步
 
-1. 等待 PR #49 最终证据提交的 API、Web、Android、iOS 与容器 CI 通过后 squash 合并，并同步主线。
-2. 从主线创建 `codex/ai-004-reliability-cost`，实现超时、一次重试、熔断、并发/频率/日费用上限和脱敏日志。
-3. 真实供应商密钥、媒体撤销联调、出口防火墙、费用参数和固定数据集验收继续保留人工门禁。
+1. 等待 PR #50 最终证据提交的 API、Web、Android、iOS 与容器 CI 通过后 squash 合并，并同步主线。
+2. 从主线创建 `codex/ai-005-fixed-evaluation`，建立真实 Provider 启用前的固定评估集、准确率、幻觉率、结构化成功率、延迟、成本和版本报告门禁。
+3. 真实供应商密钥、媒体撤销联调、出口防火墙、费用参数、账单和固定数据集验收继续保留人工门禁。
