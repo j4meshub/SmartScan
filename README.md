@@ -171,6 +171,8 @@ Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API �
 
 AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置时执行 `docker compose --profile ai -f deploy/compose/docker-compose.yml up --build ai-gateway`。该操作不会自动启用任何 Provider；容器默认只读、无 Linux capabilities，并启用 `no-new-privileges`。
 
+隔离 staging 的固定镜像、独立数据目录、回环端口、Secret 文件、启动顺序、严格校验和人工门禁见[隔离 staging 部署基线](docs/STAGING_DEPLOYMENT.md)。仓库模板与 CI 只证明配置可重建，不代表公司服务器已部署或允许生产发布。
+
 ## 测试
 
 完整测试隔离、OpenAPI 快照和覆盖率门禁说明见[测试与 CI 基线](docs/TESTING.md)。

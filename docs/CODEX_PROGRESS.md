@@ -1,21 +1,29 @@
 # SmartScan 长任务进度
 
-更新时间：2026-10-21
+更新时间：2026-10-22
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M8 可选视觉 AI |
-| 当前工作包 | `AI-005` 固定评估集 |
-| 工作包状态 | 等待人工验收：离线评估框架、契约、合成回归、中文文档和两套 10 项 CI 已完成；真实固定数据集、实际 Provider、价格/账单和数据政策未提供 |
-| 当前分支 | `codex/ai-005-fixed-evaluation` |
-| 最后验证基线 | `29d38f8`（已合并 AI-004；主线工作流 `39615121163` 五项全部通过） |
-| 工作包提交 | `745d6d1` |
-| PR | [#51](https://github.com/j4meshub/SmartScan/pull/51) |
-| 下一工作包 | `OPS-001` 隔离 staging 依赖公司服务器，当前阻塞；同时复核是否存在不依赖服务器的发布准备工作 |
+| 当前里程碑 | M9 部署与发布 |
+| 当前工作包 | `OPS-001` 隔离 staging |
+| 工作包状态 | 进行中：仓库侧隔离 Compose、配置校验、示例、测试、中文文档及本地全量回归已完成；GitHub CI 待补证，真实服务器仍阻塞 |
+| 当前分支 | `codex/ops-001-staging-baseline` |
+| 最后验证基线 | `063d875`（已合并 AI-005；主线工作流 `39629325878` 五项全部通过） |
+| 工作包提交 | 待本工作包验证后填写 |
+| PR | 待创建 |
+| 下一工作包 | `OPS-002` 依赖真实 OPS-001 staging；服务器恢复前继续审计可独立完成的网络与文件发送仓库基线 |
 
 ## 当前工作包进展
+
+- 新增独立 staging Compose：目标服务器只拉取固定 digest 镜像，不含 `build`，不挂载仓库源码；PostgreSQL、API 和 Worker 使用独立数据网络，Nginx 只在主机回环独立端口暴露 Web 入口。
+- PostgreSQL、业务数据和 OCR 模型必须位于 `/srv/smartscan/staging/` 下互不重叠的主机目录；严格模式可在 Linux 目标主机拒绝缺失目录、符号链接和解析后越界。
+- 部署与运行 Secret 使用仓库外 `0600` 文件；应用继续使用 `SMARTSCAN_ENV=production`，显式迁移、基础 OCR 开启，短信、企业微信和外部 AI 在基线中关闭。
+- 校验器拒绝生产式项目名、保留域名、特权/生产端口、可变或占位镜像、目录复用、仓库内 Secret、密码错配、自动迁移、开发验证码、Mock 服务和 CORS 错配；安全摘要不回显 Secret。
+- staging 专项当前 `19 passed`，并使用真实应用 `Settings` 加载生产模式运行夹具；全量 Python `357 passed, 5 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、格式、迁移漂移、API 兼容、JavaScript 语法和差异检查通过。本机没有 Docker，因此 Compose 真实解析、Web 镜像构建以及 Android/iOS 回归等待 GitHub Runner 补证。公司服务器、真实域名、镜像仓库、目录、Secret、模型、迁移和核心流程没有被本地夹具标记为通过。
+
+以下保留已合并 AI-005 的近期证据：
 
 - 新增默认离线的多系统评估器，用同一数据集比较基础 OCR、专业 OCR、公共 VLM 和自定义 VLM；评估器只导入本地运行 JSON，不自动启用 Provider 或发送媒体。
 - 固定清单强制授权、脱敏、许可、同意依据、按 `source_group` 切分、文件与任务媒体 SHA-256/尺寸一致。运行结果必须完整覆盖 test 集，并固定模型、框架、提示词、适配器、配置、价格和数据政策版本。
@@ -777,6 +785,6 @@ git diff --check
 
 ## 下一步
 
-1. 等待 PR #50 最终证据提交的 API、Web、Android、iOS 与容器 CI 通过后 squash 合并，并同步主线。
-2. 从主线创建 `codex/ai-005-fixed-evaluation`，建立真实 Provider 启用前的固定评估集、准确率、幻觉率、结构化成功率、延迟、成本和版本报告门禁。
-3. 真实供应商密钥、媒体撤销联调、出口防火墙、费用参数、账单和固定数据集验收继续保留人工门禁。
+1. 提交并推送 `codex/ops-001-staging-baseline`，创建中文 PR；由 GitHub Runner 验证 PostgreSQL、Compose 解析、Web 镜像、Android 与 iOS。
+2. CI 通过后合并仓库侧 OPS-001 基线并同步主线；工作包保持“等待人工验收”，不得把合并等同于真实 staging 已部署。
+3. 公司服务器恢复后按隔离清单准备域名、目录、Secret、模型和固定镜像，完成迁移及核心流程；此前继续审计 OPS-002 中不依赖服务器的网络与内部文件发送基线。

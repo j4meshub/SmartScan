@@ -1,0 +1,154 @@
+name: ${COMPOSE_PROJECT_NAME:?必须设置独立的 staging Compose 项目名}
+
+x-common-labels: &common-labels
+  com.smartscan.environment: staging
+  com.smartscan.managed-by: docker-compose
+
+x-application: &application
+  init: true
+  pull_policy: always
+  env_file:
+    - ${SMARTSCAN_STAGING_RUNTIME_ENV_FILE:?必须设置 staging 运行配置文件}
+  environment:
+    SMARTSCAN_ENV: production
+    SMARTSCAN_AUTO_MIGRATE: "false"
+    SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+  labels: *common-labels
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  postgres:
+    image: ${SMARTSCAN_STAGING_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartscan
+      POSTGRES_USER: smartscan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?必须设置 staging 数据库密码}
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_POSTGRES_ROOT:?必须设置独立 PostgreSQL 目录}
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    labels: *common-labels
+    networks: [data]
+
+  migrate:
+    <<: *application
+    image: ${SMARTSCAN_STAGING_API_IMAGE:?必须固定 API 镜像 digest}
+    restart: "no"
+    command: ["python", "-m", "services.api.app.migrations", "upgrade"]
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_DATA_ROOT:?必须设置独立数据目录}
+        target: /srv/smartscan/data
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [data]
+
+  api:
+    <<: *application
+    image: ${SMARTSCAN_STAGING_API_IMAGE:?必须固定 API 镜像 digest}
+    restart: unless-stopped
+    command:
+      - uvicorn
+      - services.api.app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "4"
+    environment:
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+      SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_INTERNAL_FILE_SEND_PREFIX: /_smartscan_files
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_DATA_ROOT:?必须设置独立数据目录}
+        target: /srv/smartscan/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    networks: [data, edge, egress]
+
+  worker-cpu-1: &worker
+    <<: *application
+    image: ${SMARTSCAN_STAGING_WORKER_IMAGE:?必须固定 Worker 镜像 digest}
+    restart: unless-stopped
+    environment:
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+      SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_OCR_MODEL_ROOT: /opt/smartscan/models/ocr
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_DATA_ROOT:?必须设置独立数据目录}
+        target: /srv/smartscan/data
+      - type: bind
+        source: ${SMARTSCAN_STAGING_MODEL_ROOT:?必须设置独立模型目录}
+        target: /opt/smartscan/models/ocr
+        read_only: true
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    networks: [data]
+
+  worker-cpu-2: *worker
+
+  ai-gateway:
+    <<: *application
+    profiles: ["ai"]
+    image: ${SMARTSCAN_STAGING_AI_GATEWAY_IMAGE:?必须固定 AI 网关镜像 digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    networks: [data, egress]
+
+  nginx:
+    image: ${SMARTSCAN_STAGING_WEB_IMAGE:?必须固定 Web 镜像 digest}
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:${SMARTSCAN_STAGING_HTTP_PORT:?必须设置 staging 回环端口}:80
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_DATA_ROOT:?必须设置独立数据目录}
+        target: /srv/smartscan/data
+        read_only: true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      api: {condition: service_healthy}
+    labels: *common-labels
+    security_opt: ["no-new-privileges:true"]
+    networks: [edge]
+
+networks:
+  data:
+    internal: true
+  edge:
+    internal: true
+  egress:
+    driver: bridge
