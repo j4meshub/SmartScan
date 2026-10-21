@@ -27,6 +27,7 @@ targets:
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: SmartScan/Info.plist
         SMARTSCAN_API_BASE_URL: https://api.invalid/
+        SMARTSCAN_BACKGROUND_TASK_IDENTIFIER: com.j4meshub.smartscan.upload
         SMARTSCAN_PRIVACY_POLICY_URL: https://privacy.example.invalid/
         SMARTSCAN_SUPPORT_URL: https://support.example.invalid/
         TARGETED_DEVICE_FAMILY: "1,2"

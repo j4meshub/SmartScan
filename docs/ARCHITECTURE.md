@@ -111,3 +111,9 @@ Android 普通构建与正式发布分离。GitHub Actions 持续验证 Debug �
 
 每个版本的 APK、签名清单、独立签名和校验报告写入不可变 Generic Package 路径，GitLab Pages 只承载 `/android/latest.json` 与 `.sig` 当前频道。频道回滚只能原样恢复一组能被当前公钥验证且与保存 APK 匹配的旧文件；已经升级的设备必须使用更高 `versionCode` 前滚修复。正式密钥、GitLab 运行、匿名下载、目标真机升级和数据保留均不由仓库自动化替代。详见[Android 正式签名与发布](ANDROID_RELEASE.md)。
 
+## iOS 发布边界
+
+iOS 普通回归与正式发布同样分离。日常 GitHub Actions 在固定 Xcode 16.4 Simulator 上生成工程、编译并运行单元测试；正式发布只能由 `main` 历史上的受保护 `ios-vX.Y.Z-build.N` 标签人工触发，并经过 `ios-release` Environment 审批，在 `macos-26` Runner 上使用满足 Apple 当前上传门禁的实际 Xcode。
+
+正式参数只从 Environment Variables 注入，P12、描述文件、App Store Connect 私钥和审核账号只从 Secrets 注入。临时钥匙串完成签名后，工作流从 Archive、嵌入描述文件和 IPA 实包重新核对 Bundle、版本、构建号、Team、后台任务标识、HTTPS 服务地址、发行身份和 SHA-256；默认 `validate-only` 不上传，只有显式选择 `upload-testflight` 才调用 Apple 上传工具。Artifact 只保存脱敏报告，不保存 IPA 或签名材料。Apple 处理状态、截图、TestFlight 真机、审核账号可用性和 App Review 始终是人工门禁。详见[iOS TestFlight 与 App Store 准备说明](IOS_APP_STORE_READINESS.md)。
+

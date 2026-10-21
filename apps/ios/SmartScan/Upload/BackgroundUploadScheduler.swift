@@ -2,7 +2,9 @@ import BackgroundTasks
 import Foundation
 
 final class BackgroundUploadScheduler: UploadBackgroundScheduling {
-    static let identifier = "com.j4meshub.smartscan.upload"
+    static let identifier = Bundle.main.object(
+        forInfoDictionaryKey: "SMARTSCAN_BACKGROUND_TASK_IDENTIFIER"
+    ) as? String ?? "com.j4meshub.smartscan.upload"
     private weak var coordinatorReference: CoordinatorReference?
 
     func register(coordinator: UploadCoordinator) {

@@ -19,6 +19,11 @@ build/
 local.properties
 *.jks
 *.keystore
+*.p12
+*.mobileprovision
+*.xcarchive
+*.ipa
+AuthKey_*.p8
 DerivedData/
 *.xcuserstate
 apps/ios/.tools/

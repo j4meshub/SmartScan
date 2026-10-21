@@ -32,6 +32,7 @@ jobs:
       - run: ruff check services migrations tests tools
       - run: ruff format --check services migrations tests tools
       - run: python tools/validate_ios_release.py
+      - run: bash -n apps/ios/scripts/archive-release.sh
       - run: python tools/validate_android_release.py
       - run: python tools/export_ai_schemas.py --check
       - run: python tools/export_ai_evaluation_schemas.py --check
