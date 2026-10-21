@@ -1,7 +1,7 @@
 package com.smartscan.feature.capture
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class BookAutoCaptureTest {
     private val ready = BookFrameSignals(0.0, true, true, 0.9, 0.1, 0.02)
