@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ def _write_env(path: Path, values: dict[str, str]) -> None:
     path.write_text(
         "\n".join(f"{key}={value}" for key, value in values.items()) + "\n", encoding="utf-8"
     )
+    path.chmod(0o600)
 
 
 def _copy_fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, str]]:
@@ -199,6 +201,15 @@ def test_database_password_rejects_url_unsafe_characters(tmp_path: Path) -> None
             runtime_env_path=runtime_path,
             ci_fixture=True,
         )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows 不提供 POSIX Secret 权限位")
+def test_strict_configuration_rejects_group_readable_secret(tmp_path: Path) -> None:
+    deploy_path, runtime_path, _, _ = _make_strict(tmp_path)
+    deploy_path.chmod(0o640)
+
+    with pytest.raises(StagingConfigError, match="0600"):
+        validate_staging_config(deploy_path, runtime_env_path=runtime_path)
 
 
 def test_duplicate_environment_key_is_rejected(tmp_path: Path) -> None:
