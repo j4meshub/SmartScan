@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 部署与发布 |
 | 当前工作包 | `REL-001` Android 发布 |
-| 工作包状态 | 进行中：仓库侧受保护标签、正式候选校验、不可变制品、签名频道和回滚链路已实现，正在完成全量验证与 PR；真实 GitLab、正式密钥和真机升级仍为人工门禁 |
+| 工作包状态 | 等待人工验收：仓库侧受保护标签、正式候选校验、不可变制品、签名频道和回滚链路已实现，PR #56 代码头两套十项 CI 已通过；真实 GitLab、正式密钥和真机升级仍为人工门禁 |
 | 当前分支 | `codex/rel-001-android-release` |
-| 最后验证基线 | 主线 `73a8019`（工作流 `39671462319` 的 API、Web、Android、iOS 和容器五项全部通过） |
+| 最后验证基线 | `9cebd58`（push 工作流 `39676941097` 与 PR 工作流 `39677124080` 的 API、Web、Android、iOS 和容器共十项全部通过） |
 | 工作包提交 | `f2c7881`（受保护标签、实包/上一版本门禁、不可变制品、签名频道与回滚链路） |
-| PR | 待创建 |
+| PR | [#56](https://github.com/j4meshub/SmartScan/pull/56)，等待最终进度证据提交后合并 |
 | 下一工作包 | REL-001 合并后推进 `REL-002` 仓库侧发布链路；`OPS-005` 在公司服务器恢复前保持阻塞 |
 
 ## 当前工作包进展
@@ -21,6 +21,7 @@
 - GitLab 仅允许受保护的 `android-vX.Y.Z` 标签进入正式流水线。构建前检查生产 HTTPS API、同源 Pages 清单/签名地址和 P-256 公钥；构建后以 `apkanalyzer`、`apksigner` 和流式 SHA-256 检查实包，并要求至少一个同包名、同证书、低版本的上一稳定 APK。
 - 每个版本的 APK、原始清单、独立签名和脱敏报告上传到不可变 Generic Package 路径，Pages 只发布已复验的 `latest.json` 与 `.sig`。人工回滚作业只能原样恢复与旧 APK 匹配的已签名频道；已升级设备必须用更高 `versionCode` 前滚修复。
 - 发布校验专项 `15 passed`；全量 Python `402 passed, 7 skipped`、覆盖率 `88.42%`，H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、146 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、AI Schema、iOS/Android 发布草稿、JavaScript 语法、GitLab YAML 解析和差异检查均通过。测试使用伪 APK 元数据与临时 ECDSA 密钥，只证明失败关闭逻辑；正式 GitLab 项目、固定构建镜像、受保护变量、无凭据下载、上一稳定真包和目标真机升级仍待人工验收。
+- 代码头 push 工作流 `39676941097` 与 PR 工作流 `39677124080` 的 API、Web、Android、iOS 和容器共十项全部通过。Android Runner 实际完成现有单元/Lint 和新增无密钥 Release 变体组装，API 在 PostgreSQL 17 完成全量回归与发布草稿门禁，固定 Xcode 16.4 Simulator、Chromium 和备份恢复容器回环同步通过。
 - OPS-004 已由 PR #55 合并到主线，中文 squash 提交为 `73a8019`；主分支工作流 `39671462319` 五项全部通过。真实异机仓库、定时任务、告警、RPO/RTO 和恢复清理仍保持人工门禁。
 
 以下保留已合并 OPS-003 的近期证据：
