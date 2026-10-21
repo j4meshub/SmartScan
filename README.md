@@ -25,6 +25,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - iOS 拍摄与 Vision：AVFoundation 后摄、点按对焦、曝光补偿、矩形/质量提示、手动快门，以及按用户保存的不可变原图和方向证据。
 - iOS 离线与后台恢复：用户分区持久队列、服务端确认分片续传、一次刷新重试、幂等完成和系统允许范围内的 BGProcessing 恢复。
 - iOS 工作区与账户：页序/四角/旋转/滤镜/复核、JPG/PDF 导出、SHA-256 校验、PDFKit 预览、系统分享及短信强验证账号删除。
+- iOS 审核准备：双语商店元数据、隐私清单、截图/审核账号清单、应用内隐私与支持入口，以及不读取密钥值的两级发布校验。
 - 文档透视评估框架：授权固定数据集清单、角点误差与可用率指标、耗时/内存报告及最少样本门禁；真实样本仍待人工验收。
 - 基础试卷净化 POC：版式规则三级建议、保守彩色笔迹候选、印刷内容保护、复核掩膜和整页原图回退；黑色笔迹不会在无可靠模型时自动擦除。
 - 双页拆分 POC：非中心书脊估计、左右独立裁切、显式阅读顺序、缺侧单页回退，以及仅在几何改善时采用的保守边界去弯曲。
@@ -128,6 +129,8 @@ iOS 用户队列、后台调度、服务端确认分片和幂等完成见[iOS �
 
 iOS 页面编辑、导出校验、PDFKit/Share Sheet 和账号删除见[iOS 工作区、导出分享与账号删除](docs/IOS_WORKSPACE_AND_ACCOUNT.md)。
 
+iOS TestFlight、App Store 元数据、签名边界和人工发布顺序见[iOS TestFlight 与 App Store 准备说明](docs/IOS_APP_STORE_READINESS.md)；数据披露草稿、截图和审核账号分别见[iOS App 隐私披露草稿](docs/IOS_APP_PRIVACY_DRAFT.md)、[iOS App Store 截图清单](docs/IOS_SCREENSHOT_CHECKLIST.md)和[iOS 审核账号操作规程](docs/IOS_REVIEW_ACCOUNT.md)。
+
 文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
 
 试卷规则检测、保守净化和禁止生成虚假原文的边界见[基础试卷检测与保守净化 POC](docs/POC_EXAM_CLEANUP.md)。
@@ -155,6 +158,7 @@ ruff check services migrations tests tools
 ruff format --check services migrations tests tools
 pytest --cov=services --cov-report=term-missing --cov-fail-under=77
 python -m services.api.app.migrations drift
+python tools/validate_ios_release.py
 node --check apps/h5/app.js
 node --check apps/h5/camera.js
 node --check apps/h5/resumable-upload.js

@@ -27,6 +27,8 @@ targets:
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: SmartScan/Info.plist
         SMARTSCAN_API_BASE_URL: https://api.invalid/
+        SMARTSCAN_PRIVACY_POLICY_URL: https://privacy.example.invalid/
+        SMARTSCAN_SUPPORT_URL: https://support.example.invalid/
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: false
   SmartScanTests:

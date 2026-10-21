@@ -30,6 +30,10 @@
 	<string>SmartScan needs camera access to capture documents.</string>
 	<key>SMARTSCAN_API_BASE_URL</key>
 	<string>$(SMARTSCAN_API_BASE_URL)</string>
+	<key>SMARTSCAN_PRIVACY_POLICY_URL</key>
+	<string>$(SMARTSCAN_PRIVACY_POLICY_URL)</string>
+	<key>SMARTSCAN_SUPPORT_URL</key>
+	<string>$(SMARTSCAN_SUPPORT_URL)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

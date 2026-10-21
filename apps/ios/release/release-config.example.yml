@@ -1,0 +1,28 @@
+schema_version: 1
+product:
+  bundle_id: com.j4meshub.smartscan.dev
+  app_store_id: APP_STORE_CONNECT_APP_ID_REQUIRED
+  apple_team_id: APPLE_TEAM_ID_REQUIRED
+  sku: APP_STORE_CONNECT_SKU_REQUIRED
+  marketing_version: 0.1.0
+  build_number: 1
+  minimum_upload_xcode_major: 26
+services:
+  api_base_url: https://api.example.invalid/
+  privacy_policy_url: https://privacy.example.invalid/
+  support_url: https://support.example.invalid/
+locales:
+  - en-US
+  - zh-Hans
+review_account:
+  role: user
+  username_environment: SMARTSCAN_REVIEW_USERNAME
+  password_environment: SMARTSCAN_REVIEW_PASSWORD
+  sms_code_environment: SMARTSCAN_REVIEW_SMS_CODE
+signing:
+  certificate_environment: SMARTSCAN_IOS_DISTRIBUTION_CERTIFICATE_BASE64
+  certificate_password_environment: SMARTSCAN_IOS_DISTRIBUTION_CERTIFICATE_PASSWORD
+  provisioning_profile_environment: SMARTSCAN_IOS_PROVISIONING_PROFILE_BASE64
+  app_store_key_id_environment: APP_STORE_CONNECT_KEY_ID
+  app_store_issuer_id_environment: APP_STORE_CONNECT_ISSUER_ID
+  app_store_private_key_environment: APP_STORE_CONNECT_PRIVATE_KEY_BASE64

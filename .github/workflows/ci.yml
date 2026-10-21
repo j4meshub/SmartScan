@@ -31,6 +31,7 @@ jobs:
       - run: pip install -e ".[dev,vision]"
       - run: ruff check services migrations tests tools
       - run: ruff format --check services migrations tests tools
+      - run: python tools/validate_ios_release.py
       - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
       - run: python tools/api_compatibility.py
       - run: python -m services.api.app.migrations upgrade
@@ -86,14 +87,7 @@ jobs:
       - name: 生成可复现 Xcode 工程
         run: sh apps/ios/scripts/generate-project.sh
       - name: Simulator 编译与单元测试
-        run: >-
-          xcodebuild
-          -project apps/ios/SmartScan.xcodeproj
-          -scheme SmartScan
-          -configuration Debug
-          -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest'
-          CODE_SIGNING_ALLOWED=NO
-          test
+        run: sh apps/ios/scripts/run-simulator-tests.sh
   containers:
     runs-on: ubuntu-latest
     steps:
