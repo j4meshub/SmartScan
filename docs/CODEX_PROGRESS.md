@@ -8,10 +8,10 @@
 |---|---|
 | 当前里程碑 | M9 部署与发布 |
 | 当前工作包 | `OPS-001` 隔离 staging |
-| 工作包状态 | 进行中：仓库侧隔离 Compose、配置校验、示例、测试、中文文档及本地全量回归已完成；GitHub CI 待补证，真实服务器仍阻塞 |
+| 工作包状态 | 等待人工验收：仓库侧隔离 Compose、配置校验、示例、测试、中文文档和两套 CI 已完成；真实服务器、域名、镜像、目录、迁移与业务流程仍阻塞 |
 | 当前分支 | `codex/ops-001-staging-baseline` |
 | 最后验证基线 | `063d875`（已合并 AI-005；主线工作流 `39629325878` 五项全部通过） |
-| 工作包提交 | `59a0ae5` |
+| 工作包提交 | `59a0ae5`、`31441eb` |
 | PR | [#52](https://github.com/j4meshub/SmartScan/pull/52) |
 | 下一工作包 | `OPS-002` 依赖真实 OPS-001 staging；服务器恢复前继续审计可独立完成的网络与文件发送仓库基线 |
 
@@ -21,7 +21,9 @@
 - PostgreSQL、业务数据和 OCR 模型必须位于 `/srv/smartscan/staging/` 下互不重叠的主机目录；严格模式可在 Linux 目标主机拒绝缺失目录、符号链接和解析后越界。
 - 部署与运行 Secret 使用仓库外 `0600` 文件；应用继续使用 `SMARTSCAN_ENV=production`，显式迁移、基础 OCR 开启，短信、企业微信和外部 AI 在基线中关闭。
 - 校验器拒绝生产式项目名、保留域名、特权/生产端口、可变或占位镜像、目录复用、仓库内 Secret、密码错配、自动迁移、开发验证码、Mock 服务和 CORS 错配；安全摘要不回显 Secret。
-- staging 专项当前 `19 passed`，并使用真实应用 `Settings` 加载生产模式运行夹具；全量 Python `357 passed, 5 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、格式、迁移漂移、API 兼容、JavaScript 语法和差异检查通过。本机没有 Docker，因此 Compose 真实解析、Web 镜像构建以及 Android/iOS 回归等待 GitHub Runner 补证。公司服务器、真实域名、镜像仓库、目录、Secret、模型、迁移和核心流程没有被本地夹具标记为通过。
+- staging 专项在 Windows 为 `19 passed, 1 skipped`，并使用真实应用 `Settings` 加载生产模式运行夹具；全量 Python `357 passed, 6 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、格式、迁移漂移、API 兼容、JavaScript 语法和差异检查通过。本机没有 Docker，Compose 真实解析、Web 镜像构建以及 Android/iOS 回归由 GitHub Runner 补证。
+- 首轮 push API 作业 `39634646303` 在 Linux 暴露严格测试的临时 Secret 文件仍为默认 `0644`，校验器按设计拒绝；没有放宽安全规则，修复为测试写入后显式设置 `0600`，并新增 POSIX 宽权限拒绝反例。修复提交 `31441eb` 的 push 工作流 `39635214962` 与 PR 工作流 `39635223887` 共 10 项全部通过：API 在 PostgreSQL 17/Linux 完成全量测试与权限反例，容器作业实际解析两份 Compose 并构建 staging Web 镜像，Web、Android 和固定 Xcode 16.4 iOS Simulator 均通过。
+- 公司服务器、真实域名、镜像仓库与 digest、主机目录、Secret、模型、迁移和核心流程没有被本地夹具或 CI 标记为通过；OPS-001 保持“等待人工验收”。
 
 以下保留已合并 AI-005 的近期证据：
 
@@ -785,6 +787,6 @@ git diff --check
 
 ## 下一步
 
-1. 提交并推送 `codex/ops-001-staging-baseline`，创建中文 PR；由 GitHub Runner 验证 PostgreSQL、Compose 解析、Web 镜像、Android 与 iOS。
-2. CI 通过后合并仓库侧 OPS-001 基线并同步主线；工作包保持“等待人工验收”，不得把合并等同于真实 staging 已部署。
-3. 公司服务器恢复后按隔离清单准备域名、目录、Secret、模型和固定镜像，完成迁移及核心流程；此前继续审计 OPS-002 中不依赖服务器的网络与内部文件发送基线。
+1. 等待 PR #52 最终证据文档提交的 API、Web、Android、iOS 与容器 CI 通过后 squash 合并，并同步主线。
+2. 公司服务器恢复后按隔离清单准备域名、目录、Secret、模型和固定镜像，完成迁移及核心流程；仓库合并不得被解释为真实 staging 已部署。
+3. 服务器恢复前继续审计 OPS-002 中不依赖服务器的 TLS/Nginx、内部文件发送和 BBR 仓库基线，同时保持真实链路验收阻塞。
