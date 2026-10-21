@@ -76,6 +76,24 @@ jobs:
           gradle-version: "8.9"
       - name: Android 分层、拍摄、编辑分享、单元测试与 Lint
         run: gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :core:upload:test :core:update:test :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :feature:sync:testDebugUnitTest :feature:update:testDebugUnitTest :feature:workspace:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug --stacktrace
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: 选择固定 Xcode 16.4
+        run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
+      - name: 生成可复现 Xcode 工程
+        run: sh apps/ios/scripts/generate-project.sh
+      - name: Simulator 编译与单元测试
+        run: >-
+          xcodebuild
+          -project apps/ios/SmartScan.xcodeproj
+          -scheme SmartScan
+          -configuration Debug
+          -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest'
+          CODE_SIGNING_ALLOWED=NO
+          test
   containers:
     runs-on: ubuntu-latest
     steps:

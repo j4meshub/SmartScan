@@ -17,6 +17,8 @@ local.properties
 *.keystore
 DerivedData/
 *.xcuserstate
+apps/ios/.tools/
+apps/ios/SmartScan.xcodeproj/
 data/
 !/apps/android/data/
 !/apps/android/data/**

@@ -6,16 +6,23 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M5 Android（自动化代码门禁完成，真机与正式分发待人工验收） |
-| 当前工作包 | `AND-006` 安全更新（完成） |
-| 工作包状态 | 完成，PR #36 最终代码头两套 CI 共 8 项通过，等待最终文档 CI 后合并 |
-| 当前分支 | `codex/and-006-secure-update` |
-| 最后验证基线 | `649b441`（AND-005 PR #35 已合并） |
-| 工作包提交 | `8b98466`、`c36b42c`、`4676b90` |
-| PR | #36（已创建，等待最终文档 CI 后合并） |
-| 下一工作包 | `IOS-001` 可复现工程 |
+| 当前里程碑 | M6 iOS |
+| 当前工作包 | `IOS-001` 可复现工程 |
+| 工作包状态 | 进行中，工程规范、固定工具链、双语资源、单元测试和 macOS CI 已实现，等待首次推送验证 |
+| 当前分支 | `codex/ios-001-reproducible-project` |
+| 最后验证基线 | `4709c61`（AND-006 PR #36 已合并） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `IOS-002` 身份与网络 |
 
 ## 当前工作包进展
+
+- AND-006 已由 PR #36 合并到主线，中文 squash 提交为 `4709c61`；最终文档头两套 API、Web、容器与 Android 共 8 项 CI 检查通过。
+- IOS-001 使用 `project.yml` 作为唯一工程规范，固定 XcodeGen `2.46.0` 官方发布 ZIP 与 SHA-256；生成的 `.xcodeproj` 和本地工具目录不提交。
+- GitHub CI 新增 `macos-15` 作业并显式选择 Xcode 16.4，不依赖 `macos-latest` 默认版本；使用无签名 iPhone 16 Pro Simulator 执行应用编译和单元测试。
+- 新增应用/测试 Target、共享 Scheme、iOS 17 最低版本和开发占位 Bundle ID；正式 Bundle ID、Team 与签名参数未冻结且不进入当前配置。
+- 首页扫描模式抽成稳定枚举并增加单元测试；所有可见首页文案补齐英文和简体中文资源。
+- 本地通过 Ruff/格式、iOS 配置契约 `4 passed`、全量 Python `166 passed, 5 skipped`、覆盖率 `88.28%`、API 兼容、迁移升级/漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法和差异检查。Windows 无法运行 XcodeGen、Xcode 与 Simulator，必须等待 macOS CI，不能把 YAML 契约测试记为 Swift 编译通过。
 
 - AND-005 已由 PR #35 合并到主线，中文 squash 提交为 `649b441`；最终头两套 API、Web、容器与 Android 共 8 项 CI 检查通过。
 - AND-006 新增 `:core:update` 纯 JVM 模块，使用固定 ECDSA P-256 公钥和 SHA-256 验证原始清单字节，篡改后在解析和下载前拒绝；该算法覆盖 Android API 26 起的目标系统。
@@ -636,6 +643,6 @@ git diff --check
 
 ## 下一步
 
-1. 等待 PR #36 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
-2. 从 `IOS-001` 建立固定 XcodeGen 版本的可复现工程与 GitHub macOS Simulator 构建门禁。
-3. 正式 GitLab 发布源、公钥、APK keystore、未知来源授权、系统安装器升级和回滚继续保留人工验收，不以 Mock 或 CI 结果代替。
+1. 完成本地 YAML、Shell、双语资源和差异检查，提交并推送 IOS-001。
+2. 使用 GitHub macOS Runner 验证 XcodeGen 生成、Xcode 16.4 编译和 Simulator 单元测试；修复全部失败后创建中文 PR 并合并。
+3. IOS-001 完成后进入 `IOS-002` 身份、Keychain 与 API 客户端；Apple Team、正式 Bundle ID、签名、真机和发布继续保留外部门禁。

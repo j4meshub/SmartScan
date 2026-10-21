@@ -1,0 +1,52 @@
+name: SmartScan
+options:
+  bundleIdPrefix: com.j4meshub
+  createIntermediateGroups: true
+  developmentLanguage: en
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.4"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    VERSIONING_SYSTEM: apple-generic
+targets:
+  SmartScan:
+    type: application
+    platform: iOS
+    sources:
+      - path: SmartScan
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.j4meshub.smartscan.dev
+        PRODUCT_NAME: SmartScan
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_CFBundleDisplayName: SmartScan
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: false
+  SmartScanTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SmartScanTests
+    dependencies:
+      - target: SmartScan
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.j4meshub.smartscan.dev.tests
+        GENERATE_INFOPLIST_FILE: true
+schemes:
+  SmartScan:
+    build:
+      targets:
+        SmartScan: all
+    test:
+      gatherCoverageData: true
+      targets:
+        - name: SmartScanTests
+          parallelizable: true
