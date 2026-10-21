@@ -291,6 +291,8 @@ def test_nginx_internal_send_and_ci_compose_static_contract() -> None:
 
     assert "internal;" in nginx
     assert "disable_symlinks on from=/srv/smartscan/data;" in nginx
+    assert "etag off;" in nginx
+    assert "add_header ETag $upstream_http_etag always;" in nginx
     assert "sendfile on;" in nginx
     assert "sendfile_max_chunk 1m;" in nginx
     assert "map $uri $auth_limit_key" in nginx

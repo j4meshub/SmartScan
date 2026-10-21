@@ -25,7 +25,7 @@ staging Web Nginx（H5、后台、API 代理、internal 文件发送）
 - 两层代理都关闭请求缓冲，避免把分片上传完整落到代理临时文件；文件响应关闭外层代理缓冲，以便 Range 和断点下载及时返回。
 - JPEG、PDF 等已压缩文件不在 gzip 类型中；JSON、JavaScript、CSS、XML、SVG 和纯文本可以压缩。
 - 内层 Nginx 的 `/_smartscan_files/` 始终为 `internal`，只读挂载业务文件目录并拒绝符号链接；外部直访返回 `404`。
-- API 先执行所有者鉴权、`404` 隐藏和审计，再返回百分号编码的 `X-Accel-Redirect`。该内部头由 Nginx 消费，不返回给客户端。
+- API 先执行所有者鉴权、`404` 隐藏和审计，再返回百分号编码的 `X-Accel-Redirect`。该内部头由 Nginx 消费，不返回给客户端；internal location 关闭基于时间/大小的自动 ETag，并显式保留 API 基于文件 SHA-256 生成的强 ETag。
 
 认证接口限频改用 `$uri` 映射空键：只有 `/api/v1/auth/login` 和 `/api/v1/auth/register` 进入限频区，普通 API 不计数；请求仍通过带尾斜杠的 `proxy_pass http://api/` 去掉外部 `/api/` 前缀。这样避免正则 location 把错误的 `/api/v1/...` 路径传给 FastAPI。
 
