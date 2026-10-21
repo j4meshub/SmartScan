@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI |
 | 当前工作包 | `AI-005` 固定评估集 |
-| 工作包状态 | 等待人工验收：离线评估框架、契约、合成回归和中文文档已完成；真实固定数据集、实际 Provider、价格/账单和数据政策未提供 |
+| 工作包状态 | 等待人工验收：离线评估框架、契约、合成回归、中文文档和两套 10 项 CI 已完成；真实固定数据集、实际 Provider、价格/账单和数据政策未提供 |
 | 当前分支 | `codex/ai-005-fixed-evaluation` |
 | 最后验证基线 | `29d38f8`（已合并 AI-004；主线工作流 `39615121163` 五项全部通过） |
 | 工作包提交 | `745d6d1` |
@@ -23,6 +23,7 @@
 - JSON 和中文 Markdown 报告不包含图片、原始路径、原始模型输出、任务/页面 ID、媒体 URL、令牌或密钥。真实数据集目录、实际运行结果和报告均已加入 Git 忽略。
 - 当前 AI 固定评估专项 `11 passed`；全量 Python `338 passed, 5 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、123 个 Python 文件格式、AI 任务/评估 Schema 快照、OpenAPI 当前/上一代兼容、迁移升级/漂移、iOS 发布草稿、JavaScript 语法和差异检查均通过。本机没有 PostgreSQL 17、Android、Xcode 或 Docker，相关环境由 GitHub Runner 补证。
 - 代码提交 `745d6d1` 的 PR 工作流 `39621101031` 五项全部通过，已在 PostgreSQL 17、Chromium、Android、Xcode 16.4 Simulator 和 Docker 环境补证。push 工作流 `39620899771` 的 API、Web、Android 和容器通过；iOS 完整日志显示编译、全部 Swift 单测和清理通过，但 GitHub 状态长时间未从 `in_progress` 收敛，取消接口称其已不在运行而重跑接口称其仍在运行。该平台状态异常不冒充绿色结论，最终文档头会触发新一轮两套工作流验证。
+- 文档头提交 `e4f0f44` 重新触发 push 工作流 `39626063110` 与 PR 工作流 `39626069371`；API、Web、Android、iOS 和容器共 10 项全部通过，公开仓库 Runner 已完成最终补证。
 
 以下保留已合并 AI-004 的近期证据：
 
