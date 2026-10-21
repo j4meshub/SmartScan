@@ -15,6 +15,6 @@
     <string name="capture_quality_blurry">Hold the device steady and tap the page to focus</string>
     <string name="capture_exposure">Exposure</string>
     <string name="capture_manual_hint">Manual shutter · low-quality pages can still be captured with a warning</string>
-    <string name="capture_saved_original">Original image saved. Enhancement never overwrites it.</string>
+    <string name="capture_saved_original">Original saved and queued. Enhancement never overwrites it.</string>
     <string name="capture_continue">Capture another page</string>
 </resources>

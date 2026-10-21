@@ -32,7 +32,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -45,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +63,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val Overlay = Color(0xB3111827)
 private val ReadyGreen = Color(0xFFB7F7D4)
@@ -71,7 +74,7 @@ private val ReadyGreen = Color(0xFFB7F7D4)
 fun CaptureScreen(
     mode: CaptureMode,
     onBack: () -> Unit,
-    onOriginalCaptured: (String) -> Unit = {},
+    onOriginalCaptured: suspend (String) -> Boolean = { true },
 ) {
     val context = LocalContext.current
     val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
@@ -81,6 +84,7 @@ fun CaptureScreen(
     }
     var session by remember { mutableStateOf<CameraSession?>(null) }
     var exposureIndex by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasPermission = granted
@@ -160,8 +164,17 @@ fun CaptureScreen(
                         mainExecutor,
                         object : ImageCapture.OnImageSavedCallback {
                             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                                state = reduceCaptureState(state, CaptureEvent.CaptureSucceeded(output.absolutePath))
-                                onOriginalCaptured(output.absolutePath)
+                                scope.launch {
+                                    val accepted = withContext(NonCancellable) {
+                                        runCatching { onOriginalCaptured(output.absolutePath) }.getOrDefault(false)
+                                    }
+                                    if (accepted) {
+                                        state = reduceCaptureState(state, CaptureEvent.CaptureSucceeded(output.absolutePath))
+                                    } else {
+                                        output.delete()
+                                        state = reduceCaptureState(state, CaptureEvent.CaptureFailed)
+                                    }
+                                }
                             }
 
                             override fun onError(exception: ImageCaptureException) {

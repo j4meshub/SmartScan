@@ -55,7 +55,12 @@
         "refresh_session_v1_auth_refresh_post",
         "logout_v1_auth_logout_post",
         "me_v1_me_get",
-        "list_projects_v1_projects_get"
+        "list_projects_v1_projects_get",
+        "create_project_v1_projects_post",
+        "create_upload_v1_uploads_post",
+        "get_upload_v1_uploads__upload_id__get",
+        "put_upload_chunk_v1_uploads__upload_id__chunks__chunk_index__put",
+        "complete_upload_v1_uploads__upload_id__complete_post"
       ]
     },
     "ios": {

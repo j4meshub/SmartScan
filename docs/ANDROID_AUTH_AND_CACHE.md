@@ -42,7 +42,7 @@ Android 实际消费以下 `/v1` 操作，并已登记到兼容矩阵：
 ## 验证
 
 ```text
-gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
+gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :core:upload:test :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :feature:sync:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
 ```
 
 自动测试覆盖认证 JSON 契约、令牌轮换、损坏密文、远端注销失败、本地清理、相同项目 ID 的跨用户隔离、单用户清理和表单规则。Mock 与 Robolectric 不能替代真实短信、硬件 Keystore、进程被系统回收、数据库升级、模拟器和真机验收。

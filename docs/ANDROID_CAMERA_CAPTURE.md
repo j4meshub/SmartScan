@@ -50,7 +50,7 @@ WAITING_PERMISSION
 
 ## 自动化与人工门禁
 
-自动测试覆盖质量阈值、非法帧输入、权限到拍摄的合法状态转换、未就绪快门、拍摄失败和原图状态。GitHub CI 使用固定 JDK 17、Gradle 8.9 与 Android 35 SDK 编译 CameraX/Compose 并执行单元测试和 Lint。
+自动测试覆盖质量阈值、非法帧输入、权限到拍摄的合法状态转换、未就绪快门、拍摄失败和原图状态。GitHub CI 使用固定 JDK 17、Gradle 8.9 与 Android 35 SDK 编译 CameraX/Compose，并执行上传核心、Room 队列、拍摄、WorkManager 处理及应用单元测试和 Lint。
 
 下列项目必须保留真机人工验收：
 

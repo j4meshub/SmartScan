@@ -15,6 +15,7 @@ android {
 
 dependencies {
     implementation(project(":core:model"))
+    implementation(project(":core:upload"))
     implementation(project(":data:repository"))
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")

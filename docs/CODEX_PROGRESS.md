@@ -1,21 +1,61 @@
 # SmartScan 长任务进度
 
-更新时间：2026-10-20
+更新时间：2026-10-21
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M5 Android |
-| 当前工作包 | `AND-003` CameraX 拍摄 |
-| 工作包状态 | 进行中，PR #33 已创建，等待最终头 CI 与合并 |
-| 当前分支 | `codex/and-003-camerax-capture` |
-| 最后验证基线 | `60bac1e`（AND-002 PR #32 已合并） |
-| 工作包提交 | `302dc89`（最新验证提交） |
-| PR | [#33](https://github.com/j4meshub/SmartScan/pull/33) |
-| 下一工作包 | `AND-004` 离线与续传 |
+| 当前工作包 | `AND-004` 离线与续传 |
+| 工作包状态 | 进行中，PR #34 已创建，等待最终头提交 CI |
+| 当前分支 | `codex/and-004-offline-resume` |
+| 最后验证基线 | `b238992`（AND-003 PR #33 已合并） |
+| 工作包提交 | `a6dffeb`（首个完整绿灯；最终文档提交待验证） |
+| PR | [#34](https://github.com/j4meshub/SmartScan/pull/34) |
+| 下一工作包 | `AND-005` 编辑与分享 |
 
 ## 当前工作包进展
+
+- AND-003 已由 PR #33 合并到主线，中文 squash 提交为 `b238992`；三模式 CameraX 预览、点按对焦、曝光补偿、质量提示、手动快门和原图保护已完成。
+- 新增 `:core:upload` 队列协议与 `:feature:sync` WorkManager/续传模块；应用捕获成功只有在原图持久化入队后才显示成功。
+- Room 从 v1 升级到 v2，新增用户分区的本地上传项目与页面队列；显式迁移保留已有项目缓存，不使用破坏性重建。
+- 同一本地项目使用 WorkManager 唯一工作链和联网约束；登录恢复会重新调度当前用户队列，换用户不会处理其他用户原图。
+- 原图流式计算 SHA-256，创建上传会话后只跳过服务端 `received_chunks` 确认的分片；每个二进制分片携带并校验独立哈希回执。
+- 断网、超时、`408`、`429` 和 `5xx` 保持幂等键并指数退避；上传过期才轮换幂等键；完成响应丢失可由服务端 `page_id` 收敛。
+- `401` 先复用一次性刷新令牌流程，刷新失败进入等待登录；本地文件缺失、分片计划或回执不一致进入不可安全重试的失败状态。
+- 入队仅接受应用私有 `files/captures/originals` 的 canonical 路径，拒绝外部路径和目录穿越；成功上传不删除原图。
+
+`AND-004` 计划门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python tools/api_compatibility.py
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm --prefix apps/h5 ci
+npm --prefix apps/h5 test
+npm --prefix apps/h5 run test:e2e
+gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :core:upload:test :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :feature:sync:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
+git diff --check
+```
+
+Android 门禁将验证 Room v1→v2 迁移、队列用户隔离、服务端确认分片恢复、断网重试幂等键、过期轮换、二进制请求契约、WorkManager/应用编译和 Lint。本机未安装 Android 工具链，模拟器、真机网络切换和 staging 服务端重启继续保留人工验收。
+
+本地结果：95 个 Python 文件格式与 Ruff、OpenAPI 客户端兼容、迁移模型漂移、CI YAML、Android XML、兼容策略 JSON 和差异检查通过；后端 `156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；H5 `33 passed`，Chromium E2E/axe `3 passed`。本机未安装 Docker、JDK、Gradle 与 Android SDK，因此 Compose 配置以及 Android 的 Room/Robolectric、续传处理器、应用编译和 Lint 交由 PR CI 验证；缺少本机工具链不是产品门禁通过证据。
+
+首轮推送提交 `78e5b94` 的 API、Web 与容器 CI 通过；Android 编译发现既有仓储测试的 `ScanApi` Fake 未实现本工作包新增的项目创建与上传方法。修复补齐测试替身的完整接口边界，保持未使用的方法显式失败，等待第二轮验证。
+
+第二轮提交 `483fef9` 的 API、Web 与容器 CI 通过；Android 编译继续发现 suspend 成员函数引用不能直接传给 `let`，以及跨模块可空属性不能依赖智能类型转换。修复改为显式分支调用并在完成态收窄 `page_id`，同时消除测试替身属性对 Kotlin `error` 函数的名称遮蔽，等待后续验证。
+
+后续提交 `ac5fbc3` 已越过主代码编译，Android 单元测试编译发现 `PageDto` 的公开字段暴露 `JsonElement`，但 `:core:network` 将其依赖声明为内部实现。修复把序列化 JSON 调整为 API 依赖，使公开 DTO 的完整类型在消费模块可解析，等待下一轮验证。
+
+提交 `8b11f39` 已进入应用编译和 Room/Robolectric 执行阶段：应用模块需要显式声明其实际消费的 `:core:upload` 类型；新增 Room 测试未绑定 Robolectric Runner，导致 Android Application 上下文未初始化。修复补齐模块依赖和两类 Room 测试 Runner，不用跳过测试或改成破坏性迁移。
+
+提交 `a6dffeb` 的 API、Web、容器与 Android CI 全部通过；Android 完整执行 Room v1→v2 迁移、用户隔离队列、续传处理器、既有模块与应用单元测试、应用编译和 `lintDebug`。PR #34 已创建，真实弱网、进程强杀、服务端重启和大文件门禁仍等待目标设备与 staging，未被 CI 结果替代。
 
 - AND-002 已由 PR #32 合并到主线，中文 squash 提交为 `60bac1e`；认证仓储、Keystore 会话、Room 用户分区缓存、Compose 登录注册与退出清理已完成。
 - 新增 `:feature:capture`，将 CameraX 生命周期、状态机、质量提示和原图捕获从 `:app` 分离；模块不依赖认证、网络或仓储。
@@ -494,6 +534,7 @@ git diff --check
 | 真实短信 | 等待人工验收 | 冻结供应商、签名、模板、密钥和限频参数 |
 | Android 正式签名分发 | 等待人工验收 | 冻结包名、签名资产和 GitLab 发布位置 |
 | Android CameraX 真机 | 等待人工验收 | 提供目标设备，验证权限、后摄、方向、对焦、曝光、质量阈值、中断恢复和连续原图完整性 |
+| Android 离线续传真机 | 等待人工验收 | 在目标设备和 staging 验证 Wi-Fi/蜂窝切换、飞行模式、进程强杀、令牌过期、服务端重启、大文件和磁盘不足 |
 | iOS 真机与 App Store | 等待人工验收 | 冻结 Team、Bundle ID、地区、隐私与支持 URL，并使用 Mac 完成门禁 |
 
 外部阻塞不会阻止 Mock、契约、算法、客户端和本地部署工作；模拟结果不得把上述门禁改为“完成”。
@@ -538,10 +579,11 @@ git diff --check
 | H5 双语与浏览器 E2E | `6d20db5` | 本地 156 项通过、覆盖率 88.28%，H5 33 项、Chromium E2E/axe 3 项通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%；中英文、键盘编辑、真实模块加载、分享回退、无障碍、Web 与容器检查通过；PR #30 已合并 |
 | Android 分层工程与 API 客户端 | `41bf07d` | 本地后端与 H5 回归通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%，Android JDK 17/Gradle 8.9/SDK 35 的网络与仓储测试、应用单元测试和 Lint 通过，Web 与容器通过；PR #31 已合并，模拟器和真机待后续门禁 |
 | Android 身份与用户分区缓存 | `60bac1e` | 本地后端 156 项、H5 33 项和 Chromium E2E/axe 3 项通过；PR #32 最终头两套 CI 的 API、Web、容器与 Android 共 8 项通过；首轮 Room/Kotlin 元数据失败已升级 Room 2.7.2 后修复，真实 Keystore、短信和真机待人工验收 |
+| Android CameraX 手动拍摄 | `b238992` | 本地后端 156 项、H5 33 项和 Chromium E2E/axe 3 项通过；PR #33 最终头两套 CI 的 8 项检查通过，Android 执行拍摄状态机/质量评估、应用编译与 Lint；相机真机门禁待人工验收 |
 
 ## 下一步
 
-1. 完成 `AND-003` CameraX/Compose 编译、状态机和质量评估单元测试及 Lint，修复任何 CI 失败。
-2. 自审相机生命周期、低质量强制拍摄、原图不可变和三模式导航边界，回填测试证据后创建中文 PR。
-3. CI 通过并合并后进入 `AND-004`，将私有原图接入用户分区 Room 队列、WorkManager、分片续传和网络切换恢复。
+1. 完成 `AND-004` Room 迁移、队列、网络契约、续传处理器、WorkManager、应用编译和 Lint 门禁，修复所有失败。
+2. 自审当前用户隔离、路径限制、幂等键轮换、令牌刷新和服务端确认分片边界，回填测试证据后创建中文 PR。
+3. CI 通过并合并后进入 `AND-005`，实现页面编辑、导出、FileProvider、系统分享和完整账号删除入口。
 4. Android 模拟器、真机、正式签名，以及真实企业微信、短信、相机和弱网继续保留人工验收门禁，不以 Mock 或 CI 结果代替。

@@ -30,5 +30,8 @@
     <string name="auth_request_failed">Could not request a code. Try again later.</string>
     <string name="auth_login_failed">Sign-in failed. Check your credentials.</string>
     <string name="auth_register_failed">Registration failed. Check the entered information.</string>
+    <string name="upload_project_document">SmartScan</string>
+    <string name="upload_project_exam">Exam</string>
+    <string name="upload_project_book">Book</string>
 </resources>
 
