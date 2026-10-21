@@ -128,11 +128,11 @@ jobs:
             --alert-webhook-url https://alerts.ci.smartscan.test/hooks/staging \
             --target-dir "$RUNNER_TEMP/smartscan-monitoring" \
             --ci-fixture
-          docker run --rm --entrypoint /bin/promtool \
+          docker run --rm --user "$(id -u):$(id -g)" --entrypoint /bin/promtool \
             -v "$RUNNER_TEMP/smartscan-monitoring:/etc/prometheus:ro" \
             prom/prometheus:v3.14.0 \
             check config /etc/prometheus/prometheus.yml
-          docker run --rm --entrypoint /bin/amtool \
+          docker run --rm --user "$(id -u):$(id -g)" --entrypoint /bin/amtool \
             -v "$RUNNER_TEMP/smartscan-monitoring:/etc/alertmanager:ro" \
             prom/alertmanager:v0.34.1 \
             check-config /etc/alertmanager/alertmanager.yml
