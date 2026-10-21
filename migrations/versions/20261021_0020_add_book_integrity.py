@@ -46,7 +46,7 @@ def upgrade() -> None:
     op.execute(
         "UPDATE scan_pages SET book_page_number_status = CASE "
         "WHEN book_split_status = 'disabled' THEN 'disabled' ELSE 'legacy' END, "
-        "book_assembly_included = 1"
+        "book_assembly_included = TRUE"
     )
     with op.batch_alter_table("scan_pages") as batch:
         batch.alter_column("book_page_number_status", existing_type=sa.String(24), nullable=False)

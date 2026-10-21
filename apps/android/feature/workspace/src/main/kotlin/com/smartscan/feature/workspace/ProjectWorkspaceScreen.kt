@@ -298,8 +298,9 @@ private fun BookIntegrityPanel(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(bookIssueText(issue), fontWeight = FontWeight.Bold)
-                    if (issue.decision != null) {
-                        Text(stringResource(R.string.workspace_book_handled, issue.decision))
+                    val decision = issue.decision
+                    if (decision != null) {
+                        Text(stringResource(R.string.workspace_book_handled, decision))
                         TextButton(onClick = { decide(issue, "reopen") }, enabled = !busy && !actionBusy) {
                             Text(stringResource(R.string.workspace_book_reopen))
                         }
