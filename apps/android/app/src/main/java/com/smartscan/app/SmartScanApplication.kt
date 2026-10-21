@@ -16,6 +16,7 @@ import com.smartscan.feature.sync.RetrofitUploadRemote
 import com.smartscan.feature.sync.UploadProcessor
 import com.smartscan.feature.sync.UploadQueueCoordinator
 import com.smartscan.feature.sync.UploadWorkerDependencies
+import com.smartscan.feature.update.AndroidUpdateManager
 
 class SmartScanApplication : Application(), UploadWorkerDependencies {
     lateinit var container: AppContainer
@@ -61,6 +62,12 @@ class SmartScanApplication : Application(), UploadWorkerDependencies {
                 currentUserId = { sessionStore.current()?.userId },
             ),
             uploadQueueCoordinator = UploadQueueCoordinator(this, localStores.uploadQueue, sessionStore),
+            updateManager = AndroidUpdateManager.createOrNull(
+                context = this,
+                manifestUrl = BuildConfig.SMARTSCAN_UPDATE_MANIFEST_URL,
+                signatureUrl = BuildConfig.SMARTSCAN_UPDATE_SIGNATURE_URL,
+                publicKeyBase64 = BuildConfig.SMARTSCAN_UPDATE_PUBLIC_KEY,
+            ),
         )
     }
 }
@@ -69,10 +76,12 @@ interface AppContainer {
     val authenticationRepository: AuthenticationRepository
     val projectRepository: ProjectRepository
     val uploadQueueCoordinator: UploadQueueCoordinator
+    val updateManager: AndroidUpdateManager?
 }
 
 private data class DefaultAppContainer(
     override val authenticationRepository: AuthenticationRepository,
     override val projectRepository: ProjectRepository,
     override val uploadQueueCoordinator: UploadQueueCoordinator,
+    override val updateManager: AndroidUpdateManager?,
 ) : AppContainer

@@ -15,6 +15,12 @@ android {
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
         buildConfigField("String", "SMARTSCAN_API_BASE_URL", "\"$apiBaseUrl\"")
+        fun escapedProperty(name: String): String = providers.gradleProperty(name).orElse("").get()
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "SMARTSCAN_UPDATE_MANIFEST_URL", "\"${escapedProperty("SMARTSCAN_UPDATE_MANIFEST_URL")}\"")
+        buildConfigField("String", "SMARTSCAN_UPDATE_SIGNATURE_URL", "\"${escapedProperty("SMARTSCAN_UPDATE_SIGNATURE_URL")}\"")
+        buildConfigField("String", "SMARTSCAN_UPDATE_PUBLIC_KEY", "\"${escapedProperty("SMARTSCAN_UPDATE_PUBLIC_KEY")}\"")
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
@@ -31,6 +37,7 @@ dependencies {
     implementation(project(":data:repository"))
     implementation(project(":feature:capture"))
     implementation(project(":feature:sync"))
+    implementation(project(":feature:update"))
     implementation(project(":feature:workspace"))
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.10.0")
