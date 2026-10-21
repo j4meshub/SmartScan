@@ -78,6 +78,31 @@ def test_ios_identity_sources_cover_secure_session_and_user_partition() -> None:
     assert 'appendingPathComponent("projects.json")' in cache
 
 
+def test_ios_capture_sources_preserve_original_and_direction_evidence() -> None:
+    source_root = IOS_ROOT / "SmartScan"
+    controller = (source_root / "Capture" / "CameraController.swift").read_text(encoding="utf-8")
+    store = (source_root / "Capture" / "CaptureStore.swift").read_text(encoding="utf-8")
+    project = yaml.safe_load((IOS_ROOT / "project.yml").read_text(encoding="utf-8"))
+    app_settings = project["targets"]["SmartScan"]["settings"]["base"]
+
+    assert "AVCaptureVideoDataOutputSampleBufferDelegate" in controller
+    assert "VNDetectRectanglesRequest" in controller
+    assert "photo.fileDataRepresentation()" in controller
+    assert 'appendingPathComponent("SmartScan/captures"' in store
+    assert '"\\(identifier).original.jpg"' in store
+    assert '"\\(identifier).evidence.json"' in store
+    assert "completeFileProtectionUntilFirstUserAuthentication" in store
+    assert "INFOPLIST_KEY_NSCameraUsageDescription" in app_settings
+
+
+def test_ios_info_plist_localization_keys_match() -> None:
+    resources = IOS_ROOT / "SmartScan" / "Resources"
+    english = _localization_keys(resources / "en.lproj" / "InfoPlist.strings")
+    chinese = _localization_keys(resources / "zh-Hans.lproj" / "InfoPlist.strings")
+
+    assert english == chinese == {"NSCameraUsageDescription"}
+
+
 def _localization_keys(path: Path) -> set[str]:
     return {
         match.group(1)
