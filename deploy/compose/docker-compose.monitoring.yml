@@ -1,0 +1,92 @@
+name: ${COMPOSE_PROJECT_NAME:?必须设置独立的 staging Compose 项目名}
+
+services:
+  prometheus:
+    image: ${SMARTSCAN_STAGING_PROMETHEUS_IMAGE:?必须固定 Prometheus 镜像 digest}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle=false
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_MONITORING_CONFIG_ROOT:?必须设置监控配置目录}/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+      - type: bind
+        source: ${SMARTSCAN_STAGING_MONITORING_CONFIG_ROOT:?必须设置监控配置目录}/rules.yml
+        target: /etc/prometheus/rules.yml
+        read_only: true
+      - type: bind
+        source: ${SMARTSCAN_STAGING_METRICS_TOKEN_FILE:?必须设置独立指标令牌文件}
+        target: /run/secrets/ops_metrics_token
+        read_only: true
+      - type: bind
+        source: ${SMARTSCAN_STAGING_MONITORING_DATA_ROOT:?必须设置监控数据目录}/prometheus
+        target: /prometheus
+    depends_on:
+      api: {condition: service_healthy}
+      alertmanager: {condition: service_started}
+      node-exporter: {condition: service_started}
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [data]
+
+  alertmanager:
+    image: ${SMARTSCAN_STAGING_ALERTMANAGER_IMAGE:?必须固定 Alertmanager 镜像 digest}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --data.retention=120h
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_MONITORING_CONFIG_ROOT:?必须设置监控配置目录}/alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+      - type: bind
+        source: ${SMARTSCAN_STAGING_MONITORING_DATA_ROOT:?必须设置监控数据目录}/alertmanager
+        target: /alertmanager
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [data]
+
+  node-exporter:
+    image: ${SMARTSCAN_STAGING_NODE_EXPORTER_IMAGE:?必须固定 Node Exporter 镜像 digest}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - type: bind
+        source: /proc
+        target: /host/proc
+        read_only: true
+      - type: bind
+        source: /sys
+        target: /host/sys
+        read_only: true
+      - type: bind
+        source: /
+        target: /host/rootfs
+        read_only: true
+        bind:
+          propagation: rslave
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=8m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [data]

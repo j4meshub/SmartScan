@@ -10,9 +10,11 @@ import pytest
 from services.api.app.config import Settings
 from tools.validate_staging_config import (
     DEFAULT_COMPOSE_FILE,
+    DEFAULT_MONITORING_COMPOSE_FILE,
     StagingConfigError,
     load_env_file,
     validate_compose_contract,
+    validate_monitoring_compose_contract,
     validate_staging_config,
 )
 
@@ -47,6 +49,9 @@ def _make_strict(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, 
         "SMARTSCAN_STAGING_WORKER_IMAGE",
         "SMARTSCAN_STAGING_AI_GATEWAY_IMAGE",
         "SMARTSCAN_STAGING_WEB_IMAGE",
+        "SMARTSCAN_STAGING_PROMETHEUS_IMAGE",
+        "SMARTSCAN_STAGING_ALERTMANAGER_IMAGE",
+        "SMARTSCAN_STAGING_NODE_EXPORTER_IMAGE",
     ):
         name = key.removeprefix("SMARTSCAN_STAGING_").removesuffix("_IMAGE").lower()
         digest = hashlib.sha256(name.encode()).hexdigest()
@@ -86,7 +91,7 @@ def test_realistic_strict_configuration_passes_without_contacting_server(tmp_pat
     config = validate_staging_config(deploy_path, runtime_env_path=runtime_path)
 
     assert config.host == "staging.smartscan.company"
-    assert len(config.image_digests) == 5
+    assert len(config.image_digests) == 8
     assert all(len(digest) == 64 for digest in config.image_digests)
 
 
@@ -222,8 +227,12 @@ def test_duplicate_environment_key_is_rejected(tmp_path: Path) -> None:
 
 def test_staging_compose_has_no_server_build_or_direct_database_port() -> None:
     validate_compose_contract(DEFAULT_COMPOSE_FILE)
+    validate_monitoring_compose_contract(DEFAULT_MONITORING_COMPOSE_FILE)
     document = DEFAULT_COMPOSE_FILE.read_text(encoding="utf-8")
+    monitoring = DEFAULT_MONITORING_COMPOSE_FILE.read_text(encoding="utf-8")
 
     assert "build:" not in document
     assert "127.0.0.1:${SMARTSCAN_STAGING_HTTP_PORT" in document
     assert "com.smartscan.environment: staging" in document
+    assert "ports:" not in monitoring
+    assert 'profiles: ["monitoring"]' in monitoring

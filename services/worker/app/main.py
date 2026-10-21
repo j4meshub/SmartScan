@@ -14,6 +14,7 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps, ImageStat
 from sqlalchemy import select
 
 from services.api.app.account_deletion import process_next_due_account_deletion
+from services.api.app.capacity import worker_storage_ready
 from services.api.app.config import get_settings
 from services.api.app.database import SessionLocal
 from services.api.app.job_service import (
@@ -34,6 +35,7 @@ from services.api.app.models import (
 from services.api.app.page_service import save_page_result
 from services.api.app.project_cleanup import process_next_project_cleanup
 from services.api.app.upload_cleanup import process_next_upload_cleanup
+from services.api.app.worker_status import record_worker_heartbeat
 from services.worker.app.book import BookSplitResult, LogicalBookPage, split_book_spread
 from services.worker.app.book_integrity import extract_printed_page_number, image_dhash
 from services.worker.app.exam import (
@@ -76,8 +78,28 @@ def claim_job() -> JobClaim | None:
 def heartbeat(claim: JobClaim, progress: int) -> bool:
     with SessionLocal() as db:
         accepted = heartbeat_job(db, claim, progress=progress, settings=settings)
+        record_worker_heartbeat(
+            db,
+            worker_id=worker_id,
+            busy_job_id=claim.job_id,
+        )
         db.commit()
         return accepted
+
+
+def update_worker_status(busy_job_id: str | None = None) -> None:
+    with SessionLocal() as db:
+        record_worker_heartbeat(
+            db,
+            worker_id=worker_id,
+            busy_job_id=busy_job_id,
+        )
+        db.commit()
+
+
+def can_claim_processing_job() -> bool:
+    with SessionLocal() as db:
+        return worker_storage_ready(db, settings)
 
 
 def quality_warning(
@@ -608,19 +630,28 @@ def main() -> None:
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     next_deletion_sweep = 0.0
+    next_worker_heartbeat = 0.0
     while running:
         now_monotonic = time.monotonic()
+        if now_monotonic >= next_worker_heartbeat:
+            update_worker_status()
+            next_worker_heartbeat = now_monotonic + settings.worker_heartbeat_interval_seconds
         if now_monotonic >= next_deletion_sweep:
             try:
                 process_upload_cleanup_queue()
                 process_project_cleanup_queue()
                 process_account_deletion_queue()
             except Exception as exc:
-                print(f"账号删除任务失败：{type(exc).__name__}", flush=True)
+                print(f"清理任务失败：{type(exc).__name__}", flush=True)
             next_deletion_sweep = now_monotonic + 30.0
+        if not can_claim_processing_job():
+            time.sleep(1.0)
+            continue
         claim = claim_job()
         if claim:
+            update_worker_status(claim.job_id)
             process(claim)
+            update_worker_status()
         else:
             time.sleep(1.0)
 

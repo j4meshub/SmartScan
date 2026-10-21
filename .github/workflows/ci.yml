@@ -116,6 +116,34 @@ jobs:
           --env-file tests/fixtures/staging/deploy.env
           -f deploy/compose/docker-compose.staging.yml
           config
+      - name: 生成并校验监控配置
+        run: |
+          mkdir -p "$RUNNER_TEMP/smartscan-monitoring"
+          sed -n 's/^SMARTSCAN_OPS_METRICS_TOKEN=//p' \
+            tests/fixtures/staging/runtime.env > "$RUNNER_TEMP/ops-metrics.token"
+          chmod 600 "$RUNNER_TEMP/ops-metrics.token"
+          python tools/render_monitoring_config.py \
+            --runtime-env tests/fixtures/staging/runtime.env \
+            --metrics-token-file "$RUNNER_TEMP/ops-metrics.token" \
+            --alert-webhook-url https://alerts.ci.smartscan.test/hooks/staging \
+            --target-dir "$RUNNER_TEMP/smartscan-monitoring" \
+            --ci-fixture
+          docker run --rm \
+            -v "$RUNNER_TEMP/smartscan-monitoring:/etc/prometheus:ro" \
+            prom/prometheus:v3.14.0 \
+            promtool check config /etc/prometheus/prometheus.yml
+          docker run --rm \
+            -v "$RUNNER_TEMP/smartscan-monitoring:/etc/alertmanager:ro" \
+            prom/alertmanager:v0.34.1 \
+            amtool check-config /etc/alertmanager/alertmanager.yml
+      - name: 解析 monitoring Profile Compose
+        run: >-
+          docker compose
+          --env-file tests/fixtures/staging/deploy.env
+          -f deploy/compose/docker-compose.staging.yml
+          -f deploy/compose/docker-compose.monitoring.yml
+          --profile monitoring
+          config
       - name: 构建 staging Web 镜像基线
         run: >-
           docker build

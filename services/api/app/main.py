@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
+from time import perf_counter
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,8 @@ from .config import get_settings
 from .database import SessionLocal
 from .domain_services import ensure_superadmin
 from .migrations import ensure_database_current, upgrade_database
+from .ops_metrics import observe_api_request
+from .ops_routes import router as ops_router
 from .scan_routes import router as scan_router
 
 settings = get_settings()
@@ -46,12 +49,33 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(scan_router)
 app.include_router(admin_router)
+app.include_router(ops_router)
 
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
+    started = perf_counter()
     request.state.request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+        observe_api_request(
+            request.method,
+            route_path,
+            500,
+            perf_counter() - started,
+        )
+        raise
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", "unmatched")
+    observe_api_request(
+        request.method,
+        route_path,
+        response.status_code,
+        perf_counter() - started,
+    )
     response.headers["x-request-id"] = request.state.request_id
     response.headers["x-content-type-options"] = "nosniff"
     response.headers["referrer-policy"] = "same-origin"

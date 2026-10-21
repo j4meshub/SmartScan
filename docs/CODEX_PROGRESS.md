@@ -7,15 +7,25 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 部署与发布 |
-| 当前工作包 | `OPS-002` 网络与文件发送 |
-| 工作包状态 | 等待人工验收：仓库侧 TLS/Nginx、内部文件发送容器链路、BBR 基线/回滚工具、中文文档及全量 CI 已完成；真实服务器、域名、可信证书、外网链路和 BBR 对照仍阻塞 |
-| 当前分支 | `codex/ops-002-network-file-delivery` |
-| 最后验证基线 | `7dc3c53`（已合并 OPS-001；主线工作流 `39638319368` 五项全部通过） |
-| 工作包提交 | `e5fe9ad`、`91fbf61` |
-| PR | [#53](https://github.com/j4meshub/SmartScan/pull/53) |
-| 下一工作包 | `OPS-003` 依赖真实 OPS-001 staging；服务器恢复前继续实现不依赖主机的监控与磁盘保护仓库基线 |
+| 当前工作包 | `OPS-003` 监控与保护 |
+| 工作包状态 | 进行中：容量闸门、内部 Prometheus 指标、Worker 心跳、监控 Profile、告警规则与中文文档已实现，本地全量门禁通过；PR CI 和真实 staging 故障注入尚未完成 |
+| 当前分支 | `codex/ops-003-monitoring-protection` |
+| 最后验证基线 | `bfc1ab7`（已合并 OPS-002；主线工作流 `39647003249` 五项全部通过） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `OPS-004` 依赖真实 OPS-001 staging；OPS-003 合并后先实现可离线验证的加密备份与恢复演练仓库基线 |
 
 ## 当前工作包进展
+
+- 新上传按磁盘固定预留、最小可用比例、全局未接收上传预留和用户目录实际占用失败关闭；完整组装额外预留一份整文件，队列高水位拒绝完成但保留可重试上传。兼容单页上传、书籍缺页补扫和单侧重拍同样在写盘前执行磁盘、用户配额和队列门禁；下载、取消与清理不被新写入保护阻断。
+- Worker 在清理任务之后检查磁盘再领取任务；PostgreSQL 用户级 advisory lock 与任务行锁共同限制每用户活跃 CPU 任务，避免两个 Worker 各自放行。迁移 `0022` 保存不含用户数据的空闲/忙碌心跳，任务租约仍是处理真实性来源。
+- 新增默认关闭且不进入 OpenAPI 的 `/internal/metrics`，要求独立 Bearer Token；API 多进程请求/延迟、上传、数据库、队列、Worker、磁盘、审计、页面复核和 AI 指标均避免用户与对象高基数标签。公网 Nginx 不代理该路径。
+- 新增显式 `monitoring` Profile：固定 digest 的 Prometheus、Alertmanager 和只读 Node Exporter 均不发布主机端口；渲染器核对运行配置与 Token 文件、HTTPS Webhook、安全目录和拒绝覆盖。CI 将使用官方工具校验配置与规则。
+- OPS-003 容量、指标、任务和书籍联合回归 `40 passed`；最终全量 Python `382 passed, 7 skipped`，应用代码覆盖率 `88.48%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、138 个 Python 文件格式、迁移版本/漂移、OpenAPI 当前/上一代兼容、AI Schema、iOS 发布草稿、JavaScript 语法和差异检查均通过。
+- 首次专项运行因本机缺少已声明的 `prometheus-client` 无法收集；安装项目依赖后继续。开发中先后发现 SQLite 心跳时区断言、既有项目创建状态码预期，以及一次容量调用误插入分片完成路径，均按真实语义修正并重跑，没有放宽生产门禁。自审补齐数据库和容量快照同时失败时指标仍可抓取，以及三条旧直接写入入口不得绕过保护的回归。
+- 本机没有 Docker、Android SDK 或 Xcode；Prometheus/Alertmanager 官方配置工具、组合 Compose、PostgreSQL 17、Android 与 Xcode 16.4 Simulator 由 PR Runner 补证。公司服务器仍不可用，真实通知、故障注入、运行 UID/GID、阈值和 15 天保留未被本地夹具标记为通过。
+
+以下保留已合并 OPS-002 的近期证据：
 
 - 新增主机 TLS Nginx 模板与失败关闭渲染器：只代理 staging 回环端口，启用 TLS 1.2/1.3、HTTP/2、短期 HSTS、认证限频、不含查询字符串的日志及上传/下载流式代理。
 - 新增 TLS 材料离线校验：要求精确 staging SAN、证书/私钥匹配、当前有效且至少 14 天剩余、非 SHA-1/MD5 签名摘要和私钥 `0600`；安全摘要不包含私钥或证书正文。
@@ -799,6 +809,6 @@ git diff --check
 
 ## 下一步
 
-1. 提交 OPS-002 最终证据，等待文档头的 push 与 PR 两套 GitHub Actions 全绿后合并 PR #53，并在主分支复验。
-2. 从 `OPS-003` 开始实现不依赖真实服务器的监控、配额和磁盘保护仓库基线；真实主机接入部分继续保持阻塞。
-3. 公司服务器恢复后验证 OPS-001/OPS-002 的真实域名、可信证书、ACME 续期、防火墙、鉴权下载、大文件、公网/手机链路和相同条件 BBR 前后对照。
+1. 完成 OPS-003 全量 Python、迁移、Web 与静态检查，自审容量竞态、指标隐私和 monitoring Profile 安全边界。
+2. 使用中文提交推送分支并创建 PR；由 GitHub Runner 实际执行 PostgreSQL 17、Prometheus/Alertmanager 配置、Compose、Android、iOS 和容器检查，通过后合并并复验主线。
+3. 公司服务器恢复后在隔离 staging 验证真实通知、Worker/数据库/磁盘故障注入、下载和清理可用性、阈值与 15 天保留；此前 OPS-003 保持等待人工验收，然后继续 OPS-004 的独立仓库工作。

@@ -201,6 +201,34 @@ def test_ai_reliability_migration_can_downgrade_without_touching_previous_schema
         downgraded.dispose()
 
 
+def test_worker_heartbeat_migration_can_downgrade_without_touching_ai_schema(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "worker-heartbeats.db")
+    command.upgrade(alembic_config(url), "head")
+    engine = create_engine(url)
+    try:
+        schema = inspect(engine)
+        assert "worker_heartbeats" in schema.get_table_names()
+        assert {column["name"] for column in schema.get_columns("worker_heartbeats")} == {
+            "worker_id",
+            "started_at",
+            "heartbeat_at",
+            "busy_job_id",
+        }
+    finally:
+        engine.dispose()
+
+    command.downgrade(alembic_config(url), "20261021_0021")
+    downgraded = create_engine(url)
+    try:
+        tables = set(inspect(downgraded).get_table_names())
+        assert "worker_heartbeats" not in tables
+        assert "ai_provider_calls" in tables
+    finally:
+        downgraded.dispose()
+
+
 def test_exam_classification_migration_marks_legacy_pages_and_can_downgrade(
     tmp_path: Path,
 ) -> None:

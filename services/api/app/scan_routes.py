@@ -35,6 +35,13 @@ from .book_integrity import (
     build_book_integrity_report,
     create_book_assembly,
 )
+from .capacity import (
+    CapacityError,
+    ensure_assembly_capacity,
+    ensure_new_upload_capacity,
+    ensure_queue_capacity,
+    ensure_reserved_upload_capacity,
+)
 from .config import get_settings
 from .database import get_db
 from .dependencies import current_user
@@ -60,6 +67,7 @@ from .models import (
     UploadStatus,
     User,
 )
+from .ops_metrics import observe_upload_bytes, observe_upload_replay
 from .page_service import (
     PageMutationError,
     dismiss_exam_suggestion,
@@ -101,6 +109,19 @@ from .upload_cleanup import UploadCleanupError, cleanup_upload_chunks
 
 settings = get_settings()
 router = APIRouter()
+
+
+def ensure_direct_processing_capacity(db: Session, user: User, size_bytes: int) -> None:
+    try:
+        ensure_queue_capacity(db, settings)
+        ensure_new_upload_capacity(
+            db,
+            settings,
+            owner_user_id=user.id,
+            size_bytes=size_bytes,
+        )
+    except CapacityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
 
 @router.get("/health")
@@ -421,6 +442,7 @@ async def create_book_supplement(
     )
     if insert_at > len(pages) + 1:
         raise HTTPException(status_code=422, detail="book_supplement_position_invalid")
+    ensure_direct_processing_capacity(db, user, len(data))
     page_id = str(uuid.uuid4())
     relative = (
         Path("users")
@@ -711,6 +733,16 @@ def create_upload(
             raise HTTPException(status_code=409, detail="idempotency key conflict")
         return upload_view(db, existing)
 
+    try:
+        ensure_new_upload_capacity(
+            db,
+            settings,
+            owner_user_id=user.id,
+            size_bytes=payload.size_bytes,
+        )
+    except CapacityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+
     chunk_size = min(settings.upload_chunk_bytes, payload.size_bytes)
     if chunk_size <= 0:
         raise HTTPException(status_code=500, detail="invalid server chunk configuration")
@@ -821,12 +853,22 @@ async def put_upload_chunk(
     if existing:
         if existing.sha256 != x_chunk_sha256 or existing.size_bytes != expected_size:
             raise HTTPException(status_code=409, detail="chunk already exists with other content")
+        observe_upload_replay()
         return ChunkReceipt(
             upload_id=upload.id,
             chunk_index=existing.chunk_index,
             size_bytes=existing.size_bytes,
             sha256=existing.sha256,
         )
+
+    try:
+        ensure_reserved_upload_capacity(
+            db,
+            settings,
+            owner_user_id=user.id,
+        )
+    except CapacityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
     relative = Path("users") / user.id / "temp" / upload.id / f"{chunk_index:08d}.part"
     destination = settings.storage_root / relative
@@ -860,6 +902,7 @@ async def put_upload_chunk(
     )
     db.add(chunk)
     db.commit()
+    observe_upload_bytes(received_size)
     return ChunkReceipt(
         upload_id=upload.id,
         chunk_index=chunk_index,
@@ -895,6 +938,12 @@ def complete_upload(
         range(upload.total_chunks)
     ):
         raise HTTPException(status_code=409, detail="upload has missing chunks")
+
+    try:
+        ensure_queue_capacity(db, settings)
+        ensure_assembly_capacity(db, settings, size_bytes=upload.size_bytes)
+    except CapacityError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
     temp_dir = settings.storage_root / "users" / user.id / "temp" / upload.id
     assembled = temp_dir / "assembled.incoming"
@@ -1052,6 +1101,7 @@ async def upload_page(
         )
         or 0
     )
+    ensure_direct_processing_capacity(db, user, len(data))
     page_id = str(uuid.uuid4())
     suffix = IMAGE_SUFFIXES[file.content_type]
     relative = Path("users") / user.id / "originals" / project.id / f"{page_id}{suffix}"
@@ -1128,6 +1178,8 @@ async def create_book_side_retake(
         raise HTTPException(status_code=400, detail="empty or invalid image")
     if not valid_image_signature(file.content_type, data[:16]):
         raise HTTPException(status_code=415, detail="file signature does not match image type")
+
+    ensure_direct_processing_capacity(db, user, len(data))
 
     replacement_id = str(uuid.uuid4())
     relative = (

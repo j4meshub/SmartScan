@@ -810,6 +810,19 @@ class AuditLog(Base):
     )
 
 
+class WorkerHeartbeat(Base):
+    __tablename__ = "worker_heartbeats"
+
+    worker_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    heartbeat_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False, index=True
+    )
+    busy_job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
+
 class AiProviderState(Base):
     __tablename__ = "ai_provider_states"
     __table_args__ = (

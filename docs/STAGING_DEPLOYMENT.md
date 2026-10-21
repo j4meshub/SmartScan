@@ -53,7 +53,10 @@ sudo install -d -m 0750 /etc/smartscan/staging
 sudo install -d -m 0750 \
   /srv/smartscan/staging/postgres \
   /srv/smartscan/staging/data \
-  /srv/smartscan/staging/models/ocr
+  /srv/smartscan/staging/models/ocr \
+  /srv/smartscan/staging/monitoring/prometheus \
+  /srv/smartscan/staging/monitoring/alertmanager
+sudo install -d -m 0750 /etc/smartscan/staging/monitoring
 sudo install -m 0600 deploy/compose/staging.env.example \
   /etc/smartscan/staging/deploy.env
 sudo install -m 0600 deploy/compose/staging.runtime.env.example \
@@ -100,6 +103,8 @@ docker compose \
 ```
 
 不要使用 `down -v`，也不要递归删除 `/srv/smartscan`。首次启动后从主机本地检查 `http://127.0.0.1:<独立端口>/api/health`，再核对 Compose 项目、容器标签、网络、挂载源和数据库名称均属于 staging。
+
+应用核心流程验证后，再按照[监控、容量配额与磁盘保护](MONITORING_AND_CAPACITY.md)生成独立指标 Token、渲染监控配置、运行 `promtool`/`amtool` 校验，并以额外 `docker-compose.monitoring.yml` 和显式 `monitoring` Profile 启动。监控服务不发布主机端口，告警 Webhook 与渲染配置均留在仓库外。
 
 ## 回滚与验收
 

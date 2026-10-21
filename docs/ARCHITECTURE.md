@@ -97,6 +97,8 @@ AI 候选系统使用同一份已授权、已脱敏且按来源分组切分的�
 
 公网 TLS 由主机 Nginx 终止，再只代理到回环地址上的 staging Web Nginx。主机层负责 TLS 1.2/1.3、HTTP/2、真实客户端限频和安全日志；容器层负责静态入口、API 前缀转换及鉴权后的 `internal` 文件发送。BBR 变更前后以只读快照固定内核、拥塞控制和 qdisc，回滚始终使用实际原值；配置生效只允许进入受控网络对照，不能直接解除上线门禁。详见[TLS、内部文件发送与 BBR 基线](NETWORK_AND_FILE_DELIVERY.md)。
 
+运维指标只通过内部数据网络暴露：API 多进程请求指标与数据库派生的队列、租约、审计、AI 和磁盘指标由 Bearer Token 保护，公网 Nginx 不代理内部路径。Worker 定期在 PostgreSQL 保存不含用户数据的存活心跳；任务真实性仍由独立租约决定。新上传、组装和 Worker 领取分别受到队列高水位、每用户并发、用户目录实际占用、未接收上传预留和磁盘最低空间约束，下载与清理不被写入保护阻断。Prometheus、Alertmanager 与 Node Exporter 只在显式 monitoring Profile 中启动且无主机端口。详见[监控、容量配额与磁盘保护](MONITORING_AND_CAPACITY.md)。
+
 ## 单机部署基线
 
 首版部署由 Nginx、API 服务组、CPU Worker 组、PostgreSQL 和用户隔离文件目录组成。上传受理与 CPU 处理解耦，保证重任务排队时登录、查询和下载鉴权仍能响应。后续只有在实际容量指标超过单机边界后，才引入独立 Worker 或高可用组件。

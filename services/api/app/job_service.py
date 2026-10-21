@@ -4,8 +4,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, select, text
+from sqlalchemy.orm import Session, aliased
 
 from .config import Settings, get_settings
 from .models import JobStatus, ProcessingJob, User
@@ -84,6 +84,29 @@ def _claim_job_row(
     return JobClaim(job.id, token, worker_id)
 
 
+def _lock_job_owner(db: Session, owner_user_id: str) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:owner_user_id, 1))"),
+            {"owner_user_id": owner_user_id},
+        )
+
+
+def _active_owner_jobs(db: Session, owner_user_id: str, now: datetime) -> int:
+    return int(
+        db.scalar(
+            select(func.count())
+            .select_from(ProcessingJob)
+            .where(
+                ProcessingJob.owner_user_id == owner_user_id,
+                ProcessingJob.status == JobStatus.baseline_processing,
+                ProcessingJob.lease_until >= now,
+            )
+        )
+        or 0
+    )
+
+
 def claim_next_job(
     db: Session,
     *,
@@ -102,18 +125,38 @@ def claim_next_job(
             & (ProcessingJob.lease_until < now)
         ),
     )
+    active = aliased(ProcessingJob)
+    active_owner_count = (
+        select(func.count())
+        .select_from(active)
+        .where(
+            active.owner_user_id == ProcessingJob.owner_user_id,
+            active.status == JobStatus.baseline_processing,
+            active.lease_until >= now,
+        )
+        .correlate(ProcessingJob)
+        .scalar_subquery()
+    )
     job = db.scalar(
         select(ProcessingJob)
         .where(
             claimable_status,
             ProcessingJob.available_at <= now,
             ProcessingJob.attempts < ProcessingJob.max_attempts,
+            active_owner_count < settings.max_active_jobs_per_user,
         )
-        .order_by(ProcessingJob.priority.desc(), ProcessingJob.created_at, ProcessingJob.id)
+        .order_by(
+            ProcessingJob.priority.desc(),
+            ProcessingJob.created_at,
+            ProcessingJob.id,
+        )
         .with_for_update(skip_locked=True)
         .limit(1)
     )
     if job is None:
+        return None
+    _lock_job_owner(db, job.owner_user_id)
+    if _active_owner_jobs(db, job.owner_user_id, now) >= settings.max_active_jobs_per_user:
         return None
     claim = _claim_job_row(job, worker_id=worker_id, now=now, settings=settings)
     db.flush()
@@ -145,6 +188,9 @@ def claim_job_by_id(
         and lease_until < now
     )
     if not claimable or due > now:
+        return None
+    _lock_job_owner(db, job.owner_user_id)
+    if _active_owner_jobs(db, job.owner_user_id, now) >= settings.max_active_jobs_per_user:
         return None
     claim = _claim_job_row(job, worker_id=worker_id, now=now, settings=settings)
     db.flush()
