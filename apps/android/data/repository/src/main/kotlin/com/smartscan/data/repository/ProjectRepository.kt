@@ -174,10 +174,10 @@ private fun saveDownload(
     body: okhttp3.ResponseBody,
     directory: File,
     requestedName: String,
-    displayName: String = requestedName,
     expectedSha256: String?,
     fallbackMimeType: String?,
     expectedSize: Long? = null,
+    displayName: String = requestedName,
 ): DownloadedArtifact {
     require(directory.mkdirs() || directory.isDirectory) { "download_directory_unavailable" }
     val safeName = File(requestedName).name.trim().takeIf { it.isNotEmpty() && it !in setOf(".", "..") }
