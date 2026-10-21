@@ -41,7 +41,7 @@ struct RootView: View {
     }
 }
 
-enum ScanModeKind: String, CaseIterable {
+enum ScanModeKind: String, CaseIterable, Hashable, Codable {
     case document
     case exam
     case book
@@ -107,6 +107,9 @@ struct HomeView: View {
             }
             .background(paper.ignoresSafeArea())
             .tint(ink)
+            .navigationDestination(for: ScanModeKind.self) { mode in
+                CaptureView(mode: mode, userID: user.id)
+            }
         }
     }
 }
@@ -116,7 +119,7 @@ struct ScanMode: View {
     var dark = false
 
     var body: some View {
-        Button(action: {}) {
+        NavigationLink(value: kind) {
             VStack(alignment: .leading) {
                 Text("⌗")
                     .font(.title2)

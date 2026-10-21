@@ -36,6 +36,8 @@ Swift 单元测试固定三种扫描模式的稳定标识与顺序，并覆盖�
 
 身份与网络实现、安全边界和环境配置见[iOS 身份、Keychain 与网络](IOS_AUTH_AND_NETWORK.md)。
 
+AVFoundation 拍摄状态机、Vision 提示、原图和方向证据见[iOS AVFoundation 拍摄与 Vision 提示](IOS_CAMERA_CAPTURE.md)。
+
 ## 外部门禁
 
 Runner 不能替代以下验收：AVFoundation 相机、Vision 方向与矩形检测、Keychain 真机行为、BackgroundTasks、内存压力、系统分享、签名、Archive、TestFlight 和 App Store 审核。Mac 只在这些无法由 Simulator 证明的门禁中使用，日常源码和规范仍可在 Windows 开发。

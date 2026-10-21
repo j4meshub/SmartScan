@@ -53,3 +53,7 @@ xcodebuild \
 
 地址必须使用 HTTPS；仅回环测试地址允许 HTTP。令牌和稳定设备 ID 分项保存到 Keychain，项目缓存按用户隔离。详细边界见[《iOS 身份、Keychain 与网络》](../../docs/IOS_AUTH_AND_NETWORK.md)。
 
+## 相机与 Vision
+
+登录后从三个扫描模式进入统一 AVFoundation 后摄页面。实时亮度、清晰度、高光和 Vision 矩形仅作提示，手动快门不会因低质量判断被禁用；JPEG 原图与方向证据按用户隔离保存。Simulator 只执行编译和纯逻辑测试，真实相机验收清单见[《iOS AVFoundation 拍摄与 Vision 提示》](../../docs/IOS_CAMERA_CAPTURE.md)。
+
