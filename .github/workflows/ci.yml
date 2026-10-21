@@ -98,4 +98,8 @@ jobs:
       - run: docker compose -f deploy/compose/docker-compose.yml config
         env:
           POSTGRES_PASSWORD: ci-only-password
+      - name: 构建可选 AI 网关镜像
+        run: docker compose --profile ai -f deploy/compose/docker-compose.yml build ai-gateway
+        env:
+          POSTGRES_PASSWORD: ci-only-password
 

@@ -58,6 +58,14 @@ services:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
   worker-cpu-2: *worker
+  ai-gateway:
+    profiles: ["ai"]
+    build: {context: ../.., dockerfile: services/ai-gateway/Dockerfile}
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      SMARTSCAN_AI_PROVIDERS: ${SMARTSCAN_AI_PROVIDERS:-[]}
+    expose: ["8010"]
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
