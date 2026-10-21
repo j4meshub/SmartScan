@@ -1,4 +1,3 @@
-import AVFoundation
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -71,13 +70,13 @@ enum DeviceOrientationEvidence: String, Codable, Equatable, Sendable {
         }
     }
 
-    var videoOrientation: AVCaptureVideoOrientation {
+    var videoRotationAngle: CGFloat {
         switch self {
-        case .portrait: .portrait
-        case .portraitUpsideDown: .portraitUpsideDown
-        case .landscapeLeft: .landscapeRight
-        case .landscapeRight: .landscapeLeft
-        case .faceUp, .faceDown, .unknown: .portrait
+        case .portrait: 90
+        case .portraitUpsideDown: 270
+        case .landscapeLeft: 0
+        case .landscapeRight: 180
+        case .faceUp, .faceDown, .unknown: 90
         }
     }
 }

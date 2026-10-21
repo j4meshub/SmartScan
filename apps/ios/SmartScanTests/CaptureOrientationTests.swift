@@ -1,5 +1,4 @@
 @testable import SmartScan
-import AVFoundation
 import ImageIO
 import XCTest
 
@@ -11,8 +10,10 @@ final class CaptureOrientationTests: XCTestCase {
         XCTAssertEqual(DeviceOrientationEvidence.landscapeRight.exifOrientation, .down)
     }
 
-    func testLandscapeVideoOrientationAccountsForBackCameraCoordinates() {
-        XCTAssertEqual(DeviceOrientationEvidence.landscapeLeft.videoOrientation, .landscapeRight)
-        XCTAssertEqual(DeviceOrientationEvidence.landscapeRight.videoOrientation, .landscapeLeft)
+    func testRotationAnglesUseIOS17ConnectionCoordinates() {
+        XCTAssertEqual(DeviceOrientationEvidence.portrait.videoRotationAngle, 90)
+        XCTAssertEqual(DeviceOrientationEvidence.portraitUpsideDown.videoRotationAngle, 270)
+        XCTAssertEqual(DeviceOrientationEvidence.landscapeLeft.videoRotationAngle, 0)
+        XCTAssertEqual(DeviceOrientationEvidence.landscapeRight.videoRotationAngle, 180)
     }
 }

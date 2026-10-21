@@ -22,6 +22,7 @@
 - 视频帧每 250 毫秒抽样亮度、梯度清晰度和高光比例，Vision 同时提供文档矩形与置信度；阈值只生成提示，不声称替代服务端复核或真实样本校准。
 - 拍照使用 `fileDataRepresentation()` 的 JPEG 原始数据，不进行裁切或增强；原图与 JSON 方向/尺寸/质量/矩形证据成对写入当前用户摘要目录，任一写入失败都会清理残留。
 - 新增相机用途双语说明、状态机、质量指标、方向映射、用户隔离原图存储测试和 iOS 工程安全契约；Windows 本地契约 `7 passed`，Swift 编译及 Simulator 单元测试等待 macOS CI。
+- 首轮提交 `d19c7ee` 的 macOS 编译发现多语句计算属性缺少显式返回；修复同时改用 iOS 17 的 `videoRotationAngle` API，避免继续依赖已弃用的 `AVCaptureVideoOrientation`。
 
 - IOS-001 已由 PR #37 合并到主线，中文 squash 提交为 `4cc0a18`；最终代码头两套 API、Web、Android、iOS 与容器共 10 项 CI 检查通过。
 - IOS-002 已接入注册、短信挑战、本地登录、`/v1/me` 会话恢复、一次性刷新令牌轮换和退出；接口字段与现有 H5/Android 客户端保持一致。

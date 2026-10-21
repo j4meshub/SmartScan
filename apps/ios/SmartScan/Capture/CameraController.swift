@@ -67,8 +67,9 @@ final class CameraController: NSObject, ObservableObject {
         transition(.shutterPressed)
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            if let connection = self.photoOutput.connection(with: .video), connection.isVideoOrientationSupported {
-                connection.videoOrientation = orientation.videoOrientation
+            if let connection = self.photoOutput.connection(with: .video),
+               connection.isVideoRotationAngleSupported(orientation.videoRotationAngle) {
+                connection.videoRotationAngle = orientation.videoRotationAngle
             }
             let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
             settings.photoQualityPrioritization = .quality

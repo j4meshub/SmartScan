@@ -92,11 +92,11 @@ struct CaptureView: View {
 
     private var qualityMessage: String {
         switch camera.state.phase {
-        case .waitingPermission: String(localized: "Waiting for camera permission…")
-        case .bindingCamera: String(localized: "Starting camera…")
-        case .capturing: String(localized: "Saving original…")
-        case .captured: String(localized: "Original saved")
-        case .failed: String(localized: "Camera unavailable")
+        case .waitingPermission: return String(localized: "Waiting for camera permission…")
+        case .bindingCamera: return String(localized: "Starting camera…")
+        case .capturing: return String(localized: "Saving original…")
+        case .captured: return String(localized: "Original saved")
+        case .failed: return String(localized: "Camera unavailable")
         case .ready:
             if camera.state.quality.ready { return String(localized: "Ready to capture") }
             let priority: [CaptureQualityIssue] = [
