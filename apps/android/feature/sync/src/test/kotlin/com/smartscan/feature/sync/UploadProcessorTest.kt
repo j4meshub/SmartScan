@@ -157,16 +157,27 @@ private class FakeStore(
     var project: LocalUploadProject,
     var upload: QueuedUpload,
 ) : UploadQueueStore {
+    private var cleared = false
+
+    override suspend fun allProjectIds(ownerUserId: String): List<String> =
+        if (!cleared && project.ownerUserId == ownerUserId) listOf(project.localProjectId) else emptyList()
+
+    override suspend fun localPaths(ownerUserId: String): List<String> =
+        if (!cleared && upload.ownerUserId == ownerUserId) listOf(upload.localPath) else emptyList()
+
+    override suspend fun clearUser(ownerUserId: String) {
+        if (project.ownerUserId == ownerUserId) cleared = true
+    }
     override suspend fun enqueue(project: LocalUploadProject, upload: QueuedUpload) {
         this.project = project
         this.upload = upload
     }
 
     override suspend fun project(ownerUserId: String, localProjectId: String) =
-        project.takeIf { it.ownerUserId == ownerUserId && it.localProjectId == localProjectId }
+        project.takeIf { !cleared && it.ownerUserId == ownerUserId && it.localProjectId == localProjectId }
 
     override suspend fun nextPending(ownerUserId: String, localProjectId: String) = upload.takeIf {
-        it.ownerUserId == ownerUserId && it.localProjectId == localProjectId &&
+        !cleared && it.ownerUserId == ownerUserId && it.localProjectId == localProjectId &&
             it.status in setOf(
                 UploadQueueStatus.QUEUED,
                 UploadQueueStatus.RETRYING,
@@ -175,7 +186,8 @@ private class FakeStore(
             )
     }
 
-    override suspend fun pendingProjectIds(ownerUserId: String) = listOf(project.localProjectId)
+    override suspend fun pendingProjectIds(ownerUserId: String) =
+        if (!cleared && project.ownerUserId == ownerUserId) listOf(project.localProjectId) else emptyList()
 
     override suspend fun setServerProjectId(ownerUserId: String, localProjectId: String, serverProjectId: String) {
         project = project.copy(serverProjectId = serverProjectId)

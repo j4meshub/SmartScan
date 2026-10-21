@@ -33,5 +33,18 @@
     <string name="upload_project_document">SmartScan</string>
     <string name="upload_project_exam">Exam</string>
     <string name="upload_project_book">Book</string>
+    <string name="share_export_title">Share scan export</string>
+    <string name="account_deletion_title">Delete account</string>
+    <string name="account_deletion_warning">Deletion starts a 7-day cooling-off period. Enter the full verified phone number, SMS code, and your username. All sessions are revoked after the request.</string>
+    <string name="account_deletion_confirm_username">Type your username to confirm</string>
+    <string name="account_deletion_action">Request account deletion</string>
+    <string name="account_deletion_failed">Account deletion could not be requested.</string>
+    <string name="account_deletion_scheduled">Account deletion is scheduled. You can cancel it during the 7-day cooling-off period.</string>
+    <string name="account_deletion_scheduled_cleanup_failed">Account deletion is scheduled, but some local scan data could not be cleared. Remove this app’s storage in Android settings before handing over the device.</string>
+    <string name="account_deletion_cancel_entry">Cancel a pending account deletion</string>
+    <string name="account_deletion_cancel_title">Cancel account deletion</string>
+    <string name="account_deletion_cancel_action">Cancel deletion</string>
+    <string name="account_deletion_canceled">Account deletion was canceled. You can sign in again.</string>
+    <string name="account_deletion_cancel_failed">Could not cancel deletion. Check the verified phone and code.</string>
 </resources>
 

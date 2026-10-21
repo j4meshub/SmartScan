@@ -4,14 +4,18 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.RequestBody
+import okhttp3.ResponseBody
+import retrofit2.http.Streaming
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.PATCH
 import retrofit2.http.Path
 import retrofit2.http.POST
 import retrofit2.http.PUT
+import retrofit2.http.Query
 
-interface SmartScanApi : AuthenticationApi, ScanApi
+interface SmartScanApi : AuthenticationApi, ScanApi, WorkspaceApi
 
 interface AuthenticationApi {
     @POST("v1/auth/sms-challenges")
@@ -31,6 +35,12 @@ interface AuthenticationApi {
 
     @GET("v1/me")
     suspend fun me(): UserDto
+
+    @POST("v1/me/account-deletion")
+    suspend fun requestAccountDeletion(@Body request: AccountDeletionRequestDto): AccountDeletionDto
+
+    @POST("v1/auth/account-deletion/cancel")
+    suspend fun cancelAccountDeletion(@Body request: AccountDeletionRequestDto): AccountDeletionDto
 }
 
 interface ScanApi {
@@ -66,6 +76,60 @@ interface ScanApi {
     @POST("v1/uploads/{uploadId}/complete")
     suspend fun completeUpload(@Path("uploadId") uploadId: String): PageDto
 }
+
+interface WorkspaceApi {
+    @PATCH("v1/projects/{projectId}/pages/order")
+    suspend fun reorderPages(
+        @Path("projectId") projectId: String,
+        @Body request: PageOrderRequestDto,
+    ): List<PageDto>
+
+    @POST("v1/pages/{pageId}/rotations")
+    suspend fun rotatePage(@Path("pageId") pageId: String, @Body request: PageRotationRequestDto): PageDto
+
+    @POST("v1/pages/{pageId}/edits")
+    suspend fun editPage(@Path("pageId") pageId: String, @Body request: PageEditRequestDto): PageDto
+
+    @PATCH("v1/pages/{pageId}/review")
+    suspend fun reviewPage(@Path("pageId") pageId: String, @Body request: PageReviewRequestDto): PageDto
+
+    @POST("v1/projects/{projectId}/exports")
+    suspend fun createExport(
+        @Path("projectId") projectId: String,
+        @Body request: ExportCreateRequestDto,
+    ): ExportDto
+
+    @GET("v1/exports/{exportId}")
+    suspend fun getExport(@Path("exportId") exportId: String): ExportDto
+
+    @Streaming
+    @GET("v1/pages/{pageId}/content")
+    suspend fun downloadPageContent(
+        @Path("pageId") pageId: String,
+        @Query("variant") variant: String = "active",
+    ): ResponseBody
+
+    @Streaming
+    @GET("v1/export-artifacts/{artifactId}/content")
+    suspend fun downloadExportArtifact(@Path("artifactId") artifactId: String): ResponseBody
+}
+
+@Serializable
+data class AccountDeletionRequestDto(
+    val phone: String,
+    @SerialName("sms_challenge_id") val smsChallengeId: String,
+    @SerialName("sms_code") val smsCode: String,
+)
+
+@Serializable
+data class AccountDeletionDto(
+    val id: String,
+    val status: String,
+    @SerialName("requested_at") val requestedAt: String,
+    @SerialName("execute_after") val executeAfter: String,
+    @SerialName("canceled_at") val canceledAt: String? = null,
+    @SerialName("completed_at") val completedAt: String? = null,
+)
 
 @Serializable
 data class CreateProjectRequestDto(
@@ -105,6 +169,35 @@ data class ChunkReceiptDto(
     @SerialName("chunk_index") val chunkIndex: Int,
     @SerialName("size_bytes") val sizeBytes: Long,
     val sha256: String,
+)
+
+@Serializable
+data class PageOrderRequestDto(@SerialName("page_ids") val pageIds: List<String>)
+
+@Serializable
+data class PageRotationRequestDto(val degrees: Int)
+
+@Serializable
+data class PageCornerDto(val x: Double, val y: Double)
+
+@Serializable
+data class PageEditRequestDto(
+    val corners: List<PageCornerDto>? = null,
+    val filter: String = "original",
+)
+
+@Serializable
+data class PageReviewRequestDto(
+    val status: String,
+    val note: String? = null,
+)
+
+@Serializable
+data class ExportCreateRequestDto(
+    val format: String,
+    val quality: String = "balanced",
+    @SerialName("include_ocr_text") val includeOcrText: Boolean = false,
+    @SerialName("page_ids") val pageIds: List<String>? = null,
 )
 
 @Serializable
@@ -204,8 +297,11 @@ data class JobDto(
 @Serializable
 data class ExportArtifactDto(
     val id: String,
+    @SerialName("page_id") val pageId: String? = null,
+    val sequence: Int = 1,
     @SerialName("file_name") val fileName: String,
     @SerialName("mime_type") val mimeType: String,
+    val sha256: String,
     @SerialName("size_bytes") val sizeBytes: Long,
 )
 
@@ -215,7 +311,10 @@ data class ExportDto(
     @SerialName("project_id") val projectId: String,
     val format: String,
     val quality: String,
+    @SerialName("include_ocr_text") val includeOcrText: Boolean = false,
     val status: String,
+    @SerialName("page_count") val pageCount: Int = 0,
+    @SerialName("error_code") val errorCode: String? = null,
     val artifacts: List<ExportArtifactDto>,
     @SerialName("created_at") val createdAt: String,
 )

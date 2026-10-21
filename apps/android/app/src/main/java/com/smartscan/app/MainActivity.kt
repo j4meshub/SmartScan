@@ -1,10 +1,12 @@
 package com.smartscan.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,19 +20,24 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.FileProvider
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.smartscan.core.model.DownloadedArtifact
 import com.smartscan.core.model.UserProfile
 import com.smartscan.data.repository.ApiResult
 import com.smartscan.data.repository.AuthenticationRepository
+import com.smartscan.data.repository.ProjectRepository
 import com.smartscan.data.repository.RegistrationInput
 import com.smartscan.feature.capture.CaptureMode
 import com.smartscan.feature.capture.CaptureScreen
 import com.smartscan.feature.sync.UploadQueueCoordinator
+import com.smartscan.feature.workspace.ProjectWorkspaceScreen
+import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -42,7 +49,27 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as SmartScanApplication).container
-        setContent { SmartScanApp(container.authenticationRepository, container.uploadQueueCoordinator) }
+        setContent {
+            SmartScanApp(
+                authenticationRepository = container.authenticationRepository,
+                projectRepository = container.projectRepository,
+                uploadQueueCoordinator = container.uploadQueueCoordinator,
+                onShare = ::shareArtifact,
+            )
+        }
+    }
+
+    private fun shareArtifact(download: DownloadedArtifact) {
+        val exportRoot = File(cacheDir, "exports").canonicalFile
+        val file = runCatching { File(download.filePath).canonicalFile }.getOrNull() ?: return
+        if (!file.isFile || file.parentFile != exportRoot) return
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = download.mimeType
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, getString(R.string.share_export_title)))
     }
 }
 
@@ -53,12 +80,15 @@ private val Mint = Color(0xFFB7F7D4)
 @Composable
 fun SmartScanApp(
     authenticationRepository: AuthenticationRepository,
+    projectRepository: ProjectRepository,
     uploadQueueCoordinator: UploadQueueCoordinator,
+    onShare: (DownloadedArtifact) -> Unit,
 ) {
     val authState = remember { MutableStateFlow<AuthUiState>(AuthUiState.Loading) }
     val state by authState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var challengeId by remember { mutableStateOf<String?>(null) }
+    var registrationChallengeId by remember { mutableStateOf<String?>(null) }
+    var cancellationChallengeId by remember { mutableStateOf<String?>(null) }
     var messageResource by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(authenticationRepository) {
@@ -72,13 +102,26 @@ fun SmartScanApp(
         AuthUiState.Loading -> LoadingScreen()
         AuthUiState.SignedOut -> AuthenticationScreen(
             messageResource = messageResource,
-            challengeReady = challengeId != null,
-            onRequestCode = { phone ->
+            registrationChallengeReady = registrationChallengeId != null,
+            cancellationChallengeReady = cancellationChallengeId != null,
+            onRequestRegistrationCode = { phone ->
                 scope.launch {
                     messageResource = null
                     when (val result = authenticationRepository.requestRegistrationChallenge(phone)) {
                         is ApiResult.Success -> {
-                            challengeId = result.value.id
+                            registrationChallengeId = result.value.id
+                            messageResource = R.string.auth_code_sent
+                        }
+                        is ApiResult.Failure -> messageResource = R.string.auth_request_failed
+                    }
+                }
+            },
+            onRequestCancellationCode = { phone ->
+                scope.launch {
+                    messageResource = null
+                    when (val result = authenticationRepository.requestAccountDeletionCancellationChallenge(phone)) {
+                        is ApiResult.Success -> {
+                            cancellationChallengeId = result.value.id
                             messageResource = R.string.auth_code_sent
                         }
                         is ApiResult.Failure -> messageResource = R.string.auth_request_failed
@@ -93,7 +136,7 @@ fun SmartScanApp(
                 }
             },
             onRegister = { phone, code, username, password ->
-                val currentChallenge = challengeId
+                val currentChallenge = registrationChallengeId
                 if (currentChallenge == null) {
                     messageResource = R.string.auth_code_required
                 } else {
@@ -107,15 +150,45 @@ fun SmartScanApp(
                     }
                 }
             },
+            onCancelDeletion = { phone, code ->
+                val currentChallenge = cancellationChallengeId
+                if (currentChallenge == null) {
+                    messageResource = R.string.auth_code_required
+                } else {
+                    scope.launch {
+                        when (authenticationRepository.cancelAccountDeletion(phone, currentChallenge, code)) {
+                            is ApiResult.Success -> {
+                                cancellationChallengeId = null
+                                messageResource = R.string.account_deletion_canceled
+                            }
+                            is ApiResult.Failure -> messageResource = R.string.account_deletion_cancel_failed
+                        }
+                    }
+                }
+            },
         )
         is AuthUiState.SignedIn -> AuthenticatedApp(
             user = current.user,
+            authenticationRepository = authenticationRepository,
+            projectRepository = projectRepository,
             uploadQueueCoordinator = uploadQueueCoordinator,
+            onShare = onShare,
+            onAccountDeletionScheduled = { localCleanupComplete ->
+                registrationChallengeId = null
+                cancellationChallengeId = null
+                messageResource = if (localCleanupComplete) {
+                    R.string.account_deletion_scheduled
+                } else {
+                    R.string.account_deletion_scheduled_cleanup_failed
+                }
+                authState.value = AuthUiState.SignedOut
+            },
             onLogout = {
                 authState.value = AuthUiState.Loading
                 scope.launch {
                     authenticationRepository.logout()
-                    challengeId = null
+                    registrationChallengeId = null
+                    cancellationChallengeId = null
                     messageResource = null
                     authState.value = AuthUiState.SignedOut
                 }
@@ -127,7 +200,11 @@ fun SmartScanApp(
 @Composable
 private fun AuthenticatedApp(
     user: UserProfile,
+    authenticationRepository: AuthenticationRepository,
+    projectRepository: ProjectRepository,
     uploadQueueCoordinator: UploadQueueCoordinator,
+    onShare: (DownloadedArtifact) -> Unit,
+    onAccountDeletionScheduled: (Boolean) -> Unit,
     onLogout: () -> Unit,
 ) {
     MaterialTheme(colorScheme = lightColorScheme(primary = Ink, background = Paper)) {
@@ -170,10 +247,22 @@ private fun AuthenticatedApp(
                     SmartScanHome { mode -> navController.navigate("capture/${mode.routeValue}") }
                 }
                 composable(AppDestination.Projects.route) {
-                    PlaceholderScreen(R.string.projects, R.string.projects_description)
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    ProjectWorkspaceScreen(
+                        repository = projectRepository,
+                        previewDirectory = remember(context) { File(context.cacheDir, "page-previews") },
+                        exportDirectory = remember(context) { File(context.cacheDir, "exports") },
+                        onShare = onShare,
+                    )
                 }
                 composable(AppDestination.Settings.route) {
-                    SettingsScreen(user, onLogout)
+                    SettingsScreen(
+                        user = user,
+                        authenticationRepository = authenticationRepository,
+                        uploadQueueCoordinator = uploadQueueCoordinator,
+                        onAccountDeletionScheduled = onAccountDeletionScheduled,
+                        onLogout = onLogout,
+                    )
                 }
                 composable(CaptureRoute) { entry ->
                     val mode = CaptureMode.fromRoute(entry.arguments?.getString("mode"))
@@ -226,20 +315,31 @@ private fun LoadingScreen() {
     }
 }
 
+private enum class AuthScreenMode { LOGIN, REGISTER, CANCEL_DELETION }
+
 @Composable
 private fun AuthenticationScreen(
     messageResource: Int?,
-    challengeReady: Boolean,
-    onRequestCode: (String) -> Unit,
+    registrationChallengeReady: Boolean,
+    cancellationChallengeReady: Boolean,
+    onRequestRegistrationCode: (String) -> Unit,
+    onRequestCancellationCode: (String) -> Unit,
     onLogin: (String, String) -> Unit,
     onRegister: (String, String, String, String) -> Unit,
+    onCancelDeletion: (String, String) -> Unit,
 ) {
-    var registration by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf(AuthScreenMode.LOGIN) }
     var phone by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    val validation = validateAuthForm(registration, phone, code, username, password, challengeReady)
+    val registration = mode == AuthScreenMode.REGISTER
+    val cancellation = mode == AuthScreenMode.CANCEL_DELETION
+    val validation = if (cancellation) {
+        validateDeletionCancellation(phone, code, cancellationChallengeReady)
+    } else {
+        validateAuthForm(registration, phone, code, username, password, registrationChallengeReady)
+    }
 
     MaterialTheme(colorScheme = lightColorScheme(primary = Ink, background = Paper)) {
         Column(
@@ -248,9 +348,17 @@ private fun AuthenticationScreen(
         ) {
             Text("SmartScan", fontWeight = FontWeight.Black, fontSize = 34.sp)
             Spacer(Modifier.height(8.dp))
-            Text(stringResource(if (registration) R.string.auth_register_title else R.string.auth_login_title))
+            Text(
+                stringResource(
+                    when (mode) {
+                        AuthScreenMode.LOGIN -> R.string.auth_login_title
+                        AuthScreenMode.REGISTER -> R.string.auth_register_title
+                        AuthScreenMode.CANCEL_DELETION -> R.string.account_deletion_cancel_title
+                    },
+                ),
+            )
             Spacer(Modifier.height(24.dp))
-            if (registration) {
+            if (registration || cancellation) {
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { phone = it.trim() },
@@ -267,28 +375,35 @@ private fun AuthenticationScreen(
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
-                    Button(onClick = { onRequestCode(phone) }, enabled = phone.isNotBlank()) {
+                    Button(
+                        onClick = {
+                            if (cancellation) onRequestCancellationCode(phone) else onRequestRegistrationCode(phone)
+                        },
+                        enabled = isValidE164Phone(phone),
+                    ) {
                         Text(stringResource(R.string.auth_request_code))
                     }
                 }
                 Spacer(Modifier.height(8.dp))
             }
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it.trim() },
-                label = { Text(stringResource(R.string.auth_username)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text(stringResource(R.string.auth_password)) },
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (!cancellation) {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it.trim() },
+                    label = { Text(stringResource(R.string.auth_username)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text(stringResource(R.string.auth_password)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             messageResource?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(it), color = MaterialTheme.colorScheme.error)
@@ -296,35 +411,136 @@ private fun AuthenticationScreen(
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = {
-                    if (registration) onRegister(phone, code, username, password) else onLogin(username, password)
+                    when (mode) {
+                        AuthScreenMode.LOGIN -> onLogin(username, password)
+                        AuthScreenMode.REGISTER -> onRegister(phone, code, username, password)
+                        AuthScreenMode.CANCEL_DELETION -> onCancelDeletion(phone, code)
+                    }
                 },
                 enabled = validation.valid,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(if (registration) R.string.auth_register_action else R.string.auth_login_action))
+                Text(
+                    stringResource(
+                        when (mode) {
+                            AuthScreenMode.LOGIN -> R.string.auth_login_action
+                            AuthScreenMode.REGISTER -> R.string.auth_register_action
+                            AuthScreenMode.CANCEL_DELETION -> R.string.account_deletion_cancel_action
+                        },
+                    ),
+                )
             }
             TextButton(onClick = {
-                registration = !registration
+                mode = if (mode == AuthScreenMode.LOGIN) AuthScreenMode.REGISTER else AuthScreenMode.LOGIN
                 password = ""
             }) {
-                Text(stringResource(if (registration) R.string.auth_show_login else R.string.auth_show_register))
+                Text(stringResource(if (mode == AuthScreenMode.LOGIN) R.string.auth_show_register else R.string.auth_show_login))
+            }
+            if (mode == AuthScreenMode.LOGIN) {
+                TextButton(onClick = { mode = AuthScreenMode.CANCEL_DELETION }) {
+                    Text(stringResource(R.string.account_deletion_cancel_entry))
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SettingsScreen(user: UserProfile, onLogout: () -> Unit) {
-    Column(
+private fun SettingsScreen(
+    user: UserProfile,
+    authenticationRepository: AuthenticationRepository,
+    uploadQueueCoordinator: UploadQueueCoordinator,
+    onAccountDeletionScheduled: (Boolean) -> Unit,
+    onLogout: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var phone by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var confirmUsername by remember { mutableStateOf("") }
+    var challengeId by remember { mutableStateOf<String?>(null) }
+    var messageResource by remember { mutableStateOf<Int?>(null) }
+    LazyColumn(
         modifier = Modifier.fillMaxSize().background(Paper).padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(stringResource(R.string.settings), fontWeight = FontWeight.Black, fontSize = 32.sp)
-        Spacer(Modifier.height(12.dp))
-        Text(user.username)
-        Text(user.phoneMasked, color = Color(0xFF4B5563))
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onLogout) { Text(stringResource(R.string.auth_logout)) }
+        item {
+            Text(stringResource(R.string.settings), fontWeight = FontWeight.Black, fontSize = 32.sp)
+            Text(user.username)
+            Text(user.phoneMasked, color = Color(0xFF4B5563))
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onLogout) { Text(stringResource(R.string.auth_logout)) }
+            HorizontalDivider(Modifier.padding(vertical = 20.dp))
+            Text(stringResource(R.string.account_deletion_title), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text(stringResource(R.string.account_deletion_warning), color = MaterialTheme.colorScheme.error)
+        }
+        item {
+            OutlinedTextField(
+                value = phone,
+                onValueChange = { phone = it.trim() },
+                label = { Text(stringResource(R.string.auth_phone)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.trim() },
+                    label = { Text(stringResource(R.string.auth_sms_code)) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = {
+                        scope.launch {
+                            when (val result = authenticationRepository.requestAccountDeletionChallenge(phone)) {
+                                is ApiResult.Success -> {
+                                    challengeId = result.value.id
+                                    messageResource = R.string.auth_code_sent
+                                }
+                                is ApiResult.Failure -> messageResource = R.string.auth_request_failed
+                            }
+                        }
+                    },
+                    enabled = isValidE164Phone(phone),
+                ) { Text(stringResource(R.string.auth_request_code)) }
+            }
+            OutlinedTextField(
+                value = confirmUsername,
+                onValueChange = { confirmUsername = it.trim() },
+                label = { Text(stringResource(R.string.account_deletion_confirm_username)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            messageResource?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.error) }
+            Button(
+                onClick = {
+                    val currentChallenge = challengeId ?: return@Button
+                    scope.launch {
+                        when (val result = authenticationRepository.requestAccountDeletion(phone, currentChallenge, code)) {
+                            is ApiResult.Success -> {
+                                val localCleanupComplete = uploadQueueCoordinator.clearUserData(user.id)
+                                onAccountDeletionScheduled(localCleanupComplete)
+                            }
+                            is ApiResult.Failure -> {
+                                if (result.kind == com.smartscan.data.repository.FailureKind.LOCAL_STORAGE) {
+                                    val localCleanupComplete = uploadQueueCoordinator.clearUserData(user.id)
+                                    onAccountDeletionScheduled(localCleanupComplete)
+                                } else {
+                                    messageResource = R.string.account_deletion_failed
+                                }
+                            }
+                        }
+                    }
+                },
+                enabled = validateDeletionForm(
+                    phone = phone,
+                    code = code,
+                    confirmedUsername = confirmUsername,
+                    expectedUsername = user.username,
+                    challengeReady = challengeId != null,
+                ).valid,
+            ) { Text(stringResource(R.string.account_deletion_action)) }
+        }
     }
 }
 

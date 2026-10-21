@@ -47,7 +47,7 @@
       ]
     },
     "android": {
-      "status": "foundation",
+      "status": "active",
       "consumed_operation_ids": [
         "request_sms_challenge_v1_auth_sms_challenges_post",
         "register_v1_auth_register_post",
@@ -60,7 +60,18 @@
         "create_upload_v1_uploads_post",
         "get_upload_v1_uploads__upload_id__get",
         "put_upload_chunk_v1_uploads__upload_id__chunks__chunk_index__put",
-        "complete_upload_v1_uploads__upload_id__complete_post"
+        "complete_upload_v1_uploads__upload_id__complete_post",
+        "list_pages_v1_projects__project_id__pages_get",
+        "reorder_pages_v1_projects__project_id__pages_order_patch",
+        "create_page_rotation_v1_pages__page_id__rotations_post",
+        "create_page_edit_v1_pages__page_id__edits_post",
+        "change_page_review_v1_pages__page_id__review_patch",
+        "page_content_v1_pages__page_id__content_get",
+        "create_project_export_v1_projects__project_id__exports_post",
+        "get_export_v1_exports__export_id__get",
+        "export_artifact_content_v1_export_artifacts__artifact_id__content_get",
+        "create_account_deletion_v1_me_account_deletion_post",
+        "cancel_pending_account_deletion_v1_auth_account_deletion_cancel_post"
       ]
     },
     "ios": {

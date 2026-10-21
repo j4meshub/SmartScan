@@ -102,4 +102,69 @@ class SmartScanApiTest {
         assertTrue(request.body.readByteArray().contentEquals(bytes))
         assertFalse(request.requestUrl!!.queryParameterNames.contains("token"))
     }
+
+    @Test
+    fun `page edit sends four normalized corners and filter`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"quality_details":null,"active_result_version":2,"review_status":"pending","ocr_status":"completed"}""",
+            ),
+        )
+        val api = api()
+
+        api.editPage(
+            "page-1",
+            PageEditRequestDto(
+                corners = listOf(PageCornerDto(0.0, 0.0), PageCornerDto(1.0, 0.0), PageCornerDto(1.0, 1.0), PageCornerDto(0.0, 1.0)),
+                filter = "grayscale",
+            ),
+        )
+        val request = server.takeRequest()
+        val body = request.body.readUtf8()
+
+        assertEquals("/v1/pages/page-1/edits", request.path)
+        assertTrue(body.contains("\"filter\":\"grayscale\""))
+        assertEquals(4, "\"x\":".toRegex().findAll(body).count())
+    }
+
+    @Test
+    fun `account deletion keeps verification data in body`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"id":"deletion-1","status":"pending","requested_at":"2026-10-21T00:00:00Z","execute_after":"2026-10-28T00:00:00Z","canceled_at":null,"completed_at":null}""",
+            ),
+        )
+        val api = api()
+
+        api.requestAccountDeletion(AccountDeletionRequestDto("+8613800001234", "challenge-id", "123456"))
+        val request = server.takeRequest()
+
+        assertEquals("/v1/me/account-deletion", request.path)
+        assertTrue(request.body.readUtf8().contains("\"sms_challenge_id\":\"challenge-id\""))
+        assertFalse(request.requestUrl!!.queryParameterNames.contains("sms_code"))
+    }
+
+    @Test
+    fun `artifact download remains authenticated without query token`() = runTest {
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/pdf").setBody("pdf-bytes"))
+        val api = api()
+
+        val body = api.downloadExportArtifact("artifact-1")
+        val request = server.takeRequest()
+
+        assertEquals("pdf-bytes", body.string())
+        assertEquals("/v1/export-artifacts/artifact-1/content", request.path)
+        assertEquals("Bearer access-token", request.getHeader("Authorization"))
+        assertFalse(request.requestUrl!!.queryParameterNames.contains("token"))
+    }
+
+    private fun api() = SmartScanApiFactory.create(
+        ApiClientConfig(
+            baseUrl = server.url("/").toString(),
+            deviceId = "android:test-device",
+            deviceName = "Android 测试设备",
+            allowInsecureLoopback = true,
+        ),
+        tokenProvider = AccessTokenProvider { "access-token" },
+    )
 }

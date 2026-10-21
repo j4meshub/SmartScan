@@ -114,6 +114,24 @@ interface UploadQueueDao {
     )
     suspend fun pendingProjectIds(userId: String): List<String>
 
+    @Query("SELECT local_project_id FROM local_upload_projects WHERE owner_user_id = :userId ORDER BY local_project_id")
+    suspend fun allProjectIds(userId: String): List<String>
+
+    @Query("SELECT local_path FROM queued_uploads WHERE owner_user_id = :userId ORDER BY created_at_epoch_ms, id")
+    suspend fun localPaths(userId: String): List<String>
+
+    @Query("DELETE FROM queued_uploads WHERE owner_user_id = :userId")
+    suspend fun deleteUploadsForUser(userId: String)
+
+    @Query("DELETE FROM local_upload_projects WHERE owner_user_id = :userId")
+    suspend fun deleteProjectsForUser(userId: String)
+
+    @Transaction
+    suspend fun clearUser(userId: String) {
+        deleteUploadsForUser(userId)
+        deleteProjectsForUser(userId)
+    }
+
     @Query(
         "UPDATE local_upload_projects SET server_project_id = :serverProjectId " +
             "WHERE owner_user_id = :userId AND local_project_id = :localProjectId",
@@ -218,6 +236,16 @@ class RoomUploadQueueStore(private val dao: UploadQueueDao) : UploadQueueStore {
 
     override suspend fun pendingProjectIds(ownerUserId: String): List<String> =
         dao.pendingProjectIds(ownerUserId.requiredUserId())
+
+    override suspend fun allProjectIds(ownerUserId: String): List<String> =
+        dao.allProjectIds(ownerUserId.requiredUserId())
+
+    override suspend fun localPaths(ownerUserId: String): List<String> =
+        dao.localPaths(ownerUserId.requiredUserId())
+
+    override suspend fun clearUser(ownerUserId: String) {
+        dao.clearUser(ownerUserId.requiredUserId())
+    }
 
     override suspend fun setServerProjectId(ownerUserId: String, localProjectId: String, serverProjectId: String) {
         require(dao.setServerProjectId(ownerUserId.requiredUserId(), localProjectId, serverProjectId) == 1) { "queue_project_missing" }

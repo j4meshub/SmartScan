@@ -1,0 +1,36 @@
+<resources>
+    <string name="workspace_title">Scan projects</string>
+    <string name="workspace_refresh">Refresh</string>
+    <string name="workspace_empty">No synchronized projects yet.</string>
+    <string name="workspace_load_failed">Could not load data. Check the connection and retry.</string>
+    <string name="workspace_back">Back to projects</string>
+    <string name="workspace_pages">Pages</string>
+    <string name="workspace_page">Page %1$d</string>
+    <string name="workspace_move_up">Move up</string>
+    <string name="workspace_move_down">Move down</string>
+    <string name="workspace_edit">Edit</string>
+    <string name="workspace_preview_unavailable">Preview unavailable</string>
+    <string name="workspace_rotate">Rotate 90°</string>
+    <string name="workspace_filter">Filter</string>
+    <string name="workspace_filter_original">Original</string>
+    <string name="workspace_filter_enhance">Enhance</string>
+    <string name="workspace_filter_grayscale">Grayscale</string>
+    <string name="workspace_filter_bw">Black &amp; white</string>
+    <string name="workspace_corners">Four corners</string>
+    <string name="workspace_corner">Corner %1$d</string>
+    <string name="workspace_x">X</string>
+    <string name="workspace_y">Y</string>
+    <string name="workspace_save_edit">Apply edit</string>
+    <string name="workspace_confirm_review">Confirm review</string>
+    <string name="workspace_export">Export</string>
+    <string name="workspace_pdf">PDF</string>
+    <string name="workspace_jpg">JPG</string>
+    <string name="workspace_clear">Clear</string>
+    <string name="workspace_balanced">Balanced</string>
+    <string name="workspace_small">Small</string>
+    <string name="workspace_include_ocr">Include OCR text layer</string>
+    <string name="workspace_create_export">Create export</string>
+    <string name="workspace_share">Share %1$s</string>
+    <string name="workspace_action_failed">The operation failed. Retry after refreshing.</string>
+    <string name="workspace_busy">Working…</string>
+</resources>
