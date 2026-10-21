@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M7 试卷与扫书产品化 |
 | 当前工作包 | `EXAM-001` 试卷分类 |
-| 工作包状态 | 进行中：后端与三端代码、本地自动化和迁移门禁通过；等待 GitHub Android/iOS Runner 编译后转固定数据集人工验收 |
+| 工作包状态 | 等待人工验收：后端与三端代码、本地门禁及 PR #43 两套 10 项 CI 全部通过；固定数据集指标尚未验收 |
 | 当前分支 | `codex/exam-001-classification` |
 | 最后验证基线 | `7c0cd12`（IOS-006 PR #42 已合并） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `e2122ec` |
+| PR | #43（首轮代码头两套 10 项 CI 全部通过，等待最终文档头验证与合并） |
 | 下一工作包 | `BOOK-001` 自动快门；`EXAM-002`/`EXAM-003` 等待 EXAM-001 固定数据集闸门 |
 
 ## 当前工作包进展
@@ -24,6 +24,7 @@
 - Alembic `0018` 对既有页面回填 `legacy`，升级、模型漂移和版本检查通过；回滚只移除新增分类列与约束。
 - 本地 Ruff 与格式检查、OpenAPI 当前/上一代兼容、全量 Python `187 passed, 5 skipped`、覆盖率超过 `88%`、H5 `34 passed`、Chromium E2E/axe `3 passed`、iOS 配置与发布契约 `21 passed`、前端语法和差异检查通过。Windows 没有 Gradle、Android SDK 和 Xcode，Android 编译/Lint与 iOS Simulator 必须由 GitHub Runner 提供证据。
 - 当前无不少于 300 页的授权固定数据集，召回率 `>=95%`、普通文档误报率、置信分布和性能报告仍为人工门禁；自动化通过后不得宣称真实指标已通过。
+- 提交 `e2122ec` 的推送与 PR 两套 Actions 共 10 项全部通过；Android 完成网络/仓储/工作区测试、应用编译与 Lint，iOS 完成 XcodeGen 工程生成、Xcode 16.4 Simulator 编译和全部 Swift 单元测试。公开仓库 Runner 已恢复，之前的额度阻塞未复现。
 
 以下保留已完成 IOS-006 的近期证据：
 
