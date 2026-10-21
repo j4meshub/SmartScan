@@ -23,6 +23,8 @@ def test_ios_project_has_reproducible_targets_and_test_scheme() -> None:
     ]
     app_settings = project["targets"]["SmartScan"]["settings"]["base"]
     assert app_settings["PRODUCT_BUNDLE_IDENTIFIER"].endswith(".dev")
+    assert app_settings["SMARTSCAN_API_BASE_URL"] == "https://api.invalid/"
+    assert app_settings["INFOPLIST_KEY_SMARTSCAN_API_BASE_URL"] == "$(SMARTSCAN_API_BASE_URL)"
 
 
 def test_xcodegen_download_is_versioned_and_digest_pinned() -> None:
@@ -58,6 +60,22 @@ def test_ios_localization_keys_match() -> None:
 
     assert english
     assert english == chinese
+
+
+def test_ios_identity_sources_cover_secure_session_and_user_partition() -> None:
+    source_root = IOS_ROOT / "SmartScan"
+    keychain = (source_root / "Security" / "KeychainSessionStore.swift").read_text(encoding="utf-8")
+    api = (source_root / "Network" / "SmartScanAPI.swift").read_text(encoding="utf-8")
+    cache = (source_root / "Storage" / "UserScopedProjectCache.swift").read_text(encoding="utf-8")
+
+    assert "kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly" in keychain
+    assert 'static let deviceID = "device-identifier-v1"' in keychain
+    assert 'forHTTPHeaderField: "X-Device-ID"' in api
+    assert 'forHTTPHeaderField: "X-Device-Platform"' in api
+    assert 'request.setValue("Bearer \\(token)"' in api
+    assert 'scheme == "https" || (scheme == "http" && loopback)' in api
+    assert "SHA256.hash" in cache
+    assert 'appendingPathComponent("projects.json")' in cache
 
 
 def _localization_keys(path: Path) -> set[str]:

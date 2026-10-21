@@ -2,9 +2,41 @@ import SwiftUI
 
 @main
 struct SmartScanApp: App {
+    @StateObject private var authentication: AuthenticationStore
+
+    init() {
+        let sessionStore = KeychainSessionStore()
+        let configuration = APIConfiguration.fromBundle()
+        let api = URLSessionSmartScanAPI(configuration: configuration, sessions: sessionStore)
+        let cache = FileUserScopedProjectCache()
+        _authentication = StateObject(
+            wrappedValue: AuthenticationStore(
+                repository: AuthenticationRepository(api: api, sessions: sessionStore, cache: cache)
+            )
+        )
+    }
+
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            RootView(authentication: authentication)
+        }
+    }
+}
+
+struct RootView: View {
+    @ObservedObject var authentication: AuthenticationStore
+
+    var body: some View {
+        switch authentication.phase {
+        case .restoring:
+            ProgressView(String(localized: "Restoring session…"))
+                .task { await authentication.restore() }
+        case .signedOut:
+            AuthenticationView(authentication: authentication)
+        case let .signedIn(user):
+            HomeView(user: user) {
+                Task { await authentication.logout() }
+            }
         }
     }
 }
@@ -32,6 +64,8 @@ enum ScanModeKind: String, CaseIterable {
 }
 
 struct HomeView: View {
+    let user: UserProfile
+    let onLogout: () -> Void
     private let ink = Color(red: 0.067, green: 0.094, blue: 0.153)
     private let paper = Color(red: 0.957, green: 0.945, blue: 0.922)
 
@@ -42,6 +76,13 @@ struct HomeView: View {
                     HStack {
                         Text("⌗  SmartScan").font(.headline.bold())
                         Spacer()
+                        Menu {
+                            Text(user.username)
+                            Button(String(localized: "Log out"), role: .destructive, action: onLogout)
+                        } label: {
+                            Image(systemName: "person.crop.circle")
+                                .accessibilityLabel(String(localized: "Account"))
+                        }
                         HStack(spacing: 4) {
                             Text("●")
                             Text(String(localized: "READY"))

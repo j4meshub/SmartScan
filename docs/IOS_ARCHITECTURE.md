@@ -13,7 +13,7 @@ apps/ios/
 └─ SmartScanTests/               Simulator 单元测试
 ```
 
-当前只有 `SmartScan` 应用 Target 和 `SmartScanTests` 单元测试 Target。后续 `IOS-002` 起应按身份、网络、存储、拍摄和同步职责继续拆分；本工作包不提前用占位接口冒充这些功能。
+当前只有 `SmartScan` 应用 Target 和 `SmartScanTests` 单元测试 Target。源码已按 `Authentication`、`Domain`、`Network`、`Security` 和 `Storage` 职责拆分；拍摄与后台同步由后续工作包继续扩展。
 
 ## 可复现边界
 
@@ -32,7 +32,9 @@ apps/ios/
 3. 从 `project.yml` 重新生成工程。
 4. 在 iPhone 16 Pro Simulator 上编译应用并执行 `SmartScanTests`。
 
-Swift 单元测试固定三种扫描模式的稳定标识与顺序，并验证每种模式都有可见标题和副标题。中英文资源目前覆盖首页所有用户可见文案；后续界面必须补齐双语资源和测试。
+Swift 单元测试固定三种扫描模式的稳定标识与顺序，并覆盖身份模型、Keychain 信封、设备请求头、刷新恢复、注销清理和用户缓存隔离。中英文资源覆盖首页及登录注册界面的用户可见文案；后续界面必须补齐双语资源和测试。
+
+身份与网络实现、安全边界和环境配置见[iOS 身份、Keychain 与网络](IOS_AUTH_AND_NETWORK.md)。
 
 ## 外部门禁
 

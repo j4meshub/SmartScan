@@ -107,7 +107,7 @@ M5 门禁：单元、Compose、模拟器和至少一台真机通过；正式签�
 | 工作包 | 状态 | 依赖 | 交付与验收 |
 |---|---|---|---|
 | `IOS-001` 可复现工程 | 完成 | API-001 | 固定 XcodeGen 2.46.0、Xcode 16.4、工程规范、双语资源和单元测试；PR #37 最终代码头两套 10 项 CI 通过，含 macOS Simulator 生成、编译与测试 |
-| `IOS-002` 身份与网络 | 未开始 | IOS-001, M2 | 注册登录、Keychain、API 客户端和用户缓存分区 |
+| `IOS-002` 身份与网络 | 进行中 | IOS-001, M2 | 注册登录、Keychain、API 客户端和用户缓存分区 |
 | `IOS-003` 拍摄与 Vision | 未开始 | IOS-002 | AVFoundation、矩形/清晰度提示、手动快门和方向证据 |
 | `IOS-004` 后台恢复 | 未开始 | IOS-003 | 本地队列、BackgroundTasks 允许范围内的续传和幂等完成 |
 | `IOS-005` 编辑与分享 | 未开始 | IOS-004, EXPORT-001 | 页面编辑、PDFKit、Share Sheet 和应用内账号删除 |
