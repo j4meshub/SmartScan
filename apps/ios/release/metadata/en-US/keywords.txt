@@ -1,0 +1,1 @@
+scanner,document,pdf,ocr,receipt,study,book,page

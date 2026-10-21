@@ -1,0 +1,1 @@
+Initial TestFlight candidate with secure sign-in, document capture, page editing, export, sharing, and in-app account deletion.

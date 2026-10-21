@@ -31,6 +31,7 @@ jobs:
       - run: pip install -e ".[dev,vision]"
       - run: ruff check services migrations tests tools
       - run: ruff format --check services migrations tests tools
+      - run: python tools/validate_ios_release.py
       - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
       - run: python tools/api_compatibility.py
       - run: python -m services.api.app.migrations upgrade

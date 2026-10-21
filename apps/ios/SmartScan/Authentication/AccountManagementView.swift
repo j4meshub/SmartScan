@@ -20,6 +20,17 @@ struct AccountManagementView: View {
                     .disabled(authentication.busy)
                 }
 
+                if AppSupportLinks.current.privacyPolicy != nil || AppSupportLinks.current.support != nil {
+                    Section(String(localized: "Help and privacy")) {
+                        if let privacyPolicy = AppSupportLinks.current.privacyPolicy {
+                            Link(String(localized: "Privacy policy"), destination: privacyPolicy)
+                        }
+                        if let support = AppSupportLinks.current.support {
+                            Link(String(localized: "Support"), destination: support)
+                        }
+                    }
+                }
+
                 Section(String(localized: "Delete account")) {
                     Text(String(localized: "Deletion starts after a 7-day cooling-off period. Signing in again does not cancel it; use the cancellation flow with SMS verification."))
                         .foregroundStyle(.red)

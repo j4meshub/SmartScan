@@ -111,7 +111,7 @@ M5 门禁：单元、Compose、模拟器和至少一台真机通过；正式签�
 | `IOS-003` 拍摄与 Vision | 完成 | IOS-002 | AVFoundation、矩形/清晰度提示、手动快门和方向证据；PR #39 最终代码头两套 10 项 CI 通过，真实相机仍待人工验收 |
 | `IOS-004` 后台恢复 | 完成 | IOS-003 | 用户分区本地队列、服务端确认分片续传、幂等完成和 BackgroundTasks 恢复已实现；PR #40 最终代码头两套 10 项 CI 通过，真实后台调度仍待人工验收 |
 | `IOS-005` 编辑与分享 | 阻塞 | IOS-004, EXPORT-001 | 页面编辑、PDFKit、Share Sheet 和应用内账号删除已实现；PR #41 因 GitHub Actions 账单/额度未分配 Runner，等待恢复后完成 macOS 编译门禁 |
-| `IOS-006` 审核准备 | 未开始 | IOS-005 | 双语元数据、截图清单、审核账号、隐私和 TestFlight 步骤 |
+| `IOS-006` 审核准备 | 进行中 | IOS-005 | 双语元数据、隐私清单、截图/审核账号清单、应用内公开链接和两级发布校验已实现；等待本地回归、PR 与 macOS CI 证据 |
 
 M6 门禁：每个 PR 完成 macOS Simulator 编译和测试；Mac 仅用于相机、后台、签名、Archive 和 TestFlight。
 

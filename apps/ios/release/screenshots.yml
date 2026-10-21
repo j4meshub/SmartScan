@@ -1,0 +1,20 @@
+schema_version: 1
+devices:
+  iphone_6_9:
+    accepted_portrait_sizes:
+      - [1320, 2868]
+      - [1290, 2796]
+      - [1260, 2736]
+  ipad_13:
+    accepted_portrait_sizes:
+      - [2064, 2752]
+      - [2048, 2732]
+locales:
+  en-US:
+    scenes: [login, capture, page_edit, export_share, account_privacy]
+    iphone_6_9: []
+    ipad_13: []
+  zh-Hans:
+    scenes: [login, capture, page_edit, export_share, account_privacy]
+    iphone_6_9: []
+    ipad_13: []

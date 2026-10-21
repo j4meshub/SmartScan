@@ -1,0 +1,5 @@
+SmartScan helps you capture paper documents, correct page geometry, organize multipage projects, and export clear JPG or searchable PDF files.
+
+Core features include document-aware capture guidance, resumable uploads, page ordering, rotation, four-corner adjustment, multiple filters, review status, and secure system sharing. Originals are preserved so edits never replace the source image.
+
+Account deletion is available in the app with identity verification and a seven-day cooling-off period. Optional external AI features are disabled by default and are not required for scanning or export.
