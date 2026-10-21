@@ -1,0 +1,367 @@
+import PDFKit
+import SwiftUI
+import UIKit
+
+struct WorkspaceView: View {
+    @StateObject private var store: WorkspaceStore
+
+    init(repository: WorkspaceServicing, userID: String) {
+        _store = StateObject(wrappedValue: WorkspaceStore(repository: repository, userID: userID))
+    }
+
+    var body: some View {
+        List {
+            if store.projects.isEmpty, !store.busy {
+                ContentUnavailableView(
+                    String(localized: "No projects yet"),
+                    systemImage: "doc.viewfinder",
+                    description: Text(String(localized: "Scan a page, then refresh this workspace."))
+                )
+            }
+            ForEach(store.projects) { project in
+                NavigationLink {
+                    ProjectWorkspaceView(project: project, store: store)
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(project.displayName).font(.headline)
+                        Text("\(project.mode) · \(project.updatedAt)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .navigationTitle(String(localized: "Workspace"))
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await store.loadProjects() }
+                } label: {
+                    Label(String(localized: "Refresh"), systemImage: "arrow.clockwise")
+                }
+                .disabled(store.busy)
+            }
+        }
+        .overlay { if store.busy, store.projects.isEmpty { ProgressView() } }
+        .task { await store.loadProjects() }
+        .alert(String(localized: "Action failed"), isPresented: errorBinding) {
+            Button(String(localized: "OK")) { store.clearError() }
+        } message: {
+            Text(store.errorMessage ?? "")
+        }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.clearError() } })
+    }
+}
+
+private struct ProjectWorkspaceView: View {
+    let project: WorkspaceProject
+    @ObservedObject var store: WorkspaceStore
+    @State private var exportFormat = WorkspaceExportFormat.pdf
+    @State private var exportQuality = WorkspaceExportQuality.balanced
+    @State private var includeOCRText = true
+
+    var body: some View {
+        List {
+            Section(String(localized: "Pages")) {
+                if store.pages.isEmpty, !store.busy {
+                    Text(String(localized: "No pages are available yet."))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(store.pages) { page in
+                    VStack(alignment: .leading, spacing: 8) {
+                        NavigationLink {
+                            PageEditorView(pageID: page.id, store: store)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(String(format: String(localized: "Page %d"), page.pageNumber))
+                                    .font(.headline)
+                                Text(pageSummary(page))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        HStack {
+                            Button(String(localized: "Move up")) {
+                                Task { await store.move(pageID: page.id, delta: -1) }
+                            }
+                            .disabled(store.busy || page.pageNumber <= 1)
+                            Button(String(localized: "Move down")) {
+                                Task { await store.move(pageID: page.id, delta: 1) }
+                            }
+                            .disabled(store.busy || page.pageNumber >= store.pages.count)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+
+            Section(String(localized: "Create export")) {
+                Picker(String(localized: "Format"), selection: $exportFormat) {
+                    Text("PDF").tag(WorkspaceExportFormat.pdf)
+                    Text("JPG").tag(WorkspaceExportFormat.jpg)
+                }
+                .pickerStyle(.segmented)
+                Picker(String(localized: "Quality"), selection: $exportQuality) {
+                    Text(String(localized: "Clear")).tag(WorkspaceExportQuality.clear)
+                    Text(String(localized: "Balanced")).tag(WorkspaceExportQuality.balanced)
+                    Text(String(localized: "Small")).tag(WorkspaceExportQuality.small)
+                }
+                Toggle(String(localized: "Include searchable OCR text"), isOn: $includeOCRText)
+                    .disabled(exportFormat != .pdf)
+                Button(String(localized: "Create export")) {
+                    Task {
+                        await store.createExport(
+                            format: exportFormat,
+                            quality: exportQuality,
+                            includeOCRText: includeOCRText
+                        )
+                    }
+                }
+                .disabled(store.busy || store.pages.isEmpty)
+            }
+
+            Section(String(localized: "Exports")) {
+                if store.exports.isEmpty {
+                    Text(String(localized: "No exports yet."))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(store.exports) { item in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("\(item.format.uppercased()) · \(item.quality)")
+                                .font(.headline)
+                            Spacer()
+                            Text(exportStatus(item.status))
+                                .font(.caption)
+                                .foregroundStyle(item.status == "ready" ? .green : .secondary)
+                        }
+                        if item.status != "ready" {
+                            Button(String(localized: "Refresh status")) {
+                                Task { await store.refresh(exportID: item.id) }
+                            }
+                            .disabled(store.busy)
+                        }
+                        ForEach(item.artifacts) { artifact in
+                            HStack {
+                                Text(artifact.fileName).lineLimit(1)
+                                Spacer()
+                                Button(String(localized: "Preview")) {
+                                    Task { await store.present(artifact, sharing: false) }
+                                }
+                                Button(String(localized: "Share")) {
+                                    Task { await store.present(artifact, sharing: true) }
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(project.displayName)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await store.refreshProject() }
+                } label: {
+                    Label(String(localized: "Refresh"), systemImage: "arrow.clockwise")
+                }
+                .disabled(store.busy)
+            }
+        }
+        .overlay { if store.busy { ProgressView() } }
+        .task(id: project.id) { await store.open(project) }
+        .sheet(item: $store.presentation) { presentation in
+            switch presentation {
+            case let .preview(document):
+                DocumentPreviewSheet(document: document)
+            case let .share(document):
+                ActivitySheet(items: [document.url])
+            }
+        }
+    }
+
+    private func pageSummary(_ page: WorkspacePage) -> String {
+        let review: String
+        switch page.reviewStatus {
+        case "confirmed": review = String(localized: "Reviewed")
+        case "not_required": review = String(localized: "No review required")
+        default: review = String(localized: "Needs review")
+        }
+        return "\(review) · OCR: \(ocrStatus(page.ocrStatus)) · v\(page.activeResultVersion)"
+    }
+
+    private func exportStatus(_ status: String) -> String {
+        switch status {
+        case "ready": return String(localized: "Ready")
+        case "failed": return String(localized: "Failed")
+        case "generating": return String(localized: "Processing")
+        default: return String(localized: "Queued")
+        }
+    }
+
+    private func ocrStatus(_ status: String) -> String {
+        switch status {
+        case "ready": return String(localized: "Ready")
+        case "disabled": return String(localized: "Disabled")
+        case "stale": return String(localized: "Needs refresh")
+        case "legacy": return String(localized: "Legacy result")
+        default: return String(localized: "Pending")
+        }
+    }
+}
+
+private struct PageEditorView: View {
+    let pageID: String
+    @ObservedObject var store: WorkspaceStore
+    @State private var corners = WorkspaceCorner.fullPage
+    @State private var filter = WorkspaceFilter.original
+
+    private var page: WorkspacePage? { store.pages.first { $0.id == pageID } }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if let page {
+                    preview(page)
+                    HStack {
+                        Button(String(localized: "Rotate 90°")) {
+                            Task { await store.rotate(pageID: page.id) }
+                        }
+                        .buttonStyle(.bordered)
+                        Button(String(localized: "Confirm review")) {
+                            Task { await store.confirm(pageID: page.id) }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(page.reviewStatus == "confirmed")
+                    }
+                    Picker(String(localized: "Filter"), selection: $filter) {
+                        Text(String(localized: "Original")).tag(WorkspaceFilter.original)
+                        Text(String(localized: "Enhance")).tag(WorkspaceFilter.enhance)
+                        Text(String(localized: "Grayscale")).tag(WorkspaceFilter.grayscale)
+                        Text(String(localized: "Black and white")).tag(WorkspaceFilter.bw)
+                    }
+                    .pickerStyle(.menu)
+                    Text(String(localized: "Four corners")).font(.headline)
+                    ForEach(corners.indices, id: \.self) { index in
+                        VStack(alignment: .leading) {
+                            Text(String(format: String(localized: "Corner %d"), index + 1))
+                                .font(.subheadline.bold())
+                            coordinateSlider(label: "X", index: index, isX: true)
+                            coordinateSlider(label: "Y", index: index, isX: false)
+                        }
+                    }
+                    Button(String(localized: "Save edit")) {
+                        Task { await store.edit(pageID: page.id, corners: corners, filter: filter) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.busy)
+                } else {
+                    ContentUnavailableView(String(localized: "Page unavailable"), systemImage: "doc.badge.ellipsis")
+                }
+            }
+            .padding()
+        }
+        .navigationTitle(page.map { String(format: String(localized: "Page %d"), $0.pageNumber) } ?? "")
+        .overlay { if store.busy { ProgressView() } }
+    }
+
+    @ViewBuilder
+    private func preview(_ page: WorkspacePage) -> some View {
+        if let document = store.previews[page.id], let image = UIImage(contentsOfFile: document.url.path) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 420)
+                .accessibilityLabel(String(format: String(localized: "Page %d preview"), page.pageNumber))
+        } else {
+            ContentUnavailableView(String(localized: "Preview unavailable"), systemImage: "photo")
+                .frame(maxWidth: .infinity, minHeight: 180)
+                .task(id: "\(page.id)-\(page.activeResultVersion)") {
+                    await store.loadPreview(for: page)
+                }
+        }
+    }
+
+    private func coordinateSlider(label: String, index: Int, isX: Bool) -> some View {
+        HStack {
+            Text(label).frame(width: 24)
+            Slider(
+                value: Binding(
+                    get: { isX ? corners[index].x : corners[index].y },
+                    set: { value in
+                        let current = corners[index]
+                        corners[index] = WorkspaceCorner(
+                            x: isX ? value : current.x,
+                            y: isX ? current.y : value
+                        )
+                    }
+                ),
+                in: 0 ... 1
+            )
+            .accessibilityLabel(
+                String(format: String(localized: "Corner %d %@"), index + 1, label)
+            )
+            Text(String(format: "%.2f", isX ? corners[index].x : corners[index].y))
+                .monospacedDigit()
+                .frame(width: 48)
+        }
+    }
+}
+
+private struct DocumentPreviewSheet: View {
+    let document: DownloadedDocument
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if document.mimeType == "application/pdf" || document.url.pathExtension.lowercased() == "pdf" {
+                    PDFDocumentView(url: document.url)
+                } else if let image = UIImage(contentsOfFile: document.url.path) {
+                    ScrollView {
+                        Image(uiImage: image).resizable().scaledToFit().padding()
+                    }
+                } else {
+                    ContentUnavailableView(String(localized: "Preview unavailable"), systemImage: "doc")
+                }
+            }
+            .navigationTitle(document.fileName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "Done")) { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct PDFDocumentView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> PDFView {
+        let view = PDFView()
+        view.autoScales = true
+        view.displayMode = .singlePageContinuous
+        view.document = PDFDocument(url: url)
+        return view
+    }
+
+    func updateUIView(_ view: PDFView, context: Context) {
+        if view.document?.documentURL != url { view.document = PDFDocument(url: url) }
+    }
+}
+
+private struct ActivitySheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}

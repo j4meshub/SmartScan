@@ -137,6 +137,19 @@ final class URLSessionSmartScanAPI: SmartScanAuthenticationAPI {
         }
     }
 
+    func executeDownload(_ request: URLRequest) async throws -> RemoteDownload {
+        let (temporaryURL, response) = try await urlSession.download(for: request)
+        let errorData = (response as? HTTPURLResponse).map { response in
+            (200 ..< 300).contains(response.statusCode) ? Data() : ((try? Data(contentsOf: temporaryURL)) ?? Data())
+        } ?? Data()
+        try validate(response: response, data: errorData)
+        return RemoteDownload(
+            temporaryURL: temporaryURL,
+            suggestedFileName: response.suggestedFilename,
+            mimeType: response.mimeType
+        )
+    }
+
     func makeRequest(path: String, method: String, authenticated: Bool) throws -> URLRequest {
         guard let url = URL(string: path, relativeTo: configuration.baseURL)?.absoluteURL else {
             throw APIClientError.invalidResponse

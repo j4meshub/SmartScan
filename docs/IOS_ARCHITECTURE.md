@@ -40,6 +40,8 @@ AVFoundation 拍摄状态机、Vision 提示、原图和方向证据见[iOS AVFo
 
 用户分区队列、服务端确认分片和 BackgroundTasks 恢复边界见[iOS 本地队列、后台恢复与分片续传](IOS_BACKGROUND_UPLOAD.md)。
 
+项目工作区、版本化页面编辑、导出完整性、PDFKit、系统分享和账号删除见[iOS 工作区、导出分享与账号删除](IOS_WORKSPACE_AND_ACCOUNT.md)。
+
 ## 外部门禁
 
 Runner 不能替代以下验收：AVFoundation 相机、Vision 方向与矩形检测、Keychain 真机行为、BackgroundTasks、内存压力、系统分享、签名、Archive、TestFlight 和 App Store 审核。Mac 只在这些无法由 Simulator 证明的门禁中使用，日常源码和规范仍可在 Windows 开发。

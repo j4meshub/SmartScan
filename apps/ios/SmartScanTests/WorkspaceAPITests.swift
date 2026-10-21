@@ -1,0 +1,131 @@
+@testable import SmartScan
+import Foundation
+import XCTest
+
+final class WorkspaceAPITests: XCTestCase {
+    override func tearDown() {
+        StubURLProtocol.handler = nil
+        super.tearDown()
+    }
+
+    func testPageEditUsesFormalPathAndNormalizedCorners() async throws {
+        let api = try makeAPI()
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/pages/page-1/edits")
+            XCTAssertEqual(request.httpMethod, "POST")
+            let body = try XCTUnwrap(requestBody(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["filter"] as? String, "grayscale")
+            XCTAssertEqual((json["corners"] as? [[String: Any]])?.count, 4)
+            return apiResponse(for: request, body: pageJSON)
+        }
+
+        let page = try await api.editPage(
+            id: "page-1",
+            corners: WorkspaceCorner.fullPage,
+            filter: .grayscale
+        )
+
+        XCTAssertEqual(page.activeResultVersion, 2)
+    }
+
+    func testExportCreationKeepsOCRFlagInsideJSONBody() async throws {
+        let api = try makeAPI()
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/projects/project-1/exports")
+            let body = try XCTUnwrap(requestBody(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["format"] as? String, "pdf")
+            XCTAssertEqual(json["quality"] as? String, "clear")
+            XCTAssertEqual(json["include_ocr_text"] as? Bool, true)
+            return apiResponse(for: request, status: 201, body: exportJSON)
+        }
+
+        let result = try await api.createExport(
+            projectID: "project-1",
+            format: .pdf,
+            quality: .clear,
+            includeOCRText: true
+        )
+
+        XCTAssertEqual(result.artifacts.first?.sha256, String(repeating: "a", count: 64))
+    }
+
+    func testAccountDeletionUsesAuthenticatedRequestAndSeparateSMSPurpose() async throws {
+        let api = try makeAPI()
+        var requestCount = 0
+        StubURLProtocol.handler = { request in
+            requestCount += 1
+            let body = try XCTUnwrap(requestBody(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            if requestCount == 1 {
+                XCTAssertEqual(request.url?.path, "/v1/auth/sms-challenges")
+                XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+                XCTAssertEqual(json["purpose"] as? String, "account_deletion")
+                return apiResponse(
+                    for: request,
+                    status: 201,
+                    body: #"{"challenge_id":"challenge-1","expires_at":"2026-10-21T00:05:00Z","retry_after_seconds":60}"#
+                )
+            }
+            XCTAssertEqual(request.url?.path, "/v1/me/account-deletion")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-1")
+            XCTAssertEqual(json["sms_challenge_id"] as? String, "challenge-1")
+            return apiResponse(for: request, status: 202, body: deletionJSON)
+        }
+
+        _ = try await api.requestSMSChallenge(phone: "+8613800001234", purpose: "account_deletion")
+        let receipt = try await api.requestAccountDeletion(
+            phone: "+8613800001234",
+            challengeID: "challenge-1",
+            code: "123456"
+        )
+
+        XCTAssertEqual(receipt.status, "pending")
+    }
+
+    private func makeAPI() throws -> URLSessionSmartScanAPI {
+        let sessions = TestSessionStore()
+        try sessions.save(token().credentials(userID: "user-1"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        return URLSessionSmartScanAPI(
+            configuration: try APIConfiguration(baseURL: URL(string: "https://api.example.test/")!),
+            sessions: sessions,
+            urlSession: URLSession(configuration: configuration)
+        )
+    }
+}
+
+private func requestBody(_ request: URLRequest) -> Data? {
+    if let body = request.httpBody { return body }
+    guard let stream = request.httpBodyStream else { return nil }
+    stream.open()
+    defer { stream.close() }
+    var data = Data()
+    var buffer = [UInt8](repeating: 0, count: 1024)
+    while stream.hasBytesAvailable {
+        let count = stream.read(&buffer, maxLength: buffer.count)
+        if count <= 0 { break }
+        data.append(contentsOf: buffer.prefix(count))
+    }
+    return data
+}
+
+private func apiResponse(
+    for request: URLRequest,
+    status: Int = 200,
+    body: String
+) -> (HTTPURLResponse, Data) {
+    let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: status,
+        httpVersion: "HTTP/1.1",
+        headerFields: ["Content-Type": "application/json"]
+    )!
+    return (response, Data(body.utf8))
+}
+
+private let pageJSON = #"{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":2,"review_status":"pending","ocr_status":"ready"}"#
+private let exportJSON = #"{"id":"export-1","project_id":"project-1","format":"pdf","quality":"clear","include_ocr_text":true,"status":"ready","page_count":1,"error_code":null,"artifacts":[{"id":"artifact-1","page_id":null,"sequence":1,"file_name":"scan.pdf","mime_type":"application/pdf","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size_bytes":12}],"created_at":"2026-10-21T00:00:00Z","completed_at":"2026-10-21T00:01:00Z"}"#
+private let deletionJSON = #"{"id":"deletion-1","status":"pending","requested_at":"2026-10-21T00:00:00Z","execute_after":"2026-10-28T00:00:00Z","canceled_at":null,"completed_at":null}"#

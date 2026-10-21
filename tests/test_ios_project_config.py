@@ -130,6 +130,44 @@ def test_ios_background_upload_is_permitted_and_server_confirmed() -> None:
     assert "UserStoragePaths.isDescendant" in queue
 
 
+def test_ios_workspace_uses_versioned_edits_verified_downloads_and_pdfkit() -> None:
+    source_root = IOS_ROOT / "SmartScan"
+    api = (source_root / "Workspace" / "WorkspaceAPI.swift").read_text(encoding="utf-8")
+    repository = (source_root / "Workspace" / "WorkspaceRepository.swift").read_text(
+        encoding="utf-8"
+    )
+    view = (source_root / "Workspace" / "WorkspaceView.swift").read_text(encoding="utf-8")
+
+    assert 'path: "v1/pages/\\(id)/edits"' in api
+    assert 'path: "v1/projects/\\(projectID)/pages/order"' in api
+    assert 'path: "v1/export-artifacts/\\(id)/content"' in api
+    assert "expectedSHA256: artifact.sha256" in repository
+    assert "expectedSize: artifact.sizeBytes" in repository
+    assert "UserStoragePaths.digest(for: userID)" in repository
+    assert "import PDFKit" in view
+    assert "UIActivityViewController" in view
+
+
+def test_ios_account_deletion_requires_sms_and_purges_user_partitions() -> None:
+    source_root = IOS_ROOT / "SmartScan"
+    repository = (source_root / "Authentication" / "AuthenticationRepository.swift").read_text(
+        encoding="utf-8"
+    )
+    purger = (source_root / "Storage" / "UserLocalDataPurger.swift").read_text(encoding="utf-8")
+    view = (source_root / "Authentication" / "AccountManagementView.swift").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'purpose: "account_deletion"' in repository
+    assert 'purpose: "account_deletion_cancel"' in repository
+    assert "confirmUsername == user.username" in (
+        source_root / "Authentication" / "AuthenticationStore.swift"
+    ).read_text(encoding="utf-8")
+    for category in ["users", "captures", "upload-queue", "downloads"]:
+        assert f'"{category}"' in purger
+    assert "Schedule account deletion" in view
+
+
 def _localization_keys(path: Path) -> set[str]:
     return {
         match.group(1)
