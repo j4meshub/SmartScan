@@ -4,6 +4,8 @@ import com.smartscan.core.auth.SessionCredentials
 import com.smartscan.core.auth.SessionStore
 import com.smartscan.core.model.ScanProject
 import com.smartscan.core.network.AuthenticationApi
+import com.smartscan.core.network.AccountDeletionDto
+import com.smartscan.core.network.AccountDeletionRequestDto
 import com.smartscan.core.network.LoginRequestDto
 import com.smartscan.core.network.RefreshRequestDto
 import com.smartscan.core.network.RegisterRequestDto
@@ -92,6 +94,36 @@ class AuthenticationRepositoryTest {
         assertNull((repository.restore() as ApiResult.Success).value)
         assertEquals(0, api.meCalls)
     }
+
+    @Test
+    fun `account deletion uses strong challenge and clears local state`() = runTest {
+        val sessions = MemorySessionStore(credentials())
+        val cache = RecordingCache()
+        val api = FakeAuthenticationApi()
+        val repository = DefaultAuthenticationRepository(api, sessions, cache)
+
+        repository.requestAccountDeletionChallenge("+8613800001234")
+        val result = repository.requestAccountDeletion("+8613800001234", "challenge-id", "123456")
+
+        assertEquals("account_deletion", api.lastChallengePurpose)
+        assertEquals("challenge-id", api.lastDeletion?.smsChallengeId)
+        assertEquals("pending", (result as ApiResult.Success).value.status)
+        assertNull(sessions.current())
+        assertEquals(listOf("user-1"), cache.clearedUsers)
+    }
+
+    @Test
+    fun `account deletion cancellation uses unauthenticated strong challenge`() = runTest {
+        val api = FakeAuthenticationApi()
+        val repository = DefaultAuthenticationRepository(api, MemorySessionStore(), RecordingCache())
+
+        repository.requestAccountDeletionCancellationChallenge("+8613800001234")
+        val result = repository.cancelAccountDeletion("+8613800001234", "challenge-id", "123456")
+
+        assertEquals("account_deletion_cancel", api.lastChallengePurpose)
+        assertEquals("challenge-id", api.lastCancellation?.smsChallengeId)
+        assertEquals("canceled", (result as ApiResult.Success).value.status)
+    }
 }
 
 private class MemorySessionStore(initial: SessionCredentials? = null) : SessionStore {
@@ -115,12 +147,24 @@ private class FakeAuthenticationApi(
     var lastRefreshToken: String? = null
     var lastRegister: RegisterRequestDto? = null
     var meCalls = 0
+    var lastChallengePurpose: String? = null
+    var lastDeletion: AccountDeletionRequestDto? = null
+    var lastCancellation: AccountDeletionRequestDto? = null
 
-    override suspend fun requestSmsChallenge(request: SmsChallengeRequestDto) = SmsChallengeDto(
-        challengeId = "challenge-id",
-        expiresAt = "2026-10-20T00:05:00Z",
-        retryAfterSeconds = 60,
-    )
+    override suspend fun requestSmsChallenge(request: SmsChallengeRequestDto): SmsChallengeDto {
+        lastChallengePurpose = request.purpose
+        return SmsChallengeDto("challenge-id", "2026-10-20T00:05:00Z", 60)
+    }
+
+    override suspend fun requestAccountDeletion(request: AccountDeletionRequestDto): AccountDeletionDto {
+        lastDeletion = request
+        return deletion("pending")
+    }
+
+    override suspend fun cancelAccountDeletion(request: AccountDeletionRequestDto): AccountDeletionDto {
+        lastCancellation = request
+        return deletion("canceled")
+    }
 
     override suspend fun register(request: RegisterRequestDto): TokenDto {
         lastRegister = request
@@ -151,6 +195,13 @@ private class FakeAuthenticationApi(
         )
     }
 }
+
+private fun deletion(status: String) = AccountDeletionDto(
+    id = "deletion-1",
+    status = status,
+    requestedAt = "2026-10-20T00:00:00Z",
+    executeAfter = "2026-10-27T00:00:00Z",
+)
 
 private fun token(
     access: String = "access-1",

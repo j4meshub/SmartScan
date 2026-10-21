@@ -44,8 +44,11 @@ data class ProcessingJob(
 
 data class ExportArtifact(
     val id: String,
+    val pageId: String?,
+    val sequence: Int,
     val fileName: String,
     val mimeType: String,
+    val sha256: String,
     val sizeBytes: Long,
 )
 
@@ -54,7 +57,23 @@ data class ProjectExport(
     val projectId: String,
     val format: String,
     val quality: String,
+    val includeOcrText: Boolean,
     val status: String,
+    val pageCount: Int,
+    val errorCode: String?,
     val artifacts: List<ExportArtifact>,
     val createdAt: String,
+)
+
+data class DownloadedArtifact(
+    val filePath: String,
+    val fileName: String,
+    val mimeType: String,
+)
+
+data class AccountDeletionReceipt(
+    val id: String,
+    val status: String,
+    val requestedAt: String,
+    val executeAfter: String,
 )

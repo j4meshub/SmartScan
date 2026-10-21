@@ -7,15 +7,44 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M5 Android |
-| 当前工作包 | `AND-004` 离线与续传 |
-| 工作包状态 | 进行中，PR #34 已创建，等待最终头提交 CI |
-| 当前分支 | `codex/and-004-offline-resume` |
-| 最后验证基线 | `b238992`（AND-003 PR #33 已合并） |
-| 工作包提交 | `a6dffeb`（首个完整绿灯；最终文档提交待验证） |
-| PR | [#34](https://github.com/j4meshub/SmartScan/pull/34) |
-| 下一工作包 | `AND-005` 编辑与分享 |
+| 当前工作包 | `AND-005` 编辑与分享 |
+| 工作包状态 | 进行中，本地静态检查与完整回归待执行 |
+| 当前分支 | `codex/and-005-edit-export-share` |
+| 最后验证基线 | `9b19932`（AND-004 PR #34 已合并） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `AND-006` 安全更新 |
 
 ## 当前工作包进展
+
+- AND-004 已由 PR #34 合并到主线，中文 squash 提交为 `9b19932`；最终头的 API、Web、容器与 Android 共 8 项 CI 检查通过。
+- 新增 `:feature:workspace`，接入项目/页面恢复、完整页序、旋转、四角/滤镜编辑、复核、PDF/JPG 导出和分享入口。
+- 页面预览与导出均使用带会话的流式下载；导出制品校验长度与 SHA-256 后才原子落入分享目录，失败会删除临时文件。
+- `FileProvider` 只开放 `cache/exports/`，分享前再次检查 canonical 父目录，页面预览、令牌和私有真实路径不会交给第三方应用。
+- 设置页接入完整手机号、强验证短信和用户名确认的账号删除申请；登录页接入冷静期撤销。
+- 服务端接受删除后，客户端按用户取消上传链、清理该用户私有原图和 Room 队列；清理失败会提示通过系统设置清除应用存储，不静默宣称成功。
+- 新增网络契约、仓储下载、表单、页序和 Room 用户隔离测试；Android 编译、Lint、模拟器与真机结果尚未产生。
+
+`AND-005` 计划门禁：
+
+```text
+python -m ruff format --check .
+python -m ruff check .
+python -m pytest --cov=services --cov-report=term-missing -q
+python tools/api_compatibility.py
+python -m services.api.app.migrations upgrade
+python -m services.api.app.migrations drift
+python -m services.api.app.migrations check
+npm --prefix apps/h5 ci
+npm --prefix apps/h5 test
+npm --prefix apps/h5 run test:e2e
+gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :core:upload:test :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :feature:sync:testDebugUnitTest :feature:workspace:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
+git diff --check
+```
+
+本地结果：137 个 Python 文件格式与 Ruff、OpenAPI 当前/上一代客户端兼容、迁移升级/漂移/版本、CI YAML、14 个 Android XML、应用与工作区双语资源键和差异检查通过；后端 `156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；H5 `33 passed`，Chromium E2E/axe `3 passed`，管理后台 JavaScript 语法通过。本机未安装 JDK、Gradle 与 Android SDK，因此 Android 编译、单元测试和 Lint 将由固定 GitHub CI 环境验证；该限制不替代模拟器和真机人工验收。
+
+## 已完成前置工作包证据
 
 - AND-003 已由 PR #33 合并到主线，中文 squash 提交为 `b238992`；三模式 CameraX 预览、点按对焦、曝光补偿、质量提示、手动快门和原图保护已完成。
 - 新增 `:core:upload` 队列协议与 `:feature:sync` WorkManager/续传模块；应用捕获成功只有在原图持久化入队后才显示成功。
@@ -580,10 +609,11 @@ git diff --check
 | Android 分层工程与 API 客户端 | `41bf07d` | 本地后端与 H5 回归通过；PR CI 在 PostgreSQL 17 环境 161 项通过、覆盖率 88.54%，Android JDK 17/Gradle 8.9/SDK 35 的网络与仓储测试、应用单元测试和 Lint 通过，Web 与容器通过；PR #31 已合并，模拟器和真机待后续门禁 |
 | Android 身份与用户分区缓存 | `60bac1e` | 本地后端 156 项、H5 33 项和 Chromium E2E/axe 3 项通过；PR #32 最终头两套 CI 的 API、Web、容器与 Android 共 8 项通过；首轮 Room/Kotlin 元数据失败已升级 Room 2.7.2 后修复，真实 Keystore、短信和真机待人工验收 |
 | Android CameraX 手动拍摄 | `b238992` | 本地后端 156 项、H5 33 项和 Chromium E2E/axe 3 项通过；PR #33 最终头两套 CI 的 8 项检查通过，Android 执行拍摄状态机/质量评估、应用编译与 Lint；相机真机门禁待人工验收 |
+| Android 离线队列与分片续传 | `9b19932` | PR #34 最终头两套 CI 的 8 项检查通过；Room v1→v2 迁移、用户隔离队列、WorkManager、服务端确认分片续传、应用编译和 Lint 通过；真实弱网、进程强杀和 staging 重启待人工验收 |
 
 ## 下一步
 
-1. 完成 `AND-004` Room 迁移、队列、网络契约、续传处理器、WorkManager、应用编译和 Lint 门禁，修复所有失败。
-2. 自审当前用户隔离、路径限制、幂等键轮换、令牌刷新和服务端确认分片边界，回填测试证据后创建中文 PR。
-3. CI 通过并合并后进入 `AND-005`，实现页面编辑、导出、FileProvider、系统分享和完整账号删除入口。
-4. Android 模拟器、真机、正式签名，以及真实企业微信、短信、相机和弱网继续保留人工验收门禁，不以 Mock 或 CI 结果代替。
+1. 完成 `AND-005` 本地静态检查与后端、H5 回归，核对双语资源、FileProvider 路径和兼容策略。
+2. 推送中文提交并创建 PR，由固定 Android CI 执行工作区模块、应用单元测试、编译和 Lint；失败后定位、修复并重跑。
+3. CI 通过、自审和进度证据回填后合并，随后进入 `AND-006` 签名安全更新清单。
+4. Android 模拟器、真机分享、账号删除并发、正式签名，以及真实企业微信、短信、相机和弱网继续保留人工验收门禁，不以 Mock 或 CI 结果代替。

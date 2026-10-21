@@ -67,6 +67,16 @@ class UploadQueueCoordinator(
         store.pendingProjectIds(userId).forEach { schedule(userId, it) }
     }
 
+    suspend fun clearUserData(ownerUserId: String): Boolean {
+        if (ownerUserId.isBlank()) return false
+        val projectIds = runCatching { store.allProjectIds(ownerUserId) }.getOrElse { return false }
+        projectIds.forEach { workManager.cancelUniqueWork(workName(ownerUserId, it)) }
+        val localPaths = runCatching { store.localPaths(ownerUserId) }.getOrElse { return false }
+        val filesCleared = localPaths.map { deletePrivateCapture(captureRoot, it) }.all { it }
+        val queueCleared = runCatching { store.clearUser(ownerUserId) }.isSuccess
+        return filesCleared && queueCleared
+    }
+
     private fun schedule(ownerUserId: String, localProjectId: String) {
         val input = Data.Builder()
             .putString(UploadWorker.OWNER_USER_ID, ownerUserId)
@@ -79,11 +89,22 @@ class UploadQueueCoordinator(
             .addTag("smartscan-upload")
             .build()
         workManager.enqueueUniqueWork(
-            "smartscan-upload-$ownerUserId-$localProjectId",
+            workName(ownerUserId, localProjectId),
             ExistingWorkPolicy.APPEND_OR_REPLACE,
             request,
         )
     }
+
+    private fun workName(ownerUserId: String, localProjectId: String) =
+        "smartscan-upload-$ownerUserId-$localProjectId"
+
+}
+
+internal fun deletePrivateCapture(captureRoot: File, path: String): Boolean {
+    val root = runCatching { captureRoot.canonicalFile }.getOrNull() ?: return false
+    val file = runCatching { File(path).canonicalFile }.getOrNull() ?: return false
+    if (file == root || !file.toPath().startsWith(root.toPath())) return false
+    return !file.exists() || file.isFile && file.delete()
 }
 
 interface UploadWorkerDependencies {

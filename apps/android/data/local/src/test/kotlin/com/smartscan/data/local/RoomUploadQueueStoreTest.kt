@@ -70,6 +70,20 @@ class RoomUploadQueueStoreTest {
         assertEquals(emptyList<String>(), store.pendingProjectIds("user-a"))
     }
 
+    @Test
+    fun `clearing one owner removes only that owners queue`() = runTest {
+        store.enqueue(project("user-a", "local-1"), upload("user-a", "first", 1))
+        store.enqueue(project("user-b", "local-1"), upload("user-b", "other", 1))
+
+        assertEquals(listOf("local-1"), store.allProjectIds("user-a"))
+        assertEquals(listOf("/private/first.jpg"), store.localPaths("user-a"))
+        store.clearUser("user-a")
+
+        assertEquals(emptyList<String>(), store.allProjectIds("user-a"))
+        assertEquals(emptyList<String>(), store.localPaths("user-a"))
+        assertEquals("other", store.nextPending("user-b", "local-1")?.id)
+    }
+
     private fun project(owner: String, localId: String) = LocalUploadProject(owner, localId, "扫描", "document", null)
 
     private fun upload(owner: String, id: String, order: Long) = QueuedUpload(

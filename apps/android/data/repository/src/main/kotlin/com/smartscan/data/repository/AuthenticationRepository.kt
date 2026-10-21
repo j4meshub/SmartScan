@@ -3,6 +3,8 @@ package com.smartscan.data.repository
 import com.smartscan.core.auth.SessionCredentials
 import com.smartscan.core.auth.SessionStore
 import com.smartscan.core.model.ScanProject
+import com.smartscan.core.model.AccountDeletionReceipt
+import com.smartscan.core.network.AccountDeletionRequestDto
 import com.smartscan.core.model.UserProfile
 import com.smartscan.core.network.AuthenticationApi
 import com.smartscan.core.network.LoginRequestDto
@@ -37,10 +39,14 @@ interface UserScopedCache {
 
 interface AuthenticationRepository {
     suspend fun requestRegistrationChallenge(phone: String): ApiResult<RegistrationChallenge>
+    suspend fun requestAccountDeletionChallenge(phone: String): ApiResult<RegistrationChallenge>
+    suspend fun requestAccountDeletionCancellationChallenge(phone: String): ApiResult<RegistrationChallenge>
     suspend fun register(input: RegistrationInput): ApiResult<UserProfile>
     suspend fun login(username: String, password: String): ApiResult<UserProfile>
     suspend fun restore(): ApiResult<UserProfile?>
     suspend fun refresh(): ApiResult<SessionCredentials>
+    suspend fun requestAccountDeletion(phone: String, challengeId: String, code: String): ApiResult<AccountDeletionReceipt>
+    suspend fun cancelAccountDeletion(phone: String, challengeId: String, code: String): ApiResult<AccountDeletionReceipt>
     suspend fun logout(): ApiResult<Unit>
 }
 
@@ -51,9 +57,18 @@ class DefaultAuthenticationRepository(
 ) : AuthenticationRepository {
     private val refreshMutex = Mutex()
 
-    override suspend fun requestRegistrationChallenge(phone: String): ApiResult<RegistrationChallenge> = safeApiCall {
+    override suspend fun requestRegistrationChallenge(phone: String): ApiResult<RegistrationChallenge> =
+        requestChallenge(phone, "registration")
+
+    override suspend fun requestAccountDeletionChallenge(phone: String): ApiResult<RegistrationChallenge> =
+        requestChallenge(phone, "account_deletion")
+
+    override suspend fun requestAccountDeletionCancellationChallenge(phone: String): ApiResult<RegistrationChallenge> =
+        requestChallenge(phone, "account_deletion_cancel")
+
+    private suspend fun requestChallenge(phone: String, purpose: String): ApiResult<RegistrationChallenge> = safeApiCall {
         require(phone.isNotBlank()) { "phone_required" }
-        api.requestSmsChallenge(SmsChallengeRequestDto(phone)).let {
+        api.requestSmsChallenge(SmsChallengeRequestDto(phone, purpose)).let {
             RegistrationChallenge(it.challengeId, it.expiresAt, it.retryAfterSeconds)
         }
     }
@@ -120,6 +135,29 @@ class DefaultAuthenticationRepository(
         }
     }
 
+    override suspend fun requestAccountDeletion(
+        phone: String,
+        challengeId: String,
+        code: String,
+    ): ApiResult<AccountDeletionReceipt> = when (
+        val result = safeApiCall {
+            api.requestAccountDeletion(AccountDeletionRequestDto(phone, challengeId, code)).toReceipt()
+        }
+    ) {
+        is ApiResult.Failure -> result
+        is ApiResult.Success -> {
+            if (clearLocalSession()) result else ApiResult.Failure(FailureKind.LOCAL_STORAGE, retryable = false)
+        }
+    }
+
+    override suspend fun cancelAccountDeletion(
+        phone: String,
+        challengeId: String,
+        code: String,
+    ): ApiResult<AccountDeletionReceipt> = safeApiCall {
+        api.cancelAccountDeletion(AccountDeletionRequestDto(phone, challengeId, code)).toReceipt()
+    }
+
     override suspend fun logout(): ApiResult<Unit> {
         val remote = safeApiCall { api.logout() }
         val localCleared = clearLocalSession()
@@ -165,6 +203,13 @@ class DefaultAuthenticationRepository(
         return sessionCleared && cacheCleared
     }
 }
+
+private fun com.smartscan.core.network.AccountDeletionDto.toReceipt() = AccountDeletionReceipt(
+    id = id,
+    status = status,
+    requestedAt = requestedAt,
+    executeAfter = executeAfter,
+)
 
 private fun TokenDto.toCredentials(userId: String? = null): SessionCredentials {
     require(tokenType.equals("bearer", ignoreCase = true)) { "token_type_invalid" }

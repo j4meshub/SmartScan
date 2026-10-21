@@ -33,5 +33,18 @@
     <string name="upload_project_document">智能扫描</string>
     <string name="upload_project_exam">试卷</string>
     <string name="upload_project_book">书籍</string>
+    <string name="share_export_title">分享扫描文件</string>
+    <string name="account_deletion_title">删除账号</string>
+    <string name="account_deletion_warning">删除申请有 7 天冷静期。请输入完整的已验证手机号、短信验证码和用户名；申请成功后所有会话都会失效。</string>
+    <string name="account_deletion_confirm_username">输入用户名确认</string>
+    <string name="account_deletion_action">申请删除账号</string>
+    <string name="account_deletion_failed">账号删除申请失败。</string>
+    <string name="account_deletion_scheduled">账号删除已进入冷静期，可在 7 天内撤销。</string>
+    <string name="account_deletion_scheduled_cleanup_failed">账号删除已进入冷静期，但部分本地扫描数据清理失败。移交设备前，请在 Android 系统设置中清除此应用的存储。</string>
+    <string name="account_deletion_cancel_entry">撤销待执行的账号删除</string>
+    <string name="account_deletion_cancel_title">撤销账号删除</string>
+    <string name="account_deletion_cancel_action">撤销删除</string>
+    <string name="account_deletion_canceled">账号删除已撤销，可以重新登录。</string>
+    <string name="account_deletion_cancel_failed">撤销失败，请检查已验证手机号和验证码。</string>
 </resources>
 

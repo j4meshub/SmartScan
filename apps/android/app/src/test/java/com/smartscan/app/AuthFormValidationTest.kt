@@ -24,4 +24,19 @@ class AuthFormValidationTest {
             validateAuthForm(true, "+8613800001234", "123456", "student", "long-password", false).valid,
         )
     }
+
+    @Test
+    fun `account deletion requires E164 phone challenge and exact username`() {
+        assertTrue(validateDeletionForm("+8613800001234", "123456", "student", "student", true).valid)
+        assertFalse(validateDeletionForm("13800001234", "123456", "student", "student", true).valid)
+        assertFalse(validateDeletionForm("+8613800001234", "123456", "Student", "student", true).valid)
+        assertFalse(validateDeletionForm("+8613800001234", "123456", "student", "student", false).valid)
+    }
+
+    @Test
+    fun `deletion cancellation requires E164 phone code and challenge`() {
+        assertTrue(validateDeletionCancellation("+8613800001234", "123456", true).valid)
+        assertFalse(validateDeletionCancellation("13800001234", "123456", true).valid)
+        assertFalse(validateDeletionCancellation("+8613800001234", "12", true).valid)
+    }
 }

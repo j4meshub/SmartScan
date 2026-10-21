@@ -40,6 +40,9 @@ interface UploadQueueStore {
     suspend fun project(ownerUserId: String, localProjectId: String): LocalUploadProject?
     suspend fun nextPending(ownerUserId: String, localProjectId: String): QueuedUpload?
     suspend fun pendingProjectIds(ownerUserId: String): List<String>
+    suspend fun allProjectIds(ownerUserId: String): List<String>
+    suspend fun localPaths(ownerUserId: String): List<String>
+    suspend fun clearUser(ownerUserId: String)
     suspend fun setServerProjectId(ownerUserId: String, localProjectId: String, serverProjectId: String)
     suspend fun setUploadSession(
         ownerUserId: String,
