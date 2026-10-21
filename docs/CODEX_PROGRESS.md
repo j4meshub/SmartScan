@@ -7,29 +7,30 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI |
-| 当前工作包 | `AI-002` 结构化任务与结果契约 |
-| 工作包状态 | 完成：七类 Schema、严格输出解析、保守业务规则、模型证据及 CI 均通过；真实出站保持关闭 |
-| 当前分支 | `codex/ai-002-structured-tasks` |
-| 最后验证基线 | `61a6dae`（已合并 AI-001；主线工作流 `39591095919` 五项全部通过） |
-| 工作包提交 | `af44c89` |
-| PR | [#48](https://github.com/j4meshub/SmartScan/pull/48) |
-| 下一工作包 | `AI-003` 网络安全；`EXAM-002`/`EXAM-003` 继续等待 EXAM-001 固定数据集闸门 |
+| 当前工作包 | `AI-003` 出站网络与媒体安全 |
+| 工作包状态 | 进行中：代码、专项测试和中文说明已落地；等待全量回归、提交、PR 与 CI |
+| 当前分支 | `codex/ai-003-network-security` |
+| 最后验证基线 | `4765487`（已合并 AI-002；主线工作流 `39598236916` 五项全部通过） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `AI-004` 可靠性与费用；`EXAM-002`/`EXAM-003` 继续等待 EXAM-001 固定数据集闸门 |
 
 ## 当前工作包进展
 
-- AI-002 为分类、方向、标题、页码、公式/表格/版面、净化掩膜复核和双页复核建立 `1.0` 版严格任务与结果模型；任务只接受类型化参数、固定零温度和有限输出，不接受任意 Prompt。
-- Provider 原始输出限制为 64 KiB UTF-8 JSON 对象；Markdown、重复键、非有限数、额外字段、任务错配和越界值均失败关闭。印刷/未知内容禁止删除，删除置信度至少 `0.9`，无页码和非双页结果禁止虚构内容或几何。
-- OpenAI Responses、Chat Completions 和自定义协议均可生成嵌入严格 JSON Schema 的请求计划；计划不含密钥、Provider 地址、页面/用户标识，媒体保持 `$SMARTSCAN_MEDIA` 占位且 `network_ready=false`。
-- 验证结果只生成带 Provider、模型、结果 Schema 摘要、页面基础版本和媒体摘要的 `candidate/review` 证据，`business_mutation_allowed=false`；实际出站和业务增强版本保存必须等待 AI-003 并再次核对活动版本。
-- `packages/contracts/ai-tasks-v1.json` 固定七类 Schema，GitHub/GitLab CI 新增快照一致性检查。当前 AI-001/AI-002 联合专项 `48 passed`；全量 Python `251 passed, 5 skipped`，应用代码覆盖率 `88.93%`；H5 `40 passed`、Chromium E2E/axe `3 passed`；Ruff、格式、Schema 快照、OpenAPI 兼容、迁移升级/漂移/版本、JavaScript 语法、iOS 发布草稿和差异检查均通过。
-- 提交 `af44c89` 的 push 工作流 `39595238962` 与 PR 工作流 `39595288206` 共 10 项全部通过：API 使用 PostgreSQL 17 完成全量测试、迁移和 AI Schema 快照检查，Web 完成浏览器 E2E，Android 完成 Gradle 测试/编译/Lint，iOS 完成固定 XcodeGen、Xcode 16.4 Simulator 编译与单测，两套容器作业成功构建 AI 网关镜像。
+- Provider 和媒体目标不再接受调用方完整 URL：Provider 地址与任务路径来自启动配置，媒体只从最多 16 个固定 HTTPS 前缀中选择并追加不少于 128 位的不透明令牌。地址拒绝 IP 字面量、非 443 端口、凭据、查询、片段、转义和歧义路径。
+- 每次调用解析 Provider 与媒体域名的全部 A/AAAA 结果，默认只接受公网；自定义 VLM 可显式声明窄范围受控网段。混合公网/私网、回环、链路本地、元数据、多播和保留地址失败关闭。
+- HTTPS 套接字直接连接已验证 IP，TLS SNI、证书主机名和 Host 使用原始域名，关闭代理隧道和二次 DNS；任何 `3xx` 都拒绝，不跟随下一跳。
+- 媒体引用核对 SHA-256、MIME、声明字节数和 30 秒～24 小时有效窗口；请求/响应按 Provider 限制，响应只接受有限、未压缩、非空的 `application/json`。网络证据不回显域名、IP、令牌、媒体 URL 或密钥。
+- Compose AI 网关容器改为只读、删除全部 capabilities、启用 `no-new-privileges` 和受限临时目录；网关仍使用显式 `ai` Profile 且不经 Nginx 暴露。
+- 初版专项首次运行 `92 passed`、4 项失败：两项旧 Provider 夹具缺少新增媒体前缀，一项 TLS 假上下文缺少标准属性，一项测试把 `SecretStr` 的掩码当成原令牌提交。修正夹具并完成安全自审反例后，AI-001～AI-003 联合专项 `107 passed`；没有放宽安全规则或跳过测试。
+- 当前本地全量 Python `310 passed, 5 skipped`，应用代码覆盖率 `88.60%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、116 个 Python 文件格式、AI Schema 快照、OpenAPI 当前/上一代兼容、迁移升级/漂移/版本、JavaScript 语法、iOS 发布草稿和差异检查均通过。当前 Windows 没有 Docker，Compose 语义与加固后的 AI 网关镜像由 PR CI 补证。
 
 以下保留已合并 AI-001 的近期证据：
 
 - AI-001 使用 `SMARTSCAN_AI_PROVIDERS` JSON 在启动时构建不可变注册表；专业 OCR、OpenAI Chat/Responses-compatible 和自定义协议分别选择明确适配器，重复 ID、危险字段和启用但缺少必要配置会启动失败。
 - 默认三类 Provider 全部关闭；密钥只以环境变量名引用。脱敏状态只报告是否存在凭据，不返回引用名称或值；关闭的 Provider 拒绝读取密钥，缺少凭据的启用项保持不可用。
 - AI 网关作为 Compose `ai` Profile 独立运行，不被 Nginx 暴露，API、Worker、H5、Android、iOS 和导出链路均不依赖它。配置检查不联网、不发送媒体。
-- AI-003 完成前不会把结构 HTTPS 校验描述成完整 SSRF 防护；DNS 重绑定、连接固定、重定向和媒体域名策略仍是后续门禁。
+- AI-001 当时只提供结构 HTTPS 校验，不把它描述成完整 SSRF 防护；DNS 重绑定、连接固定、重定向和媒体域名策略现由 AI-003 独立实现并验证。
 - 当前本地证据：AI Provider 专项 `14 passed`；全量 Python `217 passed, 5 skipped`，应用代码覆盖率 `88.85%`；H5 `40 passed`、Chromium E2E/axe `3 passed`；Ruff、格式、OpenAPI 当前/上一代兼容、迁移升级/漂移/版本、JavaScript 语法、iOS 发布草稿和差异检查均通过。本机没有 Docker，Compose 语义和 AI 网关镜像构建已由 GitHub Runner 补证。
 - 提交 `df18491` 的 push 工作流 `39588619030` 与 PR 工作流 `39588671467` 共 10 项全部通过：API 使用 PostgreSQL 17 完成全量测试和迁移，Web 完成浏览器 E2E，Android 完成 Gradle 测试/编译/Lint，iOS 完成固定 XcodeGen、Xcode 16.4 Simulator 编译与单测；两套容器作业均成功解析 Compose 并实际构建 AI 网关镜像。公开仓库 Runner 未再出现额度阻塞。
 
@@ -748,10 +749,10 @@ git diff --check
 | iOS 身份、Keychain 与网络 | `284da8e` | PR #38 最终代码头两套 10 项检查通过；注册登录、会话恢复、Keychain、设备头、刷新轮换、用户缓存隔离和双语界面的 Simulator 测试通过；真实短信与 Keychain 真机行为待人工验收 |
 | iOS AVFoundation 与 Vision 拍摄 | `2449395` | PR #39 最终代码头两套 10 项检查通过；状态机、质量阈值、Vision 矩形、iOS 17 旋转角、原图与方向证据的 Simulator 编译/测试通过；真实相机与阈值仍待人工验收 |
 | 可选视觉 AI Provider 注册 | `df18491` | PR #47 代码头两套 10 项 CI 全部通过；默认关闭、三类适配器、密钥引用隔离、脱敏状态、Compose Profile 和 AI 网关镜像构建通过；真实供应商与出站安全由后续工作包承担 |
-| 视觉 AI 结构化任务契约 | `af44c89` | PR #48 代码头两套 10 项 CI 全部通过；七类 Schema、严格输出解析、保守业务规则、模型版本证据、快照门禁和无网络请求计划通过；真实出站继续等待 AI-003 |
+| 视觉 AI 结构化任务契约 | `af44c89` | PR #48 代码头两套 10 项 CI 全部通过；七类 Schema、严格输出解析、保守业务规则、模型版本证据、快照门禁和无网络请求计划通过；安全出站由 AI-003 承接 |
 
 ## 下一步
 
-1. 等待 PR #48 最终文档提交的 GitHub Actions 通过后 squash 合并，并同步主线。
-2. 从主线创建 `codex/ai-003-network-security` 分支，实现安全媒体资源、DNS 重绑定、连接固定、禁重定向和请求限制。
-3. 外部 AI 默认关闭；真实供应商密钥、费用和固定数据集验收继续保留人工门禁，不以 Schema、配置状态或 Mock 替代。
+1. 完成 AI-003 全量回归、自审和中文提交，推送 `codex/ai-003-network-security` 并创建 PR。
+2. 等待 API、Web、Android、iOS 与容器 CI 全部通过后补充最终证据、合并并同步主线。
+3. 下一独立工作包为 `AI-004`；真实供应商密钥、媒体撤销联调、出口防火墙、费用和固定数据集验收继续保留人工门禁。

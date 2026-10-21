@@ -24,6 +24,7 @@ def configured_environment(*, enabled: bool = True, credential: bool = True) -> 
             f'"enabled":{str(enabled).lower()},'
             '"base_url":"https://vision.example/v1/",'
             '"api_key_env":"VISION_API_KEY","model":"vision-1",'
+            '"media_url_prefixes":["https://media.example/ai/"],'
             '"capabilities":["document_understanding","image_classification"]}'
             "]"
         )

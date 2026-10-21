@@ -62,6 +62,11 @@ services:
     profiles: ["ai"]
     build: {context: ../.., dockerfile: services/ai-gateway/Dockerfile}
     restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
     env_file: ../../.env
     environment:
       SMARTSCAN_AI_PROVIDERS: ${SMARTSCAN_AI_PROVIDERS:-[]}

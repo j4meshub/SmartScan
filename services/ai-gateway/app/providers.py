@@ -1,17 +1,42 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Literal, Protocol
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
-from pydantic import BaseModel, Field, SecretStr, TypeAdapter, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 PROVIDER_ID_PATTERN = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?")
 ENVIRONMENT_NAME_PATTERN = re.compile(r"[A-Z][A-Z0-9_]{0,127}")
+HOST_LABEL_PATTERN = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
+CONTROL_CHARACTER_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
+URL_PATH_PATTERN = re.compile(r"/[A-Za-z0-9._~/-]*")
+MAX_MEDIA_BYTES = 100 * 1024 * 1024
+MAX_REQUEST_BYTES = 2 * 1024 * 1024
+MAX_RESPONSE_BYTES = 64 * 1024
+CONTROLLED_NETWORKS = tuple(
+    ipaddress.ip_network(item)
+    for item in (
+        "10.0.0.0/8",
+        "100.64.0.0/10",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "fc00::/7",
+    )
+)
 
 
 class ProviderConfigurationError(ValueError):
@@ -46,7 +71,63 @@ ProviderCapability = Literal[
 ]
 
 
+def canonicalize_network_hostname(value: str) -> str:
+    if not value or value.endswith(".") or CONTROL_CHARACTER_PATTERN.search(value):
+        raise ValueError("network host must be a canonical DNS name")
+    try:
+        canonical = value.encode("idna").decode("ascii").lower()
+    except UnicodeError as exc:
+        raise ValueError("network host must be a canonical DNS name") from exc
+    if len(canonical) > 253 or "." not in canonical:
+        raise ValueError("network host must be a qualified DNS name")
+    if any(not HOST_LABEL_PATTERN.fullmatch(label) for label in canonical.split(".")):
+        raise ValueError("network host must be a canonical DNS name")
+    try:
+        ipaddress.ip_address(canonical)
+    except ValueError:
+        return canonical
+    raise ValueError("network host must not be an IP literal")
+
+
+def validate_https_base_url(value: str, *, require_trailing_slash: bool) -> str:
+    if CONTROL_CHARACTER_PATTERN.search(value) or "\\" in value:
+        raise ValueError("network URL contains ambiguous characters")
+    parsed = urlsplit(value)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("network URL must use HTTPS and include a host")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("network URL must not include credentials, query or fragment")
+    canonical_host = canonicalize_network_hostname(parsed.hostname)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("network URL port is invalid") from exc
+    if port not in {None, 443}:
+        raise ValueError("network URL must use the default HTTPS port")
+    decoded_path = unquote(parsed.path)
+    if (
+        "%" in parsed.path
+        or "//" in parsed.path
+        or "\\" in decoded_path
+        or not URL_PATH_PATTERN.fullmatch(parsed.path or "/")
+        or any(segment in {".", ".."} for segment in decoded_path.split("/"))
+    ):
+        raise ValueError("network URL path must not contain traversal")
+    path = parsed.path
+    if require_trailing_slash:
+        if not path.endswith("/"):
+            raise ValueError("media URL prefix must end with a slash")
+        if path == "//":
+            raise ValueError("media URL prefix path is invalid")
+    else:
+        path = path.rstrip("/")
+    netloc = canonical_host
+    return urlunsplit(("https", netloc, path, "", ""))
+
+
 class ProviderDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     display_name: str = Field(min_length=1, max_length=100)
     kind: ProviderKind
@@ -57,6 +138,11 @@ class ProviderDefinition(BaseModel):
     model: str | None = Field(default=None, max_length=200)
     supports_images: bool = True
     capabilities: frozenset[ProviderCapability] = Field(default_factory=frozenset)
+    media_url_prefixes: tuple[str, ...] = Field(default=(), max_length=16)
+    allowed_private_cidrs: tuple[str, ...] = Field(default=(), max_length=16)
+    max_media_bytes: int = Field(default=20 * 1024 * 1024, ge=1024, le=MAX_MEDIA_BYTES)
+    max_request_bytes: int = Field(default=512 * 1024, ge=16 * 1024, le=MAX_REQUEST_BYTES)
+    max_response_bytes: int = Field(default=MAX_RESPONSE_BYTES, ge=1024, le=MAX_RESPONSE_BYTES)
 
     @field_validator("id")
     @classmethod
@@ -77,13 +163,39 @@ class ProviderDefinition(BaseModel):
     def validate_base_url(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        parsed = urlsplit(value)
-        if parsed.scheme != "https" or not parsed.hostname:
-            raise ValueError("base_url must use HTTPS and include a host")
-        if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError("base_url must not include credentials, query or fragment")
-        path = parsed.path.rstrip("/")
-        return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+        return validate_https_base_url(value, require_trailing_slash=False)
+
+    @field_validator("media_url_prefixes")
+    @classmethod
+    def validate_media_url_prefixes(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        normalized = tuple(
+            validate_https_base_url(value, require_trailing_slash=True) for value in values
+        )
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("media URL prefixes must be unique")
+        return normalized
+
+    @field_validator("allowed_private_cidrs")
+    @classmethod
+    def validate_allowed_private_cidrs(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        normalized: list[str] = []
+        for value in values:
+            try:
+                network = ipaddress.ip_network(value, strict=True)
+            except ValueError as exc:
+                raise ValueError("allowed private CIDR must be canonical") from exc
+            if not any(
+                network.version == controlled.version and network.subnet_of(controlled)
+                for controlled in CONTROLLED_NETWORKS
+            ):
+                raise ValueError("allowed private CIDR must be an explicit controlled network")
+            minimum_prefix = 16 if network.version == 4 else 48
+            if network.prefixlen < minimum_prefix:
+                raise ValueError("allowed private CIDR is broader than the safety limit")
+            normalized.append(str(network))
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("allowed private CIDRs must be unique")
+        return tuple(normalized)
 
     @model_validator(mode="after")
     def validate_enabled_definition(self) -> ProviderDefinition:
@@ -91,7 +203,13 @@ class ProviderDefinition(BaseModel):
             raise ValueError("enabled provider requires base_url, api_key_env and model")
         if self.capabilities and not self.supports_images:
             raise ValueError("visual capabilities require supports_images=true")
+        if self.allowed_private_cidrs and self.kind != ProviderKind.CUSTOM_VLM:
+            raise ValueError("private CIDRs are only allowed for custom VLM providers")
         return self
+
+    @property
+    def outbound_policy_configured(self) -> bool:
+        return bool(self.base_url and self.media_url_prefixes)
 
 
 class ProviderDescriptor(BaseModel):
@@ -101,11 +219,15 @@ class ProviderDescriptor(BaseModel):
     api_style: ApiStyle
     enabled: bool
     configured: bool
+    outbound_policy_configured: bool
+    outbound_ready: bool
     adapter_type: str
     model: str | None
     supports_images: bool
     capabilities: list[ProviderCapability]
-    unavailable_reason: Literal["disabled", "credential_missing"] | None = None
+    unavailable_reason: (
+        Literal["disabled", "credential_missing", "network_policy_missing"] | None
+    ) = None
 
 
 class ProviderAdapter(Protocol):
@@ -143,11 +265,18 @@ class BaseProviderAdapter:
         return SecretStr(value)
 
     def descriptor(self) -> ProviderDescriptor:
-        reason: Literal["disabled", "credential_missing"] | None = None
+        reason: Literal["disabled", "credential_missing", "network_policy_missing"] | None = None
         if not self.definition.enabled:
             reason = "disabled"
         elif not self.configured:
             reason = "credential_missing"
+        elif not self.definition.outbound_policy_configured:
+            reason = "network_policy_missing"
+        outbound_ready = bool(
+            self.definition.enabled
+            and self.configured
+            and self.definition.outbound_policy_configured
+        )
         return ProviderDescriptor(
             id=self.definition.id,
             display_name=self.definition.display_name,
@@ -155,6 +284,8 @@ class BaseProviderAdapter:
             api_style=self.definition.api_style,
             enabled=self.definition.enabled,
             configured=self.configured,
+            outbound_policy_configured=self.definition.outbound_policy_configured,
+            outbound_ready=outbound_ready,
             adapter_type=self.adapter_type,
             model=self.definition.model,
             supports_images=self.definition.supports_images,
@@ -248,7 +379,7 @@ class ProviderRegistry:
 
     @property
     def ready_count(self) -> int:
-        return sum(item.definition.enabled and item.configured for item in self._adapters.values())
+        return sum(item.descriptor().outbound_ready for item in self._adapters.values())
 
 
 def load_provider_registry(
