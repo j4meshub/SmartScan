@@ -52,6 +52,7 @@ def _make_strict(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, 
         "SMARTSCAN_STAGING_PROMETHEUS_IMAGE",
         "SMARTSCAN_STAGING_ALERTMANAGER_IMAGE",
         "SMARTSCAN_STAGING_NODE_EXPORTER_IMAGE",
+        "SMARTSCAN_STAGING_RESTIC_IMAGE",
     ):
         name = key.removeprefix("SMARTSCAN_STAGING_").removesuffix("_IMAGE").lower()
         digest = hashlib.sha256(name.encode()).hexdigest()
@@ -91,7 +92,7 @@ def test_realistic_strict_configuration_passes_without_contacting_server(tmp_pat
     config = validate_staging_config(deploy_path, runtime_env_path=runtime_path)
 
     assert config.host == "staging.smartscan.company"
-    assert len(config.image_digests) == 8
+    assert len(config.image_digests) == 9
     assert all(len(digest) == 64 for digest in config.image_digests)
 
 

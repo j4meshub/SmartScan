@@ -99,6 +99,8 @@ AI 候选系统使用同一份已授权、已脱敏且按来源分组切分的�
 
 运维指标只通过内部数据网络暴露：API 多进程请求指标与数据库派生的队列、租约、审计、AI 和磁盘指标由 Bearer Token 保护，公网 Nginx 不代理内部路径。Worker 定期在 PostgreSQL 保存不含用户数据的存活心跳；任务真实性仍由独立租约决定。新上传、组装和 Worker 领取分别受到队列高水位、每用户并发、用户目录实际占用、未接收上传预留和磁盘最低空间约束，下载与清理不被写入保护阻断。Prometheus、Alertmanager 与 Node Exporter 只在显式 monitoring Profile 中启动且无主机端口。详见[监控、容量配额与磁盘保护](MONITORING_AND_CAPACITY.md)。
 
+备份面与服务面分离：PostgreSQL 连续归档 WAL，每日物理全备先经 `pg_verifybackup` 校验，再与用户文件、WAL 分别写入 Restic 加密异机快照。成功证据固定三个完整快照 ID；恢复只在独立目录和内部网络中执行，并验证迁移头、资源所有权、审计计数及文件哈希。详见[加密异机备份与恢复演练](BACKUP_AND_RECOVERY.md)。
+
 ## 单机部署基线
 
 首版部署由 Nginx、API 服务组、CPU Worker 组、PostgreSQL 和用户隔离文件目录组成。上传受理与 CPU 处理解耦，保证重任务排队时登录、查询和下载鉴权仍能响应。后续只有在实际容量指标超过单机边界后，才引入独立 Worker 或高可用组件。

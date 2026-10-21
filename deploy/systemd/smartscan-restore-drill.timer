@@ -1,0 +1,11 @@
+[Unit]
+Description=每月触发 SmartScan staging 隔离恢复演练
+
+[Timer]
+OnCalendar=*-*-01 03:30:00 Asia/Shanghai
+RandomizedDelaySec=30m
+Persistent=true
+Unit=smartscan-restore-drill.service
+
+[Install]
+WantedBy=timers.target

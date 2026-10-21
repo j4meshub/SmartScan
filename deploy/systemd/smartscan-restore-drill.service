@@ -1,0 +1,16 @@
+[Unit]
+Description=SmartScan staging 月度隔离恢复演练
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=smartscan-ops
+Group=smartscan-ops
+WorkingDirectory=/opt/smartscan/current
+ExecStart=/opt/smartscan/venv/bin/python tools/run_restore_drill.py --deploy-env /etc/smartscan/staging/deploy.env --backup-env /etc/smartscan/staging/backup.env --password-file /etc/smartscan/staging/restic-password --latest-evidence /srv/smartscan/staging/backup-evidence --execute
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/smartscan/staging/restore-drills /srv/smartscan/staging/backup-evidence

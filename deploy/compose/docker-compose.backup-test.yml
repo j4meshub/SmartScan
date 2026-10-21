@@ -1,0 +1,102 @@
+name: smartscan-backup-ci
+
+services:
+  source-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: smartscan
+      POSTGRES_USER: smartscan
+      POSTGRES_PASSWORD: ci-only-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes:
+      - source-db:/var/lib/postgresql/data
+      - source-socket:/var/run/postgresql
+
+  seed-db:
+    image: postgres:17-alpine
+    environment: {PGPASSWORD: ci-only-password}
+    entrypoint: ["/bin/sh", "-euc"]
+    command:
+      - >-
+        psql -h source-db -U smartscan -d smartscan -v ON_ERROR_STOP=1
+        -c 'CREATE TABLE restore_probe (value text NOT NULL);'
+        -c "INSERT INTO restore_probe VALUES ('smartscan-backup-ok');"
+    depends_on:
+      source-db: {condition: service_healthy}
+
+  seed-files:
+    image: alpine:3.22
+    command: ["/bin/sh", "-euc", "mkdir -p /files/users/ci/source && printf smartscan-file-ok > /files/users/ci/source/probe.txt"]
+    volumes: ["source-files:/files"]
+
+  basebackup:
+    image: postgres:17-alpine
+    environment: {PGPASSWORD: ci-only-password}
+    command:
+      - pg_basebackup
+      - --host=/var/run/postgresql
+      - --username=smartscan
+      - --pgdata=/backup/database
+      - --format=plain
+      - --wal-method=stream
+      - --checkpoint=fast
+      - --no-password
+    depends_on:
+      source-db: {condition: service_healthy}
+    volumes:
+      - database-backup:/backup
+      - source-socket:/var/run/postgresql
+
+  restic:
+    image: restic/restic:0.19.1
+    environment:
+      RESTIC_REPOSITORY: /repository
+      RESTIC_PASSWORD: ci-only-restic-password-not-for-production
+    volumes:
+      - restic-repository:/repository
+      - database-backup:/source/database:ro
+      - source-files:/source/files:ro
+      - restored:/restore
+
+  verify-basebackup:
+    image: postgres:17-alpine
+    command: ["pg_verifybackup", "/restore/source/database/database"]
+    volumes: ["restored:/restore:ro"]
+
+  restored-db:
+    image: postgres:17-alpine
+    environment:
+      PGDATA: /restore/source/database/database
+      POSTGRES_PASSWORD: ci-only-password
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes: ["restored:/restore"]
+
+  verify-restore:
+    image: postgres:17-alpine
+    environment: {PGPASSWORD: ci-only-password}
+    entrypoint: ["/bin/sh", "-euc"]
+    command:
+      - >-
+        test "$$(psql -h restored-db -U smartscan -d smartscan -Atc 'SELECT value FROM restore_probe')"
+        = smartscan-backup-ok &&
+        test "$$(cat /restore/source/files/users/ci/source/probe.txt)" = smartscan-file-ok
+    depends_on:
+      restored-db: {condition: service_healthy}
+    volumes: ["restored:/restore:ro"]
+
+volumes:
+  source-db:
+  source-files:
+  database-backup:
+  restic-repository:
+  restored:
+  source-socket:

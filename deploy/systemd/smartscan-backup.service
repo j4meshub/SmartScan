@@ -1,0 +1,16 @@
+[Unit]
+Description=SmartScan staging 每日加密异机备份
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=smartscan-ops
+Group=smartscan-ops
+WorkingDirectory=/opt/smartscan/current
+ExecStart=/opt/smartscan/venv/bin/python tools/run_backup.py --deploy-env /etc/smartscan/staging/deploy.env --backup-env /etc/smartscan/staging/backup.env --password-file /etc/smartscan/staging/restic-password --execute
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/smartscan/staging/backup-work /srv/smartscan/staging/backup-evidence

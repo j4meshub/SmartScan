@@ -48,6 +48,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - Kotlin/Compose Android 和 SwiftUI iOS 工程起点。
 - Docker Compose、Nginx、PostgreSQL 加固 SQL、GitHub Actions 和 GitLab CI。
 - 运维保护：受保护的 Prometheus 多进程指标、Worker 数据库心跳、队列/用户并发/存储配额/磁盘预留，以及默认不暴露端口的 monitoring Profile。
+- 备份恢复：PostgreSQL 物理全备与 WAL 归档、Restic 加密异机快照、7 日/4 周保留、精确快照恢复和数据库/文件一致性证据；真实异机与 RPO/RTO 仍待 staging 验收。
 
 ## 本地运行
 
@@ -177,6 +178,8 @@ AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置�
 主机 TLS 入口、证书/私钥校验、Nginx `internal`/Range 容器链路、BBR 只读基线与精确回滚见[TLS、内部文件发送与 BBR 基线](docs/NETWORK_AND_FILE_DELIVERY.md)。真实域名、可信证书、公网链路、手机网络和内核对照仍需在隔离 staging 人工验收。
 
 内部指标、Worker 心跳、队列与用户并发、存储配额、磁盘写入保护、Prometheus/Alertmanager/Node Exporter 和真实告警门禁见[监控、容量配额与磁盘保护](docs/MONITORING_AND_CAPACITY.md)。监控 Profile 默认不启动，也不向主机发布端口。
+
+每日数据库物理全备、连续 WAL、用户文件的 Restic 加密异机快照，以及按精确快照 ID 执行的月度隔离恢复与一致性检查见[加密异机备份与恢复演练](docs/BACKUP_AND_RECOVERY.md)。CI 回环不能替代真实异机仓库、RPO/RTO 和告警验收。
 
 ## 测试
 

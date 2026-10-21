@@ -21,6 +21,16 @@ services:
     image: ${SMARTSCAN_STAGING_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
     pull_policy: always
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=900s
+      - -c
+      - archive_command=test ! -f /var/lib/smartscan-wal/%f && cp %p /var/lib/smartscan-wal/%f
     environment:
       POSTGRES_DB: smartscan
       POSTGRES_USER: smartscan
@@ -29,6 +39,12 @@ services:
       - type: bind
         source: ${SMARTSCAN_STAGING_POSTGRES_ROOT:?必须设置独立 PostgreSQL 目录}
         target: /var/lib/postgresql/data
+      - type: bind
+        source: ${SMARTSCAN_STAGING_WAL_ROOT:?必须设置 WAL 归档目录}
+        target: /var/lib/smartscan-wal
+      - type: volume
+        source: postgres-socket
+        target: /var/run/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
       interval: 10s
@@ -155,3 +171,6 @@ networks:
     internal: true
   egress:
     driver: bridge
+
+volumes:
+  postgres-socket:

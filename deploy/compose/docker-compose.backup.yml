@@ -1,0 +1,129 @@
+name: ${COMPOSE_PROJECT_NAME:?必须设置独立的 staging Compose 项目名}
+
+services:
+  backup-database:
+    image: ${SMARTSCAN_STAGING_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
+    pull_policy: always
+    profiles: ["backup"]
+    entrypoint: ["/bin/sh", "-euc"]
+    command:
+      - |
+        case "$${SMARTSCAN_BACKUP_RUN_ID:-}" in
+          [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z-[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]) ;;
+          *) echo 'backup_run_id_invalid' >&2; exit 64 ;;
+        esac
+        target="/backup-work/$${SMARTSCAN_BACKUP_RUN_ID}/database"
+        test ! -e "$${target}"
+        install -d -m 0700 "$${target}"
+        pg_basebackup --host=/var/run/postgresql --username=smartscan --pgdata="$${target}" \
+          --format=plain --wal-method=stream --checkpoint=fast --no-password
+        pg_verifybackup "$${target}"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?必须设置 staging 数据库密码}
+      SMARTSCAN_BACKUP_RUN_ID: ${SMARTSCAN_BACKUP_RUN_ID:-invalid}
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_BACKUP_WORK_ROOT:?必须设置备份工作目录}
+        target: /backup-work
+      - type: volume
+        source: postgres-socket
+        target: /var/run/postgresql
+    depends_on:
+      postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+
+  backup-restic:
+    image: ${SMARTSCAN_STAGING_RESTIC_IMAGE:?必须固定 Restic 镜像 digest}
+    pull_policy: always
+    profiles: ["backup", "restore"]
+    env_file:
+      - ${SMARTSCAN_STAGING_BACKUP_ENV_FILE:?必须设置仓库外备份环境文件}
+    environment:
+      RESTIC_PASSWORD_FILE: /run/secrets/restic_password
+    entrypoint: ["restic"]
+    command: ["version"]
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_DATA_ROOT:?必须设置独立数据目录}
+        target: /source/files
+        read_only: true
+      - type: bind
+        source: ${SMARTSCAN_STAGING_BACKUP_WORK_ROOT:?必须设置备份工作目录}
+        target: /source/database
+        read_only: true
+      - type: bind
+        source: ${SMARTSCAN_STAGING_WAL_ROOT:?必须设置 WAL 归档目录}
+        target: /source/wal
+        read_only: true
+      - type: bind
+        source: ${SMARTSCAN_STAGING_RESTORE_ROOT:?必须设置恢复演练目录}
+        target: /restore
+      - type: bind
+        source: ${SMARTSCAN_STAGING_RESTIC_PASSWORD_FILE:?必须设置 Restic 密码文件}
+        target: /run/secrets/restic_password
+        read_only: true
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=32m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [egress]
+
+  restore-database:
+    image: ${SMARTSCAN_STAGING_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
+    pull_policy: always
+    profiles: ["restore"]
+    environment:
+      PGDATA: /restore/database
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?必须设置 staging 数据库密码}
+    command: ["postgres", "-c", "listen_addresses=*"]
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_RESTORE_ROOT:?必须设置恢复演练目录}/${SMARTSCAN_RESTORE_DRILL_ID:-invalid}
+        target: /restore
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=8m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [restore]
+
+  restore-audit:
+    image: ${SMARTSCAN_STAGING_API_IMAGE:?必须固定 API 镜像 digest}
+    pull_policy: always
+    profiles: ["restore"]
+    command:
+      - python
+      - -m
+      - services.api.app.restore_verification
+    environment:
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+      SMARTSCAN_DATABASE_URL: postgresql+psycopg://smartscan@restore-database:5432/smartscan
+      PGPASSWORD: ${POSTGRES_PASSWORD:?必须设置 staging 数据库密码}
+      SMARTSCAN_STORAGE_ROOT: /restore/files
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_RESTORE_ROOT:?必须设置恢复演练目录}/${SMARTSCAN_RESTORE_DRILL_ID:-invalid}
+        target: /restore
+        read_only: true
+    depends_on:
+      restore-database: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [restore]
+
+networks:
+  restore:
+    internal: true

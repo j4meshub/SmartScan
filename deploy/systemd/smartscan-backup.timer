@@ -1,0 +1,11 @@
+[Unit]
+Description=每天触发 SmartScan staging 备份
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 Asia/Shanghai
+RandomizedDelaySec=15m
+Persistent=true
+Unit=smartscan-backup.service
+
+[Install]
+WantedBy=timers.target

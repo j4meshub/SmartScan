@@ -41,12 +41,17 @@ IMAGE_KEYS = (
     "SMARTSCAN_STAGING_PROMETHEUS_IMAGE",
     "SMARTSCAN_STAGING_ALERTMANAGER_IMAGE",
     "SMARTSCAN_STAGING_NODE_EXPORTER_IMAGE",
+    "SMARTSCAN_STAGING_RESTIC_IMAGE",
 )
 PATH_KEYS = (
     "SMARTSCAN_STAGING_POSTGRES_ROOT",
     "SMARTSCAN_STAGING_DATA_ROOT",
     "SMARTSCAN_STAGING_MODEL_ROOT",
     "SMARTSCAN_STAGING_MONITORING_DATA_ROOT",
+    "SMARTSCAN_STAGING_WAL_ROOT",
+    "SMARTSCAN_STAGING_BACKUP_WORK_ROOT",
+    "SMARTSCAN_STAGING_BACKUP_EVIDENCE_ROOT",
+    "SMARTSCAN_STAGING_RESTORE_ROOT",
 )
 DEPLOY_KEYS = {
     "SMARTSCAN_DEPLOYMENT_TIER",
@@ -57,6 +62,8 @@ DEPLOY_KEYS = {
     "SMARTSCAN_STAGING_RUNTIME_ENV_FILE",
     "SMARTSCAN_STAGING_MONITORING_CONFIG_ROOT",
     "SMARTSCAN_STAGING_METRICS_TOKEN_FILE",
+    "SMARTSCAN_STAGING_BACKUP_ENV_FILE",
+    "SMARTSCAN_STAGING_RESTIC_PASSWORD_FILE",
     "POSTGRES_PASSWORD",
     *IMAGE_KEYS,
     *PATH_KEYS,
@@ -373,6 +380,17 @@ def validate_compose_contract(path: Path = DEFAULT_COMPOSE_FILE) -> None:
     )
     _require(services["ai-gateway"].get("profiles") == ["ai"], "AI 网关必须保持显式 Profile")
     _require(services["postgres"].get("networks") == ["data"], "PostgreSQL 只能连接数据网络")
+    socket_mounts = [
+        volume
+        for volume in services["postgres"].get("volumes", [])
+        if volume.get("target") == "/var/run/postgresql"
+    ]
+    _require(
+        len(socket_mounts) == 1
+        and socket_mounts[0].get("type") == "volume"
+        and socket_mounts[0].get("source") == "postgres-socket",
+        "PostgreSQL 必须使用受控 Unix Socket 卷供本机备份",
+    )
     _require(services["nginx"].get("networks") == ["edge"], "Nginx 只能连接入口网络")
     for worker_name in ("worker-cpu-1", "worker-cpu-2"):
         _require(services[worker_name].get("networks") == ["data"], "CPU Worker 只能连接数据网络")
@@ -386,6 +404,10 @@ def validate_compose_contract(path: Path = DEFAULT_COMPOSE_FILE) -> None:
     networks = document.get("networks", {})
     _require(networks.get("data", {}).get("internal") is True, "数据网络必须隔离")
     _require(networks.get("edge", {}).get("internal") is True, "入口网络必须隔离")
+    _require(
+        set(document.get("volumes", {})) == {"postgres-socket"},
+        "staging 只能声明受控 PostgreSQL Unix Socket 卷",
+    )
 
 
 def validate_monitoring_compose_contract(
