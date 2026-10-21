@@ -105,3 +105,9 @@ AI 候选系统使用同一份已授权、已脱敏且按来源分组切分的�
 
 首版部署由 Nginx、API 服务组、CPU Worker 组、PostgreSQL 和用户隔离文件目录组成。上传受理与 CPU 处理解耦，保证重任务排队时登录、查询和下载鉴权仍能响应。后续只有在实际容量指标超过单机边界后，才引入独立 Worker 或高可用组件。
 
+## Android 发布边界
+
+Android 普通构建与正式发布分离。GitHub Actions 持续验证 Debug 单元、Robolectric、应用编译、Lint 和无密钥发布契约；GitLab 仅在受保护的 `android-vX.Y.Z` 标签上使用正式 APK keystore 和独立 ECDSA P-256 清单私钥。流水线从 APK 实包读取包名、版本和证书，并要求至少一个同包名、同证书、低 `versionCode` 的上一稳定 APK 作为升级证据。
+
+每个版本的 APK、签名清单、独立签名和校验报告写入不可变 Generic Package 路径，GitLab Pages 只承载 `/android/latest.json` 与 `.sig` 当前频道。频道回滚只能原样恢复一组能被当前公钥验证且与保存 APK 匹配的旧文件；已经升级的设备必须使用更高 `versionCode` 前滚修复。正式密钥、GitLab 运行、匿名下载、目标真机升级和数据保留均不由仓库自动化替代。详见[Android 正式签名与发布](ANDROID_RELEASE.md)。
+

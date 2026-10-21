@@ -1,0 +1,9 @@
+schema_version: 1
+package_name: com.smartscan.app
+generic_package_name: smartscan-android
+apk_file_name: SmartScan-release.apk
+manifest_file_name: latest.json
+signature_file_name: latest.json.sig
+channel_path: public/android
+minimum_previous_versions: 1
+maximum_apk_size_bytes: 524288000

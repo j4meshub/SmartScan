@@ -1,0 +1,163 @@
+.android-release-rules:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^android-v[0-9]+\.[0-9]+\.[0-9]+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+    - when: never
+
+android-release-candidate:
+  extends: .android-release-rules
+  stage: release
+  image: "$SMARTSCAN_ANDROID_BUILD_IMAGE"
+  interruptible: false
+  variables:
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  script:
+    - 'case "$SMARTSCAN_ANDROID_BUILD_IMAGE" in *@sha256:*) ;; *) echo "Android 构建镜像必须固定 digest" >&2; exit 1 ;; esac'
+    - test -f "$SMARTSCAN_ANDROID_KEYSTORE_FILE"
+    - test -n "$SMARTSCAN_ANDROID_KEYSTORE_PASSWORD"
+    - test -n "$SMARTSCAN_ANDROID_KEY_ALIAS"
+    - test -n "$SMARTSCAN_ANDROID_KEY_PASSWORD"
+    - test -f "$SMARTSCAN_ANDROID_MANIFEST_PRIVATE_KEY_FILE"
+    - test -n "$SMARTSCAN_ANDROID_PREVIOUS_VERSION_NAME"
+    - test -n "$SMARTSCAN_ANDROID_VERSION_CODE"
+    - test -n "$SMARTSCAN_ANDROID_VERSION_NAME"
+    - test "$CI_COMMIT_TAG" = "android-v$SMARTSCAN_ANDROID_VERSION_NAME"
+    - test -n "$SMARTSCAN_ANDROID_MINIMUM_SUPPORTED_VERSION_CODE"
+    - test -n "$SMARTSCAN_ANDROID_SIGNING_CERTIFICATE_SHA256"
+    - test -n "$SMARTSCAN_UPDATE_PUBLIC_KEY"
+    - test -n "$SMARTSCAN_API_BASE_URL"
+    - test -n "$SMARTSCAN_UPDATE_MANIFEST_URL"
+    - test -n "$SMARTSCAN_UPDATE_SIGNATURE_URL"
+    - python -c "import cryptography, yaml"
+    - python tools/validate_android_release.py
+    - >-
+      python tools/validate_android_release.py configuration
+      --version-code "$SMARTSCAN_ANDROID_VERSION_CODE"
+      --version-name "$SMARTSCAN_ANDROID_VERSION_NAME"
+      --previous-version-name "$SMARTSCAN_ANDROID_PREVIOUS_VERSION_NAME"
+      --minimum-supported-version-code "$SMARTSCAN_ANDROID_MINIMUM_SUPPORTED_VERSION_CODE"
+      --api-base-url "$SMARTSCAN_API_BASE_URL"
+      --manifest-url "$SMARTSCAN_UPDATE_MANIFEST_URL"
+      --signature-url "$SMARTSCAN_UPDATE_SIGNATURE_URL"
+      --public-key-base64 "$SMARTSCAN_UPDATE_PUBLIC_KEY"
+    - >-
+      gradle -p apps/android :app:assembleRelease --stacktrace
+      -PSMARTSCAN_VERSION_CODE="$SMARTSCAN_ANDROID_VERSION_CODE"
+      -PSMARTSCAN_VERSION_NAME="$SMARTSCAN_ANDROID_VERSION_NAME"
+      -PSMARTSCAN_API_BASE_URL="$SMARTSCAN_API_BASE_URL"
+      -PSMARTSCAN_UPDATE_MANIFEST_URL="$SMARTSCAN_UPDATE_MANIFEST_URL"
+      -PSMARTSCAN_UPDATE_SIGNATURE_URL="$SMARTSCAN_UPDATE_SIGNATURE_URL"
+      -PSMARTSCAN_UPDATE_PUBLIC_KEY="$SMARTSCAN_UPDATE_PUBLIC_KEY"
+    - mkdir -p dist/android public/android
+    - cp apps/android/app/build/outputs/apk/release/app-release.apk dist/android/SmartScan-release.apk
+    - export SMARTSCAN_ANDROID_PREVIOUS_PACKAGE_BASE="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/smartscan-android/$SMARTSCAN_ANDROID_PREVIOUS_VERSION_NAME"
+    - >-
+      curl --fail --silent --show-error --retry 2
+      --header "JOB-TOKEN: $CI_JOB_TOKEN"
+      --output dist/android/previous-release.apk
+      "$SMARTSCAN_ANDROID_PREVIOUS_PACKAGE_BASE/SmartScan-release.apk"
+    - >-
+      python tools/validate_android_release.py candidate
+      --apk dist/android/SmartScan-release.apk
+      --previous-apk dist/android/previous-release.apk
+      --version-code "$SMARTSCAN_ANDROID_VERSION_CODE"
+      --version-name "$SMARTSCAN_ANDROID_VERSION_NAME"
+      --certificate-sha256 "$SMARTSCAN_ANDROID_SIGNING_CERTIFICATE_SHA256"
+      --report dist/android/candidate-report.json
+    - export SMARTSCAN_ANDROID_PACKAGE_BASE="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/smartscan-android/$SMARTSCAN_ANDROID_VERSION_NAME"
+    - export SMARTSCAN_ANDROID_APK_URL="$SMARTSCAN_ANDROID_PACKAGE_BASE/SmartScan-release.apk"
+    - >-
+      test "$(curl --silent --output /dev/null --write-out '%{http_code}'
+      --header "JOB-TOKEN: $CI_JOB_TOKEN" "$SMARTSCAN_ANDROID_APK_URL")" = "404"
+    - >-
+      python tools/android_update_manifest.py
+      --apk dist/android/SmartScan-release.apk
+      --package-name com.smartscan.app
+      --version-code "$SMARTSCAN_ANDROID_VERSION_CODE"
+      --version-name "$SMARTSCAN_ANDROID_VERSION_NAME"
+      --minimum-supported-version-code "$SMARTSCAN_ANDROID_MINIMUM_SUPPORTED_VERSION_CODE"
+      --apk-url "$SMARTSCAN_ANDROID_APK_URL"
+      --signing-certificate-sha256 "$SMARTSCAN_ANDROID_SIGNING_CERTIFICATE_SHA256"
+      --published-at "$CI_PIPELINE_CREATED_AT"
+      --private-key "$SMARTSCAN_ANDROID_MANIFEST_PRIVATE_KEY_FILE"
+      --output dist/android/latest.json
+      --signature-output dist/android/latest.json.sig
+    - >-
+      python tools/validate_android_release.py channel
+      --apk dist/android/SmartScan-release.apk
+      --manifest dist/android/latest.json
+      --signature dist/android/latest.json.sig
+      --public-key-base64 "$SMARTSCAN_UPDATE_PUBLIC_KEY"
+      --expected-version-name "$SMARTSCAN_ANDROID_VERSION_NAME"
+      --report dist/android/channel-report.json
+    - >-
+      for file in SmartScan-release.apk latest.json latest.json.sig candidate-report.json channel-report.json; do
+        curl --fail --silent --show-error --retry 2
+        --header "JOB-TOKEN: $CI_JOB_TOKEN"
+        --upload-file "dist/android/$file"
+        "$SMARTSCAN_ANDROID_PACKAGE_BASE/$file";
+      done
+    - cp dist/android/latest.json public/android/latest.json
+    - cp dist/android/latest.json.sig public/android/latest.json.sig
+    - printf '%s\n' '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>SmartScan Android 更新</title><p>SmartScan Android 签名更新频道</p></html>' > public/index.html
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - dist/android/
+      - public/
+
+android-release-pages:
+  extends: .android-release-rules
+  stage: deploy
+  image: "$SMARTSCAN_ANDROID_BUILD_IMAGE"
+  interruptible: false
+  needs:
+    - job: android-release-candidate
+      artifacts: true
+  script:
+    - test -s public/android/latest.json
+    - test -s public/android/latest.json.sig
+  pages:
+    publish: public
+  artifacts:
+    paths: [public]
+
+android-rollback-pages:
+  stage: deploy
+  image: "$SMARTSCAN_ANDROID_BUILD_IMAGE"
+  interruptible: false
+  rules:
+    - if: '$SMARTSCAN_ANDROID_ROLLBACK == "true" && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+    - when: never
+  script:
+    - test -n "$SMARTSCAN_ANDROID_ROLLBACK_VERSION_NAME"
+    - test -n "$SMARTSCAN_UPDATE_PUBLIC_KEY"
+    - python -c "import cryptography, yaml"
+    - mkdir -p dist/android public/android
+    - python tools/validate_android_release.py archive-version --version-name "$SMARTSCAN_ANDROID_ROLLBACK_VERSION_NAME"
+    - export SMARTSCAN_ANDROID_ROLLBACK_PACKAGE_BASE="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/smartscan-android/$SMARTSCAN_ANDROID_ROLLBACK_VERSION_NAME"
+    - >-
+      for file in SmartScan-release.apk latest.json latest.json.sig; do
+        curl --fail --silent --show-error --retry 2
+        --header "JOB-TOKEN: $CI_JOB_TOKEN"
+        --output "dist/android/$file"
+        "$SMARTSCAN_ANDROID_ROLLBACK_PACKAGE_BASE/$file";
+      done
+    - >-
+      python tools/validate_android_release.py channel
+      --apk dist/android/SmartScan-release.apk
+      --manifest dist/android/latest.json
+      --signature dist/android/latest.json.sig
+      --public-key-base64 "$SMARTSCAN_UPDATE_PUBLIC_KEY"
+      --expected-version-name "$SMARTSCAN_ANDROID_ROLLBACK_VERSION_NAME"
+      --report dist/android/rollback-channel-report.json
+    - cp dist/android/latest.json public/android/latest.json
+    - cp dist/android/latest.json.sig public/android/latest.json.sig
+    - printf '%s\n' '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>SmartScan Android 更新</title><p>SmartScan Android 签名更新频道</p></html>' > public/index.html
+  pages:
+    publish: public
+  artifacts:
+    paths:
+      - dist/android/rollback-channel-report.json
+      - public/

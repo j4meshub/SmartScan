@@ -32,6 +32,7 @@ jobs:
       - run: ruff check services migrations tests tools
       - run: ruff format --check services migrations tests tools
       - run: python tools/validate_ios_release.py
+      - run: python tools/validate_android_release.py
       - run: python tools/export_ai_schemas.py --check
       - run: python tools/export_ai_evaluation_schemas.py --check
       - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
@@ -79,7 +80,7 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: Android 分层、拍摄、编辑分享、单元测试与 Lint
-        run: gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :core:upload:test :core:update:test :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :feature:sync:testDebugUnitTest :feature:update:testDebugUnitTest :feature:workspace:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug --stacktrace
+        run: gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :core:upload:test :core:update:test :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :feature:sync:testDebugUnitTest :feature:update:testDebugUnitTest :feature:workspace:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --stacktrace
   ios:
     runs-on: macos-15
     timeout-minutes: 30
