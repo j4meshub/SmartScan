@@ -8,10 +8,10 @@
 |---|---|
 | 当前里程碑 | M9 部署与发布 |
 | 当前工作包 | `OPS-002` 网络与文件发送 |
-| 工作包状态 | 进行中：仓库侧 TLS/Nginx、内部文件发送容器链路、BBR 基线/回滚工具和中文文档已实现；全量测试与 CI 待完成，真实服务器仍阻塞 |
+| 工作包状态 | 等待人工验收：仓库侧 TLS/Nginx、内部文件发送容器链路、BBR 基线/回滚工具、中文文档及全量 CI 已完成；真实服务器、域名、可信证书、外网链路和 BBR 对照仍阻塞 |
 | 当前分支 | `codex/ops-002-network-file-delivery` |
 | 最后验证基线 | `7dc3c53`（已合并 OPS-001；主线工作流 `39638319368` 五项全部通过） |
-| 工作包提交 | `e5fe9ad` |
+| 工作包提交 | `e5fe9ad`、`91fbf61` |
 | PR | [#53](https://github.com/j4meshub/SmartScan/pull/53) |
 | 下一工作包 | `OPS-003` 依赖真实 OPS-001 staging；服务器恢复前继续实现不依赖主机的监控与磁盘保护仓库基线 |
 
@@ -22,7 +22,10 @@
 - 容器 Nginx 启用 `sendfile`、公平分块、符号链接阻断和压缩类型边界；认证限频从错误保留 `/api` 前缀的正则 location 改为 `$uri` 空键映射，普通 API 不计数且 FastAPI 继续收到 `/v1/...`。
 - 新增隔离容器集成链路：假 API 只产生 `X-Accel-Redirect`，真实 Web 镜像验证内部路径直访 `404`、完整下载、内部头不泄露、附件/ETag/私有缓存以及单区间 `206 Content-Range`。
 - 新增 BBR 只读 procfs 快照、启用前后比较和按原值生成回滚配置；工具不执行 `modprobe`、`sysctl`、覆盖或删除。只有同一内核、BBR 可用/生效且 qdisc 为 `fq` 时才允许进入真实网络对照，核心验收始终保持未完成。
-- OPS-002 Python 专项当前 `12 passed, 1 skipped`；全量 Python `369 passed, 7 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、131 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、iOS 发布草稿、JavaScript 语法和差异检查均通过。本机没有 Docker，因此 Nginx/TLS 语法与真实 internal/Range 容器集成等待 GitHub Runner 补证。真实域名、可信证书、防火墙、公网/手机链路、大文件和 BBR 前后指标没有被合成夹具标记为通过。
+- OPS-002 Python 专项当前 `12 passed, 1 skipped`；全量 Python `369 passed, 7 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、131 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、iOS 发布草稿、JavaScript 语法和差异检查均通过。
+- 首轮提交的 push 工作流 `39642978300` 与 PR 工作流 `39642987687` 仅容器作业失败：真实 Nginx 为内部文件自动生成了基于修改时间和大小的 ETag，覆盖 API 提供的 SHA-256 强 ETag。没有放宽校验，修复提交 `91fbf61` 在内部文件 location 关闭自动 ETag 并显式转发上游强 ETag。
+- 修复后的 push 工作流 `39643470449` 与 PR 工作流 `39643479528` 共 10 项全部通过：容器作业完成证书生成与校验、TLS 边缘配置渲染、真实 `nginx -t`、内部路径直访 `404`、完整下载和单区间 `206`；API 在 PostgreSQL 17 运行全量回归，Web、Android 和固定 Xcode 16.4 iOS Simulator 同步通过。公开仓库 Runner 已恢复，没有额度阻塞。
+- 本机没有 Docker，Nginx/TLS 与 internal/Range 的容器证据来自 GitHub Runner。真实域名、可信证书、ACME 续期、防火墙、公网/手机链路、大文件和 BBR 前后指标没有被合成夹具或 CI 标记为通过。
 
 以下保留已合并 OPS-001 的近期证据：
 
@@ -796,6 +799,6 @@ git diff --check
 
 ## 下一步
 
-1. 完成 OPS-002 全量本地回归、自审与中文提交，推送 `codex/ops-002-network-file-delivery` 并创建中文 PR。
-2. 由 GitHub Docker Runner 实际执行 TLS Nginx `nginx -t`、internal/Range 容器集成，同时补齐 PostgreSQL、Android 与 iOS 平台证据；CI 通过后合并仓库侧基线。
-3. 公司服务器恢复后验证真实域名、可信证书、防火墙、鉴权下载、大文件、公网/手机链路和相同条件 BBR 前后对照；此前 OPS-002 保持等待人工验收，并继续推进 OPS-003 的独立仓库工作。
+1. 提交 OPS-002 最终证据，等待文档头的 push 与 PR 两套 GitHub Actions 全绿后合并 PR #53，并在主分支复验。
+2. 从 `OPS-003` 开始实现不依赖真实服务器的监控、配额和磁盘保护仓库基线；真实主机接入部分继续保持阻塞。
+3. 公司服务器恢复后验证 OPS-001/OPS-002 的真实域名、可信证书、ACME 续期、防火墙、鉴权下载、大文件、公网/手机链路和相同条件 BBR 前后对照。
