@@ -276,6 +276,7 @@ private fun PageEditor(
     var corners by remember(page.id) { mutableStateOf(DefaultCorners) }
     var filter by remember(page.id) { mutableStateOf("original") }
     var failed by remember(page.id) { mutableStateOf(false) }
+    val examResultVersion = page.examResultVersion
 
     LaunchedEffect(page.id, page.activeResultVersion) {
         when (val result = repository.downloadPagePreview(page.id, previewDirectory)) {
@@ -286,6 +287,29 @@ private fun PageEditor(
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.workspace_page, page.pageNumber), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        if (page.examSuggestionVisible && examResultVersion != null) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(
+                            if (page.examConfidenceBand == "high") R.string.workspace_exam_suggestion_high
+                            else R.string.workspace_exam_suggestion_medium,
+                        ),
+                    )
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                when (val result = repository.dismissExamSuggestion(page.id, examResultVersion)) {
+                                    is ApiResult.Success -> onUpdated(result.value)
+                                    is ApiResult.Failure -> failed = true
+                                }
+                            }
+                        },
+                        enabled = !busy,
+                    ) { Text(stringResource(R.string.workspace_exam_dismiss)) }
+                }
+            }
+        }
         previewPath?.let { path ->
             remember(path) { BitmapFactory.decodeFile(path) }?.let { bitmap ->
                 Image(

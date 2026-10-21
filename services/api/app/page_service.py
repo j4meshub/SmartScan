@@ -65,6 +65,23 @@ def page_view(db: Session, page: ScanPage) -> PageView:
         except json.JSONDecodeError:
             ocr_details = None
     ocr_is_current = page.ocr_result_version == page.active_result_version
+    exam_details = None
+    exam_is_current = page.exam_result_version == page.active_result_version
+    if page.exam_details and exam_is_current:
+        try:
+            loaded_exam = json.loads(page.exam_details)
+            exam_details = loaded_exam if isinstance(loaded_exam, dict) else None
+        except json.JSONDecodeError:
+            exam_details = None
+    exam_dismissed = (
+        page.exam_suggestion_dismissed_result_version == page.exam_result_version
+        and page.exam_result_version is not None
+    )
+    exam_suggestion_visible = (
+        exam_is_current
+        and page.exam_recommendation in {"ask", "suggest_cleanup"}
+        and not exam_dismissed
+    )
     return PageView(
         id=page.id,
         project_id=page.project_id,
@@ -91,6 +108,26 @@ def page_view(db: Session, page: ScanPage) -> PageView:
         ocr_title_candidate=page.ocr_title_candidate if ocr_is_current else None,
         ocr_error_code=page.ocr_error_code,
         ocr_updated_at=page.ocr_updated_at,
+        exam_classification_status=page.exam_classification_status,
+        exam_result_version=page.exam_result_version,
+        exam_classifier_version=page.exam_classifier_version if exam_is_current else None,
+        exam_prediction=page.exam_prediction if exam_is_current else None,
+        exam_probability=page.exam_probability if exam_is_current else None,
+        exam_confidence_band=page.exam_confidence_band if exam_is_current else None,
+        exam_recommendation=page.exam_recommendation if exam_is_current else None,
+        exam_details=exam_details,
+        exam_suggestion_visible=exam_suggestion_visible,
+        exam_suggestion_dismissed_result_version=(
+            page.exam_suggestion_dismissed_result_version if exam_dismissed else None
+        ),
+        exam_suggestion_dismissed_by_user_id=(
+            page.exam_suggestion_dismissed_by_user_id if exam_dismissed else None
+        ),
+        exam_suggestion_dismissed_at=page.exam_suggestion_dismissed_at if exam_dismissed else None,
+        exam_suggestion_dismissal_reason=(
+            page.exam_suggestion_dismissal_reason if exam_dismissed else None
+        ),
+        exam_updated_at=page.exam_updated_at,
         active_result=active_page_result(db, page),
         created_at=page.created_at,
         updated_at=page.updated_at,
@@ -140,6 +177,22 @@ def _invalidate_ocr(page: ScanPage) -> None:
     page.ocr_title_candidate = None
     page.ocr_error_code = None
     page.ocr_updated_at = datetime.now(UTC)
+
+
+def _invalidate_exam_classification(page: ScanPage) -> None:
+    page.exam_classification_status = "stale"
+    page.exam_result_version = None
+    page.exam_classifier_version = None
+    page.exam_prediction = None
+    page.exam_probability = None
+    page.exam_confidence_band = None
+    page.exam_recommendation = None
+    page.exam_details = None
+    page.exam_suggestion_dismissed_result_version = None
+    page.exam_suggestion_dismissed_by_user_id = None
+    page.exam_suggestion_dismissed_at = None
+    page.exam_suggestion_dismissal_reason = None
+    page.exam_updated_at = datetime.now(UTC)
 
 
 def _perspective_crop(
@@ -241,6 +294,7 @@ def edit_page(
                 settings=settings,
             )
             _invalidate_ocr(page)
+            _invalidate_exam_classification(page)
     except PageMutationError:
         raise
     except Exception as exc:
@@ -327,6 +381,7 @@ def rotate_page(
                 settings=settings,
             )
             _invalidate_ocr(page)
+            _invalidate_exam_classification(page)
     except PageMutationError:
         raise
     except Exception as exc:
@@ -350,3 +405,23 @@ def update_page_review(
         page.reviewed_by_user_id = None
         page.reviewed_at = None
     page.review_reason = note or page.quality_warning
+
+
+def dismiss_exam_suggestion(
+    *,
+    page: ScanPage,
+    actor: User,
+    result_version: int,
+    reason: str | None,
+) -> None:
+    if (
+        page.exam_classification_status != "ready"
+        or page.exam_result_version != page.active_result_version
+        or page.exam_result_version != result_version
+        or page.exam_recommendation not in {"ask", "suggest_cleanup"}
+    ):
+        raise PageMutationError("exam_suggestion_not_current")
+    page.exam_suggestion_dismissed_result_version = result_version
+    page.exam_suggestion_dismissed_by_user_id = actor.id
+    page.exam_suggestion_dismissed_at = datetime.now(UTC)
+    page.exam_suggestion_dismissal_reason = reason

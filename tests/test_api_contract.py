@@ -48,6 +48,7 @@ EXPECTED_OPERATIONS = {
     ("POST", "/v1/pages/{page_id}/rotations", 200),
     ("POST", "/v1/pages/{page_id}/edits", 200),
     ("PATCH", "/v1/pages/{page_id}/review", 200),
+    ("PUT", "/v1/pages/{page_id}/exam-suggestion-dismissal", 200),
     ("GET", "/v1/jobs", 200),
     ("GET", "/v1/jobs/{job_id}", 200),
     ("POST", "/v1/jobs/{job_id}/cancel", 200),
@@ -113,6 +114,22 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
         "ocr_title_candidate",
         "ocr_error_code",
         "ocr_updated_at",
+    }.issubset(page_properties)
+    assert {
+        "exam_classification_status",
+        "exam_result_version",
+        "exam_classifier_version",
+        "exam_prediction",
+        "exam_probability",
+        "exam_confidence_band",
+        "exam_recommendation",
+        "exam_details",
+        "exam_suggestion_visible",
+        "exam_suggestion_dismissed_result_version",
+        "exam_suggestion_dismissed_by_user_id",
+        "exam_suggestion_dismissed_at",
+        "exam_suggestion_dismissal_reason",
+        "exam_updated_at",
     }.issubset(page_properties)
     project_properties = component_schemas["ProjectView"]["properties"]
     assert {"suggested_name", "suggested_name_source", "suggested_name_updated_at"}.issubset(

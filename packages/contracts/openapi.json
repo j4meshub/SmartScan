@@ -3,7 +3,7 @@
   "info": {
     "title": "SmartScan 接口",
     "description": "统一账号、权限、扫描项目、上传、处理、导出与文件生命周期接口。",
-    "version": "2026-10-20.3"
+    "version": "2026-10-21.0"
   },
   "paths": {
     "/v1/auth/account-merges": {
@@ -1636,6 +1636,71 @@
         ],
         "responses": {
           "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pages/{page_id}/exam-suggestion-dismissal": {
+      "put": {
+        "summary": "Put Exam Suggestion Dismissal",
+        "operationId": "put_exam_suggestion_dismissal_v1_pages__page_id__exam_suggestion_dismissal_put",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExamSuggestionDismissalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -3563,6 +3628,32 @@
         ],
         "title": "DeviceSessionView"
       },
+      "ExamSuggestionDismissalRequest": {
+        "properties": {
+          "result_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Result Version"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result_version"
+        ],
+        "title": "ExamSuggestionDismissalRequest"
+      },
       "ExportArtifactView": {
         "properties": {
           "id": {
@@ -4427,6 +4518,151 @@
               }
             ],
             "title": "Ocr Updated At"
+          },
+          "exam_classification_status": {
+            "type": "string",
+            "title": "Exam Classification Status",
+            "default": "pending"
+          },
+          "exam_result_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Result Version"
+          },
+          "exam_classifier_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Classifier Version"
+          },
+          "exam_prediction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Prediction"
+          },
+          "exam_probability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Probability"
+          },
+          "exam_confidence_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Confidence Band"
+          },
+          "exam_recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Recommendation"
+          },
+          "exam_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Details"
+          },
+          "exam_suggestion_visible": {
+            "type": "boolean",
+            "title": "Exam Suggestion Visible",
+            "default": false
+          },
+          "exam_suggestion_dismissed_result_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Suggestion Dismissed Result Version"
+          },
+          "exam_suggestion_dismissed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Suggestion Dismissed By User Id"
+          },
+          "exam_suggestion_dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Suggestion Dismissed At"
+          },
+          "exam_suggestion_dismissal_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Suggestion Dismissal Reason"
+          },
+          "exam_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Updated At"
           },
           "active_result": {
             "anyOf": [

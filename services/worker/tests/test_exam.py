@@ -5,7 +5,33 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
-from services.worker.app.exam import conservative_color_cleanup, detect_exam_layout
+from services.worker.app.exam import (
+    CLASSIFIER_VERSION,
+    classify_exam_page,
+    conservative_color_cleanup,
+    detect_exam_layout,
+    exam_keyword_hits,
+    exam_text_signals,
+)
+
+
+class FixedExamModel:
+    model_version = "fixed-test-v1"
+
+    def __init__(self, probability: float):
+        self.probability = probability
+
+    def predict_exam_probability(self, image: Image.Image) -> float:
+        del image
+        return self.probability
+
+
+class FailingExamModel:
+    model_version = "failing-test-v1"
+
+    def predict_exam_probability(self, image: Image.Image) -> float:
+        del image
+        raise RuntimeError("不得进入持久证据的内部模型错误")
 
 
 def exam_page() -> Image.Image:
@@ -36,6 +62,66 @@ def test_exam_layout_uses_confidence_bands_and_optional_keyword_signal() -> None
 
     keyword_only = detect_exam_layout(plain, keyword_hits=3)
     assert keyword_only.recommendation == "ask"
+
+
+def test_product_classifier_fuses_rules_ocr_and_optional_local_model() -> None:
+    classified = classify_exam_page(
+        exam_page(),
+        ocr_text="姓名 Alice 班级 3 EXAM SCORE",
+        model=FixedExamModel(0.9),
+    )
+
+    assert classified.prediction == "exam"
+    assert classified.confidence_band == "high"
+    assert classified.recommendation == "suggest_cleanup"
+    assert classified.exam_probability >= 0.65
+    assert classified.keyword_hits == 4
+    assert classified.model_probability == 0.9
+    assert classified.classifier_version == "exam-fusion-v1:fixed-test-v1"
+    assert "Alice" not in str(classified.details)
+
+
+def test_classifier_falls_back_to_rules_when_local_model_fails() -> None:
+    classified = classify_exam_page(exam_page(), model=FailingExamModel())
+
+    assert classified.classifier_version == CLASSIFIER_VERSION
+    assert classified.model_probability is None
+    assert classified.details["model_status"] == "fallback"
+    assert "内部模型错误" not in str(classified.details)
+
+
+def test_explicit_exam_mode_is_high_confidence_without_model() -> None:
+    classified = classify_exam_page(
+        Image.new("RGB", (800, 1200), "white"),
+        explicit_exam_mode=True,
+    )
+
+    assert classified.prediction == "exam"
+    assert classified.exam_probability == 1.0
+    assert classified.recommendation == "suggest_cleanup"
+    assert classified.classifier_version == "user-selected-exam-v1"
+    assert classified.details["source"] == "user_selected"
+
+
+def test_exam_keyword_hits_are_unique_and_language_aware() -> None:
+    assert exam_keyword_hits("姓名 姓名 班级 TEST EXAM score") == 4
+    assert exam_keyword_hits("classification example") == 0
+    assert exam_keyword_hits(None) == 0
+
+
+def test_exam_text_signals_count_layout_semantics_without_copying_ocr_text() -> None:
+    text = "1. （10分） A. 选项 B. 选项 ____ 装订线 x = √4 Alice"
+
+    signals = exam_text_signals(text)
+
+    assert signals["question_number_hits"] == 1
+    assert signals["score_hits"] == 1
+    assert signals["option_hits"] == 2
+    assert signals["answer_line_hits"] == 1
+    assert signals["binding_line_hits"] == 1
+    assert signals["formula_token_hits"] == 2
+    assert signals["formula_density"] > 0
+    assert "Alice" not in str(signals)
 
 
 def test_cleanup_weakens_isolated_colored_ink_and_preserves_print() -> None:

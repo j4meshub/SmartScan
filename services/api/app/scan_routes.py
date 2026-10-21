@@ -53,6 +53,7 @@ from .models import (
 )
 from .page_service import (
     PageMutationError,
+    dismiss_exam_suggestion,
     edit_page,
     page_for_owner,
     page_view,
@@ -68,6 +69,7 @@ from .project_cleanup import (
 from .repositories import page_for_actor, project_for_actor, upload_for_owner, upload_view
 from .schemas import (
     ChunkReceipt,
+    ExamSuggestionDismissalRequest,
     ExportCreate,
     ExportView,
     JobView,
@@ -693,6 +695,53 @@ def complete_upload(
     db.commit()
     db.refresh(page)
     shutil.rmtree(temp_dir, ignore_errors=True)
+    return page_view(db, page)
+
+
+@router.put("/v1/pages/{page_id}/exam-suggestion-dismissal", response_model=PageView)
+def put_exam_suggestion_dismissal(
+    page_id: str,
+    payload: ExamSuggestionDismissalRequest,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    candidate = db.get(ScanPage, page_id)
+    if candidate is not None and candidate.owner_user_id != user.id:
+        record_audit(
+            db,
+            request,
+            user,
+            "dismiss_exam_suggestion",
+            "page",
+            page_id,
+            candidate.owner_user_id,
+            "denied",
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="page not found")
+    try:
+        page = page_for_owner(db, user, page_id, lock=True)
+        dismiss_exam_suggestion(
+            page=page,
+            actor=user,
+            result_version=payload.result_version,
+            reason=payload.reason,
+        )
+    except PageMutationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
+    record_audit(
+        db,
+        request,
+        user,
+        "dismiss_exam_suggestion",
+        "page",
+        page.id,
+        page.owner_user_id,
+    )
+    db.commit()
+    db.refresh(page)
     return page_view(db, page)
 
 

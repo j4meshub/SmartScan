@@ -163,6 +163,90 @@ def test_initial_migration_can_downgrade_and_upgrade_again(tmp_path: Path) -> No
     assert current_revision(url) == head_revision(url)
 
 
+def test_exam_classification_migration_marks_legacy_pages_and_can_downgrade(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "exam-classification.db")
+    command.upgrade(alembic_config(url), "20261020_0017")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('exam-legacy-user', 'exam-legacy', 'hash', :phone_hmac, '+86******0018', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "9" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_projects "
+                "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) VALUES "
+                "('exam-legacy-project', 'exam-legacy-user', '旧试卷', 'document', 'ltr', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_pages "
+                "(id, project_id, owner_user_id, page_number, original_path, "
+                "original_mime_type, sha256, size_bytes, mime_type, rotation_degrees, "
+                "active_result_version, review_status, ocr_status, created_at, updated_at) "
+                "VALUES ('exam-legacy-page', 'exam-legacy-project', 'exam-legacy-user', 1, "
+                "'users/exam-legacy-user/originals/page.jpg', 'image/jpeg', :sha256, 100, "
+                "'image/jpeg', 0, 0, 'not_required', 'disabled', CURRENT_TIMESTAMP, "
+                "CURRENT_TIMESTAMP)"
+            ),
+            {"sha256": "a" * 64},
+        )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        columns = {item["name"] for item in inspect(migrated).get_columns("scan_pages")}
+        assert {
+            "exam_classification_status",
+            "exam_result_version",
+            "exam_classifier_version",
+            "exam_prediction",
+            "exam_probability",
+            "exam_confidence_band",
+            "exam_recommendation",
+            "exam_details",
+            "exam_suggestion_dismissed_result_version",
+            "exam_suggestion_dismissed_by_user_id",
+            "exam_suggestion_dismissed_at",
+            "exam_suggestion_dismissal_reason",
+            "exam_updated_at",
+        }.issubset(columns)
+        with migrated.connect() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        "SELECT exam_classification_status, exam_result_version, exam_updated_at "
+                        "FROM scan_pages WHERE id = 'exam-legacy-page'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        assert row["exam_classification_status"] == "legacy"
+        assert row["exam_result_version"] is None
+        assert row["exam_updated_at"] is not None
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261020_0017")
+    downgraded = create_engine(url)
+    try:
+        columns = {item["name"] for item in inspect(downgraded).get_columns("scan_pages")}
+        assert "exam_classification_status" not in columns
+        assert "exam_suggestion_dismissed_at" not in columns
+    finally:
+        downgraded.dispose()
+
+
 def test_identity_split_can_downgrade_without_losing_legacy_account_columns(tmp_path: Path) -> None:
     url = sqlite_url(tmp_path / "identity-rollback.db")
     upgrade_database(url)

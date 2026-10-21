@@ -128,6 +128,24 @@ class SmartScanApiTest {
     }
 
     @Test
+    fun `exam suggestion dismissal keeps result version in JSON body`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"quality_details":null,"active_result_version":2,"review_status":"pending","ocr_status":"completed","exam_result_version":2,"exam_confidence_band":"high","exam_recommendation":"suggest_cleanup","exam_suggestion_visible":false}""",
+            ),
+        )
+        val api = api()
+
+        val page = api.dismissExamSuggestion("page-1", ExamSuggestionDismissalRequestDto(2))
+        val request = server.takeRequest()
+
+        assertEquals("/v1/pages/page-1/exam-suggestion-dismissal", request.path)
+        assertTrue(request.body.readUtf8().contains("\"result_version\":2"))
+        assertFalse(page.examSuggestionVisible)
+        assertEquals(2, page.examResultVersion)
+    }
+
+    @Test
     fun `account deletion keeps verification data in body`() = runTest {
         server.enqueue(
             MockResponse().setHeader("Content-Type", "application/json").setBody(

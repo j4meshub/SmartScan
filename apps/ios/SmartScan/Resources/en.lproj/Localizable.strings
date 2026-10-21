@@ -97,6 +97,9 @@
 "Queued" = "Queued";
 "Rotate 90°" = "Rotate 90°";
 "Confirm review" = "Confirm review";
+"This may be an exam page. Exam cleanup is recommended and the original will be preserved." = "This may be an exam page. Exam cleanup is recommended and the original will be preserved.";
+"This may be an exam page. Switch to exam cleanup?" = "This may be an exam page. Switch to exam cleanup?";
+"Not now" = "Not now";
 "Filter" = "Filter";
 "Original" = "Original";
 "Enhance" = "Enhance";

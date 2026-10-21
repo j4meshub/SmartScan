@@ -33,6 +33,11 @@ from services.api.app.models import (
 from services.api.app.page_service import save_page_result
 from services.api.app.project_cleanup import process_next_project_cleanup
 from services.api.app.upload_cleanup import process_next_upload_cleanup
+from services.worker.app.exam import (
+    ExamClassificationResult,
+    LightweightExamClassifier,
+    classify_exam_page,
+)
 from services.worker.app.ocr import (
     OcrAnalysis,
     OcrEngine,
@@ -115,7 +120,12 @@ def quality_assessment(
     return score, warnings[0] if warnings else None, details
 
 
-def process(claim: JobClaim, *, ocr_engine: OcrEngine | None = None) -> None:
+def process(
+    claim: JobClaim,
+    *,
+    ocr_engine: OcrEngine | None = None,
+    exam_model: LightweightExamClassifier | None = None,
+) -> None:
     page_id: str | None = None
     source: Path | None = None
     job_kind = "document"
@@ -196,6 +206,16 @@ def process(claim: JobClaim, *, ocr_engine: OcrEngine | None = None) -> None:
                 rendered = rotate_clockwise(rendered, analysis.rotation_degrees)
         elif not heartbeat(claim, 80):
             return
+        exam_classification: ExamClassificationResult | None = None
+        if job_kind in {"document", "exam"}:
+            if not heartbeat(claim, 85):
+                return
+            exam_classification = classify_exam_page(
+                rendered,
+                ocr_text=analysis.text if analysis is not None else None,
+                explicit_exam_mode=job_kind == "exam",
+                model=exam_model,
+            )
         with SessionLocal() as db:
             job = db.scalar(
                 select(ProcessingJob).where(ProcessingJob.id == claim.job_id).with_for_update()
@@ -258,6 +278,39 @@ def process(claim: JobClaim, *, ocr_engine: OcrEngine | None = None) -> None:
                 page.ocr_title_candidate = None
                 page.ocr_error_code = None
                 page.ocr_updated_at = now
+            if exam_classification is not None:
+                page.exam_classification_status = "ready"
+                page.exam_result_version = result.version
+                page.exam_classifier_version = exam_classification.classifier_version
+                page.exam_prediction = exam_classification.prediction
+                page.exam_probability = exam_classification.exam_probability
+                page.exam_confidence_band = exam_classification.confidence_band
+                page.exam_recommendation = exam_classification.recommendation
+                page.exam_details = json.dumps(
+                    exam_classification.details,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                page.exam_suggestion_dismissed_result_version = None
+                page.exam_suggestion_dismissed_by_user_id = None
+                page.exam_suggestion_dismissed_at = None
+                page.exam_suggestion_dismissal_reason = None
+                page.exam_updated_at = now
+            else:
+                page.exam_classification_status = "disabled"
+                page.exam_result_version = None
+                page.exam_classifier_version = None
+                page.exam_prediction = None
+                page.exam_probability = None
+                page.exam_confidence_band = None
+                page.exam_recommendation = None
+                page.exam_details = None
+                page.exam_suggestion_dismissed_result_version = None
+                page.exam_suggestion_dismissed_by_user_id = None
+                page.exam_suggestion_dismissed_at = None
+                page.exam_suggestion_dismissal_reason = None
+                page.exam_updated_at = now
             if project is not None:
                 candidate = analysis.title_candidate if analysis is not None else None
                 if candidate and project.suggested_name_source != "ocr":

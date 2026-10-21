@@ -89,6 +89,12 @@ final class WorkspaceStore: ObservableObject {
         await updatePage { try await repository.review(pageID: pageID, confirmed: true) }
     }
 
+    func dismissExamSuggestion(pageID: String, resultVersion: Int) async {
+        await updatePage {
+            try await repository.dismissExamSuggestion(pageID: pageID, resultVersion: resultVersion)
+        }
+    }
+
     func loadPreview(for page: WorkspacePage) async {
         if previews[page.id]?.id == previewIdentifier(page) { return }
         await perform {

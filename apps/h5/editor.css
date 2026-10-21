@@ -62,6 +62,26 @@
   font-size: 13px;
 }
 
+.exam-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid #d7c2ff;
+  border-radius: 14px;
+  background: #f5f0ff;
+}
+
+.exam-suggestion p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.exam-suggestion button {
+  flex: 0 0 auto;
+}
+
 .editor-stage {
   position: relative;
   display: inline-block;

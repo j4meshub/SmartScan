@@ -22,6 +22,9 @@
     <string name="workspace_y">Y</string>
     <string name="workspace_save_edit">Apply edit</string>
     <string name="workspace_confirm_review">Confirm review</string>
+    <string name="workspace_exam_suggestion_high">This may be an exam page. Exam cleanup is recommended and the original will be preserved.</string>
+    <string name="workspace_exam_suggestion_medium">This may be an exam page. Switch to exam cleanup?</string>
+    <string name="workspace_exam_dismiss">Not now</string>
     <string name="workspace_export">Export</string>
     <string name="workspace_pdf">PDF</string>
     <string name="workspace_jpg">JPG</string>

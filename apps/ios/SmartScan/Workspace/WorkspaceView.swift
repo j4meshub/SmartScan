@@ -226,6 +226,26 @@ private struct PageEditorView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let page {
+                    if page.showsExamSuggestion, let resultVersion = page.examResultVersion {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(String(localized: page.examConfidenceBand == "high"
+                                ? "This may be an exam page. Exam cleanup is recommended and the original will be preserved."
+                                : "This may be an exam page. Switch to exam cleanup?"))
+                            Button(String(localized: "Not now")) {
+                                Task {
+                                    await store.dismissExamSuggestion(
+                                        pageID: page.id,
+                                        resultVersion: resultVersion
+                                    )
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(store.busy)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                    }
                     preview(page)
                     HStack {
                         Button(String(localized: "Rotate 90°")) {

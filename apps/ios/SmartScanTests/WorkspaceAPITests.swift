@@ -17,7 +17,7 @@ final class WorkspaceAPITests: XCTestCase {
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
             XCTAssertEqual(json["filter"] as? String, "grayscale")
             XCTAssertEqual((json["corners"] as? [[String: Any]])?.count, 4)
-            return apiResponse(for: request, body: pageJSON)
+            return apiResponse(for: request, body: legacyPageJSON)
         }
 
         let page = try await api.editPage(
@@ -49,6 +49,25 @@ final class WorkspaceAPITests: XCTestCase {
         )
 
         XCTAssertEqual(result.artifacts.first?.sha256, String(repeating: "a", count: 64))
+    }
+
+    func testExamSuggestionDismissalUsesCurrentResultVersion() async throws {
+        let api = try makeAPI()
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/pages/page-1/exam-suggestion-dismissal")
+            XCTAssertEqual(request.httpMethod, "PUT")
+            let body = try XCTUnwrap(requestBody(request))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["result_version"] as? Int, 2)
+            XCTAssertEqual(json["reason"] as? String, "user_dismissed")
+            return apiResponse(for: request, body: pageJSON)
+        }
+
+        let page = try await api.dismissExamSuggestion(id: "page-1", resultVersion: 2)
+
+        XCTAssertEqual(page.examResultVersion, 2)
+        XCTAssertEqual(page.examConfidenceBand, "high")
+        XCTAssertEqual(page.examSuggestionVisible, false)
     }
 
     func testAccountDeletionUsesAuthenticatedRequestAndSeparateSMSPurpose() async throws {
@@ -126,6 +145,7 @@ private func apiResponse(
     return (response, Data(body.utf8))
 }
 
-private let pageJSON = #"{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":2,"review_status":"pending","ocr_status":"ready"}"#
+private let pageJSON = #"{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":2,"review_status":"pending","ocr_status":"ready","exam_result_version":2,"exam_confidence_band":"high","exam_recommendation":"suggest_cleanup","exam_suggestion_visible":false}"#
+private let legacyPageJSON = #"{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":2,"review_status":"pending","ocr_status":"ready"}"#
 private let exportJSON = #"{"id":"export-1","project_id":"project-1","format":"pdf","quality":"clear","include_ocr_text":true,"status":"ready","page_count":1,"error_code":null,"artifacts":[{"id":"artifact-1","page_id":null,"sequence":1,"file_name":"scan.pdf","mime_type":"application/pdf","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size_bytes":12}],"created_at":"2026-10-21T00:00:00Z","completed_at":"2026-10-21T00:01:00Z"}"#
 private let deletionJSON = #"{"id":"deletion-1","status":"pending","requested_at":"2026-10-21T00:00:00Z","execute_after":"2026-10-28T00:00:00Z","canceled_at":null,"completed_at":null}"#

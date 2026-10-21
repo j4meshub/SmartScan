@@ -48,3 +48,20 @@ export function qualityPrompt(page, locale = "zh-CN") {
   return (locale === "zh-CN" ? chinese : english)[warning]
     || (locale === "zh-CN" ? `页面需复核：${warning}` : `Review required: ${warning}`);
 }
+
+export function examSuggestionPrompt(page, locale = "zh-CN") {
+  if (!page?.exam_suggestion_visible || !page.exam_result_version) return "";
+  const high = page.exam_confidence_band === "high";
+  if (locale === "zh-CN") {
+    return high
+      ? "检测到这可能是试卷页面，建议使用试卷净化；执行前仍会保留原图。"
+      : "这页可能是试卷页面，是否切换到试卷净化？";
+  }
+  return high
+    ? "This may be an exam page. Exam cleanup is recommended and the original will be preserved."
+    : "This may be an exam page. Switch to exam cleanup?";
+}
+
+export function canDismissExamSuggestion(page) {
+  return Boolean(page?.exam_suggestion_visible && Number.isInteger(page.exam_result_version));
+}
