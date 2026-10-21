@@ -57,3 +57,7 @@ xcodebuild \
 
 登录后从三个扫描模式进入统一 AVFoundation 后摄页面。实时亮度、清晰度、高光和 Vision 矩形仅作提示，手动快门不会因低质量判断被禁用；JPEG 原图与方向证据按用户隔离保存。Simulator 只执行编译和纯逻辑测试，真实相机验收清单见[《iOS AVFoundation 拍摄与 Vision 提示》](../../docs/IOS_CAMERA_CAPTURE.md)。
 
+## 离线队列与后台恢复
+
+拍照后原图进入用户分区持久队列。前台和系统授予的 `BGProcessingTask` 都只补传服务端尚未确认的分片；任务过期、断网和进程恢复不会把本地进度当作服务端事实。详细协议和真机门禁见[《iOS 本地队列、后台恢复与分片续传》](../../docs/IOS_BACKGROUND_UPLOAD.md)。
+

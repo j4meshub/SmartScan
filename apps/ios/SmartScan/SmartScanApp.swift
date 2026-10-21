@@ -3,28 +3,47 @@ import SwiftUI
 @main
 struct SmartScanApp: App {
     @StateObject private var authentication: AuthenticationStore
+    private let uploads: UploadCoordinator
 
     init() {
         let sessionStore = KeychainSessionStore()
         let configuration = APIConfiguration.fromBundle()
         let api = URLSessionSmartScanAPI(configuration: configuration, sessions: sessionStore)
         let cache = FileUserScopedProjectCache()
+        let authenticationRepository = AuthenticationRepository(api: api, sessions: sessionStore, cache: cache)
+        let queue = FileUploadQueueStore()
+        let processor = UploadProcessor(
+            api: api,
+            queue: queue,
+            sessions: sessionStore,
+            authentication: authenticationRepository
+        )
+        let scheduler = BackgroundUploadScheduler()
+        let uploads = UploadCoordinator(
+            queue: queue,
+            processor: processor,
+            sessions: sessionStore,
+            scheduler: scheduler
+        )
+        scheduler.register(coordinator: uploads)
+        self.uploads = uploads
         _authentication = StateObject(
             wrappedValue: AuthenticationStore(
-                repository: AuthenticationRepository(api: api, sessions: sessionStore, cache: cache)
+                repository: authenticationRepository
             )
         )
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView(authentication: authentication)
+            RootView(authentication: authentication, uploads: uploads)
         }
     }
 }
 
 struct RootView: View {
     @ObservedObject var authentication: AuthenticationStore
+    let uploads: UploadCoordinator
 
     var body: some View {
         switch authentication.phase {
@@ -34,9 +53,10 @@ struct RootView: View {
         case .signedOut:
             AuthenticationView(authentication: authentication)
         case let .signedIn(user):
-            HomeView(user: user) {
+            HomeView(user: user, uploads: uploads) {
                 Task { await authentication.logout() }
             }
+            .task(id: user.id) { _ = await uploads.resumeCurrentUser() }
         }
     }
 }
@@ -65,6 +85,7 @@ enum ScanModeKind: String, CaseIterable, Hashable, Codable {
 
 struct HomeView: View {
     let user: UserProfile
+    let uploads: UploadCoordinator
     let onLogout: () -> Void
     private let ink = Color(red: 0.067, green: 0.094, blue: 0.153)
     private let paper = Color(red: 0.957, green: 0.945, blue: 0.922)
@@ -108,7 +129,7 @@ struct HomeView: View {
             .background(paper.ignoresSafeArea())
             .tint(ink)
             .navigationDestination(for: ScanModeKind.self) { mode in
-                CaptureView(mode: mode, userID: user.id)
+                CaptureView(mode: mode, userID: user.id, uploads: uploads)
             }
         }
     }

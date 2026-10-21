@@ -32,6 +32,8 @@
 "Starting camera…" = "Starting camera…";
 "Saving original…" = "Saving original…";
 "Original saved" = "Original saved";
+"Original saved and queued" = "Original saved and queued";
+"Original saved, but could not be queued" = "Original saved, but could not be queued";
 "Camera unavailable" = "Camera unavailable";
 "Ready to capture" = "Ready to capture";
 "Too dark" = "Too dark";

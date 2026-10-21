@@ -3,11 +3,18 @@ import SwiftUI
 
 struct CaptureView: View {
     let mode: ScanModeKind
+    let userID: String
+    let uploads: UploadCoordinator
+    private let localProjectID: String
     @StateObject private var camera: CameraController
     @State private var exposure = 0.0
+    @State private var queueMessage: String?
 
-    init(mode: ScanModeKind, userID: String) {
+    init(mode: ScanModeKind, userID: String, uploads: UploadCoordinator) {
         self.mode = mode
+        self.userID = userID
+        self.uploads = uploads
+        localProjectID = UUID().uuidString.lowercased()
         _camera = StateObject(wrappedValue: CameraController(userID: userID, mode: mode))
     }
 
@@ -39,6 +46,23 @@ struct CaptureView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             camera.updateOrientation(DeviceOrientationEvidence(UIDevice.current.orientation))
         }
+        .onChange(of: camera.state.phase) { _, phase in
+            guard case let .captured(record) = phase else { return }
+            Task {
+                let enqueued = await uploads.enqueue(
+                    record: record,
+                    ownerUserID: userID,
+                    localProjectID: localProjectID,
+                    title: mode.title,
+                    mode: mode
+                )
+                await MainActor.run {
+                    queueMessage = enqueued
+                        ? String(localized: "Original saved and queued")
+                        : String(localized: "Original saved, but could not be queued")
+                }
+            }
+        }
     }
 
     private var qualityBanner: some View {
@@ -66,7 +90,10 @@ struct CaptureView: View {
 
             switch camera.state.phase {
             case .captured:
-                Button(String(localized: "Continue scanning")) { camera.continueCapturing() }
+                Button(String(localized: "Continue scanning")) {
+                    queueMessage = nil
+                    camera.continueCapturing()
+                }
                     .buttonStyle(.borderedProminent)
             case let .failed(failure):
                 Text(failureMessage(failure)).foregroundStyle(.white)
@@ -95,7 +122,7 @@ struct CaptureView: View {
         case .waitingPermission: return String(localized: "Waiting for camera permission…")
         case .bindingCamera: return String(localized: "Starting camera…")
         case .capturing: return String(localized: "Saving original…")
-        case .captured: return String(localized: "Original saved")
+        case .captured: return queueMessage ?? String(localized: "Original saved")
         case .failed: return String(localized: "Camera unavailable")
         case .ready:
             if camera.state.quality.ready { return String(localized: "Ready to capture") }
