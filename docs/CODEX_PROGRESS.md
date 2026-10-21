@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M7 试卷与扫书产品化 |
 | 当前工作包 | `BOOK-002` 双页与单侧重拍 |
-| 工作包状态 | 进行中：后端、迁移、三端入口和专项测试已实现；本地全量门禁与 GitHub Android/iOS Runner 待最终验证 |
+| 工作包状态 | 等待人工验收：实现与自动化门禁已通过；真实书籍固定集、拆分指标和目标真机仍待验收 |
 | 当前分支 | `codex/book-002-spread-retake` |
-| 最后验证基线 | `1cef660`（BOOK-001 PR #44 已合并） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 最后验证基线 | `fe8e6cc`（BOOK-002 功能提交；基于已合并的 BOOK-001 `1cef660`） |
+| 工作包提交 | `fe8e6cc` |
+| PR | [#45](https://github.com/j4meshub/SmartScan/pull/45) |
 | 下一工作包 | `BOOK-003` 页码、重复、缺页、补扫与成册；`EXAM-002`/`EXAM-003` 等待 EXAM-001 固定数据集闸门 |
 
 ## 当前工作包进展
@@ -23,7 +23,7 @@
 - H5、Android 和 iOS 已增加左右/单页标识与“重拍当前侧”入口，上传后只切换当前逻辑页。OpenAPI 增量修订为 `2026-10-21.1`，三端消费矩阵登记新操作，上一代客户端可忽略新增字段。
 - Alembic `0019` 对旧书籍页回填 `legacy`，其他页回填 `disabled`；升级、降级和 ORM 漂移专项已通过。账号合并与项目删除已纳入逻辑派生源图，避免路径残留或文件泄漏。
 - 当前本地结果：全量 Python `194 passed, 5 skipped`，应用代码覆盖率 `88.79%`；H5 `38 passed`、Chromium E2E/axe `3 passed`、iOS 工程/发布静态契约 `15 passed`，Ruff、格式、OpenAPI 兼容、迁移升级/漂移/版本、JavaScript 语法和差异检查均通过。迁移门禁首次因本地库停在 `0018` 失败，执行正式升级到 `0019` 后重跑通过；H5 E2E 首次发现重拍文件输入缺少无障碍名称，补齐中英文 `aria-label` 后重跑通过。
-- Windows 没有 Gradle、Android SDK、XcodeGen 或 Xcode，Android 单元/编译/Lint及 iOS Xcode 16.4 Simulator 必须由 GitHub Runner 提供最终证据，不能以静态检查替代。
+- Windows 没有 Gradle、Android SDK、XcodeGen 或 Xcode；提交 `fe8e6cc` 的 GitHub Actions push 工作流 `39572682283` 已由真实 Runner 完整通过，API、Web、容器、Android 和 iOS 共 5 项成功。Android 完成 Gradle 测试、应用编译与 Lint，iOS 完成固定 XcodeGen 工程生成、Xcode 16.4 Simulator 编译和 Swift 单元测试，未以静态检查替代。
 - 至少 5 本书、1000 个逻辑页面、300 次双页取景、正确拆分率 `>=95%`、顺序正确率 `>=99%` 以及目标真机仍为人工门禁；合成图片和 Simulator 不能替代。
 
 以下保留已合并 BOOK-001 的近期证据：
@@ -722,6 +722,6 @@ git diff --check
 
 ## 下一步
 
-1. 等待 PR #39 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
-2. 创建 `codex/ios-004-background-upload` 分支，实现用户分区本地队列、允许范围内的后台恢复和服务端确认分片续传。
-3. Keychain、相机、后台执行、Apple Team、正式 Bundle ID、签名、真机和发布继续保留外部门禁，不以 Simulator 结果替代。
+1. 等待 PR #45 最终文档提交的 GitHub Actions 通过后 squash 合并，并同步主线提交证据。
+2. 从主线创建 `codex/book-003-page-integrity` 分支，实现页码、重复、缺页、补扫与成册。
+3. 真实书籍固定集、双页取景指标、Android/iPhone 真机以及签名发布继续保留人工门禁，不以合成图片或 Simulator 结果替代。
