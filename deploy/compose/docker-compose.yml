@@ -69,7 +69,13 @@ services:
     tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
     env_file: ../../.env
     environment:
+      SMARTSCAN_DATABASE_URL: postgresql+psycopg://smartscan:${POSTGRES_PASSWORD}@postgres:5432/smartscan
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
       SMARTSCAN_AI_PROVIDERS: ${SMARTSCAN_AI_PROVIDERS:-[]}
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
     expose: ["8010"]
   nginx:
     image: nginx:1.27-alpine

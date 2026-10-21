@@ -5,6 +5,7 @@ import json
 import os
 import re
 from collections.abc import Mapping
+from decimal import Decimal
 from enum import StrEnum
 from typing import Literal, Protocol
 from urllib.parse import unquote, urlsplit, urlunsplit
@@ -143,6 +144,14 @@ class ProviderDefinition(BaseModel):
     max_media_bytes: int = Field(default=20 * 1024 * 1024, ge=1024, le=MAX_MEDIA_BYTES)
     max_request_bytes: int = Field(default=512 * 1024, ge=16 * 1024, le=MAX_REQUEST_BYTES)
     max_response_bytes: int = Field(default=MAX_RESPONSE_BYTES, ge=1024, le=MAX_RESPONSE_BYTES)
+    timeout_seconds: float = Field(default=90.0, ge=1.0, le=300.0)
+    max_retries: int = Field(default=1, ge=0, le=1)
+    concurrency_limit: int = Field(default=2, ge=1, le=32)
+    requests_per_minute: int = Field(default=10, ge=1, le=600)
+    daily_cost_limit_usd: Decimal = Field(default=Decimal("10.000000"), gt=0, decimal_places=6)
+    max_cost_per_request_usd: Decimal = Field(default=Decimal("0.050000"), gt=0, decimal_places=6)
+    circuit_failure_threshold: int = Field(default=3, ge=1, le=20)
+    circuit_open_seconds: int = Field(default=60, ge=5, le=3600)
 
     @field_validator("id")
     @classmethod
@@ -205,11 +214,22 @@ class ProviderDefinition(BaseModel):
             raise ValueError("visual capabilities require supports_images=true")
         if self.allowed_private_cidrs and self.kind != ProviderKind.CUSTOM_VLM:
             raise ValueError("private CIDRs are only allowed for custom VLM providers")
+        maximum_call_cost = self.max_cost_per_request_usd * (self.max_retries + 1)
+        if self.daily_cost_limit_usd < maximum_call_cost:
+            raise ValueError("daily cost limit must cover one worst-case call")
         return self
 
     @property
     def outbound_policy_configured(self) -> bool:
         return bool(self.base_url and self.media_url_prefixes)
+
+    @property
+    def daily_cost_limit_microusd(self) -> int:
+        return int(self.daily_cost_limit_usd * 1_000_000)
+
+    @property
+    def max_cost_per_request_microusd(self) -> int:
+        return int(self.max_cost_per_request_usd * 1_000_000)
 
 
 class ProviderDescriptor(BaseModel):
@@ -220,6 +240,7 @@ class ProviderDescriptor(BaseModel):
     enabled: bool
     configured: bool
     outbound_policy_configured: bool
+    reliability_policy_configured: bool
     outbound_ready: bool
     adapter_type: str
     model: str | None
@@ -285,6 +306,7 @@ class BaseProviderAdapter:
             enabled=self.definition.enabled,
             configured=self.configured,
             outbound_policy_configured=self.definition.outbound_policy_configured,
+            reliability_policy_configured=True,
             outbound_ready=outbound_ready,
             adapter_type=self.adapter_type,
             model=self.definition.model,

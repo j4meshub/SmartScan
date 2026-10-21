@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Any
 
@@ -12,6 +13,7 @@ from .network import (
     SecureProviderTransport,
 )
 from .providers import ProviderDefinition, ProviderRegistry, create_adapter, load_provider_registry
+from .reliability import ReliabilityError, ReliabilityStore, ReliableProviderExecutor
 from .tasks import (
     StructuredTaskError,
     build_provider_request_plan,
@@ -33,10 +35,20 @@ def get_network_transport() -> SecureProviderTransport:
     return SecureProviderTransport()
 
 
+def get_reliable_executor() -> ReliableProviderExecutor:
+    from services.api.app.database import SessionLocal
+
+    return ReliableProviderExecutor(ReliabilityStore(SessionLocal), get_network_transport())
+
+
 def _network_error_status(code: str) -> int:
     if code in {
         "provider_redirect_rejected",
         "provider_http_error",
+        "provider_auth_rejected",
+        "provider_payment_required",
+        "provider_http_5xx",
+        "provider_rate_limited",
         "provider_content_encoding_rejected",
         "provider_content_type_rejected",
         "provider_content_length_invalid",
@@ -49,13 +61,43 @@ def _network_error_status(code: str) -> int:
         "provider_dns_resolution_failed",
         "provider_dns_no_addresses",
         "provider_transport_failed",
+        "provider_timeout",
     }:
         return 503
     return 422
 
 
+def _reliability_error_status(code: str) -> int:
+    if code == "ai_circuit_open":
+        return 503
+    if code in {
+        "ai_concurrency_limit_exceeded",
+        "ai_rate_limit_exceeded",
+        "ai_daily_cost_limit_exceeded",
+    }:
+        return 429
+    return 503
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    from services.api.app.config import get_settings
+    from services.api.app.migrations import ensure_database_current, upgrade_database
+
+    settings = get_settings()
+    if settings.auto_migrate:
+        upgrade_database(settings.database_url)
+    else:
+        ensure_database_current(settings.database_url)
+    yield
+
+
 def create_app() -> FastAPI:
-    application = FastAPI(title="SmartScan 可选视觉 AI 网关", version="0.3.0")
+    application = FastAPI(
+        title="SmartScan 可选视觉 AI 网关",
+        version="0.4.0",
+        lifespan=lifespan,
+    )
 
     @application.get("/health")
     def health():
@@ -78,6 +120,14 @@ def create_app() -> FastAPI:
             return get_registry().get(provider_id).descriptor()
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="provider_not_found") from exc
+
+    @application.get("/v1/providers/{provider_id}/runtime")
+    def get_provider_runtime(provider_id: str):
+        try:
+            definition = get_registry().get(provider_id).definition
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="provider_not_found") from exc
+        return get_reliable_executor().status(definition)
 
     @application.post("/v1/providers/check")
     def check_provider(payload: ProviderDefinition):
@@ -185,8 +235,17 @@ def create_app() -> FastAPI:
             error_code = str(exc)
             status_code = 409 if error_code == "provider_disabled" else 503
             raise HTTPException(status_code=status_code, detail=error_code) from exc
+        executor = get_reliable_executor()
         try:
-            network_result = get_network_transport().execute(adapter, task, plan, media)
+            pending = executor.execute_network(adapter, task, plan, media)
+            network_result = pending.result
+        except ReliabilityError as exc:
+            code = str(exc)
+            raise HTTPException(
+                status_code=_reliability_error_status(code),
+                detail=code,
+                headers={"Retry-After": "60"},
+            ) from exc
         except NetworkSecurityError as exc:
             code = str(exc)
             raise HTTPException(status_code=_network_error_status(code), detail=code) from exc
@@ -194,9 +253,39 @@ def create_app() -> FastAPI:
             result, disposition = validate_result(task, network_result.provider_output)
             evidence = build_result_evidence(adapter, task, result, disposition)
         except (ValidationError, StructuredTaskError, TypeError) as exc:
+            executor.finish_output_rejected(
+                adapter,
+                task,
+                pending.call_id,
+                pending.attempts,
+                pending.duration_ms,
+                network_result.evidence.request_body_bytes,
+                network_result.evidence.response_body_bytes,
+                pending.charged_cost_microusd,
+            )
             raise HTTPException(status_code=502, detail="provider_output_rejected") from exc
         except RuntimeError as exc:
+            executor.finish_output_rejected(
+                adapter,
+                task,
+                pending.call_id,
+                pending.attempts,
+                pending.duration_ms,
+                network_result.evidence.request_body_bytes,
+                network_result.evidence.response_body_bytes,
+                pending.charged_cost_microusd,
+            )
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+        executor.finish_success(
+            adapter,
+            task,
+            pending.call_id,
+            pending.attempts,
+            pending.duration_ms,
+            network_result.evidence.request_body_bytes,
+            network_result.evidence.response_body_bytes,
+            pending.charged_cost_microusd,
+        )
         return {
             "accepted": True,
             "evidence": evidence,
