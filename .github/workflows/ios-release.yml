@@ -50,7 +50,6 @@ jobs:
       SMARTSCAN_REVIEW_USERNAME: ${{ secrets.SMARTSCAN_REVIEW_USERNAME }}
       SMARTSCAN_REVIEW_PASSWORD: ${{ secrets.SMARTSCAN_REVIEW_PASSWORD }}
       SMARTSCAN_REVIEW_SMS_CODE: ${{ secrets.SMARTSCAN_REVIEW_SMS_CODE }}
-      SMARTSCAN_IOS_RELEASE_REPORT: ${{ runner.temp }}/ios-release-report.json
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,6 +72,8 @@ jobs:
       - name: 执行正式参数、截图与审核资产门禁
         run: python tools/validate_ios_release.py --release
       - name: 生成、签名、导出并按选择上传
+        env:
+          SMARTSCAN_IOS_RELEASE_REPORT: ${{ runner.temp }}/ios-release-report.json
         run: bash apps/ios/scripts/archive-release.sh
       - name: 保存脱敏发布证据
         if: always()
