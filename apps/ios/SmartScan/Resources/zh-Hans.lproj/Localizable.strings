@@ -32,6 +32,8 @@
 "Starting camera…" = "正在启动相机…";
 "Saving original…" = "正在保存原图…";
 "Original saved" = "原图已保存";
+"Original saved and queued" = "原图已保存并加入上传队列";
+"Original saved, but could not be queued" = "原图已保存，但无法加入上传队列";
 "Camera unavailable" = "相机不可用";
 "Ready to capture" = "可以拍摄";
 "Too dark" = "环境过暗";

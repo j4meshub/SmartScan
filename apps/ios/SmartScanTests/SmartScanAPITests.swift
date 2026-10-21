@@ -75,6 +75,34 @@ final class SmartScanAPITests: XCTestCase {
         XCTAssertNoThrow(try APIConfiguration(baseURL: URL(string: "http://127.0.0.1:8000")!))
     }
 
+    func testChunkUsesFrozenPathHashHeaderAndBinaryBody() async throws {
+        let sessions = TestSessionStore()
+        try sessions.save(token().credentials(userID: "user-1"))
+        let api = URLSessionSmartScanAPI(
+            configuration: try APIConfiguration(baseURL: URL(string: "https://api.example.test/")!),
+            sessions: sessions,
+            urlSession: makeURLSession()
+        )
+        let chunk = Data([1, 2, 3, 4])
+        let hash = String(repeating: "a", count: 64)
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/uploads/upload-1/chunks/2")
+            XCTAssertEqual(request.httpMethod, "PUT")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Chunk-Sha256"), hash)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/octet-stream")
+            XCTAssertEqual(Self.bodyData(from: request), chunk)
+            return Self.response(
+                for: request,
+                body: #"{"upload_id":"upload-1","chunk_index":2,"size_bytes":4,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#
+            )
+        }
+
+        let receipt = try await api.putChunk(uploadID: "upload-1", index: 2, sha256: hash, data: chunk)
+
+        XCTAssertEqual(receipt.chunkIndex, 2)
+        XCTAssertEqual(receipt.sizeBytes, 4)
+    }
+
     private func makeURLSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURLProtocol.self]
@@ -91,7 +119,7 @@ final class SmartScanAPITests: XCTestCase {
         return (response, Data(body.utf8))
     }
 
-    private static func bodyData(from request: URLRequest) -> Data? {
+    fileprivate static func bodyData(from request: URLRequest) -> Data? {
         if let body = request.httpBody { return body }
         guard let stream = request.httpBodyStream else { return nil }
         stream.open()

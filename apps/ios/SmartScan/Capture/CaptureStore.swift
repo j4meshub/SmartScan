@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 protocol OriginalCaptureStoring {
@@ -15,8 +14,8 @@ actor FileOriginalCaptureStore: OriginalCaptureStoring {
         if let root {
             self.root = root
         } else {
-            let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            self.root = support.appendingPathComponent("SmartScan/captures", isDirectory: true)
+            self.root = UserStoragePaths.applicationSupportRoot(fileManager: fileManager)
+                .appendingPathComponent("captures", isDirectory: true)
         }
         encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -24,7 +23,7 @@ actor FileOriginalCaptureStore: OriginalCaptureStoring {
 
     func saveOriginal(_ data: Data, evidence: CaptureEvidence, userID: String) throws -> CaptureRecord {
         guard !data.isEmpty else { throw CaptureStoreError.emptyImage }
-        let userDigest = SHA256.hash(data: Data(userID.utf8)).map { String(format: "%02x", $0) }.joined()
+        let userDigest = UserStoragePaths.digest(for: userID)
         let directory = root.appendingPathComponent(userDigest, isDirectory: true)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let identifier = UUID().uuidString.lowercased()

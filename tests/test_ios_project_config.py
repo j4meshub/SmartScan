@@ -1,3 +1,4 @@
+import plistlib
 import re
 from pathlib import Path
 
@@ -24,7 +25,11 @@ def test_ios_project_has_reproducible_targets_and_test_scheme() -> None:
     app_settings = project["targets"]["SmartScan"]["settings"]["base"]
     assert app_settings["PRODUCT_BUNDLE_IDENTIFIER"].endswith(".dev")
     assert app_settings["SMARTSCAN_API_BASE_URL"] == "https://api.invalid/"
-    assert app_settings["INFOPLIST_KEY_SMARTSCAN_API_BASE_URL"] == "$(SMARTSCAN_API_BASE_URL)"
+    assert app_settings["GENERATE_INFOPLIST_FILE"] is False
+    assert app_settings["INFOPLIST_FILE"] == "SmartScan/Info.plist"
+    assert project["targets"]["SmartScan"]["sources"] == [
+        {"path": "SmartScan", "excludes": ["Info.plist"]}
+    ]
 
 
 def test_xcodegen_download_is_versioned_and_digest_pinned() -> None:
@@ -74,7 +79,9 @@ def test_ios_identity_sources_cover_secure_session_and_user_partition() -> None:
     assert 'forHTTPHeaderField: "X-Device-Platform"' in api
     assert 'request.setValue("Bearer \\(token)"' in api
     assert 'scheme == "https" || (scheme == "http" && loopback)' in api
-    assert "SHA256.hash" in cache
+    storage_paths = (source_root / "Storage" / "UserStoragePaths.swift").read_text(encoding="utf-8")
+    assert "UserStoragePaths.digest" in cache
+    assert "SHA256.hash" in storage_paths
     assert 'appendingPathComponent("projects.json")' in cache
 
 
@@ -82,17 +89,17 @@ def test_ios_capture_sources_preserve_original_and_direction_evidence() -> None:
     source_root = IOS_ROOT / "SmartScan"
     controller = (source_root / "Capture" / "CameraController.swift").read_text(encoding="utf-8")
     store = (source_root / "Capture" / "CaptureStore.swift").read_text(encoding="utf-8")
-    project = yaml.safe_load((IOS_ROOT / "project.yml").read_text(encoding="utf-8"))
-    app_settings = project["targets"]["SmartScan"]["settings"]["base"]
+    with (source_root / "Info.plist").open("rb") as handle:
+        info = plistlib.load(handle)
 
     assert "AVCaptureVideoDataOutputSampleBufferDelegate" in controller
     assert "VNDetectRectanglesRequest" in controller
     assert "photo.fileDataRepresentation()" in controller
-    assert 'appendingPathComponent("SmartScan/captures"' in store
+    assert 'appendingPathComponent("captures"' in store
     assert '"\\(identifier).original.jpg"' in store
     assert '"\\(identifier).evidence.json"' in store
     assert "completeFileProtectionUntilFirstUserAuthentication" in store
-    assert "INFOPLIST_KEY_NSCameraUsageDescription" in app_settings
+    assert "NSCameraUsageDescription" in info
 
 
 def test_ios_info_plist_localization_keys_match() -> None:
@@ -101,6 +108,26 @@ def test_ios_info_plist_localization_keys_match() -> None:
     chinese = _localization_keys(resources / "zh-Hans.lproj" / "InfoPlist.strings")
 
     assert english == chinese == {"NSCameraUsageDescription"}
+
+
+def test_ios_background_upload_is_permitted_and_server_confirmed() -> None:
+    source_root = IOS_ROOT / "SmartScan"
+    with (source_root / "Info.plist").open("rb") as handle:
+        info = plistlib.load(handle)
+    scheduler = (source_root / "Upload" / "BackgroundUploadScheduler.swift").read_text(
+        encoding="utf-8"
+    )
+    processor = (source_root / "Upload" / "UploadProcessor.swift").read_text(encoding="utf-8")
+    queue = (source_root / "Upload" / "FileUploadQueueStore.swift").read_text(encoding="utf-8")
+
+    assert info["BGTaskSchedulerPermittedIdentifiers"] == ["com.j4meshub.smartscan.upload"]
+    assert "processing" in info["UIBackgroundModes"]
+    assert "BGProcessingTaskRequest" in scheduler
+    assert "requiresNetworkConnectivity = true" in scheduler
+    assert "remote.receivedChunks" in processor
+    upload_api = (source_root / "Upload" / "UploadAPI.swift").read_text(encoding="utf-8")
+    assert 'forHTTPHeaderField: "X-Chunk-Sha256"' in upload_api
+    assert "UserStoragePaths.isDescendant" in queue
 
 
 def _localization_keys(path: Path) -> set[str]:

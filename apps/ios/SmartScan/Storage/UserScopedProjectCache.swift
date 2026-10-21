@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 protocol UserScopedProjectCaching {
@@ -18,8 +17,8 @@ actor FileUserScopedProjectCache: UserScopedProjectCaching {
         if let root {
             self.root = root
         } else {
-            let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            self.root = applicationSupport.appendingPathComponent("SmartScan/users", isDirectory: true)
+            self.root = UserStoragePaths.applicationSupportRoot(fileManager: fileManager)
+                .appendingPathComponent("users", isDirectory: true)
         }
     }
 
@@ -43,7 +42,7 @@ actor FileUserScopedProjectCache: UserScopedProjectCaching {
     }
 
     private func directory(for userID: String) -> URL {
-        let digest = SHA256.hash(data: Data(userID.utf8)).map { String(format: "%02x", $0) }.joined()
+        let digest = UserStoragePaths.digest(for: userID)
         return root.appendingPathComponent(digest, isDirectory: true)
     }
 }

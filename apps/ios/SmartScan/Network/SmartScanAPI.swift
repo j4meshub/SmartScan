@@ -127,7 +127,7 @@ final class URLSessionSmartScanAPI: SmartScanAuthenticationAPI {
         try validate(response: response, data: Data())
     }
 
-    private func execute<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+    func execute<Response: Decodable>(_ request: URLRequest) async throws -> Response {
         let (data, response) = try await urlSession.data(for: request)
         try validate(response: response, data: data)
         do {
@@ -137,7 +137,7 @@ final class URLSessionSmartScanAPI: SmartScanAuthenticationAPI {
         }
     }
 
-    private func makeRequest(path: String, method: String, authenticated: Bool) throws -> URLRequest {
+    func makeRequest(path: String, method: String, authenticated: Bool) throws -> URLRequest {
         guard let url = URL(string: path, relativeTo: configuration.baseURL)?.absoluteURL else {
             throw APIClientError.invalidResponse
         }

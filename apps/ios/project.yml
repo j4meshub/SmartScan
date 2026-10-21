@@ -16,19 +16,16 @@ targets:
     platform: iOS
     sources:
       - path: SmartScan
+        excludes:
+          - Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.j4meshub.smartscan.dev
         PRODUCT_NAME: SmartScan
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
-        GENERATE_INFOPLIST_FILE: true
-        INFOPLIST_KEY_CFBundleDisplayName: SmartScan
-        INFOPLIST_KEY_UILaunchScreen_Generation: true
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
-        INFOPLIST_KEY_NSCameraUsageDescription: SmartScan needs camera access to capture documents.
-        INFOPLIST_KEY_SMARTSCAN_API_BASE_URL: "$(SMARTSCAN_API_BASE_URL)"
+        GENERATE_INFOPLIST_FILE: false
+        INFOPLIST_FILE: SmartScan/Info.plist
         SMARTSCAN_API_BASE_URL: https://api.invalid/
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: false
