@@ -6,16 +6,25 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M5 Android（自动化代码门禁完成，真机与正式分发待人工验收） |
-| 当前工作包 | `AND-006` 安全更新（完成） |
-| 工作包状态 | 完成，PR #36 最终代码头两套 CI 共 8 项通过，等待最终文档 CI 后合并 |
-| 当前分支 | `codex/and-006-secure-update` |
-| 最后验证基线 | `649b441`（AND-005 PR #35 已合并） |
-| 工作包提交 | `8b98466`、`c36b42c`、`4676b90` |
-| PR | #36（已创建，等待最终文档 CI 后合并） |
-| 下一工作包 | `IOS-001` 可复现工程 |
+| 当前里程碑 | M6 iOS |
+| 当前工作包 | `IOS-001` 可复现工程（完成） |
+| 工作包状态 | 完成，PR #37 最终代码头两套 CI 共 10 项通过，等待最终文档 CI 后合并 |
+| 当前分支 | `codex/ios-001-reproducible-project` |
+| 最后验证基线 | `4709c61`（AND-006 PR #36 已合并） |
+| 工作包提交 | `915ee44`、`51b182c` |
+| PR | #37（已创建，等待最终文档 CI 后合并） |
+| 下一工作包 | `IOS-002` 身份与网络 |
 
 ## 当前工作包进展
+
+- AND-006 已由 PR #36 合并到主线，中文 squash 提交为 `4709c61`；最终文档头两套 API、Web、容器与 Android 共 8 项 CI 检查通过。
+- IOS-001 使用 `project.yml` 作为唯一工程规范，固定 XcodeGen `2.46.0` 官方发布 ZIP 与 SHA-256；生成的 `.xcodeproj` 和本地工具目录不提交。
+- GitHub CI 新增 `macos-15` 作业并显式选择 Xcode 16.4，不依赖 `macos-latest` 默认版本；使用无签名 iPhone 16 Pro Simulator 执行应用编译和单元测试。
+- 新增应用/测试 Target、共享 Scheme、iOS 17 最低版本和开发占位 Bundle ID；正式 Bundle ID、Team 与签名参数未冻结且不进入当前配置。
+- 首页扫描模式抽成稳定枚举并增加单元测试；所有可见首页文案补齐英文和简体中文资源。
+- 本地通过 Ruff/格式、iOS 配置契约 `4 passed`、全量 Python `166 passed, 5 skipped`、覆盖率 `88.28%`、API 兼容、迁移升级/漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法和差异检查。Windows 无法运行 XcodeGen、Xcode 与 Simulator，必须等待 macOS CI，不能把 YAML 契约测试记为 Swift 编译通过。
+- 首轮提交 `915ee44` 的 iOS CI 在哈希校验通过后发现官方 ZIP 顶层为包含 `bin` 与 `share` 的目录，脚本误把目录当作单一可执行文件。提交 `51b182c` 保留完整发布目录并补充结构契约测试，不绕过摘要或版本门禁。
+- `51b182c` 的推送与 PR 两套 API、Web、Android、iOS、容器共 10 项检查全部通过；两个 iOS 作业均完成工程生成、Xcode 16.4 Simulator 编译和 Swift 单元测试。
 
 - AND-005 已由 PR #35 合并到主线，中文 squash 提交为 `649b441`；最终头两套 API、Web、容器与 Android 共 8 项 CI 检查通过。
 - AND-006 新增 `:core:update` 纯 JVM 模块，使用固定 ECDSA P-256 公钥和 SHA-256 验证原始清单字节，篡改后在解析和下载前拒绝；该算法覆盖 Android API 26 起的目标系统。
@@ -633,9 +642,10 @@ git diff --check
 | Android 离线队列与分片续传 | `9b19932` | PR #34 最终头两套 CI 的 8 项检查通过；Room v1→v2 迁移、用户隔离队列、WorkManager、服务端确认分片续传、应用编译和 Lint 通过；真实弱网、进程强杀和 staging 重启待人工验收 |
 | Android 编辑、分享与账号删除 | `649b441` | PR #35 最终头两套 CI 的 8 项检查通过；页面编辑、鉴权导出、受限 FileProvider 分享、删除冷静期与用户级本地清理通过；真机分享、删除并发和真实短信待人工验收 |
 | Android 安全更新 | `4676b90` | PR #36 最终代码头两套 CI 的 8 项检查通过；ECDSA 清单、受控下载、APK 身份/哈希/证书复检、每日检查、Robolectric、应用编译和 Lint 通过；正式签名分发与真机安装/回滚待人工验收 |
+| iOS 可复现工程 | `51b182c` | PR #37 最终代码头两套 CI 的 10 项检查通过；固定 XcodeGen/Xcode、工程生成、双语资源、Simulator 应用编译和 Swift 单元测试通过；正式 Bundle ID、签名、真机与发布待后续门禁 |
 
 ## 下一步
 
-1. 等待 PR #36 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
-2. 从 `IOS-001` 建立固定 XcodeGen 版本的可复现工程与 GitHub macOS Simulator 构建门禁。
-3. 正式 GitLab 发布源、公钥、APK keystore、未知来源授权、系统安装器升级和回滚继续保留人工验收，不以 Mock 或 CI 结果代替。
+1. 等待 PR #37 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
+2. 创建 `codex/ios-002-auth-network` 分支，实现身份、Keychain、API 客户端和用户缓存分区。
+3. Apple Team、正式 Bundle ID、签名、真机和发布继续保留外部门禁，不以 Simulator 结果替代。

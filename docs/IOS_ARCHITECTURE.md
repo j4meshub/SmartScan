@@ -1,0 +1,39 @@
+# iOS 可复现工程与 CI 基线
+
+## 工程事实来源
+
+iOS 工程以 `apps/ios/project.yml` 为唯一工程规范，固定 XcodeGen `2.46.0` 生成 `SmartScan.xcodeproj`。生成目录和本地 `.tools` 被 Git 忽略，开发者不得通过提交生成文件代替修改规范。
+
+```text
+apps/ios/
+├─ .xcodegen-version             固定 XcodeGen 版本
+├─ project.yml                   Target、Scheme、构建配置与资源规范
+├─ scripts/generate-project.sh   下载、哈希校验、版本校验和工程生成
+├─ SmartScan/                    SwiftUI 应用与中英文资源
+└─ SmartScanTests/               Simulator 单元测试
+```
+
+当前只有 `SmartScan` 应用 Target 和 `SmartScanTests` 单元测试 Target。后续 `IOS-002` 起应按身份、网络、存储、拍摄和同步职责继续拆分；本工作包不提前用占位接口冒充这些功能。
+
+## 可复现边界
+
+- CI 固定 `macos-15` 和 `/Applications/Xcode_16.4.app/Contents/Developer`，不依赖 `macos-latest` 的默认 Xcode。
+- XcodeGen ZIP 来自官方固定版本 Release，执行前校验发布资产 SHA-256，下载失败或摘要不一致立即停止。
+- `project.yml` 固定 iOS 17.0、Swift 5 模式、版本号、应用/测试 Target、Scheme 和资源路径。
+- Simulator 使用开发占位 Bundle ID `com.j4meshub.smartscan.dev`，并通过 `CODE_SIGNING_ALLOWED=NO` 禁止 CI 误用签名材料。
+- 正式 Bundle ID、Team 和签名不会进入当前工程规范；冻结后须单独记录迁移与回滚决策。
+
+## CI 门禁
+
+每次 push 和 PR 都在 GitHub macOS Runner 执行：
+
+1. 选择固定 Xcode 16.4。
+2. 下载并校验固定 XcodeGen 2.46.0。
+3. 从 `project.yml` 重新生成工程。
+4. 在 iPhone 16 Pro Simulator 上编译应用并执行 `SmartScanTests`。
+
+Swift 单元测试固定三种扫描模式的稳定标识与顺序，并验证每种模式都有可见标题和副标题。中英文资源目前覆盖首页所有用户可见文案；后续界面必须补齐双语资源和测试。
+
+## 外部门禁
+
+Runner 不能替代以下验收：AVFoundation 相机、Vision 方向与矩形检测、Keychain 真机行为、BackgroundTasks、内存压力、系统分享、签名、Archive、TestFlight 和 App Store 审核。Mac 只在这些无法由 Simulator 证明的门禁中使用，日常源码和规范仍可在 Windows 开发。

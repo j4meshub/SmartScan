@@ -114,6 +114,8 @@ Android 页面编辑、导出鉴权下载、受限 FileProvider 分享和账号�
 
 Android 签名更新清单、APK 哈希/包名/版本/证书校验和系统安装确认见[Android 安全更新](docs/ANDROID_SECURE_UPDATE.md)。
 
+iOS 固定 XcodeGen 版本、生成工程规范、Simulator 测试和 macOS CI 边界见[iOS 可复现工程与 CI 基线](docs/IOS_ARCHITECTURE.md)。
+
 文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
 
 试卷规则检测、保守净化和禁止生成虚假原文的边界见[基础试卷检测与保守净化 POC](docs/POC_EXAM_CLEANUP.md)。

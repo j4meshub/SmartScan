@@ -285,3 +285,10 @@
 - 日期：2026-10-21
 - 决策：更新清单使用 ECDSA P-256/SHA-256 对原始 JSON 字节签名，客户端构建固定 X.509 公钥；选择 P-256 是为覆盖项目最低 Android API 26。下载后的 APK 必须同时匹配清单包名、精确版本、大小、SHA-256、清单声明证书和当前已安装应用证书。所有更新 URL 禁止凭据、查询、片段和重定向，默认配置为空并保持关闭。
 - 影响：仅攻破下载站不能替换 APK，清单私钥泄露也不能绕过既有 Android 包签名。当前固定单一证书，正式证书轮换需新增签名谱系决策；GitLab、清单私钥、APK keystore、正式公钥和真机升级继续由 `REL-001` 人工门禁管理，不进入仓库。
+
+## D-043：iOS 工程由固定 XcodeGen 生成且不提交生成文件
+
+- 状态：已确认
+- 日期：2026-10-21
+- 决策：`apps/ios/project.yml` 是 Xcode 工程唯一事实来源，使用 XcodeGen `2.46.0` 官方 ZIP 并固定 SHA-256。GitHub CI 固定 `macos-15` 与 Xcode 16.4，在 iPhone 16 Pro Simulator 上无签名编译和测试；生成的 `.xcodeproj` 与本地工具目录不提交。
+- 影响：Windows 可以维护 Swift 源码和工程规范，macOS Runner 负责每个 PR 的确定性生成、编译和单元测试。`com.j4meshub.smartscan.dev` 只是 Simulator 占位 ID，正式 Bundle ID、Team、签名、真机、Archive 与 TestFlight 仍为外部门禁；冻结正式参数前不得把占位值用于分发。

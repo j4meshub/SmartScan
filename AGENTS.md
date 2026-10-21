@@ -51,10 +51,12 @@ npm --prefix apps/h5 test
 npm --prefix apps/h5 run test:e2e
 node --check apps/admin-web/app.js
 gradle -p apps/android :core:network:test :core:security:testDebugUnitTest :core:upload:test :core:update:test :data:repository:test :data:local:testDebugUnitTest :feature:capture:testDebugUnitTest :feature:sync:testDebugUnitTest :feature:update:testDebugUnitTest :feature:workspace:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug
+sh apps/ios/scripts/generate-project.sh
+xcodebuild -project apps/ios/SmartScan.xcodeproj -scheme SmartScan -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' CODE_SIGNING_ALLOWED=NO test
 docker compose -f deploy/compose/docker-compose.yml config
 ```
 
-只运行与工作包相关的快速检查可以用于开发中反馈，但完成工作包前必须运行所有适用检查。Android 命令需要 JDK 17、Gradle 8.9 和 Android 35 SDK；iOS 命令在可复现工程建立后补入本节。
+只运行与工作包相关的快速检查可以用于开发中反馈，但完成工作包前必须运行所有适用检查。Android 命令需要 JDK 17、Gradle 8.9 和 Android 35 SDK；iOS 命令需要 macOS 15、Xcode 16.4，并由脚本校验固定 XcodeGen。
 
 ## 安全边界
 
