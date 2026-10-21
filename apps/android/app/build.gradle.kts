@@ -1,5 +1,15 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose") }
 
+val releaseStoreFile = providers.environmentVariable("SMARTSCAN_ANDROID_KEYSTORE_FILE").orNull
+val releaseStorePassword = providers.environmentVariable("SMARTSCAN_ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("SMARTSCAN_ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("SMARTSCAN_ANDROID_KEY_PASSWORD").orNull
+val releaseSigningValues = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+val hasCompleteReleaseSigning = releaseSigningValues.all { !it.isNullOrBlank() }
+if (releaseSigningValues.any { !it.isNullOrBlank() } && !hasCompleteReleaseSigning) {
+    throw GradleException("Android Release 签名变量必须同时提供，禁止部分配置")
+}
+
 android {
     namespace = "com.smartscan.app"
     compileSdk = 35
@@ -7,8 +17,8 @@ android {
         applicationId = "com.smartscan.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = providers.gradleProperty("SMARTSCAN_VERSION_CODE").orElse("1").get().toInt()
+        versionName = providers.gradleProperty("SMARTSCAN_VERSION_NAME").orElse("0.1.0").get()
         val apiBaseUrl = providers.gradleProperty("SMARTSCAN_API_BASE_URL")
             .orElse("https://api.smartscan.invalid/")
             .get()
@@ -21,6 +31,26 @@ android {
         buildConfigField("String", "SMARTSCAN_UPDATE_MANIFEST_URL", "\"${escapedProperty("SMARTSCAN_UPDATE_MANIFEST_URL")}\"")
         buildConfigField("String", "SMARTSCAN_UPDATE_SIGNATURE_URL", "\"${escapedProperty("SMARTSCAN_UPDATE_SIGNATURE_URL")}\"")
         buildConfigField("String", "SMARTSCAN_UPDATE_PUBLIC_KEY", "\"${escapedProperty("SMARTSCAN_UPDATE_PUBLIC_KEY")}\"")
+    }
+    signingConfigs {
+        if (hasCompleteReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = false
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isDebuggable = false
+            if (hasCompleteReleaseSigning) signingConfig = signingConfigs.getByName("release")
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

@@ -123,6 +123,8 @@ Android 页面编辑、导出鉴权下载、受限 FileProvider 分享和账号�
 
 Android 签名更新清单、APK 哈希/包名/版本/证书校验和系统安装确认见[Android 安全更新](docs/ANDROID_SECURE_UPDATE.md)。
 
+Android 受保护标签、正式签名变量、不可变 GitLab 制品、Pages 更新频道、上一版本证据和回滚边界见[Android 正式签名与发布](docs/ANDROID_RELEASE.md)。
+
 iOS 固定 XcodeGen 版本、生成工程规范、Simulator 测试和 macOS CI 边界见[iOS 可复现工程与 CI 基线](docs/IOS_ARCHITECTURE.md)。
 
 iOS 注册登录、Keychain 会话、受控 API 地址、刷新恢复和用户缓存分区见[iOS 身份、Keychain 与网络](docs/IOS_AUTH_AND_NETWORK.md)。
@@ -191,6 +193,7 @@ ruff format --check services migrations tests tools
 pytest --cov=services --cov-report=term-missing --cov-fail-under=77
 python -m services.api.app.migrations drift
 python tools/validate_ios_release.py
+python tools/validate_android_release.py
 node --check apps/h5/app.js
 node --check apps/h5/camera.js
 node --check apps/h5/resumable-upload.js

@@ -78,4 +78,4 @@ SMARTSCAN_UPDATE_PUBLIC_KEY=<X.509 SubjectPublicKeyInfo 的 Base64>
 
 自动测试覆盖清单篡改、包名、版本、最低版本、URL 凭据、证书摘要、APK 哈希、APK 身份规则、24 小时检查策略和生成器签名。GitHub CI 负责 Android 编译、单元测试和 Lint。
 
-以下仍需 `REL-001` 或真机人工验收：GitLab Generic Package Registry、正式清单公钥、正式 APK keystore、CI 受保护变量、系统未知来源授权、Android 安装器、升级后数据保留、上一稳定版本兼容及回滚。没有这些证据时不得声明正式签名分发通过。
+`REL-001` 已建立 GitLab Generic Package Registry、Pages 频道、受保护变量、上一稳定 APK 与保守回滚的仓库流程，详见[Android 正式签名与发布](ANDROID_RELEASE.md)。正式清单公钥、正式 APK keystore、真实 GitLab 流水线、系统未知来源授权、Android 安装器、升级后数据保留和真机回滚/前滚修复仍需人工验收；没有这些证据时不得声明正式签名分发通过。

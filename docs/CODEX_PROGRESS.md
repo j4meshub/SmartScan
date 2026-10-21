@@ -7,22 +7,21 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 部署与发布 |
-| 当前工作包 | `OPS-004` 备份恢复 |
-| 工作包状态 | 等待人工验收：仓库实现、本地门禁和 PR #55 代码头两套十项 CI 已通过；真实异机仓库、告警、定时任务与月度恢复尚未验收 |
-| 当前分支 | `codex/ops-004-backup-recovery` |
-| 最后验证基线 | `807ddd7`（push 工作流 `39668535463` 与 PR 工作流 `39668521660` 共十项全部通过） |
-| 工作包提交 | `807ddd7`（Unix Socket 数据库全备边界修复后的代码头） |
-| PR | [#55](https://github.com/j4meshub/SmartScan/pull/55)，等待最终进度证据提交后合并 |
-| 下一工作包 | OPS-004 合并后进入 `OPS-005`；公司服务器恢复后补做 OPS-001～OPS-004 的真实 staging 人工门禁 |
+| 当前工作包 | `REL-001` Android 发布 |
+| 工作包状态 | 进行中：仓库侧受保护标签、正式候选校验、不可变制品、签名频道和回滚链路已实现，正在完成全量验证与 PR；真实 GitLab、正式密钥和真机升级仍为人工门禁 |
+| 当前分支 | `codex/rel-001-android-release` |
+| 最后验证基线 | 主线 `73a8019`（工作流 `39671462319` 的 API、Web、Android、iOS 和容器五项全部通过） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | REL-001 合并后推进 `REL-002` 仓库侧发布链路；`OPS-005` 在公司服务器恢复前保持阻塞 |
 
 ## 当前工作包进展
 
-- OPS-004 新增 PostgreSQL 17 连续 WAL 归档、每日 `pg_basebackup`/`pg_verifybackup`、数据库/业务文件/WAL 三类 Restic 加密异机快照，以及对每类独立执行的 7 日/4 周保留和仓库抽查。
-- 备份配置校验器拒绝仓库内 Secret、弱密码、同机/非 HTTPS 端点、URL 凭据、目录重叠、可变镜像和开放端口；成功或失败证据均不包含用户数据、文件路径、凭据或完整仓库 URL。
-- 月度恢复按成功证据中的三个完整快照 ID 恢复到独立目录和内部网络，核对当前 Alembic 头、统一账号/资源所有权、审计计数、文件大小与 SHA-256，并记录 RTO 后清除恢复副本。CI 新增真实 PostgreSQL 物理全备、Restic 加密仓库、恢复启动和文件内容回环。
-- Ruff 全仓与 144 个 Python 文件格式通过；当前代码头定向测试 `29 passed, 1 skipped`，此前全量 Python `392 passed, 7 skipped`、覆盖率 `88.43%`，H5 `40 passed`、Chromium E2E/axe `3 passed`。迁移漂移、OpenAPI 当前/上一代兼容、AI Schema 和 iOS 发布草稿校验通过。公司服务器、异机仓库、对象保留锁、告警、定时任务、RPO 24 小时和 RTO 8 小时仍是人工门禁，未被本地夹具标为通过。
-- 首轮代码头的 push `39667663935` 与 PR `39667738391` 在解析组合 Compose 时发现生产固定 `backup.env` 在 Runner 不存在，提交 `6ee44aa` 仅为 CI 注入无密钥夹具而不放宽生产路径校验。第二轮 push `39668018390` 与 PR `39668028608` 进一步证明远程业务 `pg_hba` 规则不能承担复制连接，提交 `807ddd7` 改为共享 Unix Socket 并禁用备份容器网络，没有新增远程复制规则。
-- 修复后的 push 工作流 `39668535463` 与 PR 工作流 `39668521660` 的 API、Web、Android、iOS 和容器共十项全部通过。容器作业实际执行 PostgreSQL 17 物理全备、Restic `check --read-data`、完整快照 ID 恢复、`pg_verifybackup`、恢复数据库启动和数据库/文件内容核对；固定 Xcode 16.4 Simulator 同步通过。
+- Android `versionCode`/`versionName` 改为流水线属性注入；正式 APK keystore 仅从四个完整环境变量装配，部分配置直接失败。正式签名启用 APK Signature Scheme v2/v3，不把 keystore、密码或私钥写入仓库。
+- GitLab 仅允许受保护的 `android-vX.Y.Z` 标签进入正式流水线。构建前检查生产 HTTPS API、同源 Pages 清单/签名地址和 P-256 公钥；构建后以 `apkanalyzer`、`apksigner` 和流式 SHA-256 检查实包，并要求至少一个同包名、同证书、低版本的上一稳定 APK。
+- 每个版本的 APK、原始清单、独立签名和脱敏报告上传到不可变 Generic Package 路径，Pages 只发布已复验的 `latest.json` 与 `.sig`。人工回滚作业只能原样恢复与旧 APK 匹配的已签名频道；已升级设备必须用更高 `versionCode` 前滚修复。
+- 发布校验专项 `15 passed`；全量 Python `402 passed, 7 skipped`、覆盖率 `88.42%`，H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、146 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、AI Schema、iOS/Android 发布草稿、JavaScript 语法、GitLab YAML 解析和差异检查均通过。测试使用伪 APK 元数据与临时 ECDSA 密钥，只证明失败关闭逻辑；正式 GitLab 项目、固定构建镜像、受保护变量、无凭据下载、上一稳定真包和目标真机升级仍待人工验收。
+- OPS-004 已由 PR #55 合并到主线，中文 squash 提交为 `73a8019`；主分支工作流 `39671462319` 五项全部通过。真实异机仓库、定时任务、告警、RPO/RTO 和恢复清理仍保持人工门禁。
 
 以下保留已合并 OPS-003 的近期证据：
 
@@ -761,7 +760,7 @@ git diff --check
 | H5 真机与真实弱网 | 等待人工验收 | 提供至少 3 款 Android 手机、2 个企业微信版本、Wi-Fi/4G/5G 切换、系统分享目标和屏幕阅读器条件 |
 | 文档透视真实样本 | 等待人工验收 | 提供已授权、脱敏且具有人工期望标注的固定文档照片集 |
 | 真实短信 | 等待人工验收 | 冻结供应商、签名、模板、密钥和限频参数 |
-| Android 正式签名分发 | 等待人工验收 | 冻结包名、签名资产和 GitLab 发布位置 |
+| Android 正式签名分发 | 等待人工验收 | 仓库链路已实现；需配置真实 GitLab、固定构建镜像、受保护签名资产、公开下载域名和上一稳定 APK，并完成目标真机升级、数据保留与回滚/前滚演练 |
 | Android CameraX 真机 | 等待人工验收 | 提供目标设备，验证权限、后摄、方向、对焦、曝光、质量阈值、中断恢复和连续原图完整性 |
 | Android 离线续传真机 | 等待人工验收 | 在目标设备和 staging 验证 Wi-Fi/蜂窝切换、飞行模式、进程强杀、令牌过期、服务端重启、大文件和磁盘不足 |
 | iOS 真机与 App Store | 等待人工验收 | 冻结 Team、Bundle ID、地区、隐私与支持 URL，并使用 Mac 完成门禁 |
@@ -822,6 +821,6 @@ git diff --check
 
 ## 下一步
 
-1. 完成 OPS-004 提交、PR 和 GitHub Actions；容器作业必须实际通过 PostgreSQL 物理全备、Restic 仓库检查、精确快照恢复、恢复数据库启动和文件内容核对。
-2. OPS-004 合并并复验主线五项工作流后，从 `OPS-005` 开始准备 30 分钟 16 用户容量门禁；公司服务器不可用时保持外部阻塞，不伪造真实负载结果。
-3. 公司服务器恢复后在隔离 staging 补做 OPS-001～OPS-004 的固定镜像 UID/GID、TLS/BBR、真实通知、故障注入、异机仓库、定时任务、RPO/RTO 和恢复清理人工验收。
+1. 完成 REL-001 全量本地检查、中文提交、PR 和 GitHub Actions；Android Runner 必须实际编译现有应用，API 作业必须执行无密钥发布草稿门禁。
+2. REL-001 合并后推进 REL-002 仓库侧 TestFlight/App Store 发布链路；正式 Apple 参数、签名、Archive 和 TestFlight 继续保留人工门禁。
+3. 公司服务器恢复后执行 OPS-005 的 30 分钟 16 用户容量门禁，并在隔离 staging 补做 OPS-001～OPS-004 的真实外部验收。
