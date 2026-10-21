@@ -95,6 +95,8 @@ AI 候选系统使用同一份已授权、已脱敏且按来源分组切分的�
 
 隔离 staging 使用独立 Compose 项目和 `/srv/smartscan/staging/` 主机根目录，应用继续启用生产安全校验。数据库、入口和出站网络分层；只有打包 H5/后台/Nginx 的固定 digest Web 镜像绑定主机回环端口，数据库与 API 不直接发布端口。目标服务器只拉取镜像并显式运行迁移，不挂载仓库源码或现场构建。详见[隔离 staging 部署基线](STAGING_DEPLOYMENT.md)。
 
+公网 TLS 由主机 Nginx 终止，再只代理到回环地址上的 staging Web Nginx。主机层负责 TLS 1.2/1.3、HTTP/2、真实客户端限频和安全日志；容器层负责静态入口、API 前缀转换及鉴权后的 `internal` 文件发送。BBR 变更前后以只读快照固定内核、拥塞控制和 qdisc，回滚始终使用实际原值；配置生效只允许进入受控网络对照，不能直接解除上线门禁。详见[TLS、内部文件发送与 BBR 基线](NETWORK_AND_FILE_DELIVERY.md)。
+
 ## 单机部署基线
 
 首版部署由 Nginx、API 服务组、CPU Worker 组、PostgreSQL 和用户隔离文件目录组成。上传受理与 CPU 处理解耦，保证重任务排队时登录、查询和下载鉴权仍能响应。后续只有在实际容量指标超过单机边界后，才引入独立 Worker 或高可用组件。

@@ -1,0 +1,25 @@
+name: smartscan-nginx-ci
+
+services:
+  api:
+    image: python:3.12-alpine
+    command: ["python", "/test/fake_api.py"]
+    volumes:
+      - ../../tests/nginx/fake_api.py:/test/fake_api.py:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  nginx:
+    image: smartscan-web:ci
+    ports: ["127.0.0.1:18081:80"]
+    volumes:
+      - ../../tests/fixtures/nginx-data:/srv/smartscan/data:ro
+    depends_on:
+      api: {condition: service_healthy}

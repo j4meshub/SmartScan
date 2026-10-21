@@ -2,6 +2,7 @@
 .env.staging
 deploy/compose/staging.env
 deploy/compose/staging.runtime.env
+.ops-evidence/
 .venv/
 __pycache__/
 *.py[cod]
