@@ -11,8 +11,8 @@
 | 工作包状态 | 等待人工验收：离线评估框架、契约、合成回归和中文文档已完成；真实固定数据集、实际 Provider、价格/账单和数据政策未提供 |
 | 当前分支 | `codex/ai-005-fixed-evaluation` |
 | 最后验证基线 | `29d38f8`（已合并 AI-004；主线工作流 `39615121163` 五项全部通过） |
-| 工作包提交 | 待本工作包验证后填写 |
-| PR | 待创建 |
+| 工作包提交 | `745d6d1` |
+| PR | [#51](https://github.com/j4meshub/SmartScan/pull/51) |
 | 下一工作包 | `OPS-001` 隔离 staging 依赖公司服务器，当前阻塞；同时复核是否存在不依赖服务器的发布准备工作 |
 
 ## 当前工作包进展
@@ -21,7 +21,8 @@
 - 固定清单强制授权、脱敏、许可、同意依据、按 `source_group` 切分、文件与任务媒体 SHA-256/尺寸一致。运行结果必须完整覆盖 test 集，并固定模型、框架、提示词、适配器、配置、价格和数据政策版本。
 - 七类结构化任务分别计算准确率和无依据声明，统一报告幻觉率、结构化成功率、P50/P95 延迟、平均/总成本及逐任务指标；阈值必须在清单中保存批准人与记录，不臆造 v1.4 未规定的通用数值。四类系统缺少任一类型时只能生成局部报告，总门禁固定关闭。
 - JSON 和中文 Markdown 报告不包含图片、原始路径、原始模型输出、任务/页面 ID、媒体 URL、令牌或密钥。真实数据集目录、实际运行结果和报告均已加入 Git 忽略。
-- 当前 AI 固定评估专项 `11 passed`；全量 Python `338 passed, 5 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、123 个 Python 文件格式、AI 任务/评估 Schema 快照、OpenAPI 当前/上一代兼容、迁移升级/漂移、iOS 发布草稿、JavaScript 语法和差异检查均通过。提交、PR、PostgreSQL、Android、iOS 与容器 GitHub Actions 证据待推送后补录。
+- 当前 AI 固定评估专项 `11 passed`；全量 Python `338 passed, 5 skipped`，应用代码覆盖率 `88.67%`；H5 `40 passed`、Chromium E2E/axe `3 passed`。Ruff、123 个 Python 文件格式、AI 任务/评估 Schema 快照、OpenAPI 当前/上一代兼容、迁移升级/漂移、iOS 发布草稿、JavaScript 语法和差异检查均通过。本机没有 PostgreSQL 17、Android、Xcode 或 Docker，相关环境由 GitHub Runner 补证。
+- 代码提交 `745d6d1` 的 PR 工作流 `39621101031` 五项全部通过，已在 PostgreSQL 17、Chromium、Android、Xcode 16.4 Simulator 和 Docker 环境补证。push 工作流 `39620899771` 的 API、Web、Android 和容器通过；iOS 完整日志显示编译、全部 Swift 单测和清理通过，但 GitHub 状态长时间未从 `in_progress` 收敛，取消接口称其已不在运行而重跑接口称其仍在运行。该平台状态异常不冒充绿色结论，最终文档头会触发新一轮两套工作流验证。
 
 以下保留已合并 AI-004 的近期证据：
 
