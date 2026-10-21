@@ -24,6 +24,7 @@
 - 本地通过 Ruff/格式、发布草稿校验、全量 Python `177 passed, 5 skipped`、覆盖率 `88.28%`、API 兼容、迁移升级/漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法和差异检查。Windows 不能提供 Swift 编译证据。
 - 仓库改为公开后重新触发 PR #41 的两套失败工作流，attempt 2 均获得真实 Runner；API、Web、Android、iOS 与容器共 10 项检查全部通过，PR #41 已以中文 squash 提交 `af6fab7` 合并。IOS-006 已从旧堆叠基线重基到该主线提交。
 - PR #42 的推送与拉取请求两套工作流共 10 项检查全部通过；两个 iOS 作业都完成固定 XcodeGen 工程生成、Xcode 16.4 Simulator 编译、隐私清单打包和全部 Swift 单元测试。正式 Xcode 26+ Archive、签名、真实截图、审核账号、真机和 TestFlight 未被自动测试替代。
+- 最终纯文档提交的拉取请求 iOS 作业暴露 Runner 设备集偶发为空：Xcode 仅列出通用占位目标，固定设备名以退出码 70 失败，代码编译尚未开始。CI 改为复用可用设备或从当前 Xcode Runtime 创建临时 iPhone 16 Pro，按 UDID 测试并定向清理；不通过重跑掩盖环境脆弱性。
 
 - IOS-004 已由 PR #40 squash 合并到主线，中文提交为 `33f6754`；最终文档头两套 API、Web、Android、iOS 与容器共 10 项 CI 检查通过。
 - IOS-005 新增项目/页面工作区，支持完整页序上移下移、活动版本预览、90 度旋转、四角归一化调整、四档滤镜和页面复核；编辑继续调用服务端版本化接口，不覆盖原图。

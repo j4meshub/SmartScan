@@ -54,8 +54,16 @@ def test_ios_ci_uses_fixed_runner_xcode_and_disables_signing() -> None:
     assert ios_job["runs-on"] == "macos-15"
     assert "/Applications/Xcode_16.4.app/Contents/Developer" in run_commands
     assert "sh apps/ios/scripts/generate-project.sh" in run_commands
-    assert "CODE_SIGNING_ALLOWED=NO" in run_commands
+    assert "sh apps/ios/scripts/run-simulator-tests.sh" in run_commands
     assert "SmartScanTests" not in run_commands  # Scheme 负责选择测试 Target。
+
+    simulator_script = (IOS_ROOT / "scripts" / "run-simulator-tests.sh").read_text(encoding="utf-8")
+    assert 'export DEVICE_NAME="iPhone 16 Pro"' in simulator_script
+    assert "xcrun simctl create" in simulator_script
+    assert "xcrun simctl bootstatus" in simulator_script
+    assert '-destination "platform=iOS Simulator,id=$device_id"' in simulator_script
+    assert "CODE_SIGNING_ALLOWED=NO" in simulator_script
+    assert "xcrun simctl delete" in simulator_script
 
 
 def test_ios_localization_keys_match() -> None:

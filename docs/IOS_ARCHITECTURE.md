@@ -31,7 +31,7 @@ apps/ios/
 1. 选择固定 Xcode 16.4。
 2. 下载并校验固定 XcodeGen 2.46.0。
 3. 从 `project.yml` 重新生成工程。
-4. 在 iPhone 16 Pro Simulator 上编译应用并执行 `SmartScanTests`。
+4. 优先复用可用 iPhone 16 Pro；设备集为空时从当前 Xcode Runtime 创建临时 Simulator，等待启动后按 UDID 编译应用并执行 `SmartScanTests`，结束时只删除本次创建的设备。
 
 Swift 单元测试固定三种扫描模式的稳定标识与顺序，并覆盖身份模型、Keychain 信封、设备请求头、刷新恢复、注销清理和用户缓存隔离。中英文资源覆盖首页及登录注册界面的用户可见文案；后续界面必须补齐双语资源和测试。
 

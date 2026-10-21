@@ -19,16 +19,10 @@
 ```bash
 sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
 sh apps/ios/scripts/generate-project.sh
-xcodebuild \
-  -project apps/ios/SmartScan.xcodeproj \
-  -scheme SmartScan \
-  -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
-  CODE_SIGNING_ALLOWED=NO \
-  test
+sh apps/ios/scripts/run-simulator-tests.sh
 ```
 
-生成后可用 Xcode 打开 `apps/ios/SmartScan.xcodeproj`。新增源文件、资源或 Target 时先修改 `project.yml`，重新生成并运行测试，不手工维护工程文件。
+测试脚本优先使用 Runner 已有的 iPhone 16 Pro；若设备集为空，则从所选 Xcode 的可用 iOS Runtime 创建临时 Simulator，等待启动后按 UDID 测试，并只删除本次创建的设备。生成后可用 Xcode 打开 `apps/ios/SmartScan.xcodeproj`。新增源文件、资源或 Target 时先修改 `project.yml`，重新生成并运行测试，不手工维护工程文件。
 
 ## 当前边界
 

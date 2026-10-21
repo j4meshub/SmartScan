@@ -87,14 +87,7 @@ jobs:
       - name: 生成可复现 Xcode 工程
         run: sh apps/ios/scripts/generate-project.sh
       - name: Simulator 编译与单元测试
-        run: >-
-          xcodebuild
-          -project apps/ios/SmartScan.xcodeproj
-          -scheme SmartScan
-          -configuration Debug
-          -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest'
-          CODE_SIGNING_ALLOWED=NO
-          test
+        run: sh apps/ios/scripts/run-simulator-tests.sh
   containers:
     runs-on: ubuntu-latest
     steps:
