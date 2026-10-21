@@ -9,6 +9,7 @@ protocol SmartScanWorkspaceAPI {
     func editPage(id: String, corners: [WorkspaceCorner], filter: WorkspaceFilter) async throws -> WorkspacePage
     func reviewPage(id: String, confirmed: Bool) async throws -> WorkspacePage
     func dismissExamSuggestion(id: String, resultVersion: Int) async throws -> WorkspacePage
+    func retakeBookSide(id: String, data: Data, mimeType: String) async throws -> WorkspacePage
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -85,6 +86,24 @@ extension URLSessionSmartScanAPI: SmartScanWorkspaceAPI, SmartScanAccountDeletio
         return try await execute(request)
     }
 
+    func retakeBookSide(id: String, data: Data, mimeType: String) async throws -> WorkspacePage {
+        let boundary = "SmartScan-Book-Retake-\(UUID().uuidString)"
+        var request = try makeRequest(
+            path: "v1/pages/\(id)/book-retakes",
+            method: "POST",
+            authenticated: true
+        )
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = multipartBody(
+            boundary: boundary,
+            fieldName: "file",
+            fileName: "book-retake.jpg",
+            mimeType: mimeType,
+            data: data
+        )
+        return try await execute(request)
+    }
+
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -156,6 +175,25 @@ extension URLSessionSmartScanAPI: SmartScanWorkspaceAPI, SmartScanAccountDeletio
         )
         return try await execute(request)
     }
+}
+
+private func multipartBody(
+    boundary: String,
+    fieldName: String,
+    fileName: String,
+    mimeType: String,
+    data: Data
+) -> Data {
+    var body = Data()
+    body.append("--\(boundary)\r\n".data(using: .utf8)!)
+    body.append(
+        "Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n"
+            .data(using: .utf8)!
+    )
+    body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+    body.append(data)
+    body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+    return body
 }
 
 private struct PageOrderRequest: Encodable {

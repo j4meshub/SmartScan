@@ -25,6 +25,12 @@
     <string name="workspace_exam_suggestion_high">检测到这可能是试卷页面，建议使用试卷净化；执行前仍会保留原图。</string>
     <string name="workspace_exam_suggestion_medium">这页可能是试卷页面，是否切换到试卷净化？</string>
     <string name="workspace_exam_dismiss">暂不使用</string>
+    <string name="workspace_book_left">左页</string>
+    <string name="workspace_book_right">右页</string>
+    <string name="workspace_book_single">单页</string>
+    <string name="workspace_book_retake">重拍当前侧</string>
+    <string name="workspace_book_retaking">正在上传重拍…</string>
+    <string name="workspace_book_retake_hint">只替换当前逻辑页，另一侧和物理原图保持不变。</string>
     <string name="workspace_export">导出</string>
     <string name="workspace_pdf">PDF</string>
     <string name="workspace_jpg">JPG</string>

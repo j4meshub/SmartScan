@@ -10,6 +10,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MultipartBody
 
 class SmartScanApiTest {
     private val server = MockWebServer()
@@ -143,6 +144,30 @@ class SmartScanApiTest {
         assertTrue(request.body.readUtf8().contains("\"result_version\":2"))
         assertFalse(page.examSuggestionVisible)
         assertEquals(2, page.examResultVersion)
+    }
+
+    @Test
+    fun `book side retake uses multipart and parses logical page evidence`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"id":"replacement-page","project_id":"project-1","page_number":1,"quality_warning":null,"quality_details":null,"active_result_version":0,"review_status":"not_required","ocr_status":"disabled","book_capture_id":"replacement-page","book_side":"left","book_split_status":"retake","book_split_confidence":null,"book_split_reason":"single_side_retake","book_dewarp_applied":null,"book_dewarp_source_score":null,"book_dewarp_output_score":null,"book_dewarp_reason":null,"book_replaced_by_page_id":null,"book_is_current":true}""",
+            ),
+        )
+        val api = api()
+        val body = "jpeg".toRequestBody("image/jpeg".toMediaType())
+
+        val page = api.retakeBookSide(
+            "page-1",
+            MultipartBody.Part.createFormData("file", "left.jpg", body),
+        )
+        val request = server.takeRequest()
+
+        assertEquals("/v1/pages/page-1/book-retakes", request.path)
+        assertTrue(request.getHeader("Content-Type")!!.startsWith("multipart/form-data"))
+        assertTrue(request.body.readUtf8().contains("left.jpg"))
+        assertEquals("left", page.bookSide)
+        assertEquals("retake", page.bookSplitStatus)
+        assertTrue(page.bookIsCurrent)
     }
 
     @Test

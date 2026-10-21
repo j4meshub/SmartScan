@@ -922,3 +922,92 @@ def test_file_lifecycle_migration_maps_canceled_upload_on_downgrade(tmp_path: Pa
             )
     finally:
         downgraded.dispose()
+
+
+def test_book_logical_page_migration_backfills_modes_and_can_downgrade(
+    tmp_path: Path,
+) -> None:
+    url = sqlite_url(tmp_path / "book-logical-pages.db")
+    command.upgrade(alembic_config(url), "20261021_0018")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('book-user', 'book-user', 'hash', :phone_hmac, '+86******0019', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "c" * 64},
+        )
+        for project_id, title, mode in (
+            ("book-project", "旧书籍", "book"),
+            ("document-project", "旧文档", "document"),
+        ):
+            connection.execute(
+                text(
+                    "INSERT INTO scan_projects "
+                    "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) "
+                    "VALUES (:id, 'book-user', :title, :mode, 'ltr', CURRENT_TIMESTAMP, "
+                    "CURRENT_TIMESTAMP)"
+                ),
+                {"id": project_id, "title": title, "mode": mode},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO scan_pages "
+                    "(id, project_id, owner_user_id, page_number, original_path, "
+                    "original_mime_type, sha256, size_bytes, mime_type, rotation_degrees, "
+                    "active_result_version, review_status, ocr_status, "
+                    "exam_classification_status, created_at, updated_at) VALUES "
+                    "(:page_id, :project_id, 'book-user', 1, :path, 'image/jpeg', :sha256, "
+                    "100, 'image/jpeg', 0, 0, 'not_required', 'disabled', 'disabled', "
+                    "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "page_id": f"{mode}-page",
+                    "project_id": project_id,
+                    "path": f"users/book-user/originals/{mode}.jpg",
+                    "sha256": ("d" if mode == "book" else "e") * 64,
+                },
+            )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        schema = inspect(migrated)
+        columns = {item["name"] for item in schema.get_columns("scan_pages")}
+        assert {
+            "book_capture_id",
+            "book_side",
+            "book_split_status",
+            "book_split_confidence",
+            "book_split_reason",
+            "book_spine_x",
+            "book_logical_source_path",
+            "book_dewarp_applied",
+            "book_dewarp_source_score",
+            "book_dewarp_output_score",
+            "book_dewarp_reason",
+            "book_replaced_by_page_id",
+        }.issubset(columns)
+        with migrated.connect() as connection:
+            statuses = dict(
+                connection.execute(
+                    text("SELECT id, book_split_status FROM scan_pages ORDER BY id")
+                ).all()
+            )
+        assert statuses == {"book-page": "legacy", "document-page": "disabled"}
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261021_0018")
+    downgraded = create_engine(url)
+    try:
+        columns = {item["name"] for item in inspect(downgraded).get_columns("scan_pages")}
+        assert "book_split_status" not in columns
+        assert "book_replaced_by_page_id" not in columns
+        with downgraded.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM scan_pages")) == 2
+    finally:
+        downgraded.dispose()

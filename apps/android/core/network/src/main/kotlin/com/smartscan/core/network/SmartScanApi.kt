@@ -4,12 +4,15 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.RequestBody
+import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.http.Streaming
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PATCH
+import retrofit2.http.Multipart
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -78,6 +81,13 @@ interface ScanApi {
 }
 
 interface WorkspaceApi {
+    @Multipart
+    @POST("v1/pages/{pageId}/book-retakes")
+    suspend fun retakeBookSide(
+        @Path("pageId") pageId: String,
+        @Part file: MultipartBody.Part,
+    ): PageDto
+
     @PATCH("v1/projects/{projectId}/pages/order")
     suspend fun reorderPages(
         @Path("projectId") projectId: String,
@@ -296,6 +306,17 @@ data class PageDto(
     @SerialName("exam_confidence_band") val examConfidenceBand: String? = null,
     @SerialName("exam_recommendation") val examRecommendation: String? = null,
     @SerialName("exam_suggestion_visible") val examSuggestionVisible: Boolean = false,
+    @SerialName("book_capture_id") val bookCaptureId: String? = null,
+    @SerialName("book_side") val bookSide: String? = null,
+    @SerialName("book_split_status") val bookSplitStatus: String = "disabled",
+    @SerialName("book_split_confidence") val bookSplitConfidence: Double? = null,
+    @SerialName("book_split_reason") val bookSplitReason: String? = null,
+    @SerialName("book_dewarp_applied") val bookDewarpApplied: Boolean? = null,
+    @SerialName("book_dewarp_source_score") val bookDewarpSourceScore: Double? = null,
+    @SerialName("book_dewarp_output_score") val bookDewarpOutputScore: Double? = null,
+    @SerialName("book_dewarp_reason") val bookDewarpReason: String? = null,
+    @SerialName("book_replaced_by_page_id") val bookReplacedByPageId: String? = null,
+    @SerialName("book_is_current") val bookIsCurrent: Boolean = true,
 )
 
 @Serializable

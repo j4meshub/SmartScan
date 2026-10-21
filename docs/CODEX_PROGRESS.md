@@ -7,22 +7,30 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M7 试卷与扫书产品化 |
-| 当前工作包 | `BOOK-001` 自动快门 |
-| 工作包状态 | 等待人工验收：三端实现、本地全量门禁及 GitHub Android/iOS Runner 已通过；真实书籍固定数据集与目标真机尚未验收 |
-| 当前分支 | `codex/book-001-auto-shutter` |
-| 最后验证基线 | `fc8dec5`（EXAM-001 PR #43 已合并） |
-| 工作包提交 | `34715bd`；Runner 修复 `7110911`、`9cbcb5b` |
-| PR | #44（代码头 Android 两套作业通过；相同 Swift 代码的 iOS 两套作业通过，最终文档头验证中） |
-| 下一工作包 | `BOOK-002` 双页和单侧重拍；`EXAM-002`/`EXAM-003` 等待 EXAM-001 固定数据集闸门 |
+| 当前工作包 | `BOOK-002` 双页与单侧重拍 |
+| 工作包状态 | 等待人工验收：实现与自动化门禁已通过；真实书籍固定集、拆分指标和目标真机仍待验收 |
+| 当前分支 | `codex/book-002-spread-retake` |
+| 最后验证基线 | `fe8e6cc`（BOOK-002 功能提交；基于已合并的 BOOK-001 `1cef660`） |
+| 工作包提交 | `fe8e6cc` |
+| PR | [#45](https://github.com/j4meshub/SmartScan/pull/45) |
+| 下一工作包 | `BOOK-003` 页码、重复、缺页、补扫与成册；`EXAM-002`/`EXAM-003` 等待 EXAM-001 固定数据集闸门 |
 
 ## 当前工作包进展
 
+- BOOK-002 已把 POC 双页拆分接入 Worker：一次不可变物理原图可生成左右两个逻辑页，按项目持久化的 `reading_order` 排列；左右侧分别保存派生源图、拆分置信度和去弯曲前后评分，并独立执行质量、OCR 和结果版本处理。
+- 低置信拆分只保留 `single` 页面，写入 `book_split_review` 并要求复核；不创建虚假另一侧。正常拆分在同一事务中顺延后续页号，子任务只处理既有逻辑源图，不重复拆分。
+- 单侧重拍接口创建新逻辑页和新不可变原图，旧页记录唯一替代关系。默认页面列表与 JPG/PDF 导出过滤旧页；旧原图和历史结果仍可按 ID 追溯。普通用户、管理员跨用户操作统一 `404` 并写拒绝审计。
+- H5、Android 和 iOS 已增加左右/单页标识与“重拍当前侧”入口，上传后只切换当前逻辑页。OpenAPI 增量修订为 `2026-10-21.1`，三端消费矩阵登记新操作，上一代客户端可忽略新增字段。
+- Alembic `0019` 对旧书籍页回填 `legacy`，其他页回填 `disabled`；升级、降级和 ORM 漂移专项已通过。账号合并与项目删除已纳入逻辑派生源图，避免路径残留或文件泄漏。
+- 当前本地结果：全量 Python `194 passed, 5 skipped`，应用代码覆盖率 `88.79%`；H5 `38 passed`、Chromium E2E/axe `3 passed`、iOS 工程/发布静态契约 `15 passed`，Ruff、格式、OpenAPI 兼容、迁移升级/漂移/版本、JavaScript 语法和差异检查均通过。迁移门禁首次因本地库停在 `0018` 失败，执行正式升级到 `0019` 后重跑通过；H5 E2E 首次发现重拍文件输入缺少无障碍名称，补齐中英文 `aria-label` 后重跑通过。
+- Windows 没有 Gradle、Android SDK、XcodeGen 或 Xcode；提交 `fe8e6cc` 的 GitHub Actions push 工作流 `39572682283` 已由真实 Runner 完整通过，API、Web、容器、Android 和 iOS 共 5 项成功。Android 完成 Gradle 测试、应用编译与 Lint，iOS 完成固定 XcodeGen 工程生成、Xcode 16.4 Simulator 编译和 Swift 单元测试，未以静态检查替代。
+- 至少 5 本书、1000 个逻辑页面、300 次双页取景、正确拆分率 `>=95%`、顺序正确率 `>=99%` 以及目标真机仍为人工门禁；合成图片和 Simulator 不能替代。
+
+以下保留已合并 BOOK-001 的近期证据：
+
 - BOOK-001 已在 Android、iOS 和 H5 建立同一条件状态机：必须先检测翻页，再通过连续稳定、清晰度、曝光、边界、书脊和遮挡检查；无固定倒计时且手动快门始终可用。
-- Android CameraX 与 iOS AVFoundation 使用连续亮度帧计算运动、中心书脊和保守暗区比例；iOS 复用 Vision 矩形置信度，Android 使用四边对比度。自动与手动拍摄复用不可变原图保存路径，只有原图保存并进入队列后才重新等待下一页。
-- H5 使用缩小视频帧进行单页尽力检测，成功后仍由用户创建并上传项目；界面明确说明浏览器限制，并保留实时手动快门和系统相机文件兜底。
-- 新增三端状态机和帧指标测试、Android 保存失败重试、iOS 旧拍摄证据兼容测试及中文设计说明。本地 Python `187 passed, 5 skipped`、覆盖率 `88.65%`、H5 `37 passed`、Chromium E2E/axe `3 passed`、iOS 工程/发布契约 `15 passed`，Ruff、OpenAPI 兼容、迁移和前端语法检查通过。
-- PR #44 首轮 Android 编译发现测试误用未引入的 `kotlin.test`，改用既有 JUnit 4 后又暴露双参数浮点断言会主动失败；两次均定位、修复并重跑。提交 `9cbcb5b` 的 push 与 PR 两套 Android 单元测试、应用编译和 Lint 已通过；首轮相同 Swift 代码的两套 macOS 作业已完成 XcodeGen、Xcode 16.4 Simulator 编译和全部单元测试。
-- 至少 5 本书、1000 个逻辑页面、300 次双页取景以及 Android/iPhone 真机仍为人工门禁；暗区比例不是手部识别模型，真实门禁前不得宣称自动快门指标达标。
+- Android CameraX 与 iOS AVFoundation 使用连续亮度帧计算运动、中心书脊和保守暗区比例；自动与手动拍摄复用不可变原图保存路径，只有原图保存并进入队列后才重新等待下一页。
+- PR #44 的两套 10 项 CI 全部通过并已合并；真实书籍固定集与目标真机保持等待人工验收。
 
 以下保留已合并 EXAM-001 的近期证据：
 
@@ -714,6 +722,6 @@ git diff --check
 
 ## 下一步
 
-1. 等待 PR #39 最终文档提交的两套 CI 通过后 squash 合并，并同步主线提交证据。
-2. 创建 `codex/ios-004-background-upload` 分支，实现用户分区本地队列、允许范围内的后台恢复和服务端确认分片续传。
-3. Keychain、相机、后台执行、Apple Team、正式 Bundle ID、签名、真机和发布继续保留外部门禁，不以 Simulator 结果替代。
+1. 等待 PR #45 最终文档提交的 GitHub Actions 通过后 squash 合并，并同步主线提交证据。
+2. 从主线创建 `codex/book-003-page-integrity` 分支，实现页码、重复、缺页、补扫与成册。
+3. 真实书籍固定集、双页取景指标、Android/iPhone 真机以及签名发布继续保留人工门禁，不以合成图片或 Simulator 结果替代。

@@ -65,3 +65,19 @@ export function examSuggestionPrompt(page, locale = "zh-CN") {
 export function canDismissExamSuggestion(page) {
   return Boolean(page?.exam_suggestion_visible && Number.isInteger(page.exam_result_version));
 }
+
+export function bookSideLabel(page, locale = "zh-CN") {
+  const labels = locale === "zh-CN"
+    ? {left: "左页", right: "右页", single: "单页"}
+    : {left: "Left page", right: "Right page", single: "Single page"};
+  return labels[page?.book_side] || "";
+}
+
+export function canRetakeBookSide(page) {
+  return Boolean(
+    ["left", "right"].includes(page?.book_side)
+    && ["split", "retake"].includes(page?.book_split_status)
+    && page?.book_is_current !== false
+    && Number(page?.active_result_version || 0) > 0,
+  );
+}

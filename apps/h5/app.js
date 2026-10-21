@@ -2,7 +2,7 @@ import {AuthClient} from "./auth-client.js";
 import {analyzeBookLuma, initialBookAutoCaptureState, lumaFromImageData, reduceBookAutoCapture} from "./book-auto-capture.js";
 import {bindCameraLifecycle, cameraBlobToFile, captureCameraPhoto, openEnvironmentCamera, stopCamera} from "./camera.js";
 import {copy, editorCopy} from "./i18n.js";
-import {canDismissExamSuggestion, defaultCorners, examSuggestionPrompt, filterPreview, movePage, qualityPrompt, updateCorner} from "./page-editor.js";
+import {bookSideLabel, canDismissExamSuggestion, canRetakeBookSide, defaultCorners, examSuggestionPrompt, filterPreview, movePage, qualityPrompt, updateCorner} from "./page-editor.js";
 import {downloadBlob, exportQualityLabel, exportStatusLabel, jobKindLabel, jobStatusLabel, projectJobs, shareOrDownload, shouldPollJobs} from "./project-files.js";
 import {uploadResumable} from "./resumable-upload.js";
 
@@ -52,7 +52,7 @@ function renderEditorCorners(){ const points=editorCorners.map(corner=>`${corner
 function renderEditorState(){
   const page=editorPages[editorIndex];
   $("#editorProjectTitle").textContent=editorProject?.title||editorCopy[locale].title;
-  $("#editorPageList").innerHTML=editorPages.map((item,index)=>`<button type="button" class="page-chip ${index===editorIndex?"active":""}" data-page-index="${index}"><b>${index+1}</b><small>${item.quality_warning?"!":"✓"}</small></button>`).join("");
+  $("#editorPageList").innerHTML=editorPages.map((item,index)=>`<button type="button" class="page-chip ${index===editorIndex?"active":""}" data-page-index="${index}"><b>${index+1}</b><small>${escapeHtml(bookSideLabel(item,locale)||(item.quality_warning?"!":"✓"))}</small></button>`).join("");
   $("#movePageLeft").disabled=editorIndex<=0;
   $("#movePageRight").disabled=editorIndex<0||editorIndex>=editorPages.length-1;
   $("#qualityMessage").textContent=qualityPrompt(page,locale);
@@ -61,6 +61,7 @@ function renderEditorState(){
   $("#examSuggestion").classList.toggle("hidden",!examPrompt);
   $("#examSuggestionText").textContent=examPrompt;
   $("#dismissExamSuggestion").disabled=!canDismissExamSuggestion(page);
+  $("#bookRetake").classList.toggle("hidden",!canRetakeBookSide(page));
   document.querySelectorAll("[data-page-filter]").forEach(button=>button.classList.toggle("active",button.dataset.pageFilter===editorFilter));
   $("#editorImage").style.filter=filterPreview(editorFilter);
   renderEditorCorners();
@@ -112,6 +113,7 @@ async function openProjectEditor(projectId,title){
 async function rotateEditorPage(degrees){ const page=editorPages[editorIndex]; if(!page) return; try{ const updated=await request(`/v1/pages/${page.id}/rotations`,{method:"POST",body:JSON.stringify({degrees})}); editorPages[editorIndex]=updated; await selectEditorPage(editorIndex); }catch(error){ $("#editorMessage").textContent=localizedError(error); } }
 async function reorderEditorPage(delta){ const moved=movePage(editorPages,editorIndex,delta); if(moved.index===editorIndex) return; try{ const ordered=await request(`/v1/projects/${editorProject.id}/pages/order`,{method:"PATCH",body:JSON.stringify({page_ids:moved.pages.map(page=>page.id)})}); editorPages=ordered; editorIndex=moved.index; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].ordered; }catch(error){ $("#editorMessage").textContent=localizedError(error); } }
 async function saveEditorPage(){ const page=editorPages[editorIndex]; if(!page) return; if(!editorCornersDirty&&editorFilter==="original"){ $("#editorMessage").textContent=editorCopy[locale].noChange; return; } const payload={filter:editorFilter}; if(editorCornersDirty) payload.corners=editorCorners; try{ const updated=await request(`/v1/pages/${page.id}/edits`,{method:"POST",body:JSON.stringify(payload)}); editorPages[editorIndex]=updated; await selectEditorPage(editorIndex); $("#editorMessage").textContent=editorCopy[locale].saved; }catch(error){ $("#editorMessage").textContent=localizedError(error); } }
+async function retakeBookSide(file){ const page=editorPages[editorIndex]; if(!canRetakeBookSide(page)||!file) return; const form=new FormData(); form.append("file",file,file.name); $("#retakeBookSide").disabled=true; $("#editorMessage").textContent=editorCopy[locale].retakingBookSide; try{ const replacement=await request(`/v1/pages/${page.id}/book-retakes`,{method:"POST",body:form}); editorPages[editorIndex]=replacement; await selectEditorPage(editorIndex); await loadProjectFiles({silent:true}); $("#editorMessage").textContent=editorCopy[locale].retakenBookSide; }catch(error){ $("#editorMessage").textContent=localizedError(error); }finally{ $("#retakeBookSide").disabled=false; $("#bookRetakeFile").value=""; } }
 function setUploadProgress(uploaded,total){ const percent=Math.min(100,Math.round(uploaded/total*100)); $("#uploadProgressWrap").classList.remove("hidden"); $("#uploadProgress").value=percent; $("#uploadPercent").textContent=`${percent}%`; }
 function bookAutoStatusKey(){ const blocker=bookAutoState.blocker; return blocker?{waiting_for_page_change:"bookAutoWaitPage",page_moving:"bookAutoWaitStable",needs_focus:"bookAutoWaitFocus",exposure_invalid:"bookAutoExposure",boundary_incomplete:"bookAutoBoundary",spine_not_found:"bookAutoSpine",occlusion_detected:"bookAutoOcclusion",verifying:"bookAutoVerifying",retry_required:"bookAutoRetry"}[blocker]:bookAutoState.phase==="CAPTURE"?"bookAutoCapturing":"bookAutoChecking"; }
 function renderBookAutoStatus(){ $("#bookAutoStatus").textContent=t(bookAutoStatusKey()); }
@@ -141,6 +143,8 @@ $("#resetCorners").addEventListener("click",()=>{ editorCorners=defaultCorners()
 $("#savePageEdit").addEventListener("click",saveEditorPage);
 $("#confirmReview").addEventListener("click",async()=>{ const page=editorPages[editorIndex]; if(!page) return; try{ const updated=await request(`/v1/pages/${page.id}/review`,{method:"PATCH",body:JSON.stringify({status:"confirmed",note:qualityPrompt(page,locale)})}); editorPages[editorIndex]=updated; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].confirmed; }catch(error){ $("#editorMessage").textContent=localizedError(error); } });
 $("#dismissExamSuggestion").addEventListener("click",async()=>{ const page=editorPages[editorIndex]; if(!canDismissExamSuggestion(page)) return; try{ const updated=await request(`/v1/pages/${page.id}/exam-suggestion-dismissal`,{method:"PUT",body:JSON.stringify({result_version:page.exam_result_version,reason:"user_dismissed"})}); editorPages[editorIndex]=updated; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].examDismissed; }catch(error){ $("#editorMessage").textContent=localizedError(error); } });
+$("#retakeBookSide").addEventListener("click",()=>$("#bookRetakeFile").click());
+$("#bookRetakeFile").addEventListener("change",event=>retakeBookSide(event.target.files[0]));
 document.querySelectorAll("[data-page-filter]").forEach(button=>button.addEventListener("click",()=>{ editorFilter=button.dataset.pageFilter; renderEditorState(); }));
 $("#cornerOverlay").addEventListener("pointerdown",event=>{ const handle=event.target.closest("[data-corner]"); if(!handle) return; draggedCorner=Number(handle.dataset.corner); event.currentTarget.setPointerCapture?.(event.pointerId); });
 $("#cornerOverlay").addEventListener("pointermove",event=>{ if(draggedCorner===null) return; const rect=event.currentTarget.getBoundingClientRect(); editorCorners=updateCorner(editorCorners,draggedCorner,(event.clientX-rect.left)/rect.width,(event.clientY-rect.top)/rect.height); editorCornersDirty=true; renderEditorState(); });

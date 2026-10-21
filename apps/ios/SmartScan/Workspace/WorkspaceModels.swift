@@ -33,8 +33,26 @@ struct WorkspacePage: Codable, Equatable, Sendable, Identifiable, Hashable {
     let examConfidenceBand: String?
     let examRecommendation: String?
     let examSuggestionVisible: Bool?
+    var bookCaptureID: String? = nil
+    var bookSide: String? = nil
+    var bookSplitStatus: String? = nil
+    var bookSplitConfidence: Double? = nil
+    var bookSplitReason: String? = nil
+    var bookDewarpApplied: Bool? = nil
+    var bookDewarpSourceScore: Double? = nil
+    var bookDewarpOutputScore: Double? = nil
+    var bookDewarpReason: String? = nil
+    var bookReplacedByPageID: String? = nil
+    var bookIsCurrent: Bool? = nil
 
     var showsExamSuggestion: Bool { examSuggestionVisible == true && examResultVersion != nil }
+    var canRetakeBookSide: Bool {
+        guard let bookSide, let bookSplitStatus else { return false }
+        return ["left", "right"].contains(bookSide)
+            && ["split", "retake"].contains(bookSplitStatus)
+            && bookIsCurrent != false
+            && activeResultVersion > 0
+    }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -49,6 +67,17 @@ struct WorkspacePage: Codable, Equatable, Sendable, Identifiable, Hashable {
         case examConfidenceBand = "exam_confidence_band"
         case examRecommendation = "exam_recommendation"
         case examSuggestionVisible = "exam_suggestion_visible"
+        case bookCaptureID = "book_capture_id"
+        case bookSide = "book_side"
+        case bookSplitStatus = "book_split_status"
+        case bookSplitConfidence = "book_split_confidence"
+        case bookSplitReason = "book_split_reason"
+        case bookDewarpApplied = "book_dewarp_applied"
+        case bookDewarpSourceScore = "book_dewarp_source_score"
+        case bookDewarpOutputScore = "book_dewarp_output_score"
+        case bookDewarpReason = "book_dewarp_reason"
+        case bookReplacedByPageID = "book_replaced_by_page_id"
+        case bookIsCurrent = "book_is_current"
     }
 }
 
@@ -165,6 +194,7 @@ enum WorkspaceError: Error, Equatable {
     case invalidPageOrder
     case invalidRotation
     case invalidExamResultVersion
+    case invalidBookRetake
     case invalidCorners
     case invalidExport
     case invalidDownloadName

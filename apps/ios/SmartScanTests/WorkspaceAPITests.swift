@@ -70,6 +70,31 @@ final class WorkspaceAPITests: XCTestCase {
         XCTAssertEqual(page.examSuggestionVisible, false)
     }
 
+    func testBookSideRetakeUsesMultipartAndParsesLogicalPageEvidence() async throws {
+        let api = try makeAPI()
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/pages/page-1/book-retakes")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertTrue(request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true)
+            let body = try XCTUnwrap(requestBody(request))
+            let text = String(decoding: body, as: UTF8.self)
+            XCTAssertTrue(text.contains("name=\"file\""))
+            XCTAssertTrue(text.contains("filename=\"book-retake.jpg\""))
+            XCTAssertTrue(text.contains("Content-Type: image/jpeg"))
+            return apiResponse(for: request, status: 202, body: bookRetakePageJSON)
+        }
+
+        let page = try await api.retakeBookSide(
+            id: "page-1",
+            data: Data([0xff, 0xd8, 0xff, 0xd9]),
+            mimeType: "image/jpeg"
+        )
+
+        XCTAssertEqual(page.bookSide, "left")
+        XCTAssertEqual(page.bookSplitStatus, "retake")
+        XCTAssertEqual(page.bookIsCurrent, true)
+    }
+
     func testAccountDeletionUsesAuthenticatedRequestAndSeparateSMSPurpose() async throws {
         let api = try makeAPI()
         var requestCount = 0
@@ -147,5 +172,6 @@ private func apiResponse(
 
 private let pageJSON = #"{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":2,"review_status":"pending","ocr_status":"ready","exam_result_version":2,"exam_confidence_band":"high","exam_recommendation":"suggest_cleanup","exam_suggestion_visible":false}"#
 private let legacyPageJSON = #"{"id":"page-1","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":2,"review_status":"pending","ocr_status":"ready"}"#
+private let bookRetakePageJSON = #"{"id":"replacement-page","project_id":"project-1","page_number":1,"quality_warning":null,"rotation_degrees":0,"active_result_version":0,"review_status":"not_required","ocr_status":"disabled","book_capture_id":"replacement-page","book_side":"left","book_split_status":"retake","book_split_confidence":null,"book_split_reason":"single_side_retake","book_dewarp_applied":null,"book_dewarp_source_score":null,"book_dewarp_output_score":null,"book_dewarp_reason":null,"book_replaced_by_page_id":null,"book_is_current":true}"#
 private let exportJSON = #"{"id":"export-1","project_id":"project-1","format":"pdf","quality":"clear","include_ocr_text":true,"status":"ready","page_count":1,"error_code":null,"artifacts":[{"id":"artifact-1","page_id":null,"sequence":1,"file_name":"scan.pdf","mime_type":"application/pdf","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size_bytes":12}],"created_at":"2026-10-21T00:00:00Z","completed_at":"2026-10-21T00:01:00Z"}"#
 private let deletionJSON = #"{"id":"deletion-1","status":"pending","requested_at":"2026-10-21T00:00:00Z","execute_after":"2026-10-28T00:00:00Z","canceled_at":null,"completed_at":null}"#

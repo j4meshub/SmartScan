@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {canDismissExamSuggestion, defaultCorners, examSuggestionPrompt, filterPreview, movePage, qualityPrompt, updateCorner} from "../page-editor.js";
+import {bookSideLabel, canDismissExamSuggestion, canRetakeBookSide, defaultCorners, examSuggestionPrompt, filterPreview, movePage, qualityPrompt, updateCorner} from "../page-editor.js";
 
 test("四角坐标被限制在归一化画布范围", () => {
   const corners = updateCorner(defaultCorners(), 0, -0.2, 1.4);
@@ -16,6 +16,16 @@ test("试卷建议仅对当前可见结果显示并提供双语说明", () => {
   assert.equal(examSuggestionPrompt({...page, exam_suggestion_visible: false}), "");
   assert.equal(canDismissExamSuggestion(page), true);
   assert.equal(canDismissExamSuggestion({...page, exam_result_version: null}), false);
+});
+
+test("书籍逻辑页标签和单侧重拍门禁保持显式", () => {
+  const page = {book_side:"left", book_split_status:"split", book_is_current:true, active_result_version:1};
+  assert.equal(bookSideLabel(page, "zh-CN"), "左页");
+  assert.equal(bookSideLabel({...page, book_side:"right"}, "en"), "Right page");
+  assert.equal(canRetakeBookSide(page), true);
+  assert.equal(canRetakeBookSide({...page, book_side:"single"}), false);
+  assert.equal(canRetakeBookSide({...page, book_is_current:false}), false);
+  assert.equal(canRetakeBookSide({...page, active_result_version:0}), false);
 });
 
 test("页面移动不会越界且返回新的顺序", () => {

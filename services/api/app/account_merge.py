@@ -302,6 +302,8 @@ def merge_accounts(
     references: list[_FileReference] = []
     for page in pages:
         references.append(_FileReference(page, "original_path", page.sha256, True))
+        if page.book_logical_source_path:
+            references.append(_FileReference(page, "book_logical_source_path", None, True))
         if page.processed_path and not any(
             result.file_path == page.processed_path for result in page_results
         ):

@@ -16,7 +16,7 @@ from .scan_routes import router as scan_router
 
 settings = get_settings()
 API_MAJOR_VERSION = "v1"
-CONTRACT_REVISION = "2026-10-21.0"
+CONTRACT_REVISION = "2026-10-21.1"
 
 
 @asynccontextmanager

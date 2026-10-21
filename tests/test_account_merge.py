@@ -132,25 +132,30 @@ def create_pair(
         if with_files:
             original_relative = f"users/{source_id}/originals/{project_id}/{page_id}.jpg"
             processed_relative = f"users/{source_id}/processed/{project_id}/{page_id}.jpg"
+            logical_relative = f"users/{source_id}/book-logical/{project_id}/{page_id}/left.jpg"
             chunk_relative = f"users/{source_id}/temp/{upload_id}/00000000.part"
             export_relative = f"users/{source_id}/exports/{project_id}/merged.pdf"
             original = main.settings.storage_root / original_relative
             processed = main.settings.storage_root / processed_relative
+            logical = main.settings.storage_root / logical_relative
             chunk_path = main.settings.storage_root / chunk_relative
             export_path = main.settings.storage_root / export_relative
             original.parent.mkdir(parents=True, exist_ok=True)
             processed.parent.mkdir(parents=True, exist_ok=True)
+            logical.parent.mkdir(parents=True, exist_ok=True)
             chunk_path.parent.mkdir(parents=True, exist_ok=True)
             export_path.parent.mkdir(parents=True, exist_ok=True)
             original_data = b"original-account-merge-image"
             processed_data = b"processed-account-merge-image"
+            logical_data = b"logical-account-merge-image"
             chunk_data = b"completed-upload-chunk"
             export_data = b"%PDF-account-merge-export"
             original.write_bytes(original_data)
             processed.write_bytes(processed_data)
+            logical.write_bytes(logical_data)
             chunk_path.write_bytes(chunk_data)
             export_path.write_bytes(export_data)
-            paths = [original, processed, chunk_path, export_path]
+            paths = [original, processed, logical, chunk_path, export_path]
             db.add(ScanProject(id=project_id, owner_user_id=source_id, title="待合并项目"))
             db.add(
                 ScanPage(
@@ -160,6 +165,10 @@ def create_pair(
                     page_number=1,
                     original_path=original_relative,
                     processed_path=processed_relative,
+                    book_capture_id=page_id,
+                    book_side="left",
+                    book_split_status="split",
+                    book_logical_source_path=logical_relative,
                     active_result_version=1,
                     sha256=hashlib.sha256(original_data).hexdigest(),
                     size_bytes=len(original_data),
@@ -332,6 +341,9 @@ def test_merge_moves_resources_files_and_revokes_sessions(monkeypatch: pytest.Mo
         assert page is not None and page.owner_user_id == canonical_id
         assert page.original_path.startswith(f"users/{canonical_id}/")
         assert page.processed_path and page.processed_path.startswith(f"users/{canonical_id}/")
+        assert page.book_logical_source_path and page.book_logical_source_path.startswith(
+            f"users/{canonical_id}/"
+        )
         result_row = db.scalar(select(PageResult).where(PageResult.page_id == page.id))
         assert result_row is not None and result_row.owner_user_id == canonical_id
         assert result_row.file_path == page.processed_path

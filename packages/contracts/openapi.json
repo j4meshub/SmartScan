@@ -3,7 +3,7 @@
   "info": {
     "title": "SmartScan 接口",
     "description": "统一账号、权限、扫描项目、上传、处理、导出与文件生命周期接口。",
-    "version": "2026-10-21.0"
+    "version": "2026-10-21.1"
   },
   "paths": {
     "/v1/auth/account-merges": {
@@ -1701,6 +1701,71 @@
         },
         "responses": {
           "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pages/{page_id}/book-retakes": {
+      "post": {
+        "summary": "Create Book Side Retake",
+        "operationId": "create_book_side_retake_v1_pages__page_id__book_retakes_post",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_book_side_retake_v1_pages__page_id__book_retakes_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -3535,6 +3600,20 @@
         ],
         "title": "AuditLogView"
       },
+      "Body_create_book_side_retake_v1_pages__page_id__book_retakes_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_create_book_side_retake_v1_pages__page_id__book_retakes_post"
+      },
       "Body_upload_page_v1_projects__project_id__pages_post": {
         "properties": {
           "file": {
@@ -4663,6 +4742,131 @@
               }
             ],
             "title": "Exam Updated At"
+          },
+          "book_capture_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Capture Id"
+          },
+          "book_side": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "left",
+                  "right",
+                  "single"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Side"
+          },
+          "book_split_status": {
+            "type": "string",
+            "title": "Book Split Status",
+            "default": "disabled"
+          },
+          "book_split_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Split Confidence"
+          },
+          "book_split_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Split Reason"
+          },
+          "book_spine_x": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Spine X"
+          },
+          "book_dewarp_applied": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Dewarp Applied"
+          },
+          "book_dewarp_source_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Dewarp Source Score"
+          },
+          "book_dewarp_output_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Dewarp Output Score"
+          },
+          "book_dewarp_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Dewarp Reason"
+          },
+          "book_replaced_by_page_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Replaced By Page Id"
+          },
+          "book_is_current": {
+            "type": "boolean",
+            "title": "Book Is Current",
+            "default": true
           },
           "active_result": {
             "anyOf": [

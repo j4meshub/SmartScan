@@ -80,6 +80,7 @@ def start_project_deletion(
     relative_paths = {
         *(page.original_path for page in pages),
         *(page.processed_path for page in pages if page.processed_path),
+        *(page.book_logical_source_path for page in pages if page.book_logical_source_path),
         *(result.file_path for result in results),
         *(chunk.relative_path for chunk in chunks),
         *(artifact.file_path for artifact in artifacts),

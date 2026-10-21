@@ -140,6 +140,11 @@
       </div>
       <div id="editorPageList" class="editor-page-list" aria-label="页面列表" data-i18n-aria-label="pagesLabel"></div>
       <p id="qualityMessage" class="quality-message" role="status"></p>
+      <section id="bookRetake" class="exam-suggestion hidden" aria-live="polite">
+        <p data-editor-i18n="retakeBookHint">只替换当前逻辑页，另一侧和物理原图保持不变。</p>
+        <input id="bookRetakeFile" hidden type="file" accept="image/jpeg,image/png,image/webp" capture="environment" aria-label="选择当前侧重拍图片" data-i18n-aria-label="bookRetakeFile">
+        <button id="retakeBookSide" class="secondary" type="button" data-editor-i18n="retakeBookSide">重拍当前侧</button>
+      </section>
       <section id="examSuggestion" class="exam-suggestion hidden" aria-live="polite">
         <p id="examSuggestionText"></p>
         <button id="dismissExamSuggestion" class="secondary" type="button" data-editor-i18n="dismissExam">暂不使用</button>
