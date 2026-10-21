@@ -19,6 +19,7 @@ final class WorkspaceStore: ObservableObject {
     @Published private(set) var selectedProject: WorkspaceProject?
     @Published private(set) var pages: [WorkspacePage] = []
     @Published private(set) var exports: [WorkspaceExport] = []
+    @Published private(set) var bookIntegrity: WorkspaceBookIntegrityReport?
     @Published private(set) var previews: [String: DownloadedDocument] = [:]
     @Published private(set) var busy = false
     @Published private(set) var errorMessage: String?
@@ -40,6 +41,7 @@ final class WorkspaceStore: ObservableObject {
         selectedProject = project
         pages = []
         exports = []
+        bookIntegrity = nil
         previews = [:]
         await perform {
             async let pages = self.repository.pages(projectID: project.id)
@@ -48,6 +50,9 @@ final class WorkspaceStore: ObservableObject {
             let loadedExports = try await exports
             self.pages = loadedPages.sorted(by: { $0.pageNumber < $1.pageNumber })
             self.exports = loadedExports
+            if project.mode == "book" {
+                self.bookIntegrity = try await self.repository.bookIntegrity(projectID: project.id)
+            }
         }
     }
 
@@ -55,6 +60,7 @@ final class WorkspaceStore: ObservableObject {
         selectedProject = nil
         pages = []
         exports = []
+        bookIntegrity = nil
         previews = [:]
         errorMessage = nil
     }
@@ -111,6 +117,51 @@ final class WorkspaceStore: ObservableObject {
             outcome = replacement
         }
         return outcome
+    }
+
+    func decideBookIntegrity(issueKey: String, decision: String) async {
+        guard let project = selectedProject else { return }
+        await perform {
+            self.bookIntegrity = try await self.repository.decideBookIntegrity(
+                projectID: project.id,
+                issueKey: issueKey,
+                decision: decision
+            )
+        }
+    }
+
+    func supplementBookPage(
+        data: Data,
+        mimeType: String,
+        insertAt: Int,
+        expectedPageLabel: String
+    ) async {
+        guard let project = selectedProject else { return }
+        await perform {
+            _ = try await self.repository.supplementBookPage(
+                projectID: project.id,
+                data: data,
+                mimeType: mimeType,
+                insertAt: insertAt,
+                expectedPageLabel: expectedPageLabel
+            )
+            self.pages = try await self.repository.pages(projectID: project.id)
+                .sorted(by: { $0.pageNumber < $1.pageNumber })
+            self.bookIntegrity = try await self.repository.bookIntegrity(projectID: project.id)
+        }
+    }
+
+    func assembleBook(quality: WorkspaceExportQuality, includeOCRText: Bool) async {
+        guard let project = selectedProject else { return }
+        await perform {
+            let created = try await self.repository.assembleBook(
+                projectID: project.id,
+                quality: quality,
+                includeOCRText: includeOCRText
+            )
+            self.exports.removeAll { $0.id == created.id }
+            self.exports.insert(created, at: 0)
+        }
     }
 
     func loadPreview(for page: WorkspacePage) async {

@@ -1,6 +1,8 @@
 package com.smartscan.data.repository
 
 import com.smartscan.core.model.DownloadedArtifact
+import com.smartscan.core.model.BookIntegrityIssue
+import com.smartscan.core.model.BookIntegrityReport
 import com.smartscan.core.model.ExportArtifact
 import com.smartscan.core.model.ProjectExport
 import com.smartscan.core.model.ScanProject
@@ -8,6 +10,9 @@ import com.smartscan.core.model.ScanPage
 import com.smartscan.core.network.ExportCreateRequestDto
 import com.smartscan.core.network.ExportDto
 import com.smartscan.core.network.ExamSuggestionDismissalRequestDto
+import com.smartscan.core.network.BookAssemblyRequestDto
+import com.smartscan.core.network.BookIntegrityDecisionRequestDto
+import com.smartscan.core.network.BookIntegrityReportDto
 import com.smartscan.core.network.PageCornerDto
 import com.smartscan.core.network.PageEditRequestDto
 import com.smartscan.core.network.PageOrderRequestDto
@@ -26,6 +31,7 @@ import kotlinx.serialization.SerializationException
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
 
 interface ProjectRepository {
@@ -37,6 +43,24 @@ interface ProjectRepository {
     suspend fun reviewPage(pageId: String, confirmed: Boolean): ApiResult<ScanPage>
     suspend fun dismissExamSuggestion(pageId: String, resultVersion: Int): ApiResult<ScanPage>
     suspend fun retakeBookSide(pageId: String, file: File, mimeType: String): ApiResult<ScanPage>
+    suspend fun getBookIntegrity(projectId: String): ApiResult<BookIntegrityReport>
+    suspend fun decideBookIntegrity(
+        projectId: String,
+        issueKey: String,
+        decision: String,
+    ): ApiResult<BookIntegrityReport>
+    suspend fun supplementBookPage(
+        projectId: String,
+        file: File,
+        mimeType: String,
+        insertAt: Int,
+        expectedPageLabel: String,
+    ): ApiResult<ScanPage>
+    suspend fun assembleBook(
+        projectId: String,
+        quality: String,
+        includeOcrText: Boolean,
+    ): ApiResult<ProjectExport>
     suspend fun createExport(
         projectId: String,
         format: String,
@@ -112,6 +136,57 @@ class DefaultProjectRepository(
         }
         val body = file.asRequestBody(mimeType.toMediaTypeOrNull())
         it.retakeBookSide(pageId, MultipartBody.Part.createFormData("file", file.name, body)).toModel()
+    }
+
+    override suspend fun getBookIntegrity(projectId: String): ApiResult<BookIntegrityReport> =
+        withWorkspace { it.getBookIntegrity(projectId).toModel() }
+
+    override suspend fun decideBookIntegrity(
+        projectId: String,
+        issueKey: String,
+        decision: String,
+    ): ApiResult<BookIntegrityReport> = withWorkspace {
+        require(issueKey.isNotBlank()) { "book_integrity_issue_invalid" }
+        require(
+            decision in setOf(
+                "ignored",
+                "confirmed_absent",
+                "keep_both",
+                "exclude_duplicate",
+                "reopen",
+            ),
+        ) { "book_integrity_decision_invalid" }
+        it.decideBookIntegrity(projectId, BookIntegrityDecisionRequestDto(issueKey, decision)).toModel()
+    }
+
+    override suspend fun supplementBookPage(
+        projectId: String,
+        file: File,
+        mimeType: String,
+        insertAt: Int,
+        expectedPageLabel: String,
+    ): ApiResult<ScanPage> = withWorkspace {
+        require(file.isFile && file.length() > 0) { "book_supplement_file_invalid" }
+        require(mimeType in setOf("image/jpeg", "image/png", "image/webp")) {
+            "book_supplement_mime_invalid"
+        }
+        require(insertAt > 0 && expectedPageLabel.isNotBlank()) { "book_supplement_position_invalid" }
+        val body = file.asRequestBody(mimeType.toMediaTypeOrNull())
+        it.supplementBookPage(
+            projectId,
+            MultipartBody.Part.createFormData("file", file.name, body),
+            insertAt.toString().toRequestBody("text/plain".toMediaTypeOrNull()),
+            expectedPageLabel.toRequestBody("text/plain".toMediaTypeOrNull()),
+        ).toModel()
+    }
+
+    override suspend fun assembleBook(
+        projectId: String,
+        quality: String,
+        includeOcrText: Boolean,
+    ): ApiResult<ProjectExport> = withWorkspace {
+        require(quality in setOf("clear", "balanced", "small")) { "export_quality_invalid" }
+        it.assembleBook(projectId, BookAssemblyRequestDto(quality, includeOcrText)).toModel()
     }
 
     override suspend fun createExport(
@@ -192,6 +267,41 @@ private fun com.smartscan.core.network.PageDto.toModel() = ScanPage(
     bookDewarpReason = bookDewarpReason,
     bookReplacedByPageId = bookReplacedByPageId,
     bookIsCurrent = bookIsCurrent,
+    bookPageNumberStatus = bookPageNumberStatus,
+    bookPageNumberLabel = bookPageNumberLabel,
+    bookPageNumberValue = bookPageNumberValue,
+    bookPageNumberKind = bookPageNumberKind,
+    bookPageNumberConfidence = bookPageNumberConfidence,
+    bookPageNumberReason = bookPageNumberReason,
+    bookPageNumberResultVersion = bookPageNumberResultVersion,
+    bookExpectedPageLabel = bookExpectedPageLabel,
+    bookContentFingerprint = bookContentFingerprint,
+    bookFingerprintResultVersion = bookFingerprintResultVersion,
+    bookAssemblyIncluded = bookAssemblyIncluded,
+    bookAssemblyExclusionReason = bookAssemblyExclusionReason,
+)
+
+private fun BookIntegrityReportDto.toModel() = BookIntegrityReport(
+    projectId = projectId,
+    pagesChecked = pagesChecked,
+    includedPageCount = includedPageCount,
+    visiblePageNumberCount = visiblePageNumberCount,
+    processingPageCount = processingPageCount,
+    blockingIssueCount = blockingIssueCount,
+    readyToAssemble = readyToAssemble,
+    issues = issues.map {
+        BookIntegrityIssue(
+            key = it.key,
+            kind = it.kind,
+            severity = it.severity,
+            messageCode = it.messageCode,
+            pageId = it.pageId,
+            relatedPageId = it.relatedPageId,
+            printedPageLabel = it.printedPageLabel,
+            decision = it.decision,
+            blocking = it.blocking,
+        )
+    },
 )
 
 private fun ExportDto.toModel() = ProjectExport(
@@ -207,6 +317,9 @@ private fun ExportDto.toModel() = ProjectExport(
         ExportArtifact(it.id, it.pageId, it.sequence, it.fileName, it.mimeType, it.sha256, it.sizeBytes)
     },
     createdAt = createdAt,
+    bookAssemblySignature = bookAssemblySignature,
+    bookAssemblyRevision = bookAssemblyRevision,
+    bookPreviousExportId = bookPreviousExportId,
 )
 
 private fun saveDownload(

@@ -44,6 +44,18 @@ struct WorkspacePage: Codable, Equatable, Sendable, Identifiable, Hashable {
     var bookDewarpReason: String? = nil
     var bookReplacedByPageID: String? = nil
     var bookIsCurrent: Bool? = nil
+    var bookPageNumberStatus: String? = nil
+    var bookPageNumberLabel: String? = nil
+    var bookPageNumberValue: Int? = nil
+    var bookPageNumberKind: String? = nil
+    var bookPageNumberConfidence: Double? = nil
+    var bookPageNumberReason: String? = nil
+    var bookPageNumberResultVersion: Int? = nil
+    var bookExpectedPageLabel: String? = nil
+    var bookContentFingerprint: String? = nil
+    var bookFingerprintResultVersion: Int? = nil
+    var bookAssemblyIncluded: Bool? = nil
+    var bookAssemblyExclusionReason: String? = nil
 
     var showsExamSuggestion: Bool { examSuggestionVisible == true && examResultVersion != nil }
     var canRetakeBookSide: Bool {
@@ -78,6 +90,62 @@ struct WorkspacePage: Codable, Equatable, Sendable, Identifiable, Hashable {
         case bookDewarpReason = "book_dewarp_reason"
         case bookReplacedByPageID = "book_replaced_by_page_id"
         case bookIsCurrent = "book_is_current"
+        case bookPageNumberStatus = "book_page_number_status"
+        case bookPageNumberLabel = "book_page_number_label"
+        case bookPageNumberValue = "book_page_number_value"
+        case bookPageNumberKind = "book_page_number_kind"
+        case bookPageNumberConfidence = "book_page_number_confidence"
+        case bookPageNumberReason = "book_page_number_reason"
+        case bookPageNumberResultVersion = "book_page_number_result_version"
+        case bookExpectedPageLabel = "book_expected_page_label"
+        case bookContentFingerprint = "book_content_fingerprint"
+        case bookFingerprintResultVersion = "book_fingerprint_result_version"
+        case bookAssemblyIncluded = "book_assembly_included"
+        case bookAssemblyExclusionReason = "book_assembly_exclusion_reason"
+    }
+}
+
+struct WorkspaceBookIntegrityIssue: Codable, Equatable, Sendable, Identifiable, Hashable {
+    let key: String
+    let kind: String
+    let severity: String
+    let messageCode: String
+    let pageID: String?
+    let relatedPageID: String?
+    let printedPageLabel: String?
+    let decision: String?
+    let blocking: Bool
+
+    var id: String { key }
+
+    enum CodingKeys: String, CodingKey {
+        case key, kind, severity, decision, blocking
+        case messageCode = "message_code"
+        case pageID = "page_id"
+        case relatedPageID = "related_page_id"
+        case printedPageLabel = "printed_page_label"
+    }
+}
+
+struct WorkspaceBookIntegrityReport: Codable, Equatable, Sendable {
+    let projectID: String
+    let pagesChecked: Int
+    let includedPageCount: Int
+    let visiblePageNumberCount: Int
+    let processingPageCount: Int
+    let blockingIssueCount: Int
+    let readyToAssemble: Bool
+    let issues: [WorkspaceBookIntegrityIssue]
+
+    enum CodingKeys: String, CodingKey {
+        case issues
+        case projectID = "project_id"
+        case pagesChecked = "pages_checked"
+        case includedPageCount = "included_page_count"
+        case visiblePageNumberCount = "visible_page_number_count"
+        case processingPageCount = "processing_page_count"
+        case blockingIssueCount = "blocking_issue_count"
+        case readyToAssemble = "ready_to_assemble"
     }
 }
 
@@ -143,6 +211,9 @@ struct WorkspaceExport: Codable, Equatable, Sendable, Identifiable {
     let artifacts: [WorkspaceExportArtifact]
     let createdAt: String
     let completedAt: String?
+    var bookAssemblySignature: String? = nil
+    var bookAssemblyRevision: Int? = nil
+    var bookPreviousExportID: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, format, quality, status, artifacts
@@ -152,6 +223,9 @@ struct WorkspaceExport: Codable, Equatable, Sendable, Identifiable {
         case errorCode = "error_code"
         case createdAt = "created_at"
         case completedAt = "completed_at"
+        case bookAssemblySignature = "book_assembly_signature"
+        case bookAssemblyRevision = "book_assembly_revision"
+        case bookPreviousExportID = "book_previous_export_id"
     }
 }
 
@@ -195,6 +269,8 @@ enum WorkspaceError: Error, Equatable {
     case invalidRotation
     case invalidExamResultVersion
     case invalidBookRetake
+    case invalidBookSupplement
+    case invalidBookIntegrityDecision
     case invalidCorners
     case invalidExport
     case invalidDownloadName

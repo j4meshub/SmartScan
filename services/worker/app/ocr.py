@@ -312,6 +312,7 @@ def analyze_four_orientations(
     )
     details: dict[str, object] = {
         "schema_version": 1,
+        "selected_image_size": [best.width, best.height],
         "passes": [
             {
                 "rotation_degrees": item.rotation_degrees,

@@ -11,6 +11,8 @@ from PIL import Image, ImageEnhance, ImageOps
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from services.worker.app.book_integrity import image_dhash
+
 from .config import Settings, get_settings
 from .models import (
     JobStatus,
@@ -140,6 +142,38 @@ def page_view(db: Session, page: ScanPage) -> PageView:
         book_dewarp_reason=page.book_dewarp_reason,
         book_replaced_by_page_id=page.book_replaced_by_page_id,
         book_is_current=page.book_replaced_by_page_id is None,
+        book_page_number_status=page.book_page_number_status,
+        book_page_number_label=(
+            page.book_page_number_label
+            if page.book_page_number_result_version == page.active_result_version
+            else None
+        ),
+        book_page_number_value=(
+            page.book_page_number_value
+            if page.book_page_number_result_version == page.active_result_version
+            else None
+        ),
+        book_page_number_kind=(
+            page.book_page_number_kind
+            if page.book_page_number_result_version == page.active_result_version
+            else None
+        ),
+        book_page_number_confidence=(
+            page.book_page_number_confidence
+            if page.book_page_number_result_version == page.active_result_version
+            else None
+        ),
+        book_page_number_reason=page.book_page_number_reason,
+        book_page_number_result_version=page.book_page_number_result_version,
+        book_expected_page_label=page.book_expected_page_label,
+        book_content_fingerprint=(
+            page.book_content_fingerprint
+            if page.book_fingerprint_result_version == page.active_result_version
+            else None
+        ),
+        book_fingerprint_result_version=page.book_fingerprint_result_version,
+        book_assembly_included=page.book_assembly_included,
+        book_assembly_exclusion_reason=page.book_assembly_exclusion_reason,
         active_result=active_page_result(db, page),
         created_at=page.created_at,
         updated_at=page.updated_at,
@@ -189,6 +223,20 @@ def _invalidate_ocr(page: ScanPage) -> None:
     page.ocr_title_candidate = None
     page.ocr_error_code = None
     page.ocr_updated_at = datetime.now(UTC)
+
+
+def _invalidate_book_integrity(page: ScanPage) -> None:
+    if page.book_split_status == "disabled":
+        return
+    page.book_page_number_status = "stale"
+    page.book_page_number_label = None
+    page.book_page_number_value = None
+    page.book_page_number_kind = None
+    page.book_page_number_confidence = None
+    page.book_page_number_reason = "page_result_changed"
+    page.book_page_number_result_version = None
+    page.book_content_fingerprint = None
+    page.book_fingerprint_result_version = None
 
 
 def _invalidate_exam_classification(page: ScanPage) -> None:
@@ -296,7 +344,7 @@ def edit_page(
             if corners is not None:
                 edited = _perspective_crop(edited, corners)
             edited = _apply_filter(edited, filter_name)
-            _, destination = save_page_result(
+            result, destination = save_page_result(
                 db,
                 page=page,
                 image=edited,
@@ -307,6 +355,10 @@ def edit_page(
             )
             _invalidate_ocr(page)
             _invalidate_exam_classification(page)
+            _invalidate_book_integrity(page)
+            if page.book_split_status != "disabled":
+                page.book_content_fingerprint = image_dhash(edited)
+                page.book_fingerprint_result_version = result.version
     except PageMutationError:
         raise
     except Exception as exc:
@@ -383,7 +435,7 @@ def rotate_page(
     try:
         with Image.open(source) as raw:
             rotated = ImageOps.exif_transpose(raw).convert("RGB").rotate(-degrees, expand=True)
-            _, destination = save_page_result(
+            result, destination = save_page_result(
                 db,
                 page=page,
                 image=rotated,
@@ -394,6 +446,10 @@ def rotate_page(
             )
             _invalidate_ocr(page)
             _invalidate_exam_classification(page)
+            _invalidate_book_integrity(page)
+            if page.book_split_status != "disabled":
+                page.book_content_fingerprint = image_dhash(rotated)
+                page.book_fingerprint_result_version = result.version
     except PageMutationError:
         raise
     except Exception as exc:

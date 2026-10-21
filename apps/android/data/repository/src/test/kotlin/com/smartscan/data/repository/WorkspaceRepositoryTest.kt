@@ -3,6 +3,9 @@ package com.smartscan.data.repository
 import com.smartscan.core.model.ExportArtifact
 import com.smartscan.core.network.ExportCreateRequestDto
 import com.smartscan.core.network.ExportDto
+import com.smartscan.core.network.BookAssemblyRequestDto
+import com.smartscan.core.network.BookIntegrityDecisionRequestDto
+import com.smartscan.core.network.BookIntegrityReportDto
 import com.smartscan.core.network.PageDto
 import com.smartscan.core.network.PageEditRequestDto
 import com.smartscan.core.network.PageOrderRequestDto
@@ -81,6 +84,19 @@ class WorkspaceRepositoryTest {
     }
 
     @Test
+    fun `book integrity and assembly map versioned evidence`() = runTest {
+        val repository = DefaultProjectRepository(QueryApi(), FakeWorkspaceApi())
+
+        val report = repository.getBookIntegrity("project-1") as ApiResult.Success
+        val assembly = repository.assembleBook("project-1", "balanced", true) as ApiResult.Success
+
+        assertTrue(report.value.readyToAssemble)
+        assertEquals(1, report.value.visiblePageNumberCount)
+        assertEquals(2, assembly.value.bookAssemblyRevision)
+        assertEquals("export-previous", assembly.value.bookPreviousExportId)
+    }
+
+    @Test
     fun `export download verifies size and sha before publishing file`() = runTest {
         val bytes = "verified-export".toByteArray()
         val workspace = FakeWorkspaceApi(downloadBytes = bytes)
@@ -146,6 +162,27 @@ private class FakeWorkspaceApi(private val downloadBytes: ByteArray = "preview".
     var reorderCalled = false
     var retakeCalled = false
 
+    override suspend fun getBookIntegrity(projectId: String) = bookIntegrity(projectId)
+
+    override suspend fun decideBookIntegrity(
+        projectId: String,
+        request: BookIntegrityDecisionRequestDto,
+    ) = bookIntegrity(projectId)
+
+    override suspend fun supplementBookPage(
+        projectId: String,
+        file: okhttp3.MultipartBody.Part,
+        insertAt: okhttp3.RequestBody,
+        expectedPageLabel: okhttp3.RequestBody,
+    ) = page("supplement-page")
+
+    override suspend fun assembleBook(projectId: String, request: BookAssemblyRequestDto) =
+        export(projectId, ExportCreateRequestDto("pdf", request.quality, request.includeOcrText)).copy(
+            bookAssemblySignature = "signature",
+            bookAssemblyRevision = 2,
+            bookPreviousExportId = "export-previous",
+        )
+
     override suspend fun retakeBookSide(
         pageId: String,
         file: okhttp3.MultipartBody.Part,
@@ -184,6 +221,17 @@ private class FakeWorkspaceApi(private val downloadBytes: ByteArray = "preview".
     override suspend fun downloadPageContent(pageId: String, variant: String) = downloadBytes.toResponseBody()
     override suspend fun downloadExportArtifact(artifactId: String) = downloadBytes.toResponseBody()
 }
+
+private fun bookIntegrity(projectId: String) = BookIntegrityReportDto(
+    projectId = projectId,
+    pagesChecked = 1,
+    includedPageCount = 1,
+    visiblePageNumberCount = 1,
+    processingPageCount = 0,
+    blockingIssueCount = 0,
+    readyToAssemble = true,
+    issues = emptyList(),
+)
 
 private fun page(id: String = "page-1", number: Int = 1) = PageDto(
     id = id,

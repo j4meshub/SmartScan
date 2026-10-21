@@ -182,6 +182,36 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
         return replacement
     }
 
+    func bookIntegrity(projectID: String) async throws -> WorkspaceBookIntegrityReport {
+        workspaceBookIntegrity(projectID: projectID)
+    }
+
+    func decideBookIntegrity(
+        projectID: String,
+        issueKey: String,
+        decision: String
+    ) async throws -> WorkspaceBookIntegrityReport {
+        workspaceBookIntegrity(projectID: projectID)
+    }
+
+    func supplementBookPage(
+        projectID: String,
+        data: Data,
+        mimeType: String,
+        insertAt: Int,
+        expectedPageLabel: String
+    ) async throws -> WorkspacePage {
+        workspacePage(id: "supplement-page")
+    }
+
+    func assembleBook(
+        projectID: String,
+        quality: WorkspaceExportQuality,
+        includeOCRText: Bool
+    ) async throws -> WorkspaceExport {
+        workspaceExport()
+    }
+
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -201,6 +231,19 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
         guard let artifactDownload else { throw WorkspaceError.localFileUnavailable }
         return artifactDownload
     }
+}
+
+private func workspaceBookIntegrity(projectID: String) -> WorkspaceBookIntegrityReport {
+    WorkspaceBookIntegrityReport(
+        projectID: projectID,
+        pagesChecked: 1,
+        includedPageCount: 1,
+        visiblePageNumberCount: 1,
+        processingPageCount: 0,
+        blockingIssueCount: 0,
+        readyToAssemble: true,
+        issues: []
+    )
 }
 
 private func workspacePage(id: String = "page-1") -> WorkspacePage {

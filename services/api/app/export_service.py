@@ -206,6 +206,9 @@ def create_export(
     quality: str,
     include_ocr_text: bool,
     page_ids: list[str] | None,
+    book_assembly_signature: str | None = None,
+    book_assembly_revision: int | None = None,
+    book_previous_export_id: str | None = None,
     settings: Settings | None = None,
 ) -> ScanExport:
     settings = settings or get_settings()
@@ -235,7 +238,12 @@ def create_export(
         ocr_pages_used=sum(bool(source.ocr_lines) for source in sources) if include_ocr_text else 0,
         base_file_name=_base_file_name(project, now),
         page_snapshot=json.dumps(snapshot, sort_keys=True, separators=(",", ":")),
-        processor_version=PROCESSOR_VERSION,
+        processor_version=(
+            "export-v2-book-assembly" if book_assembly_signature is not None else PROCESSOR_VERSION
+        ),
+        book_assembly_signature=book_assembly_signature,
+        book_assembly_revision=book_assembly_revision,
+        book_previous_export_id=book_previous_export_id,
         created_at=now,
     )
     db.add(export)

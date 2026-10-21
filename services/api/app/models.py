@@ -386,7 +386,8 @@ class ScanPage(Base):
             name="ck_scan_pages_exam_dismissed_result_version",
         ),
         CheckConstraint(
-            "book_split_status IN ('disabled', 'legacy', 'pending', 'split', 'fallback', 'retake')",
+            "book_split_status IN "
+            "('disabled', 'legacy', 'pending', 'split', 'fallback', 'retake', 'supplement')",
             name="ck_scan_pages_book_split_status",
         ),
         CheckConstraint(
@@ -407,6 +408,28 @@ class ScanPage(Base):
             "book_dewarp_output_score IS NULL OR "
             "(book_dewarp_output_score >= 0 AND book_dewarp_output_score <= 1)",
             name="ck_scan_pages_book_dewarp_output_score",
+        ),
+        CheckConstraint(
+            "book_page_number_status IN "
+            "('disabled', 'legacy', 'pending', 'ready', 'none', 'ambiguous', 'stale')",
+            name="ck_scan_pages_book_page_number_status",
+        ),
+        CheckConstraint(
+            "book_page_number_kind IS NULL OR book_page_number_kind IN ('arabic', 'roman')",
+            name="ck_scan_pages_book_page_number_kind",
+        ),
+        CheckConstraint(
+            "book_page_number_confidence IS NULL OR "
+            "(book_page_number_confidence >= 0 AND book_page_number_confidence <= 1)",
+            name="ck_scan_pages_book_page_number_confidence",
+        ),
+        CheckConstraint(
+            "book_page_number_result_version IS NULL OR book_page_number_result_version >= 0",
+            name="ck_scan_pages_book_page_number_result_version",
+        ),
+        CheckConstraint(
+            "book_fingerprint_result_version IS NULL OR book_fingerprint_result_version >= 0",
+            name="ck_scan_pages_book_fingerprint_result_version",
         ),
         UniqueConstraint("book_capture_id", "book_side", name="uq_scan_pages_book_capture_side"),
         UniqueConstraint("book_replaced_by_page_id", name="uq_scan_pages_book_replaced_by"),
@@ -477,6 +500,20 @@ class ScanPage(Base):
     book_replaced_by_page_id: Mapped[str | None] = mapped_column(
         ForeignKey("scan_pages.id", ondelete="SET NULL"), index=True
     )
+    book_page_number_status: Mapped[str] = mapped_column(
+        String(24), default="disabled", nullable=False
+    )
+    book_page_number_label: Mapped[str | None] = mapped_column(String(24))
+    book_page_number_value: Mapped[int | None] = mapped_column(Integer)
+    book_page_number_kind: Mapped[str | None] = mapped_column(String(12))
+    book_page_number_confidence: Mapped[float | None] = mapped_column(Float)
+    book_page_number_reason: Mapped[str | None] = mapped_column(String(64))
+    book_page_number_result_version: Mapped[int | None] = mapped_column(Integer)
+    book_expected_page_label: Mapped[str | None] = mapped_column(String(24))
+    book_content_fingerprint: Mapped[str | None] = mapped_column(String(16))
+    book_fingerprint_result_version: Mapped[int | None] = mapped_column(Integer)
+    book_assembly_included: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    book_assembly_exclusion_reason: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -513,6 +550,31 @@ class PageResult(Base):
     page: Mapped[ScanPage] = relationship(back_populates="results")
 
 
+class BookIntegrityDecision(Base):
+    __tablename__ = "book_integrity_decisions"
+    __table_args__ = (
+        UniqueConstraint("project_id", "issue_key", name="uq_book_integrity_decision_issue"),
+        CheckConstraint(
+            "decision IN ('ignored', 'confirmed_absent', 'keep_both', 'exclude_duplicate')",
+            name="ck_book_integrity_decisions_decision",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    issue_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    issue_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)
+    details: Mapped[str | None] = mapped_column(Text)
+    decided_by_user_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ScanExport(Base):
     __tablename__ = "scan_exports"
     __table_args__ = (
@@ -527,6 +589,13 @@ class ScanExport(Base):
         CheckConstraint(
             "ocr_pages_used >= 0 AND ocr_pages_used <= page_count",
             name="ck_scan_exports_ocr_pages_used",
+        ),
+        CheckConstraint(
+            "book_assembly_revision IS NULL OR book_assembly_revision >= 1",
+            name="ck_scan_exports_book_assembly_revision",
+        ),
+        UniqueConstraint(
+            "project_id", "book_assembly_signature", name="uq_scan_exports_book_assembly_signature"
         ),
     )
 
@@ -551,6 +620,11 @@ class ScanExport(Base):
     base_file_name: Mapped[str] = mapped_column(String(160), nullable=False)
     page_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
     processor_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    book_assembly_signature: Mapped[str | None] = mapped_column(String(64), index=True)
+    book_assembly_revision: Mapped[int | None] = mapped_column(Integer)
+    book_previous_export_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scan_exports.id", ondelete="SET NULL"), index=True
+    )
     error_code: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
