@@ -1,0 +1,2031 @@
+{
+  "contract": "SmartScan 可选视觉 AI 结构化任务",
+  "schema_version": "1.0",
+  "tasks": [
+    {
+      "required_capability": "image_classification",
+      "result_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence_codes": {
+            "default": [],
+            "items": {
+              "enum": [
+                "dense_question_layout",
+                "answer_regions",
+                "book_gutter",
+                "page_number",
+                "cover_title",
+                "ordinary_layout",
+                "insufficient_evidence"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Evidence Codes",
+            "type": "array"
+          },
+          "label": {
+            "enum": [
+              "ordinary_document",
+              "exam",
+              "book_page",
+              "cover"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "classify_page",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "confidence",
+          "label"
+        ],
+        "title": "ClassifyPageResult",
+        "type": "object"
+      },
+      "result_schema_sha256": "5c6bc6763ae9fe62229c78dc946ca967644859ec830d7e68f86667138d7bc349",
+      "schema_version": "1.0",
+      "task_schema": {
+        "$defs": {
+          "ClassifyPageParameters": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_labels": {
+                "default": [
+                  "ordinary_document",
+                  "exam",
+                  "book_page",
+                  "cover"
+                ],
+                "items": {
+                  "enum": [
+                    "ordinary_document",
+                    "exam",
+                    "book_page",
+                    "cover"
+                  ],
+                  "type": "string"
+                },
+                "title": "Allowed Labels",
+                "type": "array"
+              }
+            },
+            "title": "ClassifyPageParameters",
+            "type": "object"
+          },
+          "MediaReference": {
+            "additionalProperties": false,
+            "properties": {
+              "asset_id": {
+                "format": "uuid",
+                "title": "Asset Id",
+                "type": "string"
+              },
+              "height": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Height",
+                "type": "integer"
+              },
+              "mime_type": {
+                "enum": [
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp"
+                ],
+                "title": "Mime Type",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              },
+              "width": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Width",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "asset_id",
+              "sha256",
+              "mime_type",
+              "width",
+              "height"
+            ],
+            "title": "MediaReference",
+            "type": "object"
+          },
+          "TaskConstraints": {
+            "additionalProperties": false,
+            "properties": {
+              "max_output_tokens": {
+                "default": 1024,
+                "maximum": 4096,
+                "minimum": 64,
+                "title": "Max Output Tokens",
+                "type": "integer"
+              },
+              "temperature": {
+                "const": 0.0,
+                "default": 0.0,
+                "title": "Temperature",
+                "type": "number"
+              }
+            },
+            "title": "TaskConstraints",
+            "type": "object"
+          },
+          "TaskContext": {
+            "additionalProperties": false,
+            "properties": {
+              "locale": {
+                "default": "zh-CN",
+                "enum": [
+                  "zh-CN",
+                  "en"
+                ],
+                "title": "Locale",
+                "type": "string"
+              },
+              "media": {
+                "$ref": "#/$defs/MediaReference"
+              },
+              "page_id": {
+                "format": "uuid",
+                "title": "Page Id",
+                "type": "string"
+              },
+              "source_result_version": {
+                "minimum": 0,
+                "title": "Source Result Version",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page_id",
+              "source_result_version",
+              "media"
+            ],
+            "title": "TaskContext",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "$ref": "#/$defs/TaskConstraints"
+          },
+          "context": {
+            "$ref": "#/$defs/TaskContext"
+          },
+          "parameters": {
+            "$ref": "#/$defs/ClassifyPageParameters"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "classify_page",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "context"
+        ],
+        "title": "ClassifyPageTask",
+        "type": "object"
+      },
+      "task_type": "classify_page"
+    },
+    {
+      "required_capability": "image_classification",
+      "result_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "evidence_codes": {
+            "default": [],
+            "items": {
+              "enum": [
+                "text_direction",
+                "layout_direction",
+                "insufficient_evidence"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "title": "Evidence Codes",
+            "type": "array"
+          },
+          "rotation_degrees": {
+            "enum": [
+              0,
+              90,
+              180,
+              270
+            ],
+            "title": "Rotation Degrees",
+            "type": "integer"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "detect_orientation",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "confidence",
+          "rotation_degrees"
+        ],
+        "title": "DetectOrientationResult",
+        "type": "object"
+      },
+      "result_schema_sha256": "e471850198910108cb35979ae5aca3922ee5e10cc4b0b8a9d28cfd129c84a690",
+      "schema_version": "1.0",
+      "task_schema": {
+        "$defs": {
+          "DetectOrientationParameters": {
+            "additionalProperties": false,
+            "properties": {
+              "current_rotation_degrees": {
+                "default": 0,
+                "enum": [
+                  0,
+                  90,
+                  180,
+                  270
+                ],
+                "title": "Current Rotation Degrees",
+                "type": "integer"
+              }
+            },
+            "title": "DetectOrientationParameters",
+            "type": "object"
+          },
+          "MediaReference": {
+            "additionalProperties": false,
+            "properties": {
+              "asset_id": {
+                "format": "uuid",
+                "title": "Asset Id",
+                "type": "string"
+              },
+              "height": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Height",
+                "type": "integer"
+              },
+              "mime_type": {
+                "enum": [
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp"
+                ],
+                "title": "Mime Type",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              },
+              "width": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Width",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "asset_id",
+              "sha256",
+              "mime_type",
+              "width",
+              "height"
+            ],
+            "title": "MediaReference",
+            "type": "object"
+          },
+          "TaskConstraints": {
+            "additionalProperties": false,
+            "properties": {
+              "max_output_tokens": {
+                "default": 1024,
+                "maximum": 4096,
+                "minimum": 64,
+                "title": "Max Output Tokens",
+                "type": "integer"
+              },
+              "temperature": {
+                "const": 0.0,
+                "default": 0.0,
+                "title": "Temperature",
+                "type": "number"
+              }
+            },
+            "title": "TaskConstraints",
+            "type": "object"
+          },
+          "TaskContext": {
+            "additionalProperties": false,
+            "properties": {
+              "locale": {
+                "default": "zh-CN",
+                "enum": [
+                  "zh-CN",
+                  "en"
+                ],
+                "title": "Locale",
+                "type": "string"
+              },
+              "media": {
+                "$ref": "#/$defs/MediaReference"
+              },
+              "page_id": {
+                "format": "uuid",
+                "title": "Page Id",
+                "type": "string"
+              },
+              "source_result_version": {
+                "minimum": 0,
+                "title": "Source Result Version",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page_id",
+              "source_result_version",
+              "media"
+            ],
+            "title": "TaskContext",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "$ref": "#/$defs/TaskConstraints"
+          },
+          "context": {
+            "$ref": "#/$defs/TaskContext"
+          },
+          "parameters": {
+            "$ref": "#/$defs/DetectOrientationParameters"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "detect_orientation",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "context"
+        ],
+        "title": "DetectOrientationTask",
+        "type": "object"
+      },
+      "task_type": "detect_orientation"
+    },
+    {
+      "required_capability": "document_understanding",
+      "result_schema": {
+        "$defs": {
+          "TitleCandidate": {
+            "additionalProperties": false,
+            "properties": {
+              "confidence": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Confidence",
+                "type": "number"
+              },
+              "source": {
+                "enum": [
+                  "cover",
+                  "header",
+                  "spine",
+                  "body",
+                  "unknown"
+                ],
+                "title": "Source",
+                "type": "string"
+              },
+              "text": {
+                "maxLength": 160,
+                "minLength": 1,
+                "title": "Text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text",
+              "confidence",
+              "source"
+            ],
+            "title": "TitleCandidate",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/TitleCandidate"
+            },
+            "maxItems": 5,
+            "title": "Candidates",
+            "type": "array"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "extract_title",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "confidence"
+        ],
+        "title": "ExtractTitleResult",
+        "type": "object"
+      },
+      "result_schema_sha256": "27c80bcb298a21570a9eb680b41a39cea746f2ff459b85a0aa417d58b4e2e089",
+      "schema_version": "1.0",
+      "task_schema": {
+        "$defs": {
+          "ExtractTitleParameters": {
+            "additionalProperties": false,
+            "properties": {
+              "document_kind": {
+                "default": "document",
+                "enum": [
+                  "document",
+                  "exam",
+                  "book",
+                  "cover"
+                ],
+                "title": "Document Kind",
+                "type": "string"
+              },
+              "max_candidates": {
+                "default": 3,
+                "maximum": 5,
+                "minimum": 1,
+                "title": "Max Candidates",
+                "type": "integer"
+              }
+            },
+            "title": "ExtractTitleParameters",
+            "type": "object"
+          },
+          "MediaReference": {
+            "additionalProperties": false,
+            "properties": {
+              "asset_id": {
+                "format": "uuid",
+                "title": "Asset Id",
+                "type": "string"
+              },
+              "height": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Height",
+                "type": "integer"
+              },
+              "mime_type": {
+                "enum": [
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp"
+                ],
+                "title": "Mime Type",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              },
+              "width": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Width",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "asset_id",
+              "sha256",
+              "mime_type",
+              "width",
+              "height"
+            ],
+            "title": "MediaReference",
+            "type": "object"
+          },
+          "TaskConstraints": {
+            "additionalProperties": false,
+            "properties": {
+              "max_output_tokens": {
+                "default": 1024,
+                "maximum": 4096,
+                "minimum": 64,
+                "title": "Max Output Tokens",
+                "type": "integer"
+              },
+              "temperature": {
+                "const": 0.0,
+                "default": 0.0,
+                "title": "Temperature",
+                "type": "number"
+              }
+            },
+            "title": "TaskConstraints",
+            "type": "object"
+          },
+          "TaskContext": {
+            "additionalProperties": false,
+            "properties": {
+              "locale": {
+                "default": "zh-CN",
+                "enum": [
+                  "zh-CN",
+                  "en"
+                ],
+                "title": "Locale",
+                "type": "string"
+              },
+              "media": {
+                "$ref": "#/$defs/MediaReference"
+              },
+              "page_id": {
+                "format": "uuid",
+                "title": "Page Id",
+                "type": "string"
+              },
+              "source_result_version": {
+                "minimum": 0,
+                "title": "Source Result Version",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page_id",
+              "source_result_version",
+              "media"
+            ],
+            "title": "TaskContext",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "$ref": "#/$defs/TaskConstraints"
+          },
+          "context": {
+            "$ref": "#/$defs/TaskContext"
+          },
+          "parameters": {
+            "$ref": "#/$defs/ExtractTitleParameters"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "extract_title",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "context"
+        ],
+        "title": "ExtractTitleTask",
+        "type": "object"
+      },
+      "task_type": "extract_title"
+    },
+    {
+      "required_capability": "ocr",
+      "result_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "normalized_number": {
+            "anyOf": [
+              {
+                "maximum": 100000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Normalized Number"
+          },
+          "raw_label": {
+            "anyOf": [
+              {
+                "maxLength": 24,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Raw Label"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "detected",
+              "not_detected",
+              "ambiguous"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "enum": [
+                  "arabic",
+                  "roman"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Style"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "extract_page_number",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "confidence",
+          "status"
+        ],
+        "title": "ExtractPageNumberResult",
+        "type": "object"
+      },
+      "result_schema_sha256": "0021014a701f6a750ed8355f5b197d3ada680e4ae37de80fc47bbd5c298739fb",
+      "schema_version": "1.0",
+      "task_schema": {
+        "$defs": {
+          "ExtractPageNumberParameters": {
+            "additionalProperties": false,
+            "properties": {
+              "allowed_styles": {
+                "default": [
+                  "arabic",
+                  "roman"
+                ],
+                "items": {
+                  "enum": [
+                    "arabic",
+                    "roman"
+                  ],
+                  "type": "string"
+                },
+                "title": "Allowed Styles",
+                "type": "array"
+              },
+              "nearby_numbers": {
+                "default": [],
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 8,
+                "title": "Nearby Numbers",
+                "type": "array"
+              }
+            },
+            "title": "ExtractPageNumberParameters",
+            "type": "object"
+          },
+          "MediaReference": {
+            "additionalProperties": false,
+            "properties": {
+              "asset_id": {
+                "format": "uuid",
+                "title": "Asset Id",
+                "type": "string"
+              },
+              "height": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Height",
+                "type": "integer"
+              },
+              "mime_type": {
+                "enum": [
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp"
+                ],
+                "title": "Mime Type",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              },
+              "width": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Width",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "asset_id",
+              "sha256",
+              "mime_type",
+              "width",
+              "height"
+            ],
+            "title": "MediaReference",
+            "type": "object"
+          },
+          "TaskConstraints": {
+            "additionalProperties": false,
+            "properties": {
+              "max_output_tokens": {
+                "default": 1024,
+                "maximum": 4096,
+                "minimum": 64,
+                "title": "Max Output Tokens",
+                "type": "integer"
+              },
+              "temperature": {
+                "const": 0.0,
+                "default": 0.0,
+                "title": "Temperature",
+                "type": "number"
+              }
+            },
+            "title": "TaskConstraints",
+            "type": "object"
+          },
+          "TaskContext": {
+            "additionalProperties": false,
+            "properties": {
+              "locale": {
+                "default": "zh-CN",
+                "enum": [
+                  "zh-CN",
+                  "en"
+                ],
+                "title": "Locale",
+                "type": "string"
+              },
+              "media": {
+                "$ref": "#/$defs/MediaReference"
+              },
+              "page_id": {
+                "format": "uuid",
+                "title": "Page Id",
+                "type": "string"
+              },
+              "source_result_version": {
+                "minimum": 0,
+                "title": "Source Result Version",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page_id",
+              "source_result_version",
+              "media"
+            ],
+            "title": "TaskContext",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "$ref": "#/$defs/TaskConstraints"
+          },
+          "context": {
+            "$ref": "#/$defs/TaskContext"
+          },
+          "parameters": {
+            "$ref": "#/$defs/ExtractPageNumberParameters"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "extract_page_number",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "context"
+        ],
+        "title": "ExtractPageNumberTask",
+        "type": "object"
+      },
+      "task_type": "extract_page_number"
+    },
+    {
+      "required_capability": "ocr",
+      "result_schema": {
+        "$defs": {
+          "FormulaBlock": {
+            "additionalProperties": false,
+            "properties": {
+              "block_id": {
+                "title": "Block Id",
+                "type": "string"
+              },
+              "block_type": {
+                "const": "formula",
+                "title": "Block Type",
+                "type": "string"
+              },
+              "box": {
+                "$ref": "#/$defs/NormalizedBox"
+              },
+              "confidence": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Confidence",
+                "type": "number"
+              },
+              "latex_candidate": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "title": "Latex Candidate",
+                "type": "string"
+              }
+            },
+            "required": [
+              "block_type",
+              "block_id",
+              "box",
+              "confidence",
+              "latex_candidate"
+            ],
+            "title": "FormulaBlock",
+            "type": "object"
+          },
+          "LayoutBlock": {
+            "additionalProperties": false,
+            "properties": {
+              "block_id": {
+                "title": "Block Id",
+                "type": "string"
+              },
+              "block_type": {
+                "const": "layout",
+                "title": "Block Type",
+                "type": "string"
+              },
+              "box": {
+                "$ref": "#/$defs/NormalizedBox"
+              },
+              "confidence": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Confidence",
+                "type": "number"
+              },
+              "role": {
+                "enum": [
+                  "heading",
+                  "paragraph",
+                  "figure",
+                  "caption",
+                  "unknown"
+                ],
+                "title": "Role",
+                "type": "string"
+              },
+              "text_candidate": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Text Candidate"
+              }
+            },
+            "required": [
+              "block_type",
+              "block_id",
+              "box",
+              "confidence",
+              "role"
+            ],
+            "title": "LayoutBlock",
+            "type": "object"
+          },
+          "NormalizedBox": {
+            "additionalProperties": false,
+            "properties": {
+              "x0": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "X0",
+                "type": "number"
+              },
+              "x1": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "X1",
+                "type": "number"
+              },
+              "y0": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Y0",
+                "type": "number"
+              },
+              "y1": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Y1",
+                "type": "number"
+              }
+            },
+            "required": [
+              "x0",
+              "y0",
+              "x1",
+              "y1"
+            ],
+            "title": "NormalizedBox",
+            "type": "object"
+          },
+          "TableBlock": {
+            "additionalProperties": false,
+            "properties": {
+              "block_id": {
+                "title": "Block Id",
+                "type": "string"
+              },
+              "block_type": {
+                "const": "table",
+                "title": "Block Type",
+                "type": "string"
+              },
+              "box": {
+                "$ref": "#/$defs/NormalizedBox"
+              },
+              "cells": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/TableCell"
+                },
+                "maxItems": 10000,
+                "title": "Cells",
+                "type": "array"
+              },
+              "confidence": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Confidence",
+                "type": "number"
+              }
+            },
+            "required": [
+              "block_type",
+              "block_id",
+              "box",
+              "confidence"
+            ],
+            "title": "TableBlock",
+            "type": "object"
+          },
+          "TableCell": {
+            "additionalProperties": false,
+            "properties": {
+              "column": {
+                "maximum": 999,
+                "minimum": 0,
+                "title": "Column",
+                "type": "integer"
+              },
+              "row": {
+                "maximum": 999,
+                "minimum": 0,
+                "title": "Row",
+                "type": "integer"
+              },
+              "text_candidate": {
+                "maxLength": 1000,
+                "title": "Text Candidate",
+                "type": "string"
+              }
+            },
+            "required": [
+              "row",
+              "column",
+              "text_candidate"
+            ],
+            "title": "TableCell",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "formula": "#/$defs/FormulaBlock",
+                  "layout": "#/$defs/LayoutBlock",
+                  "table": "#/$defs/TableBlock"
+                },
+                "propertyName": "block_type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/FormulaBlock"
+                },
+                {
+                  "$ref": "#/$defs/TableBlock"
+                },
+                {
+                  "$ref": "#/$defs/LayoutBlock"
+                }
+              ]
+            },
+            "maxItems": 200,
+            "title": "Blocks",
+            "type": "array"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "ocr_formula",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "confidence"
+        ],
+        "title": "OcrFormulaResult",
+        "type": "object"
+      },
+      "result_schema_sha256": "68c1ed5247ce28df302d321e339948a9777e883c4b3af685606116a9b802af3d",
+      "schema_version": "1.0",
+      "task_schema": {
+        "$defs": {
+          "MediaReference": {
+            "additionalProperties": false,
+            "properties": {
+              "asset_id": {
+                "format": "uuid",
+                "title": "Asset Id",
+                "type": "string"
+              },
+              "height": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Height",
+                "type": "integer"
+              },
+              "mime_type": {
+                "enum": [
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp"
+                ],
+                "title": "Mime Type",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              },
+              "width": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Width",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "asset_id",
+              "sha256",
+              "mime_type",
+              "width",
+              "height"
+            ],
+            "title": "MediaReference",
+            "type": "object"
+          },
+          "OcrFormulaParameters": {
+            "additionalProperties": false,
+            "properties": {
+              "requested_blocks": {
+                "default": [
+                  "formula",
+                  "table",
+                  "layout"
+                ],
+                "items": {
+                  "enum": [
+                    "formula",
+                    "table",
+                    "layout"
+                  ],
+                  "type": "string"
+                },
+                "title": "Requested Blocks",
+                "type": "array"
+              }
+            },
+            "title": "OcrFormulaParameters",
+            "type": "object"
+          },
+          "TaskConstraints": {
+            "additionalProperties": false,
+            "properties": {
+              "max_output_tokens": {
+                "default": 1024,
+                "maximum": 4096,
+                "minimum": 64,
+                "title": "Max Output Tokens",
+                "type": "integer"
+              },
+              "temperature": {
+                "const": 0.0,
+                "default": 0.0,
+                "title": "Temperature",
+                "type": "number"
+              }
+            },
+            "title": "TaskConstraints",
+            "type": "object"
+          },
+          "TaskContext": {
+            "additionalProperties": false,
+            "properties": {
+              "locale": {
+                "default": "zh-CN",
+                "enum": [
+                  "zh-CN",
+                  "en"
+                ],
+                "title": "Locale",
+                "type": "string"
+              },
+              "media": {
+                "$ref": "#/$defs/MediaReference"
+              },
+              "page_id": {
+                "format": "uuid",
+                "title": "Page Id",
+                "type": "string"
+              },
+              "source_result_version": {
+                "minimum": 0,
+                "title": "Source Result Version",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page_id",
+              "source_result_version",
+              "media"
+            ],
+            "title": "TaskContext",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "$ref": "#/$defs/TaskConstraints"
+          },
+          "context": {
+            "$ref": "#/$defs/TaskContext"
+          },
+          "parameters": {
+            "$ref": "#/$defs/OcrFormulaParameters"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "ocr_formula",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "context"
+        ],
+        "title": "OcrFormulaTask",
+        "type": "object"
+      },
+      "task_type": "ocr_formula"
+    },
+    {
+      "required_capability": "document_understanding",
+      "result_schema": {
+        "$defs": {
+          "CleanupRegionDecision": {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "preserve",
+                  "remove",
+                  "review"
+                ],
+                "title": "Action",
+                "type": "string"
+              },
+              "confidence": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Confidence",
+                "type": "number"
+              },
+              "region_id": {
+                "title": "Region Id",
+                "type": "string"
+              },
+              "region_type": {
+                "enum": [
+                  "handwriting",
+                  "printed_content",
+                  "color_mark",
+                  "unknown"
+                ],
+                "title": "Region Type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "region_id",
+              "region_type",
+              "action",
+              "confidence"
+            ],
+            "title": "CleanupRegionDecision",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/$defs/CleanupRegionDecision"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Decisions",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "review_cleanup_mask",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "confidence",
+          "decisions"
+        ],
+        "title": "ReviewCleanupMaskResult",
+        "type": "object"
+      },
+      "result_schema_sha256": "49fa36c1bea01fc0fcba11244009d04c4987b6ef4347422c4c4d4b6235c0dd63",
+      "schema_version": "1.0",
+      "task_schema": {
+        "$defs": {
+          "CleanupCandidateRegion": {
+            "additionalProperties": false,
+            "properties": {
+              "box": {
+                "$ref": "#/$defs/NormalizedBox"
+              },
+              "deterministic_hint": {
+                "default": "unknown",
+                "enum": [
+                  "color_mark",
+                  "dark_stroke",
+                  "unknown"
+                ],
+                "title": "Deterministic Hint",
+                "type": "string"
+              },
+              "region_id": {
+                "title": "Region Id",
+                "type": "string"
+              }
+            },
+            "required": [
+              "region_id",
+              "box"
+            ],
+            "title": "CleanupCandidateRegion",
+            "type": "object"
+          },
+          "MediaReference": {
+            "additionalProperties": false,
+            "properties": {
+              "asset_id": {
+                "format": "uuid",
+                "title": "Asset Id",
+                "type": "string"
+              },
+              "height": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Height",
+                "type": "integer"
+              },
+              "mime_type": {
+                "enum": [
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp"
+                ],
+                "title": "Mime Type",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              },
+              "width": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Width",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "asset_id",
+              "sha256",
+              "mime_type",
+              "width",
+              "height"
+            ],
+            "title": "MediaReference",
+            "type": "object"
+          },
+          "NormalizedBox": {
+            "additionalProperties": false,
+            "properties": {
+              "x0": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "X0",
+                "type": "number"
+              },
+              "x1": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "X1",
+                "type": "number"
+              },
+              "y0": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Y0",
+                "type": "number"
+              },
+              "y1": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Y1",
+                "type": "number"
+              }
+            },
+            "required": [
+              "x0",
+              "y0",
+              "x1",
+              "y1"
+            ],
+            "title": "NormalizedBox",
+            "type": "object"
+          },
+          "ReviewCleanupMaskParameters": {
+            "additionalProperties": false,
+            "properties": {
+              "candidates": {
+                "items": {
+                  "$ref": "#/$defs/CleanupCandidateRegion"
+                },
+                "maxItems": 200,
+                "minItems": 1,
+                "title": "Candidates",
+                "type": "array"
+              }
+            },
+            "required": [
+              "candidates"
+            ],
+            "title": "ReviewCleanupMaskParameters",
+            "type": "object"
+          },
+          "TaskConstraints": {
+            "additionalProperties": false,
+            "properties": {
+              "max_output_tokens": {
+                "default": 1024,
+                "maximum": 4096,
+                "minimum": 64,
+                "title": "Max Output Tokens",
+                "type": "integer"
+              },
+              "temperature": {
+                "const": 0.0,
+                "default": 0.0,
+                "title": "Temperature",
+                "type": "number"
+              }
+            },
+            "title": "TaskConstraints",
+            "type": "object"
+          },
+          "TaskContext": {
+            "additionalProperties": false,
+            "properties": {
+              "locale": {
+                "default": "zh-CN",
+                "enum": [
+                  "zh-CN",
+                  "en"
+                ],
+                "title": "Locale",
+                "type": "string"
+              },
+              "media": {
+                "$ref": "#/$defs/MediaReference"
+              },
+              "page_id": {
+                "format": "uuid",
+                "title": "Page Id",
+                "type": "string"
+              },
+              "source_result_version": {
+                "minimum": 0,
+                "title": "Source Result Version",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page_id",
+              "source_result_version",
+              "media"
+            ],
+            "title": "TaskContext",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "$ref": "#/$defs/TaskConstraints"
+          },
+          "context": {
+            "$ref": "#/$defs/TaskContext"
+          },
+          "parameters": {
+            "$ref": "#/$defs/ReviewCleanupMaskParameters"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "review_cleanup_mask",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "context",
+          "parameters"
+        ],
+        "title": "ReviewCleanupMaskTask",
+        "type": "object"
+      },
+      "task_type": "review_cleanup_mask"
+    },
+    {
+      "required_capability": "document_understanding",
+      "result_schema": {
+        "$defs": {
+          "NormalizedBox": {
+            "additionalProperties": false,
+            "properties": {
+              "x0": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "X0",
+                "type": "number"
+              },
+              "x1": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "X1",
+                "type": "number"
+              },
+              "y0": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Y0",
+                "type": "number"
+              },
+              "y1": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Y1",
+                "type": "number"
+              }
+            },
+            "required": [
+              "x0",
+              "y0",
+              "x1",
+              "y1"
+            ],
+            "title": "NormalizedBox",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "decision": {
+            "enum": [
+              "double_page",
+              "single_page",
+              "uncertain"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "gutter_x": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Gutter X"
+          },
+          "left_box": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NormalizedBox"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reading_order": {
+            "enum": [
+              "ltr",
+              "rtl"
+            ],
+            "title": "Reading Order",
+            "type": "string"
+          },
+          "right_box": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/NormalizedBox"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "review_book_split",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "confidence",
+          "decision",
+          "reading_order"
+        ],
+        "title": "ReviewBookSplitResult",
+        "type": "object"
+      },
+      "result_schema_sha256": "43764482f9d9a4661271a668abbfd5c4bf4d760520e520b77bd45c3153429a62",
+      "schema_version": "1.0",
+      "task_schema": {
+        "$defs": {
+          "MediaReference": {
+            "additionalProperties": false,
+            "properties": {
+              "asset_id": {
+                "format": "uuid",
+                "title": "Asset Id",
+                "type": "string"
+              },
+              "height": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Height",
+                "type": "integer"
+              },
+              "mime_type": {
+                "enum": [
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp"
+                ],
+                "title": "Mime Type",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Sha256",
+                "type": "string"
+              },
+              "width": {
+                "maximum": 50000,
+                "minimum": 1,
+                "title": "Width",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "asset_id",
+              "sha256",
+              "mime_type",
+              "width",
+              "height"
+            ],
+            "title": "MediaReference",
+            "type": "object"
+          },
+          "ReviewBookSplitParameters": {
+            "additionalProperties": false,
+            "properties": {
+              "deterministic_confidence": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "title": "Deterministic Confidence",
+                "type": "number"
+              },
+              "deterministic_gutter_x": {
+                "anyOf": [
+                  {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Deterministic Gutter X"
+              },
+              "reading_order": {
+                "enum": [
+                  "ltr",
+                  "rtl"
+                ],
+                "title": "Reading Order",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reading_order",
+              "deterministic_confidence"
+            ],
+            "title": "ReviewBookSplitParameters",
+            "type": "object"
+          },
+          "TaskConstraints": {
+            "additionalProperties": false,
+            "properties": {
+              "max_output_tokens": {
+                "default": 1024,
+                "maximum": 4096,
+                "minimum": 64,
+                "title": "Max Output Tokens",
+                "type": "integer"
+              },
+              "temperature": {
+                "const": 0.0,
+                "default": 0.0,
+                "title": "Temperature",
+                "type": "number"
+              }
+            },
+            "title": "TaskConstraints",
+            "type": "object"
+          },
+          "TaskContext": {
+            "additionalProperties": false,
+            "properties": {
+              "locale": {
+                "default": "zh-CN",
+                "enum": [
+                  "zh-CN",
+                  "en"
+                ],
+                "title": "Locale",
+                "type": "string"
+              },
+              "media": {
+                "$ref": "#/$defs/MediaReference"
+              },
+              "page_id": {
+                "format": "uuid",
+                "title": "Page Id",
+                "type": "string"
+              },
+              "source_result_version": {
+                "minimum": 0,
+                "title": "Source Result Version",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page_id",
+              "source_result_version",
+              "media"
+            ],
+            "title": "TaskContext",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "$ref": "#/$defs/TaskConstraints"
+          },
+          "context": {
+            "$ref": "#/$defs/TaskContext"
+          },
+          "parameters": {
+            "$ref": "#/$defs/ReviewBookSplitParameters"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "const": "review_book_split",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "task_type",
+          "context",
+          "parameters"
+        ],
+        "title": "ReviewBookSplitTask",
+        "type": "object"
+      },
+      "task_type": "review_book_split"
+    }
+  ]
+}
