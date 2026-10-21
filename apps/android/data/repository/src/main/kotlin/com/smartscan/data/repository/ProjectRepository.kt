@@ -121,6 +121,7 @@ class DefaultProjectRepository(
                 body = it.downloadExportArtifact(artifact.id),
                 directory = directory,
                 requestedName = "${artifact.id.take(12)}-${artifact.fileName}",
+                displayName = artifact.fileName,
                 expectedSha256 = artifact.sha256,
                 fallbackMimeType = artifact.mimeType,
                 expectedSize = artifact.sizeBytes,
@@ -173,6 +174,7 @@ private fun saveDownload(
     body: okhttp3.ResponseBody,
     directory: File,
     requestedName: String,
+    displayName: String = requestedName,
     expectedSha256: String?,
     fallbackMimeType: String?,
     expectedSize: Long? = null,
@@ -206,7 +208,7 @@ private fun saveDownload(
             if (!temporary.renameTo(destination)) throw IOException("download_commit_failed")
             return DownloadedArtifact(
                 filePath = destination.absolutePath,
-                fileName = File(requestedName).name,
+                fileName = File(displayName).name,
                 mimeType = response.contentType()?.toString() ?: fallbackMimeType ?: "application/octet-stream",
             )
         }

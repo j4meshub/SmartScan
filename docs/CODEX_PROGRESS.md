@@ -44,6 +44,8 @@ git diff --check
 
 本地结果：137 个 Python 文件格式与 Ruff、OpenAPI 当前/上一代客户端兼容、迁移升级/漂移/版本、CI YAML、14 个 Android XML、应用与工作区双语资源键和差异检查通过；后端 `156 passed, 5 skipped`，应用代码覆盖率 `88.28%`；H5 `33 passed`，Chromium E2E/axe `3 passed`，管理后台 JavaScript 语法通过。本机未安装 JDK、Gradle 与 Android SDK，因此 Android 编译、单元测试和 Lint 将由固定 GitHub CI 环境验证；该限制不替代模拟器和真机人工验收。
 
+首轮推送提交 `0fd95b0` 的 API、Web 与容器 CI 通过；Android 仓储测试发现落盘防冲突前缀被错误暴露为用户下载文件名。修复将安全存储名与展示名分离，继续保留制品 ID 前缀避免缓存覆盖，分享界面使用服务端原始文件名。
+
 ## 已完成前置工作包证据
 
 - AND-003 已由 PR #33 合并到主线，中文 squash 提交为 `b238992`；三模式 CameraX 预览、点按对焦、曝光补偿、质量提示、手动快门和原图保护已完成。
