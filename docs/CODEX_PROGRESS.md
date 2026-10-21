@@ -7,15 +7,24 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M6 iOS |
-| 当前工作包 | `IOS-004` 后台恢复（完成） |
-| 工作包状态 | 完成，PR #40 最终代码头两套 CI 共 10 项通过 |
-| 当前分支 | `codex/ios-004-background-upload` |
-| 最后验证基线 | `74b9aff`（IOS-004 最终代码头 CI 全部通过） |
-| 工作包提交 | `359121c`、`74b9aff` |
-| PR | #40（已创建，最终文档 CI 后合并） |
-| 下一工作包 | `IOS-005` 编辑与分享 |
+| 当前工作包 | `IOS-005` 编辑与分享（进行中） |
+| 工作包状态 | 阻塞：实现与本地回归完成，GitHub Actions 因账户付款失败或支出上限未分配任何 Runner |
+| 当前分支 | `codex/ios-005-edit-share` |
+| 最后验证基线 | `33f6754`（IOS-004 PR #40 已合并） |
+| 工作包提交 | `802777e`、`14a4369`、`c148d77` |
+| PR | #41（已创建，等待 GitHub Actions 账单/额度恢复后重跑） |
+| 下一工作包 | `IOS-006` 审核准备 |
 
 ## 当前工作包进展
+
+- IOS-004 已由 PR #40 squash 合并到主线，中文提交为 `33f6754`；最终文档头两套 API、Web、Android、iOS 与容器共 10 项 CI 检查通过。
+- IOS-005 新增项目/页面工作区，支持完整页序上移下移、活动版本预览、90 度旋转、四角归一化调整、四档滤镜和页面复核；编辑继续调用服务端版本化接口，不覆盖原图。
+- 导出支持 JPG/PDF、三档质量和可选 OCR 文本层，恢复既有导出并刷新状态。制品通过鉴权端点下载到当前用户摘要目录，流式校验精确字节数与 SHA-256 后才允许 PDFKit 预览或系统 Share Sheet 分享，失败会删除临时文件。
+- 账号删除要求 E.164 手机号、独立 `account_deletion` 短信挑战和完全匹配的用户名；服务端接受并撤销会话后，本机按用户清除项目缓存、捕获原图、上传队列和下载文件。未登录取消流程使用独立 `account_deletion_cancel` 挑战，不把重新登录误作取消。
+- 新增页面/导出/账号删除请求契约、非法页序与四角、下载大小/摘要、离线项目缓存、用户分区清理和删除/取消流程测试。
+- 本地通过 Ruff/格式、iOS 配置契约 `10 passed`、全量 Python `172 passed, 5 skipped`、覆盖率 `88.28%`、迁移漂移、H5 `33 passed`、Chromium E2E/axe `3 passed`、管理后台语法、双语资源键和差异检查。Windows 没有 XcodeGen、Swift、Xcode、Gradle 和 Docker；Swift 编译、PDFKit 链接和 Simulator 测试必须等待 macOS CI。
+- PR #41 的推送与 PR 两套工作流共 10 个作业都在 3 至 6 秒内失败，`runner_name` 为空且没有作业日志；GitHub 检查注释明确为“recent account payments have failed or your spending limit needs to be increased”。这不是测试失败，必须在 GitHub `Billing & plans` 恢复付款或支出上限后重跑，当前不得标记 IOS-005 完成或合并。
+- 账单阻塞期间继续静态自审，提交 `c148d77` 补齐 `WorkspaceStore` 的 Combine 导入、统一 SwiftUI 条件样式类型，并让账号删除在 `401` 时只刷新一次再重试；本地 iOS 契约仍为 `10 passed`。
 
 - IOS-003 已由 PR #39 合并到主线，中文 squash 提交为 `5977b44`；最终文档头两套 API、Web、Android、iOS 与容器共 10 项 CI 检查通过。
 - IOS-004 使用按用户摘要分区的版本化 JSON 队列，原图只允许来自当前用户私有捕获目录；队列原子写入并使用首次解锁后的完整文件保护，重复捕获 ID 幂等忽略。

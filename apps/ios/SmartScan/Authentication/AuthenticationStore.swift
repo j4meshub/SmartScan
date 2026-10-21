@@ -12,7 +12,10 @@ final class AuthenticationStore: ObservableObject {
     @Published private(set) var phase: Phase = .restoring
     @Published private(set) var busy = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var noticeMessage: String?
     @Published private(set) var challenge: RegistrationChallenge?
+    @Published private(set) var deletionChallenge: RegistrationChallenge?
+    @Published private(set) var cancellationChallenge: RegistrationChallenge?
 
     private let repository: AuthenticationRepository
 
@@ -73,8 +76,69 @@ final class AuthenticationStore: ObservableObject {
         challenge = nil
     }
 
+    func requestAccountDeletionCode(phone: String) async {
+        await perform {
+            self.deletionChallenge = try await self.repository.requestAccountDeletionChallenge(phone: phone)
+        }
+    }
+
+    func requestAccountDeletion(
+        user: UserProfile,
+        phone: String,
+        code: String,
+        confirmUsername: String
+    ) async {
+        guard confirmUsername == user.username else {
+            errorMessage = String(localized: "Enter your exact username to confirm deletion.")
+            return
+        }
+        guard let deletionChallenge else {
+            errorMessage = String(localized: "Request a verification code first.")
+            return
+        }
+        await perform {
+            let outcome = try await self.repository.requestAccountDeletion(
+                phone: phone,
+                challengeID: deletionChallenge.challengeID,
+                code: code
+            )
+            self.phase = .signedOut
+            self.deletionChallenge = nil
+            self.noticeMessage = outcome.localCleanupSucceeded
+                ? String(format: String(localized: "Account deletion scheduled for %@."), outcome.receipt.executeAfter)
+                : String(localized: "Account deletion was scheduled, but some local files could not be removed.")
+        }
+    }
+
+    func requestAccountDeletionCancellationCode(phone: String) async {
+        await perform {
+            self.cancellationChallenge = try await self.repository
+                .requestAccountDeletionCancellationChallenge(phone: phone)
+        }
+    }
+
+    func cancelAccountDeletion(phone: String, code: String) async {
+        guard let cancellationChallenge else {
+            errorMessage = String(localized: "Request a verification code first.")
+            return
+        }
+        await perform {
+            _ = try await self.repository.cancelAccountDeletion(
+                phone: phone,
+                challengeID: cancellationChallenge.challengeID,
+                code: code
+            )
+            self.cancellationChallenge = nil
+            self.noticeMessage = String(localized: "Account deletion canceled. You can log in again.")
+        }
+    }
+
     func clearError() {
         errorMessage = nil
+    }
+
+    func clearNotice() {
+        noticeMessage = nil
     }
 
     private func perform(_ operation: () async throws -> Void) async {

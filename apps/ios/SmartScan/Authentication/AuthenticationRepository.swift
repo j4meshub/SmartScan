@@ -2,13 +2,23 @@ import Foundation
 
 actor AuthenticationRepository {
     private let api: SmartScanAuthenticationAPI
+    private let accountDeletionAPI: SmartScanAccountDeletionAPI?
     private let sessions: SessionStoring
     private let cache: UserScopedProjectCaching
+    private let localDataPurger: UserScopedLocalDataPurging?
 
-    init(api: SmartScanAuthenticationAPI, sessions: SessionStoring, cache: UserScopedProjectCaching) {
+    init(
+        api: SmartScanAuthenticationAPI,
+        sessions: SessionStoring,
+        cache: UserScopedProjectCaching,
+        accountDeletionAPI: SmartScanAccountDeletionAPI? = nil,
+        localDataPurger: UserScopedLocalDataPurging? = nil
+    ) {
         self.api = api
         self.sessions = sessions
         self.cache = cache
+        self.accountDeletionAPI = accountDeletionAPI
+        self.localDataPurger = localDataPurger
     }
 
     func requestRegistrationChallenge(phone: String) async throws -> RegistrationChallenge {
@@ -70,6 +80,67 @@ actor AuthenticationRepository {
         if let remoteError { throw remoteError }
     }
 
+    func requestAccountDeletionChallenge(phone: String) async throws -> RegistrationChallenge {
+        try validatePhone(phone)
+        guard let accountDeletionAPI else { throw AuthenticationError.accountDeletionUnavailable }
+        return try await accountDeletionAPI.requestSMSChallenge(phone: phone, purpose: "account_deletion")
+    }
+
+    func requestAccountDeletion(
+        phone: String,
+        challengeID: String,
+        code: String
+    ) async throws -> AccountDeletionOutcome {
+        try validatePhone(phone)
+        guard !challengeID.isEmpty, !code.isEmpty else { throw AuthenticationError.invalidInput }
+        guard let userID = sessions.current()?.userID else { throw AuthenticationError.sessionMissing }
+        guard let accountDeletionAPI else { throw AuthenticationError.accountDeletionUnavailable }
+        let receipt: AccountDeletionReceipt
+        do {
+            receipt = try await accountDeletionAPI.requestAccountDeletion(
+                phone: phone,
+                challengeID: challengeID,
+                code: code
+            )
+        } catch let error as APIClientError {
+            guard case .http(statusCode: 401, detail: _) = error else { throw error }
+            _ = try await refresh()
+            receipt = try await accountDeletionAPI.requestAccountDeletion(
+                phone: phone,
+                challengeID: challengeID,
+                code: code
+            )
+        }
+        var cleanupSucceeded = true
+        do { try sessions.clear() } catch { cleanupSucceeded = false }
+        do { try await cache.clearUser(userID) } catch { cleanupSucceeded = false }
+        if let localDataPurger {
+            do { try await localDataPurger.clearUser(userID) } catch { cleanupSucceeded = false }
+        }
+        return AccountDeletionOutcome(receipt: receipt, localCleanupSucceeded: cleanupSucceeded)
+    }
+
+    func requestAccountDeletionCancellationChallenge(phone: String) async throws -> RegistrationChallenge {
+        try validatePhone(phone)
+        guard let accountDeletionAPI else { throw AuthenticationError.accountDeletionUnavailable }
+        return try await accountDeletionAPI.requestSMSChallenge(phone: phone, purpose: "account_deletion_cancel")
+    }
+
+    func cancelAccountDeletion(
+        phone: String,
+        challengeID: String,
+        code: String
+    ) async throws -> AccountDeletionReceipt {
+        try validatePhone(phone)
+        guard !challengeID.isEmpty, !code.isEmpty else { throw AuthenticationError.invalidInput }
+        guard let accountDeletionAPI else { throw AuthenticationError.accountDeletionUnavailable }
+        return try await accountDeletionAPI.cancelAccountDeletion(
+            phone: phone,
+            challengeID: challengeID,
+            code: code
+        )
+    }
+
     private func authenticate(_ request: () async throws -> TokenResponse) async throws -> UserProfile {
         let token = try await request()
         let provisional = try token.credentials()
@@ -89,9 +160,16 @@ actor AuthenticationRepository {
         try? sessions.clear()
         if let userID { try? await cache.clearUser(userID) }
     }
+
+    private func validatePhone(_ phone: String) throws {
+        guard phone.range(of: #"^\+[1-9][0-9]{7,14}$"#, options: .regularExpression) != nil else {
+            throw AuthenticationError.invalidInput
+        }
+    }
 }
 
 enum AuthenticationError: Error, Equatable {
     case invalidInput
     case sessionMissing
+    case accountDeletionUnavailable
 }

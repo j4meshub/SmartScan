@@ -4,13 +4,20 @@ import SwiftUI
 struct SmartScanApp: App {
     @StateObject private var authentication: AuthenticationStore
     private let uploads: UploadCoordinator
+    private let workspace: WorkspaceRepository
 
     init() {
         let sessionStore = KeychainSessionStore()
         let configuration = APIConfiguration.fromBundle()
         let api = URLSessionSmartScanAPI(configuration: configuration, sessions: sessionStore)
         let cache = FileUserScopedProjectCache()
-        let authenticationRepository = AuthenticationRepository(api: api, sessions: sessionStore, cache: cache)
+        let authenticationRepository = AuthenticationRepository(
+            api: api,
+            sessions: sessionStore,
+            cache: cache,
+            accountDeletionAPI: api,
+            localDataPurger: FileUserLocalDataPurger()
+        )
         let queue = FileUploadQueueStore()
         let processor = UploadProcessor(
             api: api,
@@ -27,6 +34,7 @@ struct SmartScanApp: App {
         )
         scheduler.register(coordinator: uploads)
         self.uploads = uploads
+        workspace = WorkspaceRepository(api: api, authentication: authenticationRepository, cache: cache)
         _authentication = StateObject(
             wrappedValue: AuthenticationStore(
                 repository: authenticationRepository
@@ -36,7 +44,7 @@ struct SmartScanApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(authentication: authentication, uploads: uploads)
+            RootView(authentication: authentication, uploads: uploads, workspace: workspace)
         }
     }
 }
@@ -44,6 +52,7 @@ struct SmartScanApp: App {
 struct RootView: View {
     @ObservedObject var authentication: AuthenticationStore
     let uploads: UploadCoordinator
+    let workspace: WorkspaceRepository
 
     var body: some View {
         switch authentication.phase {
@@ -53,7 +62,12 @@ struct RootView: View {
         case .signedOut:
             AuthenticationView(authentication: authentication)
         case let .signedIn(user):
-            HomeView(user: user, uploads: uploads) {
+            HomeView(
+                user: user,
+                authentication: authentication,
+                uploads: uploads,
+                workspace: workspace
+            ) {
                 Task { await authentication.logout() }
             }
             .task(id: user.id) { _ = await uploads.resumeCurrentUser() }
@@ -85,8 +99,11 @@ enum ScanModeKind: String, CaseIterable, Hashable, Codable {
 
 struct HomeView: View {
     let user: UserProfile
+    @ObservedObject var authentication: AuthenticationStore
     let uploads: UploadCoordinator
+    let workspace: WorkspaceRepository
     let onLogout: () -> Void
+    @State private var showsAccount = false
     private let ink = Color(red: 0.067, green: 0.094, blue: 0.153)
     private let paper = Color(red: 0.957, green: 0.945, blue: 0.922)
 
@@ -99,6 +116,7 @@ struct HomeView: View {
                         Spacer()
                         Menu {
                             Text(user.username)
+                            Button(String(localized: "Manage account")) { showsAccount = true }
                             Button(String(localized: "Log out"), role: .destructive, action: onLogout)
                         } label: {
                             Image(systemName: "person.crop.circle")
@@ -118,6 +136,17 @@ struct HomeView: View {
                     Spacer().frame(height: 30)
                     Text(String(localized: "Capture every detail on paper."))
                         .font(.system(size: 47, weight: .black, design: .rounded)).tracking(-2.0)
+                    NavigationLink {
+                        WorkspaceView(repository: workspace, userID: user.id)
+                    } label: {
+                        Label(String(localized: "Open workspace"), systemImage: "square.grid.2x2")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                    }
+                    .buttonStyle(.plain)
                     ScanMode(kind: .document, dark: true)
                     HStack(spacing: 12) {
                         ScanMode(kind: .exam)
@@ -130,6 +159,9 @@ struct HomeView: View {
             .tint(ink)
             .navigationDestination(for: ScanModeKind.self) { mode in
                 CaptureView(mode: mode, userID: user.id, uploads: uploads)
+            }
+            .sheet(isPresented: $showsAccount) {
+                AccountManagementView(user: user, authentication: authentication)
             }
         }
     }
