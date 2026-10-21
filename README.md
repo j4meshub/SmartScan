@@ -157,6 +157,8 @@ Provider 公网/受控网段、DNS 重绑定防护、固定媒体前缀、TLS �
 
 Provider 超时、一次重试、跨 Worker 熔断、调用租约、并发/频率/日费用上限和脱敏证据见[可选视觉 AI 可靠性、熔断与费用门禁](docs/AI_RELIABILITY_COST.md)。
 
+基础 OCR、专业 OCR、公共 VLM 和自定义 VLM 的同集比较、授权/脱敏清单、准确率、幻觉率、结构化成功率、延迟、成本与版本门禁见[可选视觉 AI 固定评估](docs/AI_FIXED_EVALUATION.md)。评估器默认离线，示例和 Mock 不能替代真实 API 验收。
+
 ## 容器运行
 
 将 `.env.example` 复制为 `.env`，替换所有密钥后执行：
