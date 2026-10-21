@@ -4,7 +4,7 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.j4meshub.smartscan.upload</string>
+		<string>$(SMARTSCAN_BACKGROUND_TASK_IDENTIFIER)</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
@@ -30,6 +30,8 @@
 	<string>SmartScan needs camera access to capture documents.</string>
 	<key>SMARTSCAN_API_BASE_URL</key>
 	<string>$(SMARTSCAN_API_BASE_URL)</string>
+	<key>SMARTSCAN_BACKGROUND_TASK_IDENTIFIER</key>
+	<string>$(SMARTSCAN_BACKGROUND_TASK_IDENTIFIER)</string>
 	<key>SMARTSCAN_PRIVACY_POLICY_URL</key>
 	<string>$(SMARTSCAN_PRIVACY_POLICY_URL)</string>
 	<key>SMARTSCAN_SUPPORT_URL</key>

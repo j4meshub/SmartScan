@@ -128,9 +128,12 @@ def test_ios_background_upload_is_permitted_and_server_confirmed() -> None:
     processor = (source_root / "Upload" / "UploadProcessor.swift").read_text(encoding="utf-8")
     queue = (source_root / "Upload" / "FileUploadQueueStore.swift").read_text(encoding="utf-8")
 
-    assert info["BGTaskSchedulerPermittedIdentifiers"] == ["com.j4meshub.smartscan.upload"]
+    assert info["BGTaskSchedulerPermittedIdentifiers"] == [
+        "$(SMARTSCAN_BACKGROUND_TASK_IDENTIFIER)"
+    ]
     assert "processing" in info["UIBackgroundModes"]
     assert "BGProcessingTaskRequest" in scheduler
+    assert "SMARTSCAN_BACKGROUND_TASK_IDENTIFIER" in scheduler
     assert "requiresNetworkConnectivity = true" in scheduler
     assert "remote.receivedChunks" in processor
     upload_api = (source_root / "Upload" / "UploadAPI.swift").read_text(encoding="utf-8")

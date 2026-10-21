@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import os
 import plistlib
 import re
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 from PIL import Image
@@ -28,6 +30,25 @@ METADATA_LIMITS = {
 REQUIRED_METADATA = {*METADATA_LIMITS, "keywords.txt"}
 PLACEHOLDER_MARKERS = (".invalid", "_REQUIRED", "${")
 ENV_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]+$")
+VERSION_NAME_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+BUILD_NUMBER_PATTERN = re.compile(r"^[1-9][0-9]*$")
+BUNDLE_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$")
+TEAM_ID_PATTERN = re.compile(r"^[A-Z0-9]{10}$")
+SKU_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+RELEASE_TAG_PATTERN = re.compile(
+    r"^ios-v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)-build\.(?P<build>[1-9][0-9]*)$"
+)
+RUNTIME_FIELDS = {
+    "SMARTSCAN_IOS_BUNDLE_ID": ("product", "bundle_id"),
+    "SMARTSCAN_APP_STORE_ID": ("product", "app_store_id"),
+    "SMARTSCAN_APPLE_TEAM_ID": ("product", "apple_team_id"),
+    "SMARTSCAN_APP_STORE_SKU": ("product", "sku"),
+    "SMARTSCAN_IOS_MARKETING_VERSION": ("product", "marketing_version"),
+    "SMARTSCAN_IOS_BUILD_NUMBER": ("product", "build_number"),
+    "SMARTSCAN_API_BASE_URL": ("services", "api_base_url"),
+    "SMARTSCAN_PRIVACY_POLICY_URL": ("services", "privacy_policy_url"),
+    "SMARTSCAN_SUPPORT_URL": ("services", "support_url"),
+}
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -79,6 +100,7 @@ def validate_draft(root: Path = ROOT) -> list[str]:
     errors.extend(_validate_screenshot_manifest(screenshots, release_root, require_files=False))
     errors.extend(_validate_privacy_manifest(ios_root / "SmartScan" / "PrivacyInfo.xcprivacy"))
     errors.extend(_validate_project_links(ios_root / "project.yml"))
+    errors.extend(_validate_release_automation(root))
     return errors
 
 
@@ -93,6 +115,11 @@ def validate_release(root: Path = ROOT, environ: dict[str, str] | None = None) -
     except (OSError, TypeError, yaml.YAMLError):
         return errors
 
+    env = environ if environ is not None else os.environ
+    for name in RUNTIME_FIELDS:
+        if not env.get(name):
+            errors.append(f"缺少发布环境变量：{name}")
+    config = _runtime_config(config, env)
     values = [
         config.get("product", {}).get("bundle_id", ""),
         config.get("product", {}).get("app_store_id", ""),
@@ -109,13 +136,82 @@ def validate_release(root: Path = ROOT, environ: dict[str, str] | None = None) -
     if bundle_id.endswith(".dev"):
         errors.append("正式 Bundle ID 不能使用 .dev 占位后缀")
 
-    env = environ if environ is not None else os.environ
     for name in _environment_names(config):
         if not env.get(name):
             errors.append(f"缺少发布环境变量：{name}")
 
+    errors.extend(_validate_runtime_values(config, env))
     errors.extend(_validate_screenshot_manifest(screenshots, release_root, require_files=True))
     return errors
+
+
+def _runtime_config(config: dict[str, Any], env: dict[str, str]) -> dict[str, Any]:
+    rendered = copy.deepcopy(config)
+    for name, (section, key) in RUNTIME_FIELDS.items():
+        if env.get(name):
+            rendered.setdefault(section, {})[key] = env[name]
+    return rendered
+
+
+def _validate_runtime_values(config: dict[str, Any], env: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+    product = config.get("product", {})
+    services = config.get("services", {})
+    bundle_id = str(product.get("bundle_id", ""))
+    app_store_id = str(product.get("app_store_id", ""))
+    team_id = str(product.get("apple_team_id", ""))
+    sku = str(product.get("sku", ""))
+    version = str(product.get("marketing_version", ""))
+    build = str(product.get("build_number", ""))
+    if BUNDLE_ID_PATTERN.fullmatch(bundle_id) is None or bundle_id.endswith(".dev"):
+        errors.append("正式 Bundle ID 格式无效")
+    if not app_store_id.isdigit() or int(app_store_id or 0) <= 0:
+        errors.append("App Store Connect App ID 必须为正整数")
+    if TEAM_ID_PATTERN.fullmatch(team_id) is None:
+        errors.append("Apple Team ID 格式无效")
+    if SKU_PATTERN.fullmatch(sku) is None:
+        errors.append("App Store SKU 格式无效")
+    if VERSION_NAME_PATTERN.fullmatch(version) is None:
+        errors.append("iOS 营销版本必须使用 X.Y.Z")
+    if BUILD_NUMBER_PATTERN.fullmatch(build) is None:
+        errors.append("iOS 构建号必须为正整数")
+    for key, name in (
+        ("api_base_url", "API 地址"),
+        ("privacy_policy_url", "隐私政策地址"),
+        ("support_url", "支持地址"),
+    ):
+        if not _is_safe_https_url(str(services.get(key, ""))):
+            errors.append(f"{name}必须是不含凭据、查询参数和片段的 HTTPS URL")
+
+    tag = env.get("SMARTSCAN_IOS_RELEASE_TAG", "")
+    match = RELEASE_TAG_PATTERN.fullmatch(tag)
+    if match is None:
+        errors.append("缺少或无效的受保护 iOS 发布标签")
+    elif match.group("version") != version or match.group("build") != build:
+        errors.append("iOS 发布标签与营销版本/构建号不一致")
+
+    minimum_xcode = product.get("minimum_upload_xcode_major")
+    actual_xcode = env.get("SMARTSCAN_IOS_XCODE_VERSION", "")
+    version_match = re.search(r"Xcode\s+([0-9]+)(?:\.[0-9]+)*", actual_xcode)
+    if not isinstance(minimum_xcode, int) or minimum_xcode < 26:
+        errors.append("最低上传 Xcode 主版本配置无效")
+    elif version_match is None:
+        errors.append("缺少 Xcode 版本证据")
+    elif int(version_match.group(1)) < minimum_xcode:
+        errors.append("当前 Xcode 低于 App Store Connect 上传门禁")
+    return errors
+
+
+def _is_safe_https_url(value: str) -> bool:
+    parsed = urlsplit(value)
+    return bool(
+        parsed.scheme == "https"
+        and parsed.hostname
+        and not parsed.username
+        and not parsed.password
+        and not parsed.query
+        and not parsed.fragment
+    )
 
 
 def _validate_environment_references(config: dict[str, Any]) -> list[str]:
@@ -219,8 +315,49 @@ def _validate_privacy_manifest(path: Path) -> list[str]:
 def _validate_project_links(path: Path) -> list[str]:
     project = load_yaml(path)
     settings = project.get("targets", {}).get("SmartScan", {}).get("settings", {}).get("base", {})
-    keys = {"SMARTSCAN_PRIVACY_POLICY_URL", "SMARTSCAN_SUPPORT_URL"}
+    keys = {
+        "SMARTSCAN_BACKGROUND_TASK_IDENTIFIER",
+        "SMARTSCAN_PRIVACY_POLICY_URL",
+        "SMARTSCAN_SUPPORT_URL",
+    }
     return [f"project.yml 缺少 {key}" for key in keys if key not in settings]
+
+
+def _validate_release_automation(root: Path) -> list[str]:
+    errors: list[str] = []
+    workflow_path = root / ".github" / "workflows" / "ios-release.yml"
+    script_path = root / "apps" / "ios" / "scripts" / "archive-release.sh"
+    if not workflow_path.is_file():
+        return ["缺少 iOS 正式发布工作流"]
+    if not script_path.is_file():
+        return ["缺少 iOS 签名归档脚本"]
+    workflow = workflow_path.read_text(encoding="utf-8")
+    for token in (
+        "workflow_dispatch:",
+        "runs-on: macos-26",
+        "name: ios-release",
+        "github.ref_protected",
+        "validate_ios_release.py --release",
+        "archive-release.sh",
+        "upload-artifact@v4",
+    ):
+        if token not in workflow:
+            errors.append(f"iOS 发布工作流缺少门禁：{token}")
+    script = script_path.read_text(encoding="utf-8")
+    for token in (
+        "set -euo pipefail",
+        "mktemp -d",
+        "security import",
+        "codesign --verify --deep --strict",
+        "-exportArchive",
+        "validate_ios_archive.py",
+        "xcrun altool",
+    ):
+        if token not in script:
+            errors.append(f"iOS 归档脚本缺少门禁：{token}")
+    if "set -x" in script:
+        errors.append("iOS 归档脚本禁止回显 Secret")
+    return errors
 
 
 def _safe_parameter_name(config: dict[str, Any], target: Any) -> str:

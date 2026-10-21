@@ -434,3 +434,11 @@
 - 决策：正式 Android APK 只由 GitLab 受保护语义化标签构建，APK keystore 与 ECDSA P-256 更新清单密钥相互独立。流水线必须从当前和至少一个上一稳定 APK 实包读取包名、版本和证书，确认同证书升级后，才把 APK、清单、签名和报告写入版本化 Generic Package；Pages 的 `latest` 频道只复制已经复验的清单原始字节和签名。
 - 原因：只检查 Gradle 输入不能证明最终 APK 身份，把 APK 放在可覆盖路径会让历史证据失效；重新签署“回滚”清单也容易把未知内容提升为可信。不可变版本制品与小型可变频道可以同时提供可追溯性和快速止损。
 - 影响：频道回滚只阻止尚未升级的设备，必须复用旧版原始清单/签名并核对对应 APK；已安装问题版本的设备只能通过更高 `versionCode` 前滚修复。正式 GitLab、密钥、匿名下载、真机升级和数据保留通过前，REL-001 保持等待人工验收。
+
+## D-064：iOS 正式发布使用受保护标签、临时钥匙串和显式上传
+
+- 状态：已确认
+- 日期：2026-10-22
+- 决策：普通 Xcode 16.4 Simulator CI 继续负责可复现编译和单元测试，正式发行只能由 `main` 历史上的受保护 `ios-vX.Y.Z-build.N` 标签人工触发，并经过 `ios-release` GitHub Environment 审批。正式参数和 Secret 不回写仓库；`macos-26` Runner 在临时钥匙串中签名，逐项核对 Archive、App Store 描述文件、IPA、Bundle/版本/Team、生产 URL、Xcode 和 `codesign` 证据。默认模式只校验，只有显式选择才上传 TestFlight。
+- 原因：Simulator 通过不能证明发行签名或 Apple 接受构建，直接在普通 CI 暴露密钥也会扩大泄露面；同时，自动上传会让参数误配直接产生不可覆盖的外部构建。把身份从实包读取并先执行无上传校验，可以让审批者在外部副作用前核对同一候选制品。
+- 影响：工作流 Artifact 只保存脱敏 JSON，不保存 IPA、证书、描述文件、私钥或钥匙串；已经上传的构建只能递增构建号前滚。仓库测试无法代替正式 Environment/Ruleset、签名材料、真实 Archive、Apple 处理、截图、TestFlight 真机和 App Review，因此 REL-002 在这些证据完成前保持等待人工验收。

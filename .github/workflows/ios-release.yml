@@ -1,0 +1,84 @@
+name: iOS 正式发布
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 发布动作
+        required: true
+        type: choice
+        default: validate-only
+        options:
+          - validate-only
+          - upload-testflight
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+jobs:
+  archive-and-upload:
+    name: 签名归档与人工确认上传
+    runs-on: macos-26
+    timeout-minutes: 60
+    environment:
+      name: ios-release
+      url: https://appstoreconnect.apple.com/apps/${{ vars.SMARTSCAN_APP_STORE_ID }}/testflight/ios
+    env:
+      SMARTSCAN_IOS_UPLOAD_MODE: ${{ inputs.mode }}
+      SMARTSCAN_IOS_RELEASE_TAG: ${{ github.ref_name }}
+      SMARTSCAN_REF_TYPE: ${{ github.ref_type }}
+      SMARTSCAN_REF_PROTECTED: ${{ github.ref_protected }}
+      SMARTSCAN_IOS_BUNDLE_ID: ${{ vars.SMARTSCAN_IOS_BUNDLE_ID }}
+      SMARTSCAN_APP_STORE_ID: ${{ vars.SMARTSCAN_APP_STORE_ID }}
+      SMARTSCAN_APP_STORE_SKU: ${{ vars.SMARTSCAN_APP_STORE_SKU }}
+      SMARTSCAN_APPLE_TEAM_ID: ${{ vars.SMARTSCAN_APPLE_TEAM_ID }}
+      SMARTSCAN_IOS_MARKETING_VERSION: ${{ vars.SMARTSCAN_IOS_MARKETING_VERSION }}
+      SMARTSCAN_IOS_BUILD_NUMBER: ${{ vars.SMARTSCAN_IOS_BUILD_NUMBER }}
+      SMARTSCAN_API_BASE_URL: ${{ vars.SMARTSCAN_API_BASE_URL }}
+      SMARTSCAN_PRIVACY_POLICY_URL: ${{ vars.SMARTSCAN_PRIVACY_POLICY_URL }}
+      SMARTSCAN_SUPPORT_URL: ${{ vars.SMARTSCAN_SUPPORT_URL }}
+      SMARTSCAN_IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.SMARTSCAN_IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      SMARTSCAN_IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.SMARTSCAN_IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      SMARTSCAN_IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.SMARTSCAN_IOS_PROVISIONING_PROFILE_BASE64 }}
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY_BASE64 }}
+      SMARTSCAN_REVIEW_USERNAME: ${{ secrets.SMARTSCAN_REVIEW_USERNAME }}
+      SMARTSCAN_REVIEW_PASSWORD: ${{ secrets.SMARTSCAN_REVIEW_PASSWORD }}
+      SMARTSCAN_REVIEW_SMS_CODE: ${{ secrets.SMARTSCAN_REVIEW_SMS_CODE }}
+      SMARTSCAN_IOS_RELEASE_REPORT: ${{ runner.temp }}/ios-release-report.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: 安装无密钥校验依赖
+        run: python -m pip install "pyyaml>=6.0,<7" "pillow>=10.4,<13"
+      - name: 验证受保护发布标签与 Xcode
+        run: |
+          set -euo pipefail
+          test "$SMARTSCAN_REF_TYPE" = "tag"
+          test "$SMARTSCAN_REF_PROTECTED" = "true"
+          [[ "$SMARTSCAN_IOS_RELEASE_TAG" =~ ^ios-v[0-9]+\.[0-9]+\.[0-9]+-build\.[1-9][0-9]*$ ]]
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          echo "SMARTSCAN_IOS_XCODE_VERSION=$(xcodebuild -version | head -n 1)" >> "$GITHUB_ENV"
+      - name: 执行正式参数、截图与审核资产门禁
+        run: python tools/validate_ios_release.py --release
+      - name: 生成、签名、导出并按选择上传
+        run: bash apps/ios/scripts/archive-release.sh
+      - name: 保存脱敏发布证据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-report-${{ github.run_id }}
+          path: ${{ runner.temp }}/ios-release-report.json
+          if-no-files-found: warn
+          retention-days: 90
