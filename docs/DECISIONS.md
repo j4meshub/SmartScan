@@ -292,3 +292,10 @@
 - 日期：2026-10-21
 - 决策：`apps/ios/project.yml` 是 Xcode 工程唯一事实来源，使用 XcodeGen `2.46.0` 官方 ZIP 并固定 SHA-256。GitHub CI 固定 `macos-15` 与 Xcode 16.4，在 iPhone 16 Pro Simulator 上无签名编译和测试；生成的 `.xcodeproj` 与本地工具目录不提交。
 - 影响：Windows 可以维护 Swift 源码和工程规范，macOS Runner 负责每个 PR 的确定性生成、编译和单元测试。`com.j4meshub.smartscan.dev` 只是 Simulator 占位 ID，正式 Bundle ID、Team、签名、真机、Archive 与 TestFlight 仍为外部门禁；冻结正式参数前不得把占位值用于分发。
+
+## D-044：iOS 会话与设备标识分离，缓存目录使用用户摘要分区
+
+- 状态：已确认
+- 日期：2026-10-21
+- 决策：iOS 把完整设备会话与稳定设备 ID 保存为两个独立 Keychain 项，保护级别使用 `AfterFirstUnlockThisDeviceOnly`；刷新令牌每次轮换都原子替换完整会话。用户项目缓存不使用用户名或原始用户 ID 作为路径，而以用户 ID 的 SHA-256 摘要建立独立目录。API 默认地址为不可解析的 `.invalid` 域名，只允许 HTTPS 或测试明确使用的回环 HTTP。
+- 影响：退出登录可以删除令牌和当前用户缓存而不改变设备身份，也不会误删其他账号缓存；原始用户 ID 不暴露在本地目录名。Simulator 自动测试只能证明 Keychain API 契约和缓存隔离逻辑，不能替代锁屏恢复、设备迁移、备份排除和真机数据保护等级验收。

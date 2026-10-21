@@ -37,3 +37,19 @@ xcodebuild \
 - GitHub macOS Runner 只证明工程可生成、Simulator 可编译且单元测试通过。
 - Apple Team、正式 Bundle ID、证书、Provisioning Profile、真机、相机、后台执行、Archive、TestFlight 和 App Store 均保留后续人工门禁。
 
+## API 环境与身份
+
+应用默认使用 `https://api.invalid/`，不会意外连接任何真实服务。开发或 CI 需要联调时，通过构建设置覆盖地址，例如：
+
+```bash
+xcodebuild \
+  -project apps/ios/SmartScan.xcodeproj \
+  -scheme SmartScan \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+  SMARTSCAN_API_BASE_URL=https://staging.example.invalid/ \
+  CODE_SIGNING_ALLOWED=NO \
+  test
+```
+
+地址必须使用 HTTPS；仅回环测试地址允许 HTTP。令牌和稳定设备 ID 分项保存到 Keychain，项目缓存按用户隔离。详细边界见[《iOS 身份、Keychain 与网络》](../../docs/IOS_AUTH_AND_NETWORK.md)。
+

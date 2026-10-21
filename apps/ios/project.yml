@@ -27,6 +27,8 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
+        INFOPLIST_KEY_SMARTSCAN_API_BASE_URL: "$(SMARTSCAN_API_BASE_URL)"
+        SMARTSCAN_API_BASE_URL: https://api.invalid/
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: false
   SmartScanTests:
