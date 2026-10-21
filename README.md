@@ -39,7 +39,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - JPG/PDF 导出：单页/多页制品、清晰/均衡/小文件三档、版本快照和仅采用当前 OCR 行框的可选文本层。
 - 文件生命周期：导出鉴权下载与 Range、Nginx 内部发送、幂等上传取消、过期分片回收和可重试项目清理。
 - API 契约冻结：当前与上一代双快照、客户端实际消费矩阵、破坏性变更检查和至少 90 天弃用登记。
-- 可选 AI Provider：配置驱动且默认关闭的专业 OCR、OpenAI-compatible 和自定义适配器注册表；七类任务使用版本化 JSON Schema、严格原始输出校验和候选证据，核心扫描不依赖网关。
+- 可选 AI Provider：配置驱动且默认关闭的专业 OCR、OpenAI-compatible 和自定义适配器注册表；七类任务使用版本化 JSON Schema，并通过固定 HTTPS 目标、DNS/IP 连接固定、禁重定向和媒体允许列表安全出站，核心扫描不依赖网关。
 - 只增不改的审计事件：覆盖登录和管理员跨用户访问。
 - 按所有者隔离的扫描项目、安全图片路径、SHA-256 元数据，以及由 PostgreSQL 支持的租约任务队列。
 - 分片上传、断点续传、分片/整文件哈希校验、幂等完成和跨用户隔离。
@@ -153,6 +153,8 @@ iOS TestFlight、App Store 元数据、签名边界和人工发布顺序见[iOS 
 
 分类、方向、标题、页码、公式/表格、净化和双页复核的输入输出 Schema、保守业务规则与模型版本证据见[可选视觉 AI 结构化任务与结果契约](docs/AI_STRUCTURED_TASKS.md)。
 
+Provider 公网/受控网段、DNS 重绑定防护、固定媒体前缀、TLS 连接、禁重定向和请求大小门禁见[可选视觉 AI 出站网络与媒体安全](docs/AI_NETWORK_SECURITY.md)。
+
 ## 容器运行
 
 将 `.env.example` 复制为 `.env`，替换所有密钥后执行：
@@ -163,7 +165,7 @@ docker compose -f deploy/compose/docker-compose.yml up --build
 
 Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API 和 Worker。生产 Worker 还要求在 `models/ocr` 放置通过清单校验的离线模型包；缺失或被篡改时拒绝领取任务。数据库版本管理、旧基线接管和回滚要求详见[数据库迁移说明](docs/DATABASE_MIGRATIONS.md)。正式上线前仍需配置 TLS、加密备份和生产密钥管理。
 
-AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置时执行 `docker compose --profile ai -f deploy/compose/docker-compose.yml up --build ai-gateway`。该操作不会自动启用任何 Provider。
+AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置时执行 `docker compose --profile ai -f deploy/compose/docker-compose.yml up --build ai-gateway`。该操作不会自动启用任何 Provider；容器默认只读、无 Linux capabilities，并启用 `no-new-privileges`。
 
 ## 测试
 
@@ -190,7 +192,7 @@ node --check apps/admin-web/app.js
 - 数据路径使用服务端生成的 ID，且不由 Nginx 直接公开。
 - 未授权和不存在的对象 ID 均返回 `404`。
 - 唯一超级管理员同时受 API 逻辑和 PostgreSQL 防护约束保护。
-- 可选 AI 注册配置必须使用无内嵌凭据的 HTTPS 地址；AI-003 完成实际出站请求的 DNS 重绑定、网段、重定向和媒体限制前不得发送用户媒体，基础扫描链路始终不依赖外部 AI。
+- 可选 AI 只连接启动配置中的 HTTPS DNS 地址；全部解析结果必须是公网或显式受控网段，实际 TLS 套接字固定到已验证 IP且禁止重定向。媒体只能使用固定允许前缀和至少 128 位限时令牌，基础扫描链路始终不依赖外部 AI。
 - 分片仅写入当前用户的临时目录，完成前校验分片大小、分片哈希、整文件哈希和图片文件签名。
 - 文档透视校正只在边缘检测达到面积阈值时执行；检测失败不会裁切原图，而是生成基础增强结果并标记复核。
 

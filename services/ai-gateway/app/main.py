@@ -6,6 +6,11 @@ from typing import Any
 from fastapi import Body, FastAPI, HTTPException
 from pydantic import ValidationError
 
+from .network import (
+    NetworkSecurityError,
+    OutboundMediaReference,
+    SecureProviderTransport,
+)
 from .providers import ProviderDefinition, ProviderRegistry, create_adapter, load_provider_registry
 from .tasks import (
     StructuredTaskError,
@@ -23,8 +28,34 @@ def get_registry() -> ProviderRegistry:
     return load_provider_registry()
 
 
+@lru_cache
+def get_network_transport() -> SecureProviderTransport:
+    return SecureProviderTransport()
+
+
+def _network_error_status(code: str) -> int:
+    if code in {
+        "provider_redirect_rejected",
+        "provider_http_error",
+        "provider_content_encoding_rejected",
+        "provider_content_type_rejected",
+        "provider_content_length_invalid",
+        "provider_transfer_encoding_rejected",
+        "provider_response_too_large",
+        "provider_response_empty",
+    }:
+        return 502
+    if code in {
+        "provider_dns_resolution_failed",
+        "provider_dns_no_addresses",
+        "provider_transport_failed",
+    }:
+        return 503
+    return 422
+
+
 def create_app() -> FastAPI:
-    application = FastAPI(title="SmartScan 可选视觉 AI 网关", version="0.2.0")
+    application = FastAPI(title="SmartScan 可选视觉 AI 网关", version="0.3.0")
 
     @application.get("/health")
     def health():
@@ -126,6 +157,51 @@ def create_app() -> FastAPI:
             status_code = 409 if error_code == "provider_disabled" else 503
             raise HTTPException(status_code=status_code, detail=error_code) from exc
         return {"accepted": True, "evidence": evidence}
+
+    @application.post("/v1/tasks/{provider_id}/execute")
+    def execute_structured_task(provider_id: str, payload: dict[str, Any] = Body()):
+        if set(payload) != {"task", "media"} or not isinstance(payload["media"], dict):
+            raise HTTPException(status_code=422, detail="task_execution_envelope_invalid")
+        try:
+            adapter = get_registry().get(provider_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="provider_not_found") from exc
+        try:
+            task = validate_task(payload["task"])
+            media = OutboundMediaReference.model_validate(payload["media"])
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "task_execution_invalid",
+                    "errors": validation_error_details(exc),
+                },
+            ) from exc
+        try:
+            plan = build_provider_request_plan(adapter, task)
+        except StructuredTaskError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            error_code = str(exc)
+            status_code = 409 if error_code == "provider_disabled" else 503
+            raise HTTPException(status_code=status_code, detail=error_code) from exc
+        try:
+            network_result = get_network_transport().execute(adapter, task, plan, media)
+        except NetworkSecurityError as exc:
+            code = str(exc)
+            raise HTTPException(status_code=_network_error_status(code), detail=code) from exc
+        try:
+            result, disposition = validate_result(task, network_result.provider_output)
+            evidence = build_result_evidence(adapter, task, result, disposition)
+        except (ValidationError, StructuredTaskError, TypeError) as exc:
+            raise HTTPException(status_code=502, detail="provider_output_rejected") from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return {
+            "accepted": True,
+            "evidence": evidence,
+            "network": network_result.evidence,
+        }
 
     return application
 
