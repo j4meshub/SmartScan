@@ -95,11 +95,22 @@ actor AuthenticationRepository {
         guard !challengeID.isEmpty, !code.isEmpty else { throw AuthenticationError.invalidInput }
         guard let userID = sessions.current()?.userID else { throw AuthenticationError.sessionMissing }
         guard let accountDeletionAPI else { throw AuthenticationError.accountDeletionUnavailable }
-        let receipt = try await accountDeletionAPI.requestAccountDeletion(
-            phone: phone,
-            challengeID: challengeID,
-            code: code
-        )
+        let receipt: AccountDeletionReceipt
+        do {
+            receipt = try await accountDeletionAPI.requestAccountDeletion(
+                phone: phone,
+                challengeID: challengeID,
+                code: code
+            )
+        } catch let error as APIClientError {
+            guard case .http(statusCode: 401, detail: _) = error else { throw error }
+            _ = try await refresh()
+            receipt = try await accountDeletionAPI.requestAccountDeletion(
+                phone: phone,
+                challengeID: challengeID,
+                code: code
+            )
+        }
         var cleanupSucceeded = true
         do { try sessions.clear() } catch { cleanupSucceeded = false }
         do { try await cache.clearUser(userID) } catch { cleanupSucceeded = false }

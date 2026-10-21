@@ -13,9 +13,9 @@ struct WorkspaceView: View {
         List {
             if store.projects.isEmpty, !store.busy {
                 ContentUnavailableView(
-                    String(localized: "No projects yet"),
+                    "No projects yet",
                     systemImage: "doc.viewfinder",
-                    description: Text(String(localized: "Scan a page, then refresh this workspace."))
+                    description: Text("Scan a page, then refresh this workspace.")
                 )
             }
             ForEach(store.projects) { project in
@@ -136,7 +136,7 @@ private struct ProjectWorkspaceView: View {
                             Spacer()
                             Text(exportStatus(item.status))
                                 .font(.caption)
-                                .foregroundStyle(item.status == "ready" ? .green : .secondary)
+                                .foregroundStyle(item.status == "ready" ? Color.green : Color.gray)
                         }
                         if item.status != "ready" {
                             Button(String(localized: "Refresh status")) {
@@ -260,7 +260,7 @@ private struct PageEditorView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(store.busy)
                 } else {
-                    ContentUnavailableView(String(localized: "Page unavailable"), systemImage: "doc.badge.ellipsis")
+                    ContentUnavailableView("Page unavailable", systemImage: "doc.badge.ellipsis")
                 }
             }
             .padding()
@@ -278,7 +278,7 @@ private struct PageEditorView: View {
                 .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 420)
                 .accessibilityLabel(String(format: String(localized: "Page %d preview"), page.pageNumber))
         } else {
-            ContentUnavailableView(String(localized: "Preview unavailable"), systemImage: "photo")
+            ContentUnavailableView("Preview unavailable", systemImage: "photo")
                 .frame(maxWidth: .infinity, minHeight: 180)
                 .task(id: "\(page.id)-\(page.activeResultVersion)") {
                     await store.loadPreview(for: page)
@@ -326,7 +326,7 @@ private struct DocumentPreviewSheet: View {
                         Image(uiImage: image).resizable().scaledToFit().padding()
                     }
                 } else {
-                    ContentUnavailableView(String(localized: "Preview unavailable"), systemImage: "doc")
+                    ContentUnavailableView("Preview unavailable", systemImage: "doc")
                 }
             }
             .navigationTitle(document.fileName)

@@ -103,6 +103,31 @@ final class AuthenticationRepositoryTests: XCTestCase {
         XCTAssertEqual(deletionAPI.lastPurpose, "account_deletion_cancel")
         XCTAssertEqual(receipt.status, "canceled")
     }
+
+    func testAccountDeletionRefreshesOnceBeforeConsumingChallenge() async throws {
+        let api = StubAuthenticationAPI()
+        api.refreshToken = token(access: "access-2", refresh: "refresh-2")
+        let deletionAPI = StubAccountDeletionAPI()
+        deletionAPI.requestErrors = [.http(statusCode: 401, detail: "token_expired")]
+        let sessions = TestSessionStore()
+        try sessions.save(token().credentials(userID: "user-1"))
+        let repository = AuthenticationRepository(
+            api: api,
+            sessions: sessions,
+            cache: SpyUserCache(),
+            accountDeletionAPI: deletionAPI
+        )
+
+        let outcome = try await repository.requestAccountDeletion(
+            phone: "+8613800001234",
+            challengeID: "challenge-1",
+            code: "123456"
+        )
+
+        XCTAssertEqual(outcome.receipt.status, "pending")
+        XCTAssertEqual(api.lastRefreshToken, "refresh-1")
+        XCTAssertEqual(deletionAPI.requestCount, 2)
+    }
 }
 
 final class StubAuthenticationAPI: SmartScanAuthenticationAPI {
@@ -153,6 +178,8 @@ actor SpyUserCache: UserScopedProjectCaching {
 final class StubAccountDeletionAPI: SmartScanAccountDeletionAPI {
     var lastPurpose: String?
     var lastRequestPhone: String?
+    var requestErrors: [APIClientError] = []
+    var requestCount = 0
 
     func requestSMSChallenge(phone: String, purpose: String) async throws -> RegistrationChallenge {
         lastPurpose = purpose
@@ -168,6 +195,8 @@ final class StubAccountDeletionAPI: SmartScanAccountDeletionAPI {
         challengeID: String,
         code: String
     ) async throws -> AccountDeletionReceipt {
+        requestCount += 1
+        if !requestErrors.isEmpty { throw requestErrors.removeFirst() }
         lastRequestPhone = phone
         return deletionReceipt(status: "pending")
     }
