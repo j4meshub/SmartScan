@@ -13,4 +13,5 @@ include(":data:repository")
 include(":feature:capture")
 include(":feature:sync")
 include(":feature:workspace")
+include(":feature:update")
 

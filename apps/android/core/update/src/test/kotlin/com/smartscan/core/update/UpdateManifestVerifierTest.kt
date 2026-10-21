@@ -3,6 +3,7 @@ package com.smartscan.core.update
 import java.nio.file.Path
 import java.security.KeyPairGenerator
 import java.security.Signature
+import java.security.spec.ECGenParameterSpec
 import java.util.Base64
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -50,6 +51,30 @@ class UpdateManifestVerifierTest {
     }
 
     @Test
+    fun `signed manifest still rejects inconsistent versions and credential query`() {
+        val invalidMinimum = fixture(versionCode = 2, minimumSupported = 3)
+        assertInstanceOf(
+            UpdateVerificationResult.Rejected::class.java,
+            invalidMinimum.verifier.verify(invalidMinimum.payload, invalidMinimum.signature, "com.smartscan.app", 1),
+        )
+        val queryUrl = fixture(apkUrl = "https://updates.example.com/SmartScan.apk?token=secret")
+        assertInstanceOf(
+            UpdateVerificationResult.Rejected::class.java,
+            queryUrl.verifier.verify(queryUrl.payload, queryUrl.signature, "com.smartscan.app", 1),
+        )
+        val invalidPublishedAt = fixture(publishedAt = "2026-10-21T00:00:00")
+        assertInstanceOf(
+            UpdateVerificationResult.Rejected::class.java,
+            invalidPublishedAt.verifier.verify(
+                invalidPublishedAt.payload,
+                invalidPublishedAt.signature,
+                "com.smartscan.app",
+                1,
+            ),
+        )
+    }
+
+    @Test
     fun `apk hash accepts exact file and rejects changed bytes`() {
         val apk = temporaryDirectory.resolve("SmartScan.apk").toFile().apply { writeText("signed-apk") }
         val expected = "19414629577da02c41742a2b05a8a40b2698f0a7b0353e56cd1a306d95d249a2"
@@ -58,10 +83,40 @@ class UpdateManifestVerifierTest {
         assertFalse(verifyApkSha256(apk, expected))
     }
 
-    private fun fixture(versionCode: Long = 2, minimumSupported: Long = 1): Fixture {
-        val keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
-        val payload = """{"schema_version":1,"package_name":"com.smartscan.app","version_code":$versionCode,"version_name":"1.1.0","minimum_supported_version_code":$minimumSupported,"apk_url":"https://updates.example.com/SmartScan.apk","apk_sha256":"${"a".repeat(64)}","apk_signing_certificate_sha256":"${"b".repeat(64)}","published_at":"2026-10-21T00:00:00Z"}""".encodeToByteArray()
-        val signer = Signature.getInstance("Ed25519").apply {
+    @Test
+    fun `apk identity requires exact package version and pinned installed signer`() {
+        val fixture = fixture(versionCode = 5)
+        val manifest = (fixture.verifier.verify(
+            fixture.payload,
+            fixture.signature,
+            "com.smartscan.app",
+            2,
+        ) as UpdateVerificationResult.Available).update.manifest
+        val expected = manifest.apkSigningCertificateSha256
+        val installed = ApkPackageIdentity("com.smartscan.app", 2, setOf(expected))
+
+        assertEquals(null, verifyApkPackageIdentity(manifest, ApkPackageIdentity("com.smartscan.app", 5, setOf(expected)), installed))
+        assertEquals(
+            "apk_signer_mismatch",
+            verifyApkPackageIdentity(manifest, ApkPackageIdentity("com.smartscan.app", 5, setOf("c".repeat(64))), installed),
+        )
+        assertEquals(
+            "package_version_mismatch",
+            verifyApkPackageIdentity(manifest, ApkPackageIdentity("com.smartscan.app", 4, setOf(expected)), installed),
+        )
+    }
+
+    private fun fixture(
+        versionCode: Long = 2,
+        minimumSupported: Long = 1,
+        apkUrl: String = "https://updates.example.com/SmartScan.apk",
+        publishedAt: String = "2026-10-21T00:00:00Z",
+    ): Fixture {
+        val keyPair = KeyPairGenerator.getInstance("EC").apply {
+            initialize(ECGenParameterSpec("secp256r1"))
+        }.generateKeyPair()
+        val payload = """{"schema_version":1,"package_name":"com.smartscan.app","version_code":$versionCode,"version_name":"1.1.0","minimum_supported_version_code":$minimumSupported,"apk_url":"$apkUrl","apk_size_bytes":1048576,"apk_sha256":"${"a".repeat(64)}","apk_signing_certificate_sha256":"${"b".repeat(64)}","published_at":"$publishedAt"}""".encodeToByteArray()
+        val signer = Signature.getInstance("SHA256withECDSA").apply {
             initSign(keyPair.private)
             update(payload)
         }

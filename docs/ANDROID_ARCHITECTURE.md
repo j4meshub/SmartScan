@@ -25,7 +25,9 @@
         ├─ :core:model ── 不依赖 Android 的领域对象
         ├─ :feature:capture ── CameraX 预览、质量提示与原图捕获
         ├─ :feature:sync ── WorkManager、分片续传与会话恢复
-        └─ :feature:workspace ── 页面编辑、导出下载与分享入口
+        ├─ :feature:workspace ── 页面编辑、导出下载与分享入口
+        ├─ :core:update ── 签名清单、版本、哈希与 APK 身份规则
+        └─ :feature:update ── 受控下载、PackageManager 校验与系统安装器
 ```
 
 - `:core:model` 只保存项目、页面、任务和导出领域模型，可被后续缓存与界面复用。
@@ -35,6 +37,7 @@
 - `:core:upload` 定义与 Android 框架无关的队列状态、项目/页面模型和用户分区存储协议；`:data:local` 使用 Room v2 实现。
 - `:feature:sync` 负责私有原图入队、WorkManager 网络约束、服务端确认分片续传和登录恢复；不读取其他用户队列。
 - `:feature:workspace` 负责项目恢复、页序、旋转、四角/滤镜编辑、复核、导出创建和鉴权制品下载；系统分享仍由 `:app` 通过受限 `FileProvider` 执行。
+- `:core:update` 负责与 Android 框架无关的 ECDSA P-256 清单验签、版本/地址/哈希与 APK 身份规则；`:feature:update` 负责每日检查、私有目录下载、实包证书读取和系统安装确认。
 - `:app` 只负责 Android 入口、Compose 导航、系统分享和依赖装配。账号删除入口调用服务端冷静期流程，并按用户清理本地队列和私有原图。
 
 依赖方向只允许上层依赖下层；网络模块不能依赖应用模块，领域模型不能依赖 Android 或传输库。

@@ -112,6 +112,8 @@ Android Room 离线队列、WorkManager 网络恢复、服务端确认分片续�
 
 Android 页面编辑、导出鉴权下载、受限 FileProvider 分享和账号删除本地清理见[Android 编辑、导出、分享与账号删除](docs/ANDROID_EDIT_EXPORT_SHARE.md)。
 
+Android 签名更新清单、APK 哈希/包名/版本/证书校验和系统安装确认见[Android 安全更新](docs/ANDROID_SECURE_UPDATE.md)。
+
 文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
 
 试卷规则检测、保守净化和禁止生成虚假原文的边界见[基础试卷检测与保守净化 POC](docs/POC_EXAM_CLEANUP.md)。

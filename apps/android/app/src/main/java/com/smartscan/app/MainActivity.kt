@@ -36,6 +36,10 @@ import com.smartscan.data.repository.RegistrationInput
 import com.smartscan.feature.capture.CaptureMode
 import com.smartscan.feature.capture.CaptureScreen
 import com.smartscan.feature.sync.UploadQueueCoordinator
+import com.smartscan.feature.update.AndroidUpdateManager
+import com.smartscan.feature.update.InstallLaunchResult
+import com.smartscan.feature.update.UpdateCheckResult
+import com.smartscan.feature.update.UpdateDownloadResult
 import com.smartscan.feature.workspace.ProjectWorkspaceScreen
 import java.io.File
 import java.time.LocalDateTime
@@ -54,7 +58,11 @@ class MainActivity : ComponentActivity() {
                 authenticationRepository = container.authenticationRepository,
                 projectRepository = container.projectRepository,
                 uploadQueueCoordinator = container.uploadQueueCoordinator,
+                updateManager = container.updateManager,
                 onShare = ::shareArtifact,
+                onInstallUpdate = { ready ->
+                    container.updateManager?.launchInstaller(this, ready) ?: InstallLaunchResult.REJECTED
+                },
             )
         }
     }
@@ -82,7 +90,9 @@ fun SmartScanApp(
     authenticationRepository: AuthenticationRepository,
     projectRepository: ProjectRepository,
     uploadQueueCoordinator: UploadQueueCoordinator,
+    updateManager: AndroidUpdateManager?,
     onShare: (DownloadedArtifact) -> Unit,
+    onInstallUpdate: (UpdateDownloadResult.Ready) -> InstallLaunchResult,
 ) {
     val authState = remember { MutableStateFlow<AuthUiState>(AuthUiState.Loading) }
     val state by authState.collectAsStateWithLifecycle()
@@ -90,9 +100,13 @@ fun SmartScanApp(
     var registrationChallengeId by remember { mutableStateOf<String?>(null) }
     var cancellationChallengeId by remember { mutableStateOf<String?>(null) }
     var messageResource by remember { mutableStateOf<Int?>(null) }
+    var startupUpdateResult by remember { mutableStateOf<UpdateCheckResult?>(null) }
 
     LaunchedEffect(authenticationRepository) {
         authState.value = authenticationRepository.restore().toUiState()
+    }
+    LaunchedEffect(updateManager) {
+        if (updateManager != null) startupUpdateResult = updateManager.check()
     }
     LaunchedEffect(state) {
         if (state is AuthUiState.SignedIn) uploadQueueCoordinator.resumeCurrentUser()
@@ -172,7 +186,10 @@ fun SmartScanApp(
             authenticationRepository = authenticationRepository,
             projectRepository = projectRepository,
             uploadQueueCoordinator = uploadQueueCoordinator,
+            updateManager = updateManager,
+            initialUpdateResult = startupUpdateResult,
             onShare = onShare,
+            onInstallUpdate = onInstallUpdate,
             onAccountDeletionScheduled = { localCleanupComplete ->
                 registrationChallengeId = null
                 cancellationChallengeId = null
@@ -203,7 +220,10 @@ private fun AuthenticatedApp(
     authenticationRepository: AuthenticationRepository,
     projectRepository: ProjectRepository,
     uploadQueueCoordinator: UploadQueueCoordinator,
+    updateManager: AndroidUpdateManager?,
+    initialUpdateResult: UpdateCheckResult?,
     onShare: (DownloadedArtifact) -> Unit,
+    onInstallUpdate: (UpdateDownloadResult.Ready) -> InstallLaunchResult,
     onAccountDeletionScheduled: (Boolean) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -260,6 +280,9 @@ private fun AuthenticatedApp(
                         user = user,
                         authenticationRepository = authenticationRepository,
                         uploadQueueCoordinator = uploadQueueCoordinator,
+                        updateManager = updateManager,
+                        initialUpdateResult = initialUpdateResult,
+                        onInstallUpdate = onInstallUpdate,
                         onAccountDeletionScheduled = onAccountDeletionScheduled,
                         onLogout = onLogout,
                     )
@@ -450,6 +473,9 @@ private fun SettingsScreen(
     user: UserProfile,
     authenticationRepository: AuthenticationRepository,
     uploadQueueCoordinator: UploadQueueCoordinator,
+    updateManager: AndroidUpdateManager?,
+    initialUpdateResult: UpdateCheckResult?,
+    onInstallUpdate: (UpdateDownloadResult.Ready) -> InstallLaunchResult,
     onAccountDeletionScheduled: (Boolean) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -459,6 +485,13 @@ private fun SettingsScreen(
     var confirmUsername by remember { mutableStateOf("") }
     var challengeId by remember { mutableStateOf<String?>(null) }
     var messageResource by remember { mutableStateOf<Int?>(null) }
+    var updateResult by remember { mutableStateOf(initialUpdateResult) }
+    var updateDownload by remember { mutableStateOf<UpdateDownloadResult.Ready?>(null) }
+    var updateBusy by remember { mutableStateOf(false) }
+    var updateMessageResource by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(initialUpdateResult) {
+        if (initialUpdateResult != null) updateResult = initialUpdateResult
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(Paper).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -469,6 +502,67 @@ private fun SettingsScreen(
             Text(user.phoneMasked, color = Color(0xFF4B5563))
             Spacer(Modifier.height(16.dp))
             Button(onClick = onLogout) { Text(stringResource(R.string.auth_logout)) }
+            HorizontalDivider(Modifier.padding(vertical = 20.dp))
+            Text(stringResource(R.string.update_title), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            if (updateManager == null) {
+                Text(stringResource(R.string.update_unconfigured))
+            } else {
+                when (val result = updateResult) {
+                    null, UpdateCheckResult.NotDue -> Text(stringResource(R.string.update_not_checked))
+                    UpdateCheckResult.Current -> Text(stringResource(R.string.update_current))
+                    is UpdateCheckResult.Available -> Text(
+                        stringResource(
+                            if (result.update.mandatory) R.string.update_available_required else R.string.update_available,
+                            result.update.manifest.versionName,
+                        ),
+                    )
+                    is UpdateCheckResult.Failed -> Text(stringResource(R.string.update_check_failed), color = MaterialTheme.colorScheme.error)
+                }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            updateBusy = true
+                            updateDownload = null
+                            updateMessageResource = null
+                            updateResult = updateManager.check(force = true)
+                            updateBusy = false
+                        }
+                    },
+                    enabled = !updateBusy,
+                ) { Text(stringResource(R.string.update_check_action)) }
+                val available = updateResult as? UpdateCheckResult.Available
+                if (available != null) {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                updateBusy = true
+                                when (val result = updateManager.download(available.update)) {
+                                    is UpdateDownloadResult.Ready -> {
+                                        updateDownload = result
+                                        updateMessageResource = null
+                                    }
+                                    is UpdateDownloadResult.Failed -> updateMessageResource = R.string.update_download_failed
+                                }
+                                updateBusy = false
+                            }
+                        },
+                        enabled = !updateBusy,
+                    ) { Text(stringResource(R.string.update_download_action)) }
+                }
+                updateDownload?.let { ready ->
+                    Button(
+                        onClick = {
+                            updateMessageResource = when (onInstallUpdate(ready)) {
+                                InstallLaunchResult.INSTALLER_OPENED -> R.string.update_installer_opened
+                                InstallLaunchResult.PERMISSION_OPENED -> R.string.update_permission_required
+                                InstallLaunchResult.REJECTED -> R.string.update_install_rejected
+                            }
+                        },
+                        enabled = !updateBusy,
+                    ) { Text(stringResource(R.string.update_install_action)) }
+                }
+                updateMessageResource?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.error) }
+            }
             HorizontalDivider(Modifier.padding(vertical = 20.dp))
             Text(stringResource(R.string.account_deletion_title), fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text(stringResource(R.string.account_deletion_warning), color = MaterialTheme.colorScheme.error)
