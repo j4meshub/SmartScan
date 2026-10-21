@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "dataset_id": "smartscan-ai-fixed",
+  "dataset_version": "1.0.0",
+  "authorization": {
+    "approved": true,
+    "deidentified": true,
+    "license": "请填写真实许可依据",
+    "consent_reference": "请填写批准或同意记录",
+    "purpose": "比较基础 OCR、专业 OCR、公共 VLM 和自定义 VLM"
+  },
+  "split_policy": {
+    "group_by": "source_group",
+    "reviewed": true,
+    "review_reference": "请填写数据切分复核记录"
+  },
+  "thresholds": {
+    "minimum_test_samples": 1,
+    "minimum_accuracy": 0.9,
+    "minimum_structured_success_rate": 0.99,
+    "maximum_hallucination_rate": 0.01,
+    "maximum_latency_ms_p95": 5000,
+    "maximum_average_cost_microusd": 10000,
+    "approved_by": "请填写阈值批准人",
+    "approval_reference": "请填写阈值批准记录；示例数值不能用于验收"
+  },
+  "core_flow_evidence": {
+    "external_ai_disabled": true,
+    "sample_count": 1,
+    "completion_rate": 1.0,
+    "evidence_reference": "请填写外部 AI 全关闭时的核心流程测试证据",
+    "reviewed": true
+  },
+  "samples": [
+    {
+      "id": "document-001-classification",
+      "source_group": "document-001",
+      "split": "test",
+      "category": "中文普通文档",
+      "language": "zh-CN",
+      "path": "images/document-001.png",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "task": {
+        "schema_version": "1.0",
+        "task_id": "11111111-1111-4111-8111-111111111111",
+        "task_type": "classify_page",
+        "context": {
+          "page_id": "22222222-2222-4222-8222-222222222222",
+          "source_result_version": 1,
+          "media": {
+            "asset_id": "33333333-3333-4333-8333-333333333333",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "mime_type": "image/png",
+            "width": 2480,
+            "height": 3508
+          },
+          "locale": "zh-CN"
+        },
+        "constraints": {
+          "temperature": 0.0,
+          "max_output_tokens": 1024
+        },
+        "parameters": {}
+      },
+      "expected": {
+        "label": "ordinary_document"
+      }
+    }
+  ]
+}

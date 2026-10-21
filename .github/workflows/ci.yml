@@ -33,6 +33,7 @@ jobs:
       - run: ruff format --check services migrations tests tools
       - run: python tools/validate_ios_release.py
       - run: python tools/export_ai_schemas.py --check
+      - run: python tools/export_ai_evaluation_schemas.py --check
       - run: pytest --cov=services --cov-report=term-missing --cov-fail-under=77
       - run: python tools/api_compatibility.py
       - run: python -m services.api.app.migrations upgrade

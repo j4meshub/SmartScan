@@ -24,7 +24,10 @@ data/
 !/apps/android/data/**
 uploads/
 datasets/perspective/images/
+datasets/ai-evaluation/images/
+datasets/ai-evaluation/runs/
 reports/perspective/
+reports/ai-evaluation/
 reports/load/
 load-tests/accounts.local.json
 models/ocr/
