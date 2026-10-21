@@ -1,4 +1,7 @@
 .env
+.env.staging
+deploy/compose/staging.env
+deploy/compose/staging.runtime.env
 .venv/
 __pycache__/
 *.py[cod]
