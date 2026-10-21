@@ -130,6 +130,7 @@ jobs:
             --ci-fixture
           docker run --rm --user "$(id -u):$(id -g)" --entrypoint /bin/promtool \
             -v "$RUNNER_TEMP/smartscan-monitoring:/etc/prometheus:ro" \
+            -v "$RUNNER_TEMP/ops-metrics.token:/run/secrets/ops_metrics_token:ro" \
             prom/prometheus:v3.14.0 \
             check config /etc/prometheus/prometheus.yml
           docker run --rm --user "$(id -u):$(id -g)" --entrypoint /bin/amtool \
