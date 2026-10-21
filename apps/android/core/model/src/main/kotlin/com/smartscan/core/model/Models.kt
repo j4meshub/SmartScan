@@ -29,6 +29,10 @@ data class ScanPage(
     val qualityWarning: String?,
     val activeResultVersion: Int,
     val ocrStatus: String,
+    val examResultVersion: Int? = null,
+    val examConfidenceBand: String? = null,
+    val examRecommendation: String? = null,
+    val examSuggestionVisible: Boolean = false,
 )
 
 data class ProcessingJob(

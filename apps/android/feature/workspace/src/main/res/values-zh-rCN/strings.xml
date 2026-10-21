@@ -22,6 +22,9 @@
     <string name="workspace_y">纵坐标</string>
     <string name="workspace_save_edit">应用编辑</string>
     <string name="workspace_confirm_review">确认复核</string>
+    <string name="workspace_exam_suggestion_high">检测到这可能是试卷页面，建议使用试卷净化；执行前仍会保留原图。</string>
+    <string name="workspace_exam_suggestion_medium">这页可能是试卷页面，是否切换到试卷净化？</string>
+    <string name="workspace_exam_dismiss">暂不使用</string>
     <string name="workspace_export">导出</string>
     <string name="workspace_pdf">PDF</string>
     <string name="workspace_jpg">JPG</string>

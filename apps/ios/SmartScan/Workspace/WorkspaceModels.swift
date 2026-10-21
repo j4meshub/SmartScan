@@ -29,6 +29,12 @@ struct WorkspacePage: Codable, Equatable, Sendable, Identifiable, Hashable {
     let activeResultVersion: Int
     let reviewStatus: String
     let ocrStatus: String
+    let examResultVersion: Int?
+    let examConfidenceBand: String?
+    let examRecommendation: String?
+    let examSuggestionVisible: Bool?
+
+    var showsExamSuggestion: Bool { examSuggestionVisible == true && examResultVersion != nil }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -39,6 +45,10 @@ struct WorkspacePage: Codable, Equatable, Sendable, Identifiable, Hashable {
         case activeResultVersion = "active_result_version"
         case reviewStatus = "review_status"
         case ocrStatus = "ocr_status"
+        case examResultVersion = "exam_result_version"
+        case examConfidenceBand = "exam_confidence_band"
+        case examRecommendation = "exam_recommendation"
+        case examSuggestionVisible = "exam_suggestion_visible"
     }
 }
 
@@ -154,6 +164,7 @@ struct AccountDeletionOutcome: Equatable, Sendable {
 enum WorkspaceError: Error, Equatable {
     case invalidPageOrder
     case invalidRotation
+    case invalidExamResultVersion
     case invalidCorners
     case invalidExport
     case invalidDownloadName

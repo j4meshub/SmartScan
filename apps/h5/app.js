@@ -1,7 +1,7 @@
 import {AuthClient} from "./auth-client.js";
 import {bindCameraLifecycle, cameraBlobToFile, captureCameraPhoto, openEnvironmentCamera, stopCamera} from "./camera.js";
 import {copy, editorCopy} from "./i18n.js";
-import {defaultCorners, filterPreview, movePage, qualityPrompt, updateCorner} from "./page-editor.js";
+import {canDismissExamSuggestion, defaultCorners, examSuggestionPrompt, filterPreview, movePage, qualityPrompt, updateCorner} from "./page-editor.js";
 import {downloadBlob, exportQualityLabel, exportStatusLabel, jobKindLabel, jobStatusLabel, projectJobs, shareOrDownload, shouldPollJobs} from "./project-files.js";
 import {uploadResumable} from "./resumable-upload.js";
 
@@ -52,6 +52,10 @@ function renderEditorState(){
   $("#movePageRight").disabled=editorIndex<0||editorIndex>=editorPages.length-1;
   $("#qualityMessage").textContent=qualityPrompt(page,locale);
   $("#confirmReview").classList.toggle("hidden",!page||page.review_status!=="pending");
+  const examPrompt=examSuggestionPrompt(page,locale);
+  $("#examSuggestion").classList.toggle("hidden",!examPrompt);
+  $("#examSuggestionText").textContent=examPrompt;
+  $("#dismissExamSuggestion").disabled=!canDismissExamSuggestion(page);
   document.querySelectorAll("[data-page-filter]").forEach(button=>button.classList.toggle("active",button.dataset.pageFilter===editorFilter));
   $("#editorImage").style.filter=filterPreview(editorFilter);
   renderEditorCorners();
@@ -128,6 +132,7 @@ $("#movePageRight").addEventListener("click",()=>reorderEditorPage(1));
 $("#resetCorners").addEventListener("click",()=>{ editorCorners=defaultCorners(); editorCornersDirty=false; renderEditorState(); });
 $("#savePageEdit").addEventListener("click",saveEditorPage);
 $("#confirmReview").addEventListener("click",async()=>{ const page=editorPages[editorIndex]; if(!page) return; try{ const updated=await request(`/v1/pages/${page.id}/review`,{method:"PATCH",body:JSON.stringify({status:"confirmed",note:qualityPrompt(page,locale)})}); editorPages[editorIndex]=updated; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].confirmed; }catch(error){ $("#editorMessage").textContent=localizedError(error); } });
+$("#dismissExamSuggestion").addEventListener("click",async()=>{ const page=editorPages[editorIndex]; if(!canDismissExamSuggestion(page)) return; try{ const updated=await request(`/v1/pages/${page.id}/exam-suggestion-dismissal`,{method:"PUT",body:JSON.stringify({result_version:page.exam_result_version,reason:"user_dismissed"})}); editorPages[editorIndex]=updated; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].examDismissed; }catch(error){ $("#editorMessage").textContent=localizedError(error); } });
 document.querySelectorAll("[data-page-filter]").forEach(button=>button.addEventListener("click",()=>{ editorFilter=button.dataset.pageFilter; renderEditorState(); }));
 $("#cornerOverlay").addEventListener("pointerdown",event=>{ const handle=event.target.closest("[data-corner]"); if(!handle) return; draggedCorner=Number(handle.dataset.corner); event.currentTarget.setPointerCapture?.(event.pointerId); });
 $("#cornerOverlay").addEventListener("pointermove",event=>{ if(draggedCorner===null) return; const rect=event.currentTarget.getBoundingClientRect(); editorCorners=updateCorner(editorCorners,draggedCorner,(event.clientX-rect.left)/rect.width,(event.clientY-rect.top)/rect.height); editorCornersDirty=true; renderEditorState(); });

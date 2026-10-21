@@ -93,6 +93,12 @@ interface WorkspaceApi {
     @PATCH("v1/pages/{pageId}/review")
     suspend fun reviewPage(@Path("pageId") pageId: String, @Body request: PageReviewRequestDto): PageDto
 
+    @PUT("v1/pages/{pageId}/exam-suggestion-dismissal")
+    suspend fun dismissExamSuggestion(
+        @Path("pageId") pageId: String,
+        @Body request: ExamSuggestionDismissalRequestDto,
+    ): PageDto
+
     @POST("v1/projects/{projectId}/exports")
     suspend fun createExport(
         @Path("projectId") projectId: String,
@@ -193,6 +199,12 @@ data class PageReviewRequestDto(
 )
 
 @Serializable
+data class ExamSuggestionDismissalRequestDto(
+    @SerialName("result_version") val resultVersion: Int,
+    val reason: String = "user_dismissed",
+)
+
+@Serializable
 data class ExportCreateRequestDto(
     val format: String,
     val quality: String = "balanced",
@@ -280,6 +292,10 @@ data class PageDto(
     @SerialName("active_result_version") val activeResultVersion: Int,
     @SerialName("review_status") val reviewStatus: String,
     @SerialName("ocr_status") val ocrStatus: String,
+    @SerialName("exam_result_version") val examResultVersion: Int? = null,
+    @SerialName("exam_confidence_band") val examConfidenceBand: String? = null,
+    @SerialName("exam_recommendation") val examRecommendation: String? = null,
+    @SerialName("exam_suggestion_visible") val examSuggestionVisible: Boolean = false,
 )
 
 @Serializable

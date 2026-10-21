@@ -24,6 +24,8 @@ test("项目页包含四角、旋转、滤镜、排序和质量复核入口", as
     "movePageRight",
     "savePageEdit",
     "confirmReview",
+    "examSuggestion",
+    "dismissExamSuggestion",
   ]) assert.match(html, new RegExp(`id=["']${id}["']`));
   assert.equal((html.match(/data-page-filter=/g) || []).length, 4);
   assert.equal((html.match(/data-corner=/g) || []).length, 4);

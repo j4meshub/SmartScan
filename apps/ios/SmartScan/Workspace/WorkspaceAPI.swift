@@ -8,6 +8,7 @@ protocol SmartScanWorkspaceAPI {
     func rotatePage(id: String, degrees: Int) async throws -> WorkspacePage
     func editPage(id: String, corners: [WorkspaceCorner], filter: WorkspaceFilter) async throws -> WorkspacePage
     func reviewPage(id: String, confirmed: Bool) async throws -> WorkspacePage
+    func dismissExamSuggestion(id: String, resultVersion: Int) async throws -> WorkspacePage
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -68,6 +69,18 @@ extension URLSessionSmartScanAPI: SmartScanWorkspaceAPI, SmartScanAccountDeletio
         var request = try makeRequest(path: "v1/pages/\(id)/review", method: "PATCH", authenticated: true)
         request.httpBody = try JSONEncoder().encode(
             PageReviewRequest(status: confirmed ? "confirmed" : "pending", note: nil)
+        )
+        return try await execute(request)
+    }
+
+    func dismissExamSuggestion(id: String, resultVersion: Int) async throws -> WorkspacePage {
+        var request = try makeRequest(
+            path: "v1/pages/\(id)/exam-suggestion-dismissal",
+            method: "PUT",
+            authenticated: true
+        )
+        request.httpBody = try JSONEncoder().encode(
+            ExamSuggestionDismissalRequest(resultVersion: resultVersion, reason: "user_dismissed")
         )
         return try await execute(request)
     }
@@ -161,6 +174,16 @@ private struct PageEditRequest: Encodable {
 private struct PageReviewRequest: Encodable {
     let status: String
     let note: String?
+}
+
+private struct ExamSuggestionDismissalRequest: Encodable {
+    let resultVersion: Int
+    let reason: String
+
+    enum CodingKeys: String, CodingKey {
+        case resultVersion = "result_version"
+        case reason
+    }
 }
 
 private struct ExportCreateRequest: Encodable {

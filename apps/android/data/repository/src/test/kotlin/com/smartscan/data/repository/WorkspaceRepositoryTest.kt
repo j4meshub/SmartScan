@@ -53,6 +53,17 @@ class WorkspaceRepositoryTest {
     }
 
     @Test
+    fun `exam suggestion dismissal maps current version and hidden state`() = runTest {
+        val repository = DefaultProjectRepository(QueryApi(), FakeWorkspaceApi())
+
+        val result = repository.dismissExamSuggestion("page-1", 3)
+
+        val page = (result as ApiResult.Success).value
+        assertEquals(3, page.examResultVersion)
+        assertFalse(page.examSuggestionVisible)
+    }
+
+    @Test
     fun `export download verifies size and sha before publishing file`() = runTest {
         val bytes = "verified-export".toByteArray()
         val workspace = FakeWorkspaceApi(downloadBytes = bytes)
@@ -131,6 +142,11 @@ private class FakeWorkspaceApi(private val downloadBytes: ByteArray = "preview".
 
     override suspend fun reviewPage(pageId: String, request: PageReviewRequestDto) =
         page(pageId).copy(reviewStatus = request.status)
+
+    override suspend fun dismissExamSuggestion(
+        pageId: String,
+        request: com.smartscan.core.network.ExamSuggestionDismissalRequestDto,
+    ) = page(pageId).copy(examResultVersion = request.resultVersion, examSuggestionVisible = false)
 
     override suspend fun createExport(projectId: String, request: ExportCreateRequestDto) = export(projectId, request)
     override suspend fun getExport(exportId: String) = export("project-1", ExportCreateRequestDto("pdf"))

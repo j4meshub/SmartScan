@@ -152,6 +152,8 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
 
     func reviewPage(id: String, confirmed: Bool) async throws -> WorkspacePage { workspacePage() }
 
+    func dismissExamSuggestion(id: String, resultVersion: Int) async throws -> WorkspacePage { workspacePage() }
+
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -182,7 +184,11 @@ private func workspacePage() -> WorkspacePage {
         rotationDegrees: 0,
         activeResultVersion: 1,
         reviewStatus: "pending",
-        ocrStatus: "ready"
+        ocrStatus: "ready",
+        examResultVersion: nil,
+        examConfidenceBand: nil,
+        examRecommendation: nil,
+        examSuggestionVisible: nil
     )
 }
 

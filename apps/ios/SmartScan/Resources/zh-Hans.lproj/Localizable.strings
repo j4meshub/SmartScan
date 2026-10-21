@@ -97,6 +97,9 @@
 "Queued" = "已排队";
 "Rotate 90°" = "旋转 90°";
 "Confirm review" = "确认复核";
+"This may be an exam page. Exam cleanup is recommended and the original will be preserved." = "检测到这可能是试卷页面，建议使用试卷净化；执行前仍会保留原图。";
+"This may be an exam page. Switch to exam cleanup?" = "这页可能是试卷页面，是否切换到试卷净化？";
+"Not now" = "暂不使用";
 "Filter" = "滤镜";
 "Original" = "原图";
 "Enhance" = "增强";

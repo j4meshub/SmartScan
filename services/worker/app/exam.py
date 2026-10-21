@@ -2,14 +2,30 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 
 import cv2
 import numpy as np
 from PIL import Image
 
 ExamRecommendation = Literal["ordinary", "ask", "suggest_cleanup"]
+ExamPrediction = Literal["ordinary", "exam"]
+ConfidenceBand = Literal["low", "medium", "high"]
+
+CLASSIFIER_VERSION = "exam-rules-v2"
+FUSION_VERSION = "exam-fusion-v1"
+_CHINESE_EXAM_KEYWORDS = ("姓名", "班级", "学号", "考试", "试卷", "得分")
+_ENGLISH_EXAM_KEYWORDS = ("name", "class", "student id", "exam", "examination", "score")
+
+
+class LightweightExamClassifier(Protocol):
+    """可选的本地 CPU 小模型边界；不得调用外部 AI。"""
+
+    model_version: str
+
+    def predict_exam_probability(self, image: Image.Image) -> float: ...
 
 
 @dataclass(frozen=True)
@@ -20,6 +36,19 @@ class ExamDetectionResult:
     text_component_count: int
     answer_marker_count: int
     keyword_hits: int
+
+
+@dataclass(frozen=True)
+class ExamClassificationResult:
+    prediction: ExamPrediction
+    exam_probability: float
+    confidence_band: ConfidenceBand
+    recommendation: ExamRecommendation
+    classifier_version: str
+    rule_score: float
+    model_probability: float | None
+    keyword_hits: int
+    details: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -139,6 +168,159 @@ def detect_exam_layout(
         text_component_count=text_component_count,
         answer_marker_count=answer_marker_count,
         keyword_hits=keyword_hits,
+    )
+
+
+def exam_keyword_hits(ocr_text: str | None) -> int:
+    """只返回去重后的关键词数量，不把 OCR 原文复制到分类证据。"""
+
+    if not ocr_text:
+        return 0
+    normalized = ocr_text.casefold()
+    hits = sum(keyword in normalized for keyword in _CHINESE_EXAM_KEYWORDS)
+    hits += sum(
+        re.search(rf"(?<![a-z]){re.escape(keyword)}(?![a-z])", normalized) is not None
+        for keyword in _ENGLISH_EXAM_KEYWORDS
+    )
+    return hits
+
+
+def exam_text_signals(ocr_text: str | None) -> dict[str, int | float]:
+    """提取不可逆的版式语义计数；返回值不得包含 OCR 原文。"""
+
+    normalized = (ocr_text or "").casefold()
+    if not normalized:
+        return {
+            "question_number_hits": 0,
+            "score_hits": 0,
+            "option_hits": 0,
+            "answer_line_hits": 0,
+            "binding_line_hits": 0,
+            "formula_token_hits": 0,
+            "formula_density": 0.0,
+        }
+    question_number_hits = len(
+        re.findall(r"(?:^|[\s\n])(?:第\s*)?\d{1,3}\s*(?:[.．、)]|题\b)", normalized)
+    )
+    score_hits = len(re.findall(r"\d{1,3}\s*(?:分|points?|marks?)\b", normalized))
+    option_hits = len(re.findall(r"(?:^|[\s\n])[a-dａ-ｄ]\s*[.．、)]", normalized))
+    answer_line_hits = len(re.findall(r"_{3,}|…{2,}|\.{4,}", normalized))
+    binding_line_hits = sum(
+        marker in normalized for marker in ("装订线", "密封线", "binding line", "seal line")
+    )
+    formula_token_hits = len(re.findall(r"[=±×÷∑√]|\b(?:sin|cos|tan|log)\s*\(?", normalized))
+    formula_density = round(formula_token_hits / max(1, len(normalized)), 6)
+    return {
+        "question_number_hits": question_number_hits,
+        "score_hits": score_hits,
+        "option_hits": option_hits,
+        "answer_line_hits": answer_line_hits,
+        "binding_line_hits": binding_line_hits,
+        "formula_token_hits": formula_token_hits,
+        "formula_density": formula_density,
+    }
+
+
+def _semantic_signal_hits(keyword_hits: int, signals: dict[str, int | float]) -> int:
+    return (
+        keyword_hits
+        + min(2, int(signals["question_number_hits"]))
+        + min(1, int(signals["score_hits"]))
+        + min(2, int(signals["option_hits"]) // 2)
+        + min(1, int(signals["answer_line_hits"]))
+        + min(1, int(signals["binding_line_hits"]))
+        + (1 if float(signals["formula_density"]) >= 0.002 else 0)
+    )
+
+
+def classify_exam_page(
+    image: Image.Image,
+    *,
+    ocr_text: str | None = None,
+    explicit_exam_mode: bool = False,
+    model: LightweightExamClassifier | None = None,
+    max_analysis_dimension: int = 1600,
+) -> ExamClassificationResult:
+    """融合确定性版式规则与可选本地小模型，输出可解释置信区间。"""
+
+    keyword_hits = exam_keyword_hits(ocr_text)
+    text_signals = exam_text_signals(ocr_text)
+    semantic_signal_hits = _semantic_signal_hits(keyword_hits, text_signals)
+    if explicit_exam_mode:
+        return ExamClassificationResult(
+            prediction="exam",
+            exam_probability=1.0,
+            confidence_band="high",
+            recommendation="suggest_cleanup",
+            classifier_version="user-selected-exam-v1",
+            rule_score=1.0,
+            model_probability=None,
+            keyword_hits=keyword_hits,
+            details={
+                "source": "user_selected",
+                "keyword_hits": keyword_hits,
+                "semantic_signal_hits": semantic_signal_hits,
+                **text_signals,
+                "model_status": "not_requested",
+            },
+        )
+
+    rule = detect_exam_layout(
+        image,
+        keyword_hits=semantic_signal_hits,
+        max_analysis_dimension=max_analysis_dimension,
+    )
+    probability = rule.score
+    model_probability: float | None = None
+    model_version: str | None = None
+    model_status = "not_configured"
+    if model is not None:
+        try:
+            candidate = float(model.predict_exam_probability(image))
+            candidate_version = model.model_version.strip()
+            if not 0 <= candidate <= 1 or not candidate_version:
+                raise ValueError("invalid lightweight model output")
+            model_probability = candidate
+            model_version = candidate_version
+            model_status = "ready"
+            probability = 0.55 * rule.score + 0.45 * candidate
+        except Exception:  # 小模型故障不能破坏无外部 AI 的规则基线。
+            model_status = "fallback"
+
+    probability = round(probability, 6)
+    if probability >= 0.65:
+        band: ConfidenceBand = "high"
+        recommendation: ExamRecommendation = "suggest_cleanup"
+    elif probability >= 0.25:
+        band = "medium"
+        recommendation = "ask"
+    else:
+        band = "low"
+        recommendation = "ordinary"
+    classifier_version = (
+        f"{FUSION_VERSION}:{model_version}" if model_version is not None else CLASSIFIER_VERSION
+    )
+    return ExamClassificationResult(
+        prediction="exam" if probability >= 0.5 else "ordinary",
+        exam_probability=probability,
+        confidence_band=band,
+        recommendation=recommendation,
+        classifier_version=classifier_version,
+        rule_score=rule.score,
+        model_probability=model_probability,
+        keyword_hits=keyword_hits,
+        details={
+            "source": "rules_and_local_model" if model_probability is not None else "rules",
+            "model_status": model_status,
+            "keyword_hits": keyword_hits,
+            "semantic_signal_hits": semantic_signal_hits,
+            **text_signals,
+            "long_line_count": rule.long_line_count,
+            "text_component_count": rule.text_component_count,
+            "answer_marker_count": rule.answer_marker_count,
+            "rule_score": rule.score,
+            "model_probability": model_probability,
+        },
     )
 
 

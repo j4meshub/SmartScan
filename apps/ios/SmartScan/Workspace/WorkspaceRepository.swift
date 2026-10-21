@@ -9,6 +9,7 @@ protocol WorkspaceServicing {
     func rotate(pageID: String, degrees: Int) async throws -> WorkspacePage
     func edit(pageID: String, corners: [WorkspaceCorner], filter: WorkspaceFilter) async throws -> WorkspacePage
     func review(pageID: String, confirmed: Bool) async throws -> WorkspacePage
+    func dismissExamSuggestion(pageID: String, resultVersion: Int) async throws -> WorkspacePage
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -89,6 +90,13 @@ actor WorkspaceRepository: WorkspaceServicing {
 
     func review(pageID: String, confirmed: Bool) async throws -> WorkspacePage {
         try await withSingleRefresh { try await api.reviewPage(id: pageID, confirmed: confirmed) }
+    }
+
+    func dismissExamSuggestion(pageID: String, resultVersion: Int) async throws -> WorkspacePage {
+        guard resultVersion > 0 else { throw WorkspaceError.invalidExamResultVersion }
+        return try await withSingleRefresh {
+            try await api.dismissExamSuggestion(id: pageID, resultVersion: resultVersion)
+        }
     }
 
     func createExport(

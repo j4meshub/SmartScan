@@ -7,6 +7,7 @@ import com.smartscan.core.model.ScanProject
 import com.smartscan.core.model.ScanPage
 import com.smartscan.core.network.ExportCreateRequestDto
 import com.smartscan.core.network.ExportDto
+import com.smartscan.core.network.ExamSuggestionDismissalRequestDto
 import com.smartscan.core.network.PageCornerDto
 import com.smartscan.core.network.PageEditRequestDto
 import com.smartscan.core.network.PageOrderRequestDto
@@ -31,6 +32,7 @@ interface ProjectRepository {
     suspend fun rotatePage(pageId: String, degrees: Int): ApiResult<ScanPage>
     suspend fun editPage(pageId: String, corners: List<Pair<Double, Double>>, filter: String): ApiResult<ScanPage>
     suspend fun reviewPage(pageId: String, confirmed: Boolean): ApiResult<ScanPage>
+    suspend fun dismissExamSuggestion(pageId: String, resultVersion: Int): ApiResult<ScanPage>
     suspend fun createExport(
         projectId: String,
         format: String,
@@ -88,6 +90,11 @@ class DefaultProjectRepository(
 
     override suspend fun reviewPage(pageId: String, confirmed: Boolean): ApiResult<ScanPage> = withWorkspace {
         it.reviewPage(pageId, PageReviewRequestDto(if (confirmed) "confirmed" else "pending")).toModel()
+    }
+
+    override suspend fun dismissExamSuggestion(pageId: String, resultVersion: Int): ApiResult<ScanPage> = withWorkspace {
+        require(resultVersion > 0) { "exam_result_version_invalid" }
+        it.dismissExamSuggestion(pageId, ExamSuggestionDismissalRequestDto(resultVersion)).toModel()
     }
 
     override suspend fun createExport(
@@ -153,6 +160,10 @@ private fun com.smartscan.core.network.PageDto.toModel() = ScanPage(
     qualityWarning = qualityWarning,
     activeResultVersion = activeResultVersion,
     ocrStatus = ocrStatus,
+    examResultVersion = examResultVersion,
+    examConfidenceBand = examConfidenceBand,
+    examRecommendation = examRecommendation,
+    examSuggestionVisible = examSuggestionVisible,
 )
 
 private fun ExportDto.toModel() = ProjectExport(

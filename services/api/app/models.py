@@ -355,6 +355,36 @@ class ScanPage(Base):
             "ocr_result_version IS NULL OR ocr_result_version >= 0",
             name="ck_scan_pages_ocr_result_version",
         ),
+        CheckConstraint(
+            "exam_classification_status IN ('pending', 'ready', 'disabled', 'stale', 'legacy')",
+            name="ck_scan_pages_exam_classification_status",
+        ),
+        CheckConstraint(
+            "exam_result_version IS NULL OR exam_result_version >= 0",
+            name="ck_scan_pages_exam_result_version",
+        ),
+        CheckConstraint(
+            "exam_prediction IS NULL OR exam_prediction IN ('ordinary', 'exam')",
+            name="ck_scan_pages_exam_prediction",
+        ),
+        CheckConstraint(
+            "exam_probability IS NULL OR (exam_probability >= 0 AND exam_probability <= 1)",
+            name="ck_scan_pages_exam_probability",
+        ),
+        CheckConstraint(
+            "exam_confidence_band IS NULL OR exam_confidence_band IN ('low', 'medium', 'high')",
+            name="ck_scan_pages_exam_confidence_band",
+        ),
+        CheckConstraint(
+            "exam_recommendation IS NULL OR "
+            "exam_recommendation IN ('ordinary', 'ask', 'suggest_cleanup')",
+            name="ck_scan_pages_exam_recommendation",
+        ),
+        CheckConstraint(
+            "exam_suggestion_dismissed_result_version IS NULL OR "
+            "exam_suggestion_dismissed_result_version >= 0",
+            name="ck_scan_pages_exam_dismissed_result_version",
+        ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     project_id: Mapped[str] = mapped_column(
@@ -393,6 +423,21 @@ class ScanPage(Base):
     ocr_title_candidate: Mapped[str | None] = mapped_column(String(160))
     ocr_error_code: Mapped[str | None] = mapped_column(String(64))
     ocr_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    exam_classification_status: Mapped[str] = mapped_column(
+        String(24), default="pending", nullable=False
+    )
+    exam_result_version: Mapped[int | None] = mapped_column(Integer)
+    exam_classifier_version: Mapped[str | None] = mapped_column(String(96))
+    exam_prediction: Mapped[str | None] = mapped_column(String(16))
+    exam_probability: Mapped[float | None] = mapped_column(Float)
+    exam_confidence_band: Mapped[str | None] = mapped_column(String(16))
+    exam_recommendation: Mapped[str | None] = mapped_column(String(24))
+    exam_details: Mapped[str | None] = mapped_column(Text)
+    exam_suggestion_dismissed_result_version: Mapped[int | None] = mapped_column(Integer)
+    exam_suggestion_dismissed_by_user_id: Mapped[str | None] = mapped_column(String(36))
+    exam_suggestion_dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    exam_suggestion_dismissal_reason: Mapped[str | None] = mapped_column(String(160))
+    exam_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

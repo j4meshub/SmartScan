@@ -131,6 +131,8 @@ iOS 页面编辑、导出校验、PDFKit/Share Sheet 和账号删除见[iOS 工�
 
 iOS TestFlight、App Store 元数据、签名边界和人工发布顺序见[iOS TestFlight 与 App Store 准备说明](docs/IOS_APP_STORE_READINESS.md)；数据披露草稿、截图和审核账号分别见[iOS App 隐私披露草稿](docs/IOS_APP_PRIVACY_DRAFT.md)、[iOS App Store 截图清单](docs/IOS_SCREENSHOT_CHECKLIST.md)和[iOS 审核账号操作规程](docs/IOS_REVIEW_ACCOUNT.md)。
 
+试卷页面规则/轻量模型分类、置信区间、结果版本、三端建议取消和固定数据集门禁见[试卷页面分类、建议与取消](docs/EXAM_CLASSIFICATION.md)。
+
 文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
 
 试卷规则检测、保守净化和禁止生成虚假原文的边界见[基础试卷检测与保守净化 POC](docs/POC_EXAM_CLEANUP.md)。

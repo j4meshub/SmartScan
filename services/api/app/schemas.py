@@ -253,6 +253,20 @@ class PageView(BaseModel):
     ocr_title_candidate: str | None
     ocr_error_code: str | None
     ocr_updated_at: datetime | None
+    exam_classification_status: str = "pending"
+    exam_result_version: int | None = None
+    exam_classifier_version: str | None = None
+    exam_prediction: str | None = None
+    exam_probability: float | None = None
+    exam_confidence_band: str | None = None
+    exam_recommendation: str | None = None
+    exam_details: dict[str, object] | None = None
+    exam_suggestion_visible: bool = False
+    exam_suggestion_dismissed_result_version: int | None = None
+    exam_suggestion_dismissed_by_user_id: str | None = None
+    exam_suggestion_dismissed_at: datetime | None = None
+    exam_suggestion_dismissal_reason: str | None = None
+    exam_updated_at: datetime | None = None
     active_result: PageResultView | None
     created_at: datetime
     updated_at: datetime
@@ -285,6 +299,11 @@ class PageOrderUpdate(BaseModel):
 class PageReviewUpdate(BaseModel):
     status: Literal["pending", "confirmed"]
     note: str | None = Field(default=None, max_length=160)
+
+
+class ExamSuggestionDismissalRequest(BaseModel):
+    result_version: int = Field(ge=1)
+    reason: str | None = Field(default=None, max_length=160)
 
 
 class UploadCreate(BaseModel):
