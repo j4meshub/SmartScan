@@ -15,6 +15,20 @@
     <string name="capture_quality_blurry">请保持稳定，并点按页面对焦</string>
     <string name="capture_exposure">曝光</string>
     <string name="capture_manual_hint">手动快门 · 低质量页面仍可带警告拍摄</string>
+    <string name="capture_book_auto_toggle">条件式自动快门</string>
+    <string name="capture_book_manual_fallback">自动快门不使用倒计时 · 始终保留手动快门</string>
+    <string name="capture_book_wait_page">请翻页以启用自动拍摄</string>
+    <string name="capture_book_wait_stable">请保持书本连续稳定</string>
+    <string name="capture_book_wait_focus">正在等待画面清晰</string>
+    <string name="capture_book_exposure">请调整光线或曝光</string>
+    <string name="capture_book_boundary">请让完整书本边界进入画面</string>
+    <string name="capture_book_spine">请对准并展开书脊</string>
+    <string name="capture_book_occlusion">请将手移出页面关键区域</string>
+    <string name="capture_book_verifying">正在校验已保存的原图…</string>
+    <string name="capture_book_retry">自动拍摄失败，请使用手动快门或重试</string>
+    <string name="capture_book_capturing">全部条件已满足，正在拍摄…</string>
+    <string name="capture_book_checks_ready">已检测翻页，正在检查拍摄条件</string>
     <string name="capture_saved_original">原图已保存并进入队列，后续增强不会覆盖原图。</string>
     <string name="capture_continue">继续拍摄</string>
+    <string name="capture_retry">重试</string>
 </resources>

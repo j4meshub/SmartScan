@@ -50,5 +50,9 @@ class CaptureStateMachineTest {
         assertEquals(CapturePhase.ERROR, failed.phase)
         assertEquals(CaptureError.SAVE_FAILED, failed.error)
         assertNull(failed.originalPath)
+
+        val retried = reduceCaptureState(failed, CaptureEvent.Retry)
+        assertEquals(CapturePhase.READY, retried.phase)
+        assertNull(retried.error)
     }
 }

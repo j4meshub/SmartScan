@@ -15,6 +15,20 @@
     <string name="capture_quality_blurry">Hold the device steady and tap the page to focus</string>
     <string name="capture_exposure">Exposure</string>
     <string name="capture_manual_hint">Manual shutter · low-quality pages can still be captured with a warning</string>
+    <string name="capture_book_auto_toggle">Conditional auto shutter</string>
+    <string name="capture_book_manual_fallback">Auto shutter has no countdown · manual shutter stays available</string>
+    <string name="capture_book_wait_page">Turn the page to arm auto capture</string>
+    <string name="capture_book_wait_stable">Hold the book steady</string>
+    <string name="capture_book_wait_focus">Waiting for a sharp image</string>
+    <string name="capture_book_exposure">Adjust lighting or exposure</string>
+    <string name="capture_book_boundary">Keep the full book boundary in view</string>
+    <string name="capture_book_spine">Align the book spine</string>
+    <string name="capture_book_occlusion">Move hands away from the page</string>
+    <string name="capture_book_verifying">Verifying the captured original…</string>
+    <string name="capture_book_retry">Automatic capture failed; use manual shutter or retry</string>
+    <string name="capture_book_capturing">All checks passed. Capturing…</string>
+    <string name="capture_book_checks_ready">Page change detected; checking capture conditions</string>
     <string name="capture_saved_original">Original saved and queued. Enhancement never overwrites it.</string>
     <string name="capture_continue">Capture another page</string>
+    <string name="capture_retry">Retry</string>
 </resources>

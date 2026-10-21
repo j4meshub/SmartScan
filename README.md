@@ -133,6 +133,8 @@ iOS TestFlight、App Store 元数据、签名边界和人工发布顺序见[iOS 
 
 试卷页面规则/轻量模型分类、置信区间、结果版本、三端建议取消和固定数据集门禁见[试卷页面分类、建议与取消](docs/EXAM_CLASSIFICATION.md)。
 
+扫书模式的翻页、稳定、清晰度、曝光、边界、书脊、遮挡状态机以及原生端与 H5 的能力边界见[扫书条件自动快门](docs/BOOK_AUTO_CAPTURE.md)。
+
 文档透视真实样本的准备、指标口径和验收边界见[文档透视真实样本评估](docs/POC_PERSPECTIVE_EVALUATION.md)。仓库中的合成测试只验证评估器，不能证明真实可用率达到 `95%`。
 
 试卷规则检测、保守净化和禁止生成虚假原文的边界见[基础试卷检测与保守净化 POC](docs/POC_EXAM_CLEANUP.md)。

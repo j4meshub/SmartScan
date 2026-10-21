@@ -60,6 +60,10 @@ struct CaptureView: View {
                     queueMessage = enqueued
                         ? String(localized: "Original saved and queued")
                         : String(localized: "Original saved, but could not be queued")
+                    if camera.shouldAutomaticallyContinueBookCapture {
+                        camera.completeBookVerification(accepted: enqueued)
+                        if enqueued { camera.continueCapturing() }
+                    }
                 }
             }
         }
@@ -78,6 +82,20 @@ struct CaptureView: View {
 
     private var controls: some View {
         VStack(spacing: 16) {
+            if mode == .book {
+                Toggle(
+                    String(localized: "Conditional auto shutter"),
+                    isOn: Binding(
+                        get: { camera.bookAutoCaptureEnabled },
+                        set: { camera.setBookAutoCaptureEnabled($0) }
+                    )
+                )
+                .tint(.green)
+                .foregroundStyle(.white)
+                Text(String(localized: "Auto shutter has no countdown. Manual shutter stays available."))
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
             HStack {
                 Image(systemName: "sun.min")
                 Slider(value: $exposure, in: -1 ... 1) { editing in
@@ -125,6 +143,7 @@ struct CaptureView: View {
         case .captured: return queueMessage ?? String(localized: "Original saved")
         case .failed: return String(localized: "Camera unavailable")
         case .ready:
+            if mode == .book, camera.bookAutoCaptureEnabled { return bookAutoCaptureMessage }
             if camera.state.quality.ready { return String(localized: "Ready to capture") }
             let priority: [CaptureQualityIssue] = [
                 .tooDark, .tooBright, .blurry, .glare, .documentNotFound, .analyzing,
@@ -138,6 +157,24 @@ struct CaptureView: View {
             case .documentNotFound: return String(localized: "Align the full document")
             default: return String(localized: "Analyzing image…")
             }
+        }
+    }
+
+    private var bookAutoCaptureMessage: String {
+        switch camera.bookAutoCaptureState.blocker {
+        case .waitingForPageChange: String(localized: "Turn the page to arm auto capture")
+        case .pageMoving: String(localized: "Hold the book steady")
+        case .needsFocus: String(localized: "Waiting for a sharp image")
+        case .exposureInvalid: String(localized: "Adjust lighting or exposure")
+        case .boundaryIncomplete: String(localized: "Keep the full book boundary in view")
+        case .spineNotFound: String(localized: "Align the book spine")
+        case .occlusionDetected: String(localized: "Move hands away from the page")
+        case .verifying: String(localized: "Verifying the captured original…")
+        case .retryRequired: String(localized: "Automatic capture failed; use manual shutter or retry")
+        case nil:
+            camera.bookAutoCaptureState.phase == .capture
+                ? String(localized: "All checks passed. Capturing…")
+                : String(localized: "Page change detected; checking capture conditions")
         }
     }
 

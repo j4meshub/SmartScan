@@ -8,12 +8,15 @@ import Vision
 
 final class CameraController: NSObject, ObservableObject {
     @Published private(set) var state = CaptureState()
+    @Published private(set) var bookAutoCaptureState = BookAutoCaptureState()
+    @Published private(set) var bookAutoCaptureEnabled = false
     let session = AVCaptureSession()
 
     private let userID: String
     private let mode: ScanModeKind
     private let store: OriginalCaptureStoring
     private let evaluator = FrameQualityEvaluator()
+    private let bookMetricsEvaluator = BookFrameMetricsEvaluator()
     private let sessionQueue = DispatchQueue(label: "com.j4meshub.smartscan.camera.session")
     private let analysisQueue = DispatchQueue(label: "com.j4meshub.smartscan.camera.analysis")
     private let photoOutput = AVCapturePhotoOutput()
@@ -25,12 +28,14 @@ final class CameraController: NSObject, ObservableObject {
     private var pendingCaptureOrientation: DeviceOrientationEvidence = .portrait
     private var pendingQuality: FrameQuality = .analyzing
     private var pendingRectangle: NormalizedQuadrilateral?
+    private var automaticCaptureInFlight = false
 
     init(userID: String, mode: ScanModeKind, store: OriginalCaptureStoring = FileOriginalCaptureStore()) {
         self.userID = userID
         self.mode = mode
         self.store = store
         super.init()
+        bookAutoCaptureEnabled = mode == .book
     }
 
     func start() {
@@ -59,7 +64,32 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     func capture(orientation: DeviceOrientationEvidence) {
+        capture(orientation: orientation, automatic: false)
+    }
+
+    func setBookAutoCaptureEnabled(_ enabled: Bool) {
+        guard mode == .book else { return }
+        bookAutoCaptureEnabled = enabled
+        if !enabled { automaticCaptureInFlight = false }
+        bookAutoCaptureState = reduceBookAutoCapture(bookAutoCaptureState, event: .reset)
+        analysisQueue.async { [weak self] in self?.bookMetricsEvaluator.reset() }
+    }
+
+    func completeBookVerification(accepted: Bool) {
+        guard automaticCaptureInFlight else { return }
+        var next = reduceBookAutoCapture(bookAutoCaptureState, event: .verificationFinished(accepted))
+        if accepted { next = reduceBookAutoCapture(next, event: .continueAfterAccept) }
+        bookAutoCaptureState = next
+        automaticCaptureInFlight = false
+    }
+
+    var shouldAutomaticallyContinueBookCapture: Bool {
+        automaticCaptureInFlight && bookAutoCaptureState.phase == .verify
+    }
+
+    private func capture(orientation: DeviceOrientationEvidence, automatic: Bool) {
         guard state.phase == .ready else { return }
+        automaticCaptureInFlight = automatic
         updateOrientation(orientation)
         pendingCaptureOrientation = orientation
         pendingQuality = state.quality
@@ -78,12 +108,18 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     func continueCapturing() {
+        if bookAutoCaptureState.phase == .acceptOrRetry && bookAutoCaptureState.accepted == false {
+            bookAutoCaptureState = reduceBookAutoCapture(bookAutoCaptureState, event: .retry)
+        }
         transition(.continueCapturing)
     }
 
     func retry() {
         let failed = state.phase
         transition(.retry)
+        if bookAutoCaptureState.phase == .acceptOrRetry && bookAutoCaptureState.accepted == false {
+            bookAutoCaptureState = reduceBookAutoCapture(bookAutoCaptureState, event: .retry)
+        }
         if failed == .failed(.saveFailed) { return }
         start()
     }
@@ -189,7 +225,15 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
         error: Error?
     ) {
         guard error == nil, let data = photo.fileDataRepresentation() else {
-            DispatchQueue.main.async { self.transition(.captureFailed) }
+            DispatchQueue.main.async {
+                if self.automaticCaptureInFlight {
+                    var next = reduceBookAutoCapture(self.bookAutoCaptureState, event: .captureFinished)
+                    next = reduceBookAutoCapture(next, event: .verificationFinished(false))
+                    self.bookAutoCaptureState = next
+                    self.automaticCaptureInFlight = false
+                }
+                self.transition(.captureFailed)
+            }
             return
         }
         let dimensions = photo.resolvedSettings.photoDimensions
@@ -208,9 +252,25 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
         Task {
             do {
                 let record = try await store.saveOriginal(data, evidence: evidence, userID: userID)
-                await MainActor.run { self.transition(.captureSucceeded(record)) }
+                await MainActor.run {
+                    if self.automaticCaptureInFlight {
+                        self.bookAutoCaptureState = reduceBookAutoCapture(
+                            self.bookAutoCaptureState,
+                            event: .captureFinished
+                        )
+                    }
+                    self.transition(.captureSucceeded(record))
+                }
             } catch {
-                await MainActor.run { self.transition(.captureFailed) }
+                await MainActor.run {
+                    if self.automaticCaptureInFlight {
+                        var next = reduceBookAutoCapture(self.bookAutoCaptureState, event: .captureFinished)
+                        next = reduceBookAutoCapture(next, event: .verificationFinished(false))
+                        self.bookAutoCaptureState = next
+                        self.automaticCaptureInFlight = false
+                    }
+                    self.transition(.captureFailed)
+                }
             }
         }
     }
@@ -231,7 +291,15 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         let detection = detectRectangle(in: pixelBuffer, orientation: orientation)
         guard let quality = analyzeLuma(pixelBuffer, rectangleConfidence: detection?.confidence) else { return }
         DispatchQueue.main.async { [weak self] in
-            self?.transition(.frameAnalyzed(quality, detection?.quadrilateral))
+            guard let self else { return }
+            self.transition(.frameAnalyzed(quality, detection?.quadrilateral))
+            guard self.mode == .book, self.bookAutoCaptureEnabled, self.state.phase == .ready else { return }
+            let previous = self.bookAutoCaptureState
+            let next = reduceBookAutoCapture(previous, event: .frameObserved(quality.bookSignals))
+            self.bookAutoCaptureState = next
+            if next.phase == .capture, previous.phase != .capture {
+                self.capture(orientation: self.orientationSnapshot(), automatic: true)
+            }
         }
     }
 
@@ -244,12 +312,31 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
         let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
         let bytes = Array(UnsafeBufferPointer(start: base.assumingMemoryBound(to: UInt8.self), count: bytesPerRow * height))
-        return try? evaluator.evaluate(
+        guard let quality = try? evaluator.evaluate(
             luma: bytes,
             width: width,
             height: height,
             bytesPerRow: bytesPerRow,
             rectangleConfidence: rectangleConfidence
+        ) else { return nil }
+        guard mode == .book,
+              let metrics = bookMetricsEvaluator.evaluate(
+                  luma: bytes,
+                  width: width,
+                  height: height,
+                  bytesPerRow: bytesPerRow,
+                  rectangleConfidence: rectangleConfidence
+              ) else { return quality }
+        return FrameQuality(
+            brightness: quality.brightness,
+            sharpness: quality.sharpness,
+            highlightRatio: quality.highlightRatio,
+            rectangleConfidence: quality.rectangleConfidence,
+            issues: quality.issues,
+            motionScore: metrics.motionScore,
+            boundaryConfidence: metrics.boundaryConfidence,
+            spineConfidence: metrics.spineConfidence,
+            occlusionRatio: metrics.occlusionRatio
         )
     }
 

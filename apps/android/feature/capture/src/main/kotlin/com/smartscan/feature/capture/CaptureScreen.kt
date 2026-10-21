@@ -35,6 +35,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -84,6 +85,8 @@ fun CaptureScreen(
     }
     var session by remember { mutableStateOf<CameraSession?>(null) }
     var exposureIndex by remember { mutableIntStateOf(0) }
+    var bookAutoEnabled by remember(mode) { mutableStateOf(mode == CaptureMode.BOOK) }
+    var bookAutoState by remember(mode) { mutableStateOf(BookAutoCaptureState()) }
     val scope = rememberCoroutineScope()
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -99,6 +102,59 @@ fun CaptureScreen(
         }
     }
 
+    fun captureOriginal(automatic: Boolean) {
+        val current = session ?: return
+        if (state.phase != CapturePhase.READY) return
+        state = reduceCaptureState(state, CaptureEvent.ShutterPressed)
+        val directory = File(context.filesDir, "captures/originals")
+        if ((!directory.exists() && !directory.mkdirs()) || !directory.isDirectory) {
+            if (automatic) {
+                var next = reduceBookAutoCapture(bookAutoState, BookAutoCaptureEvent.CaptureFinished)
+                next = reduceBookAutoCapture(next, BookAutoCaptureEvent.VerificationFinished(false))
+                bookAutoState = next
+            }
+            state = reduceCaptureState(state, CaptureEvent.CaptureFailed)
+            return
+        }
+        val output = File(directory, "original_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg")
+        current.imageCapture.takePicture(
+            ImageCapture.OutputFileOptions.Builder(output).build(),
+            mainExecutor,
+            object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                    scope.launch {
+                        val accepted = withContext(NonCancellable) {
+                            runCatching { onOriginalCaptured(output.absolutePath) }.getOrDefault(false)
+                        }
+                        if (automatic) {
+                            var next = reduceBookAutoCapture(bookAutoState, BookAutoCaptureEvent.CaptureFinished)
+                            next = reduceBookAutoCapture(next, BookAutoCaptureEvent.VerificationFinished(accepted))
+                            if (accepted) next = reduceBookAutoCapture(next, BookAutoCaptureEvent.ContinueAfterAccept)
+                            bookAutoState = next
+                        }
+                        if (accepted) {
+                            state = reduceCaptureState(state, CaptureEvent.CaptureSucceeded(output.absolutePath))
+                            if (automatic) state = reduceCaptureState(state, CaptureEvent.ContinueCapturing)
+                        } else {
+                            output.delete()
+                            state = reduceCaptureState(state, CaptureEvent.CaptureFailed)
+                        }
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    output.delete()
+                    if (automatic) {
+                        var next = reduceBookAutoCapture(bookAutoState, BookAutoCaptureEvent.CaptureFinished)
+                        next = reduceBookAutoCapture(next, BookAutoCaptureEvent.VerificationFinished(false))
+                        bookAutoState = next
+                    }
+                    state = reduceCaptureState(state, CaptureEvent.CaptureFailed)
+                }
+            },
+        )
+    }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (hasPermission) {
             CameraPreview(
@@ -106,8 +162,21 @@ fun CaptureScreen(
                     session = readySession
                     exposureIndex = readySession.camera.cameraInfo.exposureState.exposureCompensationIndex
                     state = reduceCaptureState(state, CaptureEvent.CameraReady)
+                    bookAutoState = BookAutoCaptureState()
                 },
-                onQuality = { quality -> state = reduceCaptureState(state, CaptureEvent.FrameAnalyzed(quality)) },
+                onQuality = { quality ->
+                    state = reduceCaptureState(state, CaptureEvent.FrameAnalyzed(quality))
+                    if (mode == CaptureMode.BOOK && bookAutoEnabled && state.phase == CapturePhase.READY) {
+                        val next = reduceBookAutoCapture(
+                            bookAutoState,
+                            BookAutoCaptureEvent.FrameObserved(quality.bookSignals()),
+                        )
+                        val shouldCapture = next.phase == BookAutoCapturePhase.CAPTURE &&
+                            bookAutoState.phase != BookAutoCapturePhase.CAPTURE
+                        bookAutoState = next
+                        if (shouldCapture) captureOriginal(automatic = true)
+                    }
+                },
                 onCameraFailed = { state = reduceCaptureState(state, CaptureEvent.CameraFailed) },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -137,10 +206,23 @@ fun CaptureScreen(
             )
             state.error == CaptureError.SAVE_FAILED -> ErrorPanel(
                 message = stringResource(R.string.capture_save_failed),
+                onRetry = {
+                    state = reduceCaptureState(state, CaptureEvent.Retry)
+                    if (bookAutoState.accepted == false) {
+                        bookAutoState = reduceBookAutoCapture(bookAutoState, BookAutoCaptureEvent.Retry)
+                    }
+                },
                 modifier = Modifier.align(Alignment.Center),
             )
             else -> CaptureControls(
+                mode = mode,
                 state = state,
+                bookAutoEnabled = bookAutoEnabled,
+                bookAutoState = bookAutoState,
+                onBookAutoEnabledChange = { enabled ->
+                    bookAutoEnabled = enabled
+                    bookAutoState = reduceBookAutoCapture(bookAutoState, BookAutoCaptureEvent.Reset)
+                },
                 exposureIndex = exposureIndex,
                 onExposureChange = { delta ->
                     session?.let { current ->
@@ -150,40 +232,7 @@ fun CaptureScreen(
                         current.camera.cameraControl.setExposureCompensationIndex(target)
                     }
                 },
-                onShutter = shutter@{
-                    val current = session ?: return@shutter
-                    state = reduceCaptureState(state, CaptureEvent.ShutterPressed)
-                    val directory = File(context.filesDir, "captures/originals")
-                    if ((!directory.exists() && !directory.mkdirs()) || !directory.isDirectory) {
-                        state = reduceCaptureState(state, CaptureEvent.CaptureFailed)
-                        return@shutter
-                    }
-                    val output = File(directory, "original_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg")
-                    current.imageCapture.takePicture(
-                        ImageCapture.OutputFileOptions.Builder(output).build(),
-                        mainExecutor,
-                        object : ImageCapture.OnImageSavedCallback {
-                            override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                                scope.launch {
-                                    val accepted = withContext(NonCancellable) {
-                                        runCatching { onOriginalCaptured(output.absolutePath) }.getOrDefault(false)
-                                    }
-                                    if (accepted) {
-                                        state = reduceCaptureState(state, CaptureEvent.CaptureSucceeded(output.absolutePath))
-                                    } else {
-                                        output.delete()
-                                        state = reduceCaptureState(state, CaptureEvent.CaptureFailed)
-                                    }
-                                }
-                            }
-
-                            override fun onError(exception: ImageCaptureException) {
-                                output.delete()
-                                state = reduceCaptureState(state, CaptureEvent.CaptureFailed)
-                            }
-                        },
-                    )
-                },
+                onShutter = { captureOriginal(automatic = false) },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
@@ -213,7 +262,11 @@ private fun CaptureTopBar(mode: CaptureMode, onBack: () -> Unit, modifier: Modif
 
 @Composable
 private fun CaptureControls(
+    mode: CaptureMode,
     state: CaptureState,
+    bookAutoEnabled: Boolean,
+    bookAutoState: BookAutoCaptureState,
+    onBookAutoEnabledChange: (Boolean) -> Unit,
     exposureIndex: Int,
     onExposureChange: (Int) -> Unit,
     onShutter: () -> Unit,
@@ -224,6 +277,13 @@ private fun CaptureControls(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         QualityMessage(state.quality)
+        if (mode == CaptureMode.BOOK) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Switch(checked = bookAutoEnabled, onCheckedChange = onBookAutoEnabledChange)
+                Text(stringResource(R.string.capture_book_auto_toggle), color = Color.White)
+            }
+            if (bookAutoEnabled) BookAutoCaptureMessage(bookAutoState)
+        }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.capture_exposure), color = Color.White)
@@ -238,8 +298,36 @@ private fun CaptureControls(
             shape = CircleShape,
             colors = ButtonDefaults.buttonColors(containerColor = Color.White, disabledContainerColor = Color.Gray),
         ) { Text("", modifier = Modifier.size(48.dp).background(Color(0xFF111827), CircleShape)) }
-        Text(stringResource(R.string.capture_manual_hint), color = Color.White, fontSize = 12.sp)
+        Text(
+            stringResource(
+                if (mode == CaptureMode.BOOK && bookAutoEnabled) R.string.capture_book_manual_fallback
+                else R.string.capture_manual_hint,
+            ),
+            color = Color.White,
+            fontSize = 12.sp,
+        )
     }
+}
+
+@Composable
+private fun BookAutoCaptureMessage(state: BookAutoCaptureState) {
+    val message = when (state.blocker) {
+        BookAutoCaptureBlocker.WAITING_FOR_PAGE_CHANGE -> R.string.capture_book_wait_page
+        BookAutoCaptureBlocker.PAGE_MOVING -> R.string.capture_book_wait_stable
+        BookAutoCaptureBlocker.NEEDS_FOCUS -> R.string.capture_book_wait_focus
+        BookAutoCaptureBlocker.EXPOSURE_INVALID -> R.string.capture_book_exposure
+        BookAutoCaptureBlocker.BOUNDARY_INCOMPLETE -> R.string.capture_book_boundary
+        BookAutoCaptureBlocker.SPINE_NOT_FOUND -> R.string.capture_book_spine
+        BookAutoCaptureBlocker.OCCLUSION_DETECTED -> R.string.capture_book_occlusion
+        BookAutoCaptureBlocker.VERIFYING -> R.string.capture_book_verifying
+        BookAutoCaptureBlocker.RETRY_REQUIRED -> R.string.capture_book_retry
+        null -> if (state.phase == BookAutoCapturePhase.CAPTURE) {
+            R.string.capture_book_capturing
+        } else {
+            R.string.capture_book_checks_ready
+        }
+    }
+    Text(stringResource(message), color = ReadyGreen, fontSize = 12.sp)
 }
 
 @Composable
@@ -269,9 +357,15 @@ private fun PermissionPanel(onRetry: () -> Unit, modifier: Modifier = Modifier) 
 }
 
 @Composable
-private fun ErrorPanel(message: String, modifier: Modifier = Modifier) {
+private fun ErrorPanel(message: String, onRetry: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     Surface(modifier = modifier.padding(24.dp), color = Overlay, shape = RoundedCornerShape(20.dp)) {
-        Text(message, Modifier.padding(24.dp), color = Color.White)
+        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(message, color = Color.White)
+            if (onRetry != null) {
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onRetry) { Text(stringResource(R.string.capture_retry)) }
+            }
+        }
     }
 }
 
@@ -315,6 +409,7 @@ private fun CameraPreview(
     val providerReference = remember { AtomicReference<ProcessCameraProvider?>() }
     val disposed = remember { AtomicBoolean(false) }
     val evaluator = remember { FrameQualityEvaluator() }
+    val bookMetricsEvaluator = remember { BookFrameMetricsEvaluator() }
 
     AndroidView(
         modifier = modifier,
@@ -343,7 +438,7 @@ private fun CameraPreview(
                                     val now = SystemClock.elapsedRealtime()
                                     if (now - lastAnalysisAt >= 250) {
                                         lastAnalysisAt = now
-                                        analyzeFrame(image, evaluator)?.let { quality ->
+                                        analyzeFrame(image, evaluator, bookMetricsEvaluator)?.let { quality ->
                                             mainExecutor.execute { if (!disposed.get()) onQuality(quality) }
                                         }
                                     }
@@ -376,16 +471,33 @@ private fun CameraPreview(
     }
 }
 
-private fun analyzeFrame(image: ImageProxy, evaluator: FrameQualityEvaluator): FrameQuality? = runCatching {
+private fun analyzeFrame(
+    image: ImageProxy,
+    evaluator: FrameQualityEvaluator,
+    bookMetricsEvaluator: BookFrameMetricsEvaluator,
+): FrameQuality? = runCatching {
     val plane = image.planes.first()
     val buffer = plane.buffer
     val bytes = ByteArray(buffer.remaining())
     buffer.get(bytes)
-    evaluator.evaluate(
+    val quality = evaluator.evaluate(
         luma = bytes,
         width = image.width,
         height = image.height,
         rowStride = plane.rowStride,
         pixelStride = plane.pixelStride,
+    )
+    val metrics = bookMetricsEvaluator.evaluate(
+        luma = bytes,
+        width = image.width,
+        height = image.height,
+        rowStride = plane.rowStride,
+        pixelStride = plane.pixelStride,
+    )
+    quality.copy(
+        motionScore = metrics.motionScore,
+        boundaryConfidence = metrics.boundaryConfidence,
+        spineConfidence = metrics.spineConfidence,
+        occlusionRatio = metrics.occlusionRatio,
     )
 }.getOrNull()

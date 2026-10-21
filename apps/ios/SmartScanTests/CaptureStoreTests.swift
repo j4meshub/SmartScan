@@ -35,6 +35,19 @@ final class CaptureStoreTests: XCTestCase {
         }
     }
 
+    func testLegacyFrameQualityWithoutBookSignalsStillDecodes() throws {
+        let legacy = Data(
+            #"{"brightness":0.5,"sharpness":0.2,"highlightRatio":0.01,"rectangleConfidence":0.9,"issues":[]}"#.utf8
+        )
+
+        let quality = try JSONDecoder().decode(FrameQuality.self, from: legacy)
+
+        XCTAssertNil(quality.motionScore)
+        XCTAssertNil(quality.boundaryConfidence)
+        XCTAssertNil(quality.spineConfidence)
+        XCTAssertNil(quality.occlusionRatio)
+    }
+
     private func makeEvidence() -> CaptureEvidence {
         CaptureEvidence(
             capturedAt: "2026-10-21T05:00:00Z",
