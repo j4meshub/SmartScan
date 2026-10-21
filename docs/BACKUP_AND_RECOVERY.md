@@ -17,7 +17,7 @@ OPS-004 已提供仓库内可自动验证的备份、保留和恢复基线。目
 
 `docker-compose.staging.yml` 对 PostgreSQL 启用 `wal_level=replica`、`archive_mode=on` 和最多 15 分钟的 WAL 归档超时，归档命令拒绝覆盖已存在的 WAL。每日任务执行：
 
-1. 使用与运行库相同的固定 PostgreSQL 镜像执行 `pg_basebackup --wal-method=stream`，随后运行 `pg_verifybackup`。
+1. 使用与运行库相同的固定 PostgreSQL 镜像，通过仅 Compose 内共享的 Unix Socket 执行 `pg_basebackup --wal-method=stream`，随后运行 `pg_verifybackup`；备份容器禁用网络，不新增远程复制规则。
 2. 分别创建 `database`、`files`、`wal` 三类 Restic 快照，解析并保存完整 64 位快照 ID。
 3. 对每类快照独立执行“7 日、4 周”保留和 `prune`，再以 `restic check --read-data-subset=5%` 抽查仓库数据。
 4. 写入不含 Secret 的成功/失败阶段证据，并清理主机上的明文数据库工作副本。失败不会产生成功证据。

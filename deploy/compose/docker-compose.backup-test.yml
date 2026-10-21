@@ -12,7 +12,9 @@ services:
       interval: 2s
       timeout: 2s
       retries: 20
-    volumes: ["source-db:/var/lib/postgresql/data"]
+    volumes:
+      - source-db:/var/lib/postgresql/data
+      - source-socket:/var/run/postgresql
 
   seed-db:
     image: postgres:17-alpine
@@ -36,7 +38,7 @@ services:
     environment: {PGPASSWORD: ci-only-password}
     command:
       - pg_basebackup
-      - --host=source-db
+      - --host=/var/run/postgresql
       - --username=smartscan
       - --pgdata=/backup/database
       - --format=plain
@@ -45,7 +47,9 @@ services:
       - --no-password
     depends_on:
       source-db: {condition: service_healthy}
-    volumes: ["database-backup:/backup"]
+    volumes:
+      - database-backup:/backup
+      - source-socket:/var/run/postgresql
 
   restic:
     image: restic/restic:0.19.1
@@ -95,3 +99,4 @@ volumes:
   database-backup:
   restic-repository:
   restored:
+  source-socket:

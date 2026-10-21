@@ -15,7 +15,7 @@ services:
         target="/backup-work/$${SMARTSCAN_BACKUP_RUN_ID}/database"
         test ! -e "$${target}"
         install -d -m 0700 "$${target}"
-        pg_basebackup --host=postgres --username=smartscan --pgdata="$${target}" \
+        pg_basebackup --host=/var/run/postgresql --username=smartscan --pgdata="$${target}" \
           --format=plain --wal-method=stream --checkpoint=fast --no-password
         pg_verifybackup "$${target}"
     environment:
@@ -25,13 +25,16 @@ services:
       - type: bind
         source: ${SMARTSCAN_STAGING_BACKUP_WORK_ROOT:?必须设置备份工作目录}
         target: /backup-work
+      - type: volume
+        source: postgres-socket
+        target: /var/run/postgresql
     depends_on:
       postgres: {condition: service_healthy}
     read_only: true
     tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
-    networks: [data]
+    network_mode: none
 
   backup-restic:
     image: ${SMARTSCAN_STAGING_RESTIC_IMAGE:?必须固定 Restic 镜像 digest}

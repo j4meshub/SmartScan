@@ -42,6 +42,9 @@ services:
       - type: bind
         source: ${SMARTSCAN_STAGING_WAL_ROOT:?必须设置 WAL 归档目录}
         target: /var/lib/smartscan-wal
+      - type: volume
+        source: postgres-socket
+        target: /var/run/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
       interval: 10s
@@ -168,3 +171,6 @@ networks:
     internal: true
   egress:
     driver: bridge
+
+volumes:
+  postgres-socket:

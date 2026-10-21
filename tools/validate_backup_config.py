@@ -154,6 +154,22 @@ def _validate_compose(path: Path = DEFAULT_COMPOSE) -> None:
         target = volume.get("target", "")
         if target.startswith(("/source/", "/run/secrets/")):
             _require(volume.get("read_only") is True, f"备份源挂载必须只读：{target}")
+    database_backup = services["backup-database"]
+    _require(
+        database_backup.get("network_mode") == "none",
+        "数据库备份容器必须禁用网络并仅使用 Unix Socket",
+    )
+    socket_mounts = [
+        volume
+        for volume in database_backup.get("volumes", [])
+        if volume.get("target") == "/var/run/postgresql"
+    ]
+    _require(
+        len(socket_mounts) == 1
+        and socket_mounts[0].get("type") == "volume"
+        and socket_mounts[0].get("source") == "postgres-socket",
+        "数据库备份容器缺少受控 PostgreSQL Unix Socket 卷",
+    )
     _require(
         document.get("networks", {}).get("restore", {}).get("internal") is True, "恢复网络必须隔离"
     )
