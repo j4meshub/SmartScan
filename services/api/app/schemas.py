@@ -267,6 +267,18 @@ class PageView(BaseModel):
     exam_suggestion_dismissed_at: datetime | None = None
     exam_suggestion_dismissal_reason: str | None = None
     exam_updated_at: datetime | None = None
+    book_capture_id: str | None = None
+    book_side: Literal["left", "right", "single"] | None = None
+    book_split_status: str = "disabled"
+    book_split_confidence: float | None = None
+    book_split_reason: str | None = None
+    book_spine_x: int | None = None
+    book_dewarp_applied: bool | None = None
+    book_dewarp_source_score: float | None = None
+    book_dewarp_output_score: float | None = None
+    book_dewarp_reason: str | None = None
+    book_replaced_by_page_id: str | None = None
+    book_is_current: bool = True
     active_result: PageResultView | None
     created_at: datetime
     updated_at: datetime

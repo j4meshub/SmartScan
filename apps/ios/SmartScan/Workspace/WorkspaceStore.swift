@@ -95,6 +95,24 @@ final class WorkspaceStore: ObservableObject {
         }
     }
 
+    func retakeBookSide(pageID: String, data: Data, mimeType: String) async -> WorkspacePage? {
+        var outcome: WorkspacePage?
+        await perform {
+            let replacement = try await self.repository.retakeBookSide(
+                pageID: pageID,
+                data: data,
+                mimeType: mimeType
+            )
+            guard let index = self.pages.firstIndex(where: { $0.id == pageID }) else { return }
+            self.pages[index] = replacement
+            self.pages.sort { $0.pageNumber < $1.pageNumber }
+            self.previews[pageID] = nil
+            self.previews[replacement.id] = nil
+            outcome = replacement
+        }
+        return outcome
+    }
+
     func loadPreview(for page: WorkspacePage) async {
         if previews[page.id]?.id == previewIdentifier(page) { return }
         await perform {

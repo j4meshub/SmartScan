@@ -83,6 +83,23 @@ final class WorkspaceRepositoryTests: XCTestCase {
         XCTAssertEqual(projects.map(\.id), ["cached-1"])
         XCTAssertEqual(projects.first?.displayName, "离线项目")
     }
+
+    func testBookSideRetakeValidatesPayloadAndReturnsReplacement() async throws {
+        let fixture = try WorkspaceFixture()
+        defer { fixture.cleanup() }
+        let api = FakeWorkspaceAPI()
+        let repository = fixture.repository(api: api)
+
+        let replacement = try await repository.retakeBookSide(
+            pageID: "page-1",
+            data: Data([0xff, 0xd8, 0xff, 0xd9]),
+            mimeType: "image/jpeg"
+        )
+
+        XCTAssertEqual(api.retakeCount, 1)
+        XCTAssertEqual(replacement.id, "replacement-page")
+        XCTAssertEqual(replacement.bookSide, "left")
+    }
 }
 
 private struct WorkspaceFixture {
@@ -129,6 +146,7 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
     var artifactDownload: RemoteDownload?
     var editCount = 0
     var reorderCount = 0
+    var retakeCount = 0
 
     func listProjects() async throws -> [WorkspaceProject] {
         if let projectError { throw projectError }
@@ -154,6 +172,16 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
 
     func dismissExamSuggestion(id: String, resultVersion: Int) async throws -> WorkspacePage { workspacePage() }
 
+    func retakeBookSide(id: String, data: Data, mimeType: String) async throws -> WorkspacePage {
+        retakeCount += 1
+        var replacement = workspacePage(id: "replacement-page")
+        replacement.bookCaptureID = "replacement-page"
+        replacement.bookSide = "left"
+        replacement.bookSplitStatus = "retake"
+        replacement.bookIsCurrent = true
+        return replacement
+    }
+
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -175,9 +203,9 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
     }
 }
 
-private func workspacePage() -> WorkspacePage {
+private func workspacePage(id: String = "page-1") -> WorkspacePage {
     WorkspacePage(
-        id: "page-1",
+        id: id,
         projectID: "project-1",
         pageNumber: 1,
         qualityWarning: nil,

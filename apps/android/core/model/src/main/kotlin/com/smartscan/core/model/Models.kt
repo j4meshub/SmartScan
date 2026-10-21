@@ -33,6 +33,17 @@ data class ScanPage(
     val examConfidenceBand: String? = null,
     val examRecommendation: String? = null,
     val examSuggestionVisible: Boolean = false,
+    val bookCaptureId: String? = null,
+    val bookSide: String? = null,
+    val bookSplitStatus: String = "disabled",
+    val bookSplitConfidence: Double? = null,
+    val bookSplitReason: String? = null,
+    val bookDewarpApplied: Boolean? = null,
+    val bookDewarpSourceScore: Double? = null,
+    val bookDewarpOutputScore: Double? = null,
+    val bookDewarpReason: String? = null,
+    val bookReplacedByPageId: String? = null,
+    val bookIsCurrent: Boolean = true,
 )
 
 data class ProcessingJob(

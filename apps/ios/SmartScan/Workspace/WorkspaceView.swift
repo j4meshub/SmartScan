@@ -1,4 +1,5 @@
 import PDFKit
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -78,6 +79,11 @@ private struct ProjectWorkspaceView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(String(format: String(localized: "Page %d"), page.pageNumber))
                                     .font(.headline)
+                                if let side = page.bookSide {
+                                    Text(bookSideLabel(side))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 Text(pageSummary(page))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -194,6 +200,14 @@ private struct ProjectWorkspaceView: View {
         return "\(review) · OCR: \(ocrStatus(page.ocrStatus)) · v\(page.activeResultVersion)"
     }
 
+    private func bookSideLabel(_ side: String) -> String {
+        switch side {
+        case "left": return String(localized: "Left page")
+        case "right": return String(localized: "Right page")
+        default: return String(localized: "Single page")
+        }
+    }
+
     private func exportStatus(_ status: String) -> String {
         switch status {
         case "ready": return String(localized: "Ready")
@@ -215,17 +229,36 @@ private struct ProjectWorkspaceView: View {
 }
 
 private struct PageEditorView: View {
-    let pageID: String
     @ObservedObject var store: WorkspaceStore
+    @State private var currentPageID: String
     @State private var corners = WorkspaceCorner.fullPage
     @State private var filter = WorkspaceFilter.original
+    @State private var bookRetakeItem: PhotosPickerItem?
 
-    private var page: WorkspacePage? { store.pages.first { $0.id == pageID } }
+    init(pageID: String, store: WorkspaceStore) {
+        self.store = store
+        _currentPageID = State(initialValue: pageID)
+    }
+
+    private var page: WorkspacePage? { store.pages.first { $0.id == currentPageID } }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let page {
+                    if page.canRetakeBookSide {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(String(localized: "Only this logical page is replaced; the other side and physical original remain unchanged."))
+                            PhotosPicker(selection: $bookRetakeItem, matching: .images) {
+                                Label(String(localized: "Retake this side"), systemImage: "camera.viewfinder")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(store.busy)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                    }
                     if page.showsExamSuggestion, let resultVersion = page.examResultVersion {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(String(localized: page.examConfidenceBand == "high"
@@ -287,6 +320,21 @@ private struct PageEditorView: View {
         }
         .navigationTitle(page.map { String(format: String(localized: "Page %d"), $0.pageNumber) } ?? "")
         .overlay { if store.busy { ProgressView() } }
+        .onChange(of: bookRetakeItem) { _, item in
+            guard let item, let page else { return }
+            Task {
+                defer { bookRetakeItem = nil }
+                guard let source = try? await item.loadTransferable(type: Data.self),
+                      let image = UIImage(data: source),
+                      let jpeg = image.jpegData(compressionQuality: 0.95),
+                      let replacement = await store.retakeBookSide(
+                          pageID: page.id,
+                          data: jpeg,
+                          mimeType: "image/jpeg"
+                      ) else { return }
+                currentPageID = replacement.id
+            }
+        }
     }
 
     @ViewBuilder

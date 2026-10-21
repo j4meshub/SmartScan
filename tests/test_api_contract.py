@@ -45,6 +45,7 @@ EXPECTED_OPERATIONS = {
     ("POST", "/v1/uploads/{upload_id}/complete", 202),
     ("GET", "/v1/pages/{page_id}/content", 200),
     ("GET", "/v1/pages/{page_id}/results", 200),
+    ("POST", "/v1/pages/{page_id}/book-retakes", 202),
     ("POST", "/v1/pages/{page_id}/rotations", 200),
     ("POST", "/v1/pages/{page_id}/edits", 200),
     ("PATCH", "/v1/pages/{page_id}/review", 200),
@@ -114,6 +115,20 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
         "ocr_title_candidate",
         "ocr_error_code",
         "ocr_updated_at",
+    }.issubset(page_properties)
+    assert {
+        "book_capture_id",
+        "book_side",
+        "book_split_status",
+        "book_split_confidence",
+        "book_split_reason",
+        "book_spine_x",
+        "book_dewarp_applied",
+        "book_dewarp_source_score",
+        "book_dewarp_output_score",
+        "book_dewarp_reason",
+        "book_replaced_by_page_id",
+        "book_is_current",
     }.issubset(page_properties)
     assert {
         "exam_classification_status",

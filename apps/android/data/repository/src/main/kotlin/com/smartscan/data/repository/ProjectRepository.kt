@@ -23,6 +23,9 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import retrofit2.HttpException
 
 interface ProjectRepository {
@@ -33,6 +36,7 @@ interface ProjectRepository {
     suspend fun editPage(pageId: String, corners: List<Pair<Double, Double>>, filter: String): ApiResult<ScanPage>
     suspend fun reviewPage(pageId: String, confirmed: Boolean): ApiResult<ScanPage>
     suspend fun dismissExamSuggestion(pageId: String, resultVersion: Int): ApiResult<ScanPage>
+    suspend fun retakeBookSide(pageId: String, file: File, mimeType: String): ApiResult<ScanPage>
     suspend fun createExport(
         projectId: String,
         format: String,
@@ -95,6 +99,19 @@ class DefaultProjectRepository(
     override suspend fun dismissExamSuggestion(pageId: String, resultVersion: Int): ApiResult<ScanPage> = withWorkspace {
         require(resultVersion > 0) { "exam_result_version_invalid" }
         it.dismissExamSuggestion(pageId, ExamSuggestionDismissalRequestDto(resultVersion)).toModel()
+    }
+
+    override suspend fun retakeBookSide(
+        pageId: String,
+        file: File,
+        mimeType: String,
+    ): ApiResult<ScanPage> = withWorkspace {
+        require(file.isFile && file.length() > 0) { "book_retake_file_invalid" }
+        require(mimeType in setOf("image/jpeg", "image/png", "image/webp")) {
+            "book_retake_mime_invalid"
+        }
+        val body = file.asRequestBody(mimeType.toMediaTypeOrNull())
+        it.retakeBookSide(pageId, MultipartBody.Part.createFormData("file", file.name, body)).toModel()
     }
 
     override suspend fun createExport(
@@ -164,6 +181,17 @@ private fun com.smartscan.core.network.PageDto.toModel() = ScanPage(
     examConfidenceBand = examConfidenceBand,
     examRecommendation = examRecommendation,
     examSuggestionVisible = examSuggestionVisible,
+    bookCaptureId = bookCaptureId,
+    bookSide = bookSide,
+    bookSplitStatus = bookSplitStatus,
+    bookSplitConfidence = bookSplitConfidence,
+    bookSplitReason = bookSplitReason,
+    bookDewarpApplied = bookDewarpApplied,
+    bookDewarpSourceScore = bookDewarpSourceScore,
+    bookDewarpOutputScore = bookDewarpOutputScore,
+    bookDewarpReason = bookDewarpReason,
+    bookReplacedByPageId = bookReplacedByPageId,
+    bookIsCurrent = bookIsCurrent,
 )
 
 private fun ExportDto.toModel() = ProjectExport(

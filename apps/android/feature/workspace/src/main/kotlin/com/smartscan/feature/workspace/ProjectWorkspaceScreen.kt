@@ -1,6 +1,8 @@
 package com.smartscan.feature.workspace
 
 import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -237,6 +240,18 @@ private fun ProjectDetail(
             Card(onClick = { onSelectPage(page) }, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     Text(stringResource(R.string.workspace_page, page.pageNumber), fontWeight = FontWeight.Bold)
+                    page.bookSide?.let { side ->
+                        Text(
+                            stringResource(
+                                when (side) {
+                                    "left" -> R.string.workspace_book_left
+                                    "right" -> R.string.workspace_book_right
+                                    else -> R.string.workspace_book_single
+                                },
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     Text("${page.reviewStatus} · ${page.ocrStatus}", style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TextButton(onClick = { onMove(page, -1) }, enabled = page.pageNumber > 1 && !busy) {
@@ -272,11 +287,38 @@ private fun PageEditor(
     onUpdated: (ScanPage) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var previewPath by remember(page.id) { mutableStateOf<String?>(null) }
     var corners by remember(page.id) { mutableStateOf(DefaultCorners) }
     var filter by remember(page.id) { mutableStateOf("original") }
     var failed by remember(page.id) { mutableStateOf(false) }
+    var retaking by remember(page.id) { mutableStateOf(false) }
     val examResultVersion = page.examResultVersion
+    val canRetakeBookSide = page.bookSide in setOf("left", "right") &&
+        page.bookSplitStatus in setOf("split", "retake") && page.bookIsCurrent &&
+        page.activeResultVersion > 0
+    val retakeLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            retaking = true
+            failed = false
+            val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+            val temporary = File.createTempFile("book-retake-", ".image", context.cacheDir)
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    temporary.outputStream().use { output -> input.copyTo(output) }
+                } ?: error("book_retake_stream_unavailable")
+                when (val result = repository.retakeBookSide(page.id, temporary, mimeType)) {
+                    is ApiResult.Success -> onUpdated(result.value)
+                    is ApiResult.Failure -> failed = true
+                }
+            } catch (_: Exception) {
+                failed = true
+            } finally {
+                temporary.delete()
+                retaking = false
+            }
+        }
+    }
 
     LaunchedEffect(page.id, page.activeResultVersion) {
         when (val result = repository.downloadPagePreview(page.id, previewDirectory)) {
@@ -287,6 +329,24 @@ private fun PageEditor(
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.workspace_page, page.pageNumber), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        if (canRetakeBookSide) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.workspace_book_retake_hint))
+                    OutlinedButton(
+                        onClick = { retakeLauncher.launch("image/*") },
+                        enabled = !busy && !retaking,
+                    ) {
+                        Text(
+                            stringResource(
+                                if (retaking) R.string.workspace_book_retaking
+                                else R.string.workspace_book_retake,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
         if (page.examSuggestionVisible && examResultVersion != null) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

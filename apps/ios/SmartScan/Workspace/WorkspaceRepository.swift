@@ -10,6 +10,7 @@ protocol WorkspaceServicing {
     func edit(pageID: String, corners: [WorkspaceCorner], filter: WorkspaceFilter) async throws -> WorkspacePage
     func review(pageID: String, confirmed: Bool) async throws -> WorkspacePage
     func dismissExamSuggestion(pageID: String, resultVersion: Int) async throws -> WorkspacePage
+    func retakeBookSide(pageID: String, data: Data, mimeType: String) async throws -> WorkspacePage
     func createExport(
         projectID: String,
         format: WorkspaceExportFormat,
@@ -96,6 +97,15 @@ actor WorkspaceRepository: WorkspaceServicing {
         guard resultVersion > 0 else { throw WorkspaceError.invalidExamResultVersion }
         return try await withSingleRefresh {
             try await api.dismissExamSuggestion(id: pageID, resultVersion: resultVersion)
+        }
+    }
+
+    func retakeBookSide(pageID: String, data: Data, mimeType: String) async throws -> WorkspacePage {
+        guard !data.isEmpty, ["image/jpeg", "image/png", "image/webp"].contains(mimeType) else {
+            throw WorkspaceError.invalidBookRetake
+        }
+        return try await withSingleRefresh {
+            try await api.retakeBookSide(id: pageID, data: data, mimeType: mimeType)
         }
     }
 

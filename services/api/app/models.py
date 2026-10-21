@@ -385,6 +385,31 @@ class ScanPage(Base):
             "exam_suggestion_dismissed_result_version >= 0",
             name="ck_scan_pages_exam_dismissed_result_version",
         ),
+        CheckConstraint(
+            "book_split_status IN ('disabled', 'legacy', 'pending', 'split', 'fallback', 'retake')",
+            name="ck_scan_pages_book_split_status",
+        ),
+        CheckConstraint(
+            "book_side IS NULL OR book_side IN ('left', 'right', 'single')",
+            name="ck_scan_pages_book_side",
+        ),
+        CheckConstraint(
+            "book_split_confidence IS NULL OR "
+            "(book_split_confidence >= 0 AND book_split_confidence <= 1)",
+            name="ck_scan_pages_book_split_confidence",
+        ),
+        CheckConstraint(
+            "book_dewarp_source_score IS NULL OR "
+            "(book_dewarp_source_score >= 0 AND book_dewarp_source_score <= 1)",
+            name="ck_scan_pages_book_dewarp_source_score",
+        ),
+        CheckConstraint(
+            "book_dewarp_output_score IS NULL OR "
+            "(book_dewarp_output_score >= 0 AND book_dewarp_output_score <= 1)",
+            name="ck_scan_pages_book_dewarp_output_score",
+        ),
+        UniqueConstraint("book_capture_id", "book_side", name="uq_scan_pages_book_capture_side"),
+        UniqueConstraint("book_replaced_by_page_id", name="uq_scan_pages_book_replaced_by"),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     project_id: Mapped[str] = mapped_column(
@@ -438,6 +463,20 @@ class ScanPage(Base):
     exam_suggestion_dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     exam_suggestion_dismissal_reason: Mapped[str | None] = mapped_column(String(160))
     exam_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    book_capture_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    book_side: Mapped[str | None] = mapped_column(String(8))
+    book_split_status: Mapped[str] = mapped_column(String(24), default="disabled", nullable=False)
+    book_split_confidence: Mapped[float | None] = mapped_column(Float)
+    book_split_reason: Mapped[str | None] = mapped_column(String(64))
+    book_spine_x: Mapped[int | None] = mapped_column(Integer)
+    book_logical_source_path: Mapped[str | None] = mapped_column(String(500))
+    book_dewarp_applied: Mapped[bool | None] = mapped_column(Boolean)
+    book_dewarp_source_score: Mapped[float | None] = mapped_column(Float)
+    book_dewarp_output_score: Mapped[float | None] = mapped_column(Float)
+    book_dewarp_reason: Mapped[str | None] = mapped_column(String(64))
+    book_replaced_by_page_id: Mapped[str | None] = mapped_column(
+        ForeignKey("scan_pages.id", ondelete="SET NULL"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

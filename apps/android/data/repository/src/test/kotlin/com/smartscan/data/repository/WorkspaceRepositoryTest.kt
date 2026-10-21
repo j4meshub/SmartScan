@@ -64,6 +64,23 @@ class WorkspaceRepositoryTest {
     }
 
     @Test
+    fun `single side retake uploads multipart and maps replacement lineage`() = runTest {
+        val workspace = FakeWorkspaceApi()
+        val repository = DefaultProjectRepository(QueryApi(), workspace)
+        val source = temporaryDirectory.resolve("left.jpg").toFile().apply {
+            writeBytes(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 1, 2, 3))
+        }
+
+        val result = repository.retakeBookSide("page-1", source, "image/jpeg")
+
+        val page = (result as ApiResult.Success).value
+        assertTrue(workspace.retakeCalled)
+        assertEquals("left", page.bookSide)
+        assertEquals("retake", page.bookSplitStatus)
+        assertTrue(page.bookIsCurrent)
+    }
+
+    @Test
     fun `export download verifies size and sha before publishing file`() = runTest {
         val bytes = "verified-export".toByteArray()
         val workspace = FakeWorkspaceApi(downloadBytes = bytes)
@@ -127,6 +144,20 @@ private class QueryApi : ScanApi {
 private class FakeWorkspaceApi(private val downloadBytes: ByteArray = "preview".toByteArray()) : WorkspaceApi {
     var lastEdit: PageEditRequestDto? = null
     var reorderCalled = false
+    var retakeCalled = false
+
+    override suspend fun retakeBookSide(
+        pageId: String,
+        file: okhttp3.MultipartBody.Part,
+    ): PageDto {
+        retakeCalled = true
+        return page("replacement-page").copy(
+            bookCaptureId = "replacement-page",
+            bookSide = "left",
+            bookSplitStatus = "retake",
+            bookIsCurrent = true,
+        )
+    }
 
     override suspend fun reorderPages(projectId: String, request: PageOrderRequestDto): List<PageDto> {
         reorderCalled = true

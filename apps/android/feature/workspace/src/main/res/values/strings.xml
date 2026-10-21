@@ -25,6 +25,12 @@
     <string name="workspace_exam_suggestion_high">This may be an exam page. Exam cleanup is recommended and the original will be preserved.</string>
     <string name="workspace_exam_suggestion_medium">This may be an exam page. Switch to exam cleanup?</string>
     <string name="workspace_exam_dismiss">Not now</string>
+    <string name="workspace_book_left">Left page</string>
+    <string name="workspace_book_right">Right page</string>
+    <string name="workspace_book_single">Single page</string>
+    <string name="workspace_book_retake">Retake this side</string>
+    <string name="workspace_book_retaking">Uploading retake…</string>
+    <string name="workspace_book_retake_hint">Only this logical page is replaced; the other side and physical original remain unchanged.</string>
     <string name="workspace_export">Export</string>
     <string name="workspace_pdf">PDF</string>
     <string name="workspace_jpg">JPG</string>

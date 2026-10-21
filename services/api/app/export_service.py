@@ -114,7 +114,10 @@ def _select_pages(
     pages = list(
         db.scalars(
             select(ScanPage)
-            .where(ScanPage.project_id == project.id)
+            .where(
+                ScanPage.project_id == project.id,
+                ScanPage.book_replaced_by_page_id.is_(None),
+            )
             .order_by(ScanPage.page_number, ScanPage.id)
         )
     )

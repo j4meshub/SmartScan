@@ -5,6 +5,7 @@ import os
 import signal
 import socket
 import time
+import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -33,6 +34,7 @@ from services.api.app.models import (
 from services.api.app.page_service import save_page_result
 from services.api.app.project_cleanup import process_next_project_cleanup
 from services.api.app.upload_cleanup import process_next_upload_cleanup
+from services.worker.app.book import BookSplitResult, LogicalBookPage, split_book_spread
 from services.worker.app.exam import (
     ExamClassificationResult,
     LightweightExamClassifier,
@@ -120,6 +122,52 @@ def quality_assessment(
     return score, warnings[0] if warnings else None, details
 
 
+def _logical_book_image(page: LogicalBookPage) -> Image.Image:
+    return page.dewarp.image if page.dewarp.applied else page.image
+
+
+def _save_book_logical_source(
+    *,
+    image: Image.Image,
+    owner_user_id: str,
+    project_id: str,
+    capture_id: str,
+    side: str,
+) -> tuple[str, Path]:
+    relative = (
+        Path("users") / owner_user_id / "book-logical" / project_id / capture_id / f"{side}.jpg"
+    )
+    destination = settings.storage_root / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    incoming = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.incoming")
+    try:
+        image.convert("RGB").save(incoming, "JPEG", quality=94, optimize=True)
+        os.replace(incoming, destination)
+    finally:
+        incoming.unlink(missing_ok=True)
+    return relative.as_posix(), destination
+
+
+def _apply_book_metadata(
+    page: ScanPage,
+    metadata: dict[str, object],
+    *,
+    logical_source_path: str | None = None,
+) -> None:
+    page.book_capture_id = metadata.get("capture_id")  # type: ignore[assignment]
+    page.book_side = metadata.get("side")  # type: ignore[assignment]
+    page.book_split_status = str(metadata["split_status"])
+    page.book_split_confidence = metadata.get("split_confidence")  # type: ignore[assignment]
+    page.book_split_reason = metadata.get("split_reason")  # type: ignore[assignment]
+    page.book_spine_x = metadata.get("spine_x")  # type: ignore[assignment]
+    page.book_dewarp_applied = metadata.get("dewarp_applied")  # type: ignore[assignment]
+    page.book_dewarp_source_score = metadata.get("dewarp_source_score")  # type: ignore[assignment]
+    page.book_dewarp_output_score = metadata.get("dewarp_output_score")  # type: ignore[assignment]
+    page.book_dewarp_reason = metadata.get("dewarp_reason")  # type: ignore[assignment]
+    if logical_source_path is not None:
+        page.book_logical_source_path = logical_source_path
+
+
 def process(
     claim: JobClaim,
     *,
@@ -132,6 +180,13 @@ def process(
     rotation_degrees = 0
     locale = "zh-CN"
     page_missing = False
+    owner_user_id: str | None = None
+    project_id: str | None = None
+    book_capture_id: str | None = None
+    book_side: str | None = None
+    book_split_status = "disabled"
+    book_metadata: dict[str, object] | None = None
+    reading_order = "left_to_right"
     with SessionLocal() as db:
         job = db.get(ProcessingJob, claim.job_id)
         if (
@@ -144,10 +199,30 @@ def process(
         if page is None:
             page_missing = True
         else:
-            source = settings.storage_root / page.original_path
+            source = settings.storage_root / (page.book_logical_source_path or page.original_path)
             page_id = page.id
             job_kind = job.kind
+            owner_user_id = job.owner_user_id
+            project_id = job.project_id
             rotation_degrees = page.rotation_degrees
+            book_capture_id = page.book_capture_id
+            book_side = page.book_side
+            book_split_status = page.book_split_status
+            book_metadata = {
+                "capture_id": page.book_capture_id,
+                "side": page.book_side,
+                "split_status": page.book_split_status,
+                "split_confidence": page.book_split_confidence,
+                "split_reason": page.book_split_reason,
+                "spine_x": page.book_spine_x,
+                "dewarp_applied": page.book_dewarp_applied,
+                "dewarp_source_score": page.book_dewarp_source_score,
+                "dewarp_output_score": page.book_dewarp_output_score,
+                "dewarp_reason": page.book_dewarp_reason,
+            }
+            project = db.get(ScanProject, page.project_id)
+            if project is not None and project.reading_order == "rtl":
+                reading_order = "right_to_left"
             owner = db.get(User, job.owner_user_id)
             locale = owner.locale if owner is not None else "zh-CN"
     if page_missing:
@@ -162,12 +237,51 @@ def process(
             db.commit()
         return
     output: Path | None = None
+    book_split_result: BookSplitResult | None = None
+    book_logical_images: dict[str, Image.Image] = {}
+    book_logical_sources: dict[str, tuple[str, Path]] = {}
     try:
         if not heartbeat(claim, 15):
             return
         assert source is not None and page_id is not None
         with Image.open(source) as raw:
             image = ImageOps.exif_transpose(raw).convert("RGB")
+            if job_kind == "book" and book_split_status == "pending" and book_side is None:
+                book_split_result = split_book_spread(image, reading_order=reading_order)
+                selected = book_split_result.pages[0]
+                if book_split_result.split_detected:
+                    capture_id = book_capture_id or page_id
+                    book_capture_id = capture_id
+                    for logical_page in book_split_result.pages:
+                        logical_image = _logical_book_image(logical_page)
+                        book_logical_images[logical_page.side] = logical_image.copy()
+                    image = _logical_book_image(selected).copy()
+                    book_metadata = {
+                        "capture_id": capture_id,
+                        "side": selected.side,
+                        "split_status": "split",
+                        "split_confidence": book_split_result.confidence,
+                        "split_reason": book_split_result.reason,
+                        "spine_x": book_split_result.spine_x,
+                        "dewarp_applied": selected.dewarp.applied,
+                        "dewarp_source_score": selected.dewarp.source_score,
+                        "dewarp_output_score": selected.dewarp.output_score,
+                        "dewarp_reason": selected.dewarp.reason,
+                    }
+                else:
+                    image = selected.image.copy()
+                    book_metadata = {
+                        "capture_id": book_capture_id or page_id,
+                        "side": "single",
+                        "split_status": "fallback",
+                        "split_confidence": book_split_result.confidence,
+                        "split_reason": book_split_result.reason,
+                        "spine_x": None,
+                        "dewarp_applied": selected.dewarp.applied,
+                        "dewarp_source_score": selected.dewarp.source_score,
+                        "dewarp_output_score": selected.dewarp.output_score,
+                        "dewarp_reason": selected.dewarp.reason,
+                    }
             correct_edges = job_kind in {"document", "exam"}
             edges_detected = True
             if correct_edges:
@@ -183,6 +297,11 @@ def process(
                 document_edges_required=correct_edges,
                 document_edges_detected=edges_detected,
             )
+            if book_metadata is not None and book_split_status != "disabled":
+                quality_details["book"] = book_metadata
+                if book_metadata.get("split_status") == "fallback":
+                    quality_warning_value = "book_split_review"
+                    quality_score = min(quality_score, 70.0)
             image = ImageOps.autocontrast(image, cutoff=1)
             image = ImageEnhance.Sharpness(image).enhance(1.15)
             image = image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=110, threshold=3))
@@ -216,6 +335,18 @@ def process(
                 explicit_exam_mode=job_kind == "exam",
                 model=exam_model,
             )
+        if book_logical_images:
+            assert (
+                book_capture_id is not None and owner_user_id is not None and project_id is not None
+            )
+            for side, logical_image in book_logical_images.items():
+                book_logical_sources[side] = _save_book_logical_source(
+                    image=logical_image,
+                    owner_user_id=owner_user_id,
+                    project_id=project_id,
+                    capture_id=book_capture_id,
+                    side=side,
+                )
         with SessionLocal() as db:
             job = db.scalar(
                 select(ProcessingJob).where(ProcessingJob.id == claim.job_id).with_for_update()
@@ -228,7 +359,81 @@ def process(
                 or job.lease_token != claim.lease_token
                 or job.cancel_requested_at is not None
             ):
+                for _, book_output in book_logical_sources.values():
+                    book_output.unlink(missing_ok=True)
                 return
+            project = db.scalar(
+                select(ScanProject).where(ScanProject.id == page.project_id).with_for_update()
+            )
+            if project is None:
+                raise RuntimeError("project_missing")
+            if book_split_result is not None and page.book_split_status == "pending":
+                if book_split_result.split_detected:
+                    first_page, second_page = book_split_result.pages
+                    first_source = book_logical_sources[first_page.side][0]
+                    second_source = book_logical_sources[second_page.side][0]
+                    assert book_metadata is not None and book_capture_id is not None
+                    _apply_book_metadata(
+                        page,
+                        book_metadata,
+                        logical_source_path=first_source,
+                    )
+                    later_pages = list(
+                        db.scalars(
+                            select(ScanPage)
+                            .where(
+                                ScanPage.project_id == page.project_id,
+                                ScanPage.page_number > page.page_number,
+                            )
+                            .order_by(ScanPage.page_number.desc(), ScanPage.id.desc())
+                            .with_for_update()
+                        )
+                    )
+                    for later_page in later_pages:
+                        later_page.page_number += 1
+                    second_metadata: dict[str, object] = {
+                        "capture_id": book_capture_id,
+                        "side": second_page.side,
+                        "split_status": "split",
+                        "split_confidence": book_split_result.confidence,
+                        "split_reason": book_split_result.reason,
+                        "spine_x": book_split_result.spine_x,
+                        "dewarp_applied": second_page.dewarp.applied,
+                        "dewarp_source_score": second_page.dewarp.source_score,
+                        "dewarp_output_score": second_page.dewarp.output_score,
+                        "dewarp_reason": second_page.dewarp.reason,
+                    }
+                    child = ScanPage(
+                        id=str(uuid.uuid4()),
+                        project_id=page.project_id,
+                        owner_user_id=page.owner_user_id,
+                        page_number=page.page_number + 1,
+                        original_path=page.original_path,
+                        original_mime_type=page.original_mime_type,
+                        sha256=page.sha256,
+                        size_bytes=page.size_bytes,
+                        mime_type=page.mime_type,
+                    )
+                    _apply_book_metadata(
+                        child,
+                        second_metadata,
+                        logical_source_path=second_source,
+                    )
+                    db.add(child)
+                    db.flush()
+                    db.add(
+                        ProcessingJob(
+                            owner_user_id=page.owner_user_id,
+                            project_id=page.project_id,
+                            page_id=child.id,
+                            kind="book_logical",
+                            max_attempts=settings.job_max_attempts,
+                        )
+                    )
+                else:
+                    assert book_metadata is not None
+                    _apply_book_metadata(page, book_metadata)
+                project.updated_at = datetime.now(UTC)
             page.quality_score = quality_score
             page.quality_warning = quality_warning_value
             page.quality_details = json.dumps(
@@ -247,13 +452,20 @@ def process(
                 db,
                 page=page,
                 image=rendered,
-                result_type="baseline",
-                processor_version="baseline-v2",
+                result_type=(
+                    "book_logical"
+                    if job_kind in {"book", "book_logical", "book_retake"}
+                    else "baseline"
+                ),
+                processor_version=(
+                    "book-split-v1"
+                    if job_kind in {"book", "book_logical", "book_retake"}
+                    else "baseline-v2"
+                ),
                 rotation_degrees=final_rotation,
                 settings=settings,
             )
             now = datetime.now(UTC)
-            project = db.get(ScanProject, page.project_id)
             if analysis is not None:
                 page.ocr_text = analysis.text
                 page.ocr_status = "ready"
@@ -339,6 +551,8 @@ def process(
     except Exception as exc:  # keep originals and expose a recoverable failure
         if output is not None and output.exists():
             output.unlink()
+        for _, book_output in book_logical_sources.values():
+            book_output.unlink(missing_ok=True)
         with SessionLocal() as db:
             mark_job_failure(
                 db,

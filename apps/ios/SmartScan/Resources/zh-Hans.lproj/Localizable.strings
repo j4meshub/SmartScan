@@ -132,3 +132,8 @@
 "Help and privacy" = "帮助与隐私";
 "Privacy policy" = "隐私政策";
 "Support" = "用户支持";
+"Left page" = "左页";
+"Right page" = "右页";
+"Single page" = "单页";
+"Retake this side" = "重拍当前侧";
+"Only this logical page is replaced; the other side and physical original remain unchanged." = "只替换当前逻辑页，另一侧和物理原图保持不变。";
