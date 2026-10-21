@@ -23,6 +23,10 @@ data class FrameQuality(
     val sharpness: Double,
     val highlightRatio: Double,
     val issues: Set<QualityIssue>,
+    val motionScore: Double = 0.0,
+    val boundaryConfidence: Double = 0.0,
+    val spineConfidence: Double = 0.0,
+    val occlusionRatio: Double = 1.0,
 ) {
     val ready: Boolean get() = issues.isEmpty()
 
@@ -63,6 +67,7 @@ sealed interface CaptureEvent {
     data class CaptureSucceeded(val originalPath: String) : CaptureEvent
     data object CaptureFailed : CaptureEvent
     data object ContinueCapturing : CaptureEvent
+    data object Retry : CaptureEvent
 }
 
 fun reduceCaptureState(state: CaptureState, event: CaptureEvent): CaptureState = when (event) {
@@ -84,6 +89,11 @@ fun reduceCaptureState(state: CaptureState, event: CaptureEvent): CaptureState =
     }
     CaptureEvent.ContinueCapturing -> if (state.phase == CapturePhase.CAPTURED) {
         state.copy(phase = CapturePhase.READY, originalPath = null)
+    } else {
+        state
+    }
+    CaptureEvent.Retry -> if (state.phase == CapturePhase.ERROR && state.error == CaptureError.SAVE_FAILED) {
+        state.copy(phase = CapturePhase.READY, originalPath = null, error = null)
     } else {
         state
     }

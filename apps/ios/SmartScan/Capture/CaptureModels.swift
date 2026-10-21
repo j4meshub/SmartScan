@@ -32,13 +32,40 @@ struct FrameQuality: Codable, Equatable, Sendable {
     let highlightRatio: Double
     let rectangleConfidence: Double?
     let issues: Set<CaptureQualityIssue>
+    let motionScore: Double?
+    let boundaryConfidence: Double?
+    let spineConfidence: Double?
+    let occlusionRatio: Double?
+
+    init(
+        brightness: Double,
+        sharpness: Double,
+        highlightRatio: Double,
+        rectangleConfidence: Double?,
+        issues: Set<CaptureQualityIssue>,
+        motionScore: Double? = nil,
+        boundaryConfidence: Double? = nil,
+        spineConfidence: Double? = nil,
+        occlusionRatio: Double? = nil
+    ) {
+        self.brightness = brightness
+        self.sharpness = sharpness
+        self.highlightRatio = highlightRatio
+        self.rectangleConfidence = rectangleConfidence
+        self.issues = issues
+        self.motionScore = motionScore
+        self.boundaryConfidence = boundaryConfidence
+        self.spineConfidence = spineConfidence
+        self.occlusionRatio = occlusionRatio
+    }
 
     static let analyzing = FrameQuality(
         brightness: 0,
         sharpness: 0,
         highlightRatio: 0,
         rectangleConfidence: nil,
-        issues: [.analyzing]
+        issues: [.analyzing],
+        occlusionRatio: 1
     )
 
     var ready: Bool { issues.isEmpty }

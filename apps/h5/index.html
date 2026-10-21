@@ -110,6 +110,11 @@
         <button id="openCamera" class="secondary" type="button" data-i18n="openCamera">打开实时相机</button>
         <div id="cameraPanel" class="camera-panel hidden">
           <video id="cameraPreview" autoplay muted playsinline></video>
+          <div id="bookAutoControls" class="book-auto-controls hidden">
+            <label><input id="bookAutoEnabled" type="checkbox"><span data-i18n="bookAutoToggle">条件满足后自动拍摄</span></label>
+            <small data-i18n="bookAutoScope">浏览器尽力检测，无倒计时；手动快门始终可用。</small>
+            <p id="bookAutoStatus" role="status" aria-live="polite"></p>
+          </div>
           <div>
             <button id="takePhoto" class="primary" type="button" data-i18n="takePhoto">拍摄页面</button>
             <button id="stopCamera" class="secondary" type="button" data-i18n="closeCamera">关闭相机</button>

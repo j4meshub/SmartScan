@@ -11,6 +11,8 @@ test("拍摄入口同时提供实时相机、系统相机文件兜底和预览",
   assert.match(html, /id="pageFile"[^>]*capture="environment"/);
   assert.match(html, /id="pageFile"[^>]*accept="image\/jpeg,image\/png,image\/webp,image\/heic"/);
   assert.match(html, /id="capturePreview"/);
+  assert.match(html, /id="bookAutoEnabled"[^>]*type="checkbox"/);
+  assert.match(html, /id="bookAutoStatus"[^>]*aria-live="polite"/);
 });
 
 test("项目页包含四角、旋转、滤镜、排序和质量复核入口", async () => {
