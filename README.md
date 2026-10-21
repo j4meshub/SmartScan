@@ -39,6 +39,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - JPG/PDF 导出：单页/多页制品、清晰/均衡/小文件三档、版本快照和仅采用当前 OCR 行框的可选文本层。
 - 文件生命周期：导出鉴权下载与 Range、Nginx 内部发送、幂等上传取消、过期分片回收和可重试项目清理。
 - API 契约冻结：当前与上一代双快照、客户端实际消费矩阵、破坏性变更检查和至少 90 天弃用登记。
+- 可选 AI Provider：配置驱动的专业 OCR、OpenAI-compatible 和自定义适配器注册表；默认全部关闭，状态接口不返回密钥引用或值，核心扫描不依赖网关。
 - 只增不改的审计事件：覆盖登录和管理员跨用户访问。
 - 按所有者隔离的扫描项目、安全图片路径、SHA-256 元数据，以及由 PostgreSQL 支持的租约任务队列。
 - 分片上传、断点续传、分片/整文件哈希校验、幂等完成和跨用户隔离。
@@ -148,6 +149,8 @@ iOS TestFlight、App Store 元数据、签名边界和人工发布顺序见[iOS 
 
 隔离环境的账号准备、短时冒烟、30 分钟正式场景和报告门禁见[16 用户混合负载 POC](docs/POC_MIXED_LOAD.md)。
 
+外部视觉 AI 的默认关闭策略、Provider JSON、适配器选择、脱敏状态接口和后续安全边界见[可选视觉 AI Provider 注册与配置](docs/AI_PROVIDER_REGISTRY.md)。
+
 ## 容器运行
 
 将 `.env.example` 复制为 `.env`，替换所有密钥后执行：
@@ -157,6 +160,8 @@ docker compose -f deploy/compose/docker-compose.yml up --build
 ```
 
 Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API 和 Worker。生产 Worker 还要求在 `models/ocr` 放置通过清单校验的离线模型包；缺失或被篡改时拒绝领取任务。数据库版本管理、旧基线接管和回滚要求详见[数据库迁移说明](docs/DATABASE_MIGRATIONS.md)。正式上线前仍需配置 TLS、加密备份和生产密钥管理。
+
+AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置时执行 `docker compose --profile ai -f deploy/compose/docker-compose.yml up --build ai-gateway`。该操作不会自动启用任何 Provider。
 
 ## 测试
 
@@ -183,7 +188,7 @@ node --check apps/admin-web/app.js
 - 数据路径使用服务端生成的 ID，且不由 Nginx 直接公开。
 - 未授权和不存在的对象 ID 均返回 `404`。
 - 唯一超级管理员同时受 API 逻辑和 PostgreSQL 防护约束保护。
-- 可选 AI 地址必须通过 HTTPS 和公网 IP 的 SSRF 检查；基础扫描链路不依赖外部 AI。
+- 可选 AI 注册配置必须使用无内嵌凭据的 HTTPS 地址；AI-003 完成实际出站请求的 DNS 重绑定、网段、重定向和媒体限制前不得发送用户媒体，基础扫描链路始终不依赖外部 AI。
 - 分片仅写入当前用户的临时目录，完成前校验分片大小、分片哈希、整文件哈希和图片文件签名。
 - 文档透视校正只在边缘检测达到面积阈值时执行；检测失败不会裁切原图，而是生成基础增强结果并标记复核。
 
@@ -196,7 +201,7 @@ apps/android/        Kotlin、Compose 与 CameraX 工程骨架
 apps/ios/            SwiftUI 应用工程骨架
 services/api/        账号、权限、项目、上传和审计 API
 services/worker/     CPU 图像处理队列 Worker
-services/ai-gateway/ 可选 AI 供应商校验边界
+services/ai-gateway/ 默认关闭的可选 AI Provider 注册与出站边界
 packages/            接口约定与共享翻译
 deploy/              Compose、Nginx 和 PostgreSQL 控制项
 docs/                架构与交付状态文档

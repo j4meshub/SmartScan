@@ -6,16 +6,24 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M7 试卷与扫书产品化 |
-| 当前工作包 | `BOOK-003` 页码、完整性、补扫与成册 |
-| 工作包状态 | 等待人工验收：实现、本地自动化和 GitHub Runner 已通过；真实书籍固定集、目标真机及大书容量仍待验收 |
-| 当前分支 | `codex/book-003-page-integrity` |
-| 最后验证基线 | `1ce99a6`（BOOK-003 Runner 修复提交；基于已合并 BOOK-002 `9929362`） |
-| 工作包提交 | `bc5a1de`、`1ce99a6` |
-| PR | [#46](https://github.com/j4meshub/SmartScan/pull/46) |
-| 下一工作包 | `AI-001` Provider 注册与配置；`EXAM-002`/`EXAM-003` 等待 EXAM-001 固定数据集闸门 |
+| 当前里程碑 | M8 可选视觉 AI |
+| 当前工作包 | `AI-001` Provider 注册与配置 |
+| 工作包状态 | 进行中：注册表、三类适配器、脱敏状态接口和可选容器已实现；本地全量回归通过，等待 GitHub Runner |
+| 当前分支 | `codex/ai-001-provider-registry` |
+| 最后验证基线 | `9cb65d9`（已合并 BOOK-003；主线工作流 `39586048685` 五项全部通过） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `AI-002` 结构化任务；`EXAM-002`/`EXAM-003` 继续等待 EXAM-001 固定数据集闸门 |
 
 ## 当前工作包进展
+
+- AI-001 使用 `SMARTSCAN_AI_PROVIDERS` JSON 在启动时构建不可变注册表；专业 OCR、OpenAI Chat/Responses-compatible 和自定义协议分别选择明确适配器，重复 ID、危险字段和启用但缺少必要配置会启动失败。
+- 默认三类 Provider 全部关闭；密钥只以环境变量名引用。脱敏状态只报告是否存在凭据，不返回引用名称或值；关闭的 Provider 拒绝读取密钥，缺少凭据的启用项保持不可用。
+- AI 网关作为 Compose `ai` Profile 独立运行，不被 Nginx 暴露，API、Worker、H5、Android、iOS 和导出链路均不依赖它。配置检查不联网、不发送媒体。
+- AI-003 完成前不会把结构 HTTPS 校验描述成完整 SSRF 防护；DNS 重绑定、连接固定、重定向和媒体域名策略仍是后续门禁。
+- 当前本地证据：AI Provider 专项 `14 passed`；全量 Python `217 passed, 5 skipped`，应用代码覆盖率 `88.85%`；H5 `40 passed`、Chromium E2E/axe `3 passed`；Ruff、格式、OpenAPI 当前/上一代兼容、迁移升级/漂移/版本、JavaScript 语法、iOS 发布草稿和差异检查均通过。本机没有 Docker，Compose 语义和 AI 网关镜像构建等待 GitHub Runner。
+
+以下保留已合并 BOOK-003 的近期证据：
 
 - BOOK-003 新增常见页码区域 OCR 证据和本地图像 dHash；阿拉伯/规范罗马页码、候选冲突、无页码和置信原因均与活动处理版本绑定，页面编辑会使旧证据失效，不以内部页序伪装印刷页码。
 - 完整性报告从当前逻辑页动态计算缺页、重复、同号异内容冲突、倒序、缺侧、质量复核和补扫页码不匹配；人工决策单独保存，可确认不存在、保留两页、排除重复或重新打开。排除只影响成册快照，不删除原图。
@@ -732,6 +740,6 @@ git diff --check
 
 ## 下一步
 
-1. 等待 PR #45 最终文档提交的 GitHub Actions 通过后 squash 合并，并同步主线提交证据。
-2. 从主线创建 `codex/book-003-page-integrity` 分支，实现页码、重复、缺页、补扫与成册。
-3. 真实书籍固定集、双页取景指标、Android/iPhone 真机以及签名发布继续保留人工门禁，不以合成图片或 Simulator 结果替代。
+1. 完成 AI-001 全量回归、中文提交、PR、GitHub Actions 和合并，并同步最终证据。
+2. 从主线创建 `codex/ai-002-structured-tasks` 分支，实现结构化任务与结果契约，但在 AI-003 完成前不发送真实用户媒体。
+3. 外部 AI 默认关闭；真实供应商密钥、费用和固定数据集验收继续保留人工门禁，不以配置状态或 Mock 替代。

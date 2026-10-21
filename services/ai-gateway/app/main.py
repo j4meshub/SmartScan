@@ -1,44 +1,52 @@
 from __future__ import annotations
 
-import ipaddress
-import socket
-from urllib.parse import urlparse
+from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, HttpUrl
 
-app = FastAPI(title="SmartScan optional AI gateway", version="0.1.0")
-
-
-class ProviderCheck(BaseModel):
-    base_url: HttpUrl
-    model: str
+from .providers import ProviderDefinition, ProviderRegistry, create_adapter, load_provider_registry
 
 
-def ensure_public_https(url: str) -> None:
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("provider URL must use HTTPS")
-    for info in socket.getaddrinfo(parsed.hostname, parsed.port or 443):
-        address = ipaddress.ip_address(info[4][0])
-        if (
-            address.is_private
-            or address.is_loopback
-            or address.is_link_local
-            or address.is_reserved
-        ):
-            raise ValueError("provider URL resolves to a non-public address")
+@lru_cache
+def get_registry() -> ProviderRegistry:
+    return load_provider_registry()
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "enabled": False}
+def create_app() -> FastAPI:
+    application = FastAPI(title="SmartScan 可选视觉 AI 网关", version="0.2.0")
+
+    @application.get("/health")
+    def health():
+        registry = get_registry()
+        return {
+            "status": "ok",
+            "enabled": registry.enabled_count > 0,
+            "provider_count": len(registry.list_descriptors()),
+            "enabled_count": registry.enabled_count,
+            "ready_count": registry.ready_count,
+        }
+
+    @application.get("/v1/providers")
+    def list_providers():
+        return {"items": get_registry().list_descriptors()}
+
+    @application.get("/v1/providers/{provider_id}")
+    def get_provider(provider_id: str):
+        try:
+            return get_registry().get(provider_id).descriptor()
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="provider_not_found") from exc
+
+    @application.post("/v1/providers/check")
+    def check_provider(payload: ProviderDefinition):
+        adapter = create_adapter(payload, {})
+        return {
+            "accepted": True,
+            "provider": adapter.descriptor(),
+            "note": "configuration_only_no_network_request",
+        }
+
+    return application
 
 
-@app.post("/v1/providers/check")
-def check_provider(payload: ProviderCheck):
-    try:
-        ensure_public_https(str(payload.base_url))
-    except (ValueError, OSError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"accepted": True, "model": payload.model, "note": "No media was transmitted."}
+app = create_app()

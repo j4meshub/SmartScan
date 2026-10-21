@@ -26,5 +26,5 @@ container-build:
   stage: build
   image: docker:27
   services: [docker:27-dind]
-  script: ["docker build -f services/api/Dockerfile -t smartscan-api:$CI_COMMIT_SHA .", "docker build -f services/worker/Dockerfile -t smartscan-worker:$CI_COMMIT_SHA ."]
+  script: ["docker build -f services/api/Dockerfile -t smartscan-api:$CI_COMMIT_SHA .", "docker build -f services/worker/Dockerfile -t smartscan-worker:$CI_COMMIT_SHA .", "docker build -f services/ai-gateway/Dockerfile -t smartscan-ai-gateway:$CI_COMMIT_SHA ."]
 
