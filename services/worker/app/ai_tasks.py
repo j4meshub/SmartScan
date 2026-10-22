@@ -16,6 +16,7 @@ COMMON_DOCUMENT_TASKS = {
     "detect_orientation",
     "extract_title",
     "extract_page_number",
+    "ocr_formula",
 }
 _TASK_NAMESPACE = uuid.UUID("dbd74f57-59a2-4b0b-9550-e51c89f770c4")
 
@@ -122,11 +123,13 @@ def build_task_payload(context: AiTaskContext, task_type: str) -> dict[str, Any]
             "book": "book",
         }.get(context.project.mode, "document")
         parameters = {"document_kind": kind, "max_candidates": 3}
-    else:
+    elif task_type == "extract_page_number":
         parameters = {
             "allowed_styles": ["arabic", "roman"],
             "nearby_numbers": list(context.nearby_page_numbers),
         }
+    else:
+        parameters = {"requested_blocks": ["formula", "table", "layout"]}
     if not isinstance(context.result.sha256, str) or len(context.result.sha256) != 64:
         raise AiTaskBuildError("ai_media_sha256_missing")
     return {
@@ -146,7 +149,10 @@ def build_task_payload(context: AiTaskContext, task_type: str) -> dict[str, Any]
             "locale": context.locale,
         },
         "parameters": parameters,
-        "constraints": {"temperature": 0.0, "max_output_tokens": 1024},
+        "constraints": {
+            "temperature": 0.0,
+            "max_output_tokens": 4096 if task_type == "ocr_formula" else 1024,
+        },
     }
 
 

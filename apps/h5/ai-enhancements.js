@@ -1,4 +1,5 @@
 const RUNNING_STATUSES = new Set(["queued", "processing"]);
+const candidatePreview = value => String(value || "").trim().slice(0, 512);
 
 export function createAiIdempotencyKey(pageId, sourceVersion, cryptoApi = globalThis.crypto) {
   if (!Number.isInteger(sourceVersion) || sourceVersion < 1) throw new Error("ai_source_version_invalid");
@@ -7,9 +8,10 @@ export function createAiIdempotencyKey(pageId, sourceVersion, cryptoApi = global
   return `h5-ai.${safePage}.v${sourceVersion}.${cryptoApi.randomUUID()}`.slice(0, 100);
 }
 
-export function latestEnhancement(enhancements, sourceVersion) {
+export function latestEnhancement(enhancements, sourceVersion, enhancementKind = null) {
   const items = Array.isArray(enhancements) ? enhancements : [];
-  return items.find(item => item.source_result_version === sourceVersion) || items[0] || null;
+  const matchingKind = enhancementKind ? items.filter(item => item.enhancement_kind === enhancementKind) : items;
+  return matchingKind.find(item => item.source_result_version === sourceVersion) || matchingKind[0] || null;
 }
 
 export function shouldPollEnhancements(enhancements) {
@@ -31,6 +33,32 @@ export function aiCandidateSummary(enhancement) {
   const pageNumber = tasks.extract_page_number;
   if (pageNumber?.status === "detected" && (pageNumber.raw_label || Number.isInteger(pageNumber.normalized_number))) {
     rows.push({kind:"pageNumber", value:String(pageNumber.raw_label || pageNumber.normalized_number), confidence:pageNumber.confidence});
+  }
+  const complexOcr = tasks.ocr_formula;
+  const blocks = Array.isArray(complexOcr?.blocks) ? complexOcr.blocks.slice(0, 40) : [];
+  for (const block of blocks) {
+    if (block?.block_type === "formula" && typeof block.latex_candidate === "string" && block.latex_candidate.trim()) {
+      rows.push({kind:"formula", value:candidatePreview(block.latex_candidate), confidence:block.confidence});
+      continue;
+    }
+    if (block?.block_type === "table" && Array.isArray(block.cells)) {
+      const cells = block.cells.slice(0, 200)
+        .filter(cell => Number.isInteger(cell?.row) && Number.isInteger(cell?.column) && typeof cell?.text_candidate === "string")
+        .sort((left,right) => left.row-right.row || left.column-right.column);
+      const rowValues = new Map();
+      for (const cell of cells) {
+        const value=cell.text_candidate.trim();
+        if (!value) continue;
+        if (!rowValues.has(cell.row)) rowValues.set(cell.row, []);
+        rowValues.get(cell.row).push(value);
+      }
+      const value=candidatePreview([...rowValues.values()].map(row => row.join(" | ")).join(" / "));
+      if (value) rows.push({kind:"table", value, confidence:block.confidence});
+      continue;
+    }
+    if (block?.block_type === "layout" && typeof block.text_candidate === "string" && block.text_candidate.trim()) {
+      rows.push({kind:"layout", value:candidatePreview(block.text_candidate), confidence:block.confidence});
+    }
   }
   return rows;
 }

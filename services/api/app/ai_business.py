@@ -4,7 +4,9 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
+from PIL import Image
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -13,6 +15,7 @@ from .models import (
     AiEnhancementTask,
     AiMediaGrant,
     JobStatus,
+    PageResult,
     ProcessingJob,
     ScanPage,
     ScanProject,
@@ -318,6 +321,44 @@ def accept_enhancement(
         page.book_page_number_result_version = page.active_result_version
         applied["book_page_number"] = label
 
+    complex_ocr = candidate_tasks.get("ocr_formula")
+    if isinstance(complex_ocr, dict):
+        lines, structured_blocks = _accepted_complex_ocr(
+            db,
+            page=page,
+            task=task,
+            result=complex_ocr,
+        )
+        if lines:
+            now = datetime.now(UTC)
+            page.ocr_text = "\n".join(str(line["text"]) for line in lines)
+            page.ocr_status = "ready"
+            page.ocr_result_version = page.active_result_version
+            page.ocr_model_version = "ai-ocr-formula-v1"
+            page.ocr_confidence = float(complex_ocr.get("confidence", 0.0))
+            page.ocr_rotation_degrees = 0
+            page.ocr_details = json.dumps(
+                {
+                    "schema_version": 2,
+                    "source": "ai_user_accepted",
+                    "ai_enhancement_id": task.id,
+                    "source_result_version": task.source_result_version,
+                    "lines": lines,
+                    "structured_blocks": structured_blocks,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            page.ocr_title_candidate = None
+            page.ocr_error_code = None
+            page.ocr_updated_at = now
+            applied["ocr_text_layer"] = {
+                "line_count": len(lines),
+                "block_count": len(structured_blocks),
+                "result_version": page.active_result_version,
+            }
+
     evidence = _json_object(task.evidence) or {}
     evidence["accepted_application"] = {
         "applied": applied,
@@ -330,6 +371,185 @@ def accept_enhancement(
     task.accepted_at = datetime.now(UTC)
     task.updated_at = task.accepted_at
     return task, destination
+
+
+def _accepted_complex_ocr(
+    db: Session,
+    *,
+    page: ScanPage,
+    task: AiEnhancementTask,
+    result: dict[str, Any],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """把已确认的归一化候选转换为当前图片坐标，不修改任何图片文件。"""
+
+    if task.enhancement_kind != "complex_ocr" or result.get("task_type") != "ocr_formula":
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    confidence = result.get("confidence")
+    blocks = result.get("blocks")
+    if (
+        not isinstance(confidence, (int, float))
+        or isinstance(confidence, bool)
+        or not 0 <= float(confidence) <= 1
+        or not isinstance(blocks, list)
+        or len(blocks) > 200
+    ):
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    source = db.scalar(
+        select(PageResult).where(
+            PageResult.page_id == page.id,
+            PageResult.version == task.source_result_version,
+        )
+    )
+    if source is None:
+        raise AiBusinessError("ai_source_version_conflict")
+    settings = get_settings()
+    root = settings.storage_root.resolve()
+    image_path = (root / source.file_path).resolve()
+    if root not in image_path.parents or not image_path.is_file():
+        raise AiBusinessError("ai_source_file_missing", 404)
+    try:
+        with Image.open(image_path) as image:
+            width, height = image.size
+    except OSError as exc:
+        raise AiBusinessError("ai_source_file_invalid", 422) from exc
+
+    lines: list[dict[str, object]] = []
+    structured: list[dict[str, object]] = []
+    block_ids: set[str] = set()
+    for block in blocks:
+        parsed, texts = _parse_complex_block(block)
+        block_id = str(parsed["block_id"])
+        if block_id in block_ids:
+            raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+        block_ids.add(block_id)
+        structured.append(parsed)
+        pixel_box = _pixel_box(parsed["box"], width=width, height=height)
+        for text in texts:
+            for offset in range(0, len(text), 512):
+                lines.append(
+                    {
+                        "text": text[offset : offset + 512],
+                        "confidence": parsed["confidence"],
+                        "box": pixel_box,
+                        "block_id": block_id,
+                        "block_type": parsed["block_type"],
+                    }
+                )
+    return lines, structured
+
+
+def _parse_complex_block(block: object) -> tuple[dict[str, object], list[str]]:
+    if not isinstance(block, dict):
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    block_type = block.get("block_type")
+    block_id = block.get("block_id")
+    confidence = block.get("confidence")
+    box = block.get("box")
+    if (
+        block_type not in {"formula", "table", "layout"}
+        or not isinstance(block_id, str)
+        or not block_id
+        or len(block_id) > 64
+        or not block_id[0].isascii()
+        or not block_id[0].isalnum()
+        or not all(
+            character.isascii() and (character.isalnum() or character in "_.:-")
+            for character in block_id[1:]
+        )
+        or not isinstance(confidence, (int, float))
+        or isinstance(confidence, bool)
+        or not 0 <= float(confidence) <= 1
+    ):
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    parsed_box = _normalized_box(box)
+    parsed: dict[str, object] = {
+        "block_type": block_type,
+        "block_id": block_id,
+        "box": parsed_box,
+        "confidence": float(confidence),
+    }
+    texts: list[str] = []
+    if block_type == "formula":
+        latex = _candidate_text(block.get("latex_candidate"), required=True, max_length=4000)
+        parsed["latex_candidate"] = latex
+        texts = [latex]
+    elif block_type == "layout":
+        role = block.get("role")
+        if role not in {"heading", "paragraph", "figure", "caption", "unknown"}:
+            raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+        parsed["role"] = role
+        text = _candidate_text(block.get("text_candidate"), required=False, max_length=4000)
+        parsed["text_candidate"] = text or None
+        texts = [text] if text else []
+    else:
+        cells = block.get("cells")
+        if not isinstance(cells, list) or len(cells) > 10_000:
+            raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+        parsed_cells: list[dict[str, object]] = []
+        positions: set[tuple[int, int]] = set()
+        rows: dict[int, list[tuple[int, str]]] = {}
+        for cell in cells:
+            if not isinstance(cell, dict):
+                raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+            row, column = cell.get("row"), cell.get("column")
+            if (
+                not isinstance(row, int)
+                or isinstance(row, bool)
+                or not 0 <= row <= 999
+                or not isinstance(column, int)
+                or isinstance(column, bool)
+                or not 0 <= column <= 999
+                or (row, column) in positions
+            ):
+                raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+            text = _candidate_text(cell.get("text_candidate"), required=False, max_length=1000)
+            positions.add((row, column))
+            parsed_cells.append({"row": row, "column": column, "text_candidate": text})
+            if text:
+                rows.setdefault(row, []).append((column, text))
+        parsed["cells"] = parsed_cells
+        texts = [" | ".join(text for _, text in sorted(rows[row])) for row in sorted(rows)]
+    return parsed, texts
+
+
+def _normalized_box(value: object) -> dict[str, float]:
+    if not isinstance(value, dict) or set(value) != {"x0", "y0", "x1", "y1"}:
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    coordinates: dict[str, float] = {}
+    for key in ("x0", "y0", "x1", "y1"):
+        item = value.get(key)
+        if (
+            not isinstance(item, (int, float))
+            or isinstance(item, bool)
+            or not 0 <= float(item) <= 1
+        ):
+            raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+        coordinates[key] = float(item)
+    if coordinates["x1"] <= coordinates["x0"] or coordinates["y1"] <= coordinates["y0"]:
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    return coordinates
+
+
+def _candidate_text(value: object, *, required: bool, max_length: int) -> str:
+    if value is None and not required:
+        return ""
+    if not isinstance(value, str):
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    text = " ".join(value.split())
+    if (required and not text) or len(text) > max_length:
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    return text
+
+
+def _pixel_box(box: object, *, width: int, height: int) -> list[float]:
+    if not isinstance(box, dict):
+        raise AiBusinessError("ai_complex_ocr_candidate_invalid", 422)
+    return [
+        round(float(box["x0"]) * width, 3),
+        round(float(box["y0"]) * height, 3),
+        round(float(box["x1"]) * width, 3),
+        round(float(box["y1"]) * height, 3),
+    ]
 
 
 def reject_enhancement(

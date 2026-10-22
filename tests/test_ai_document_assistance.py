@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from test_ai_business import create_enhancement, create_processed_page, enable_ai, register
 
 from services.api.app import main
@@ -15,6 +16,7 @@ from services.api.app.job_service import JobClaim, claim_ai_job_by_id
 from services.api.app.models import (
     AiEnhancementTask,
     JobStatus,
+    PageResult,
     ProcessingJob,
     ScanPage,
     ScanProject,
@@ -96,6 +98,74 @@ class FakeCommonGateway:
         }
         if self.mismatch_evidence:
             evidence["page_id"] = "00000000-0000-4000-8000-000000000000"
+        return AiGatewayResult(evidence=evidence, network={"network_ready": True})
+
+
+class FakeComplexOcrGateway:
+    def execute(
+        self,
+        *,
+        enhancement_task_id: str,
+        task: dict[str, Any],
+        media: object,
+    ) -> AiGatewayResult:
+        del enhancement_task_id, media
+        assert task["task_type"] == "ocr_formula"
+        assert task["parameters"] == {"requested_blocks": ["formula", "table", "layout"]}
+        assert task["constraints"]["max_output_tokens"] == 4096
+        task_id = str(task["task_id"])
+        result = {
+            "schema_version": "1.0",
+            "task_id": task_id,
+            "task_type": "ocr_formula",
+            "confidence": 0.92,
+            "blocks": [
+                {
+                    "block_type": "formula",
+                    "block_id": "formula-1",
+                    "box": {"x0": 0.1, "y0": 0.1, "x1": 0.5, "y1": 0.3},
+                    "confidence": 0.96,
+                    "latex_candidate": r"x^2 + y^2 = z^2",
+                },
+                {
+                    "block_type": "table",
+                    "block_id": "table-1",
+                    "box": {"x0": 0.1, "y0": 0.35, "x1": 0.9, "y1": 0.65},
+                    "confidence": 0.9,
+                    "cells": [
+                        {"row": 0, "column": 0, "text_candidate": "科目"},
+                        {"row": 0, "column": 1, "text_candidate": "成绩"},
+                        {"row": 1, "column": 0, "text_candidate": "数学"},
+                        {"row": 1, "column": 1, "text_candidate": "98"},
+                    ],
+                },
+                {
+                    "block_type": "layout",
+                    "block_id": "layout-1",
+                    "box": {"x0": 0.1, "y0": 0.7, "x1": 0.9, "y1": 0.9},
+                    "confidence": 0.89,
+                    "role": "paragraph",
+                    "text_candidate": "复杂版面正文",
+                },
+            ],
+        }
+        evidence = {
+            "provider_id": "mock-complex",
+            "provider_kind": "custom_vlm",
+            "api_style": "openai_responses",
+            "model_version": "mock-formula-v1",
+            "schema_version": "1.0",
+            "result_schema_sha256": "b" * 64,
+            "task_id": task_id,
+            "task_type": "ocr_formula",
+            "page_id": task["context"]["page_id"],
+            "source_result_version": task["context"]["source_result_version"],
+            "media_sha256": task["context"]["media"]["sha256"],
+            "disposition": "candidate",
+            "business_mutation_allowed": False,
+            "execution_mode": "mock",
+            "result": result,
+        }
         return AiGatewayResult(evidence=evidence, network={"network_ready": True})
 
 
@@ -199,6 +269,179 @@ def test_common_ai_worker_only_creates_candidates_until_user_accepts() -> None:
             assert project is not None and project.title == "AI 业务编排"
             assert project.suggested_name == "AI 建议标题"
             assert project.suggested_name_source == "ai"
+
+
+def test_complex_ocr_only_enters_current_text_layer_after_acceptance() -> None:
+    with TestClient(main.app) as client:
+        headers, _ = register(client, "ai_complex_ocr")
+        project_id, page_id = create_processed_page(client, headers)
+        enable_ai(client, headers, project_id)
+        task_view = create_enhancement(
+            client,
+            headers,
+            page_id,
+            "ai-complex-ocr-flow-0001",
+            kind="complex_ocr",
+        )
+
+        before_export = client.post(
+            f"/v1/projects/{project_id}/exports",
+            json={"format": "pdf", "quality": "balanced", "include_ocr_text": True},
+            headers=headers,
+        )
+        assert before_export.status_code == 201, before_export.text
+        assert before_export.json()["ocr_pages_used"] == 0
+
+        with SessionLocal() as db:
+            page = db.get(ScanPage, page_id)
+            base_result = db.scalar(
+                select(PageResult).where(PageResult.page_id == page_id, PageResult.version == 1)
+            )
+            assert page is not None and page.ocr_text is None
+            assert base_result is not None
+            base_sha256 = base_result.sha256
+
+        process_ai_claim(
+            _claim(task_view, worker_id="ai-complex-ocr-worker"),
+            gateway=FakeComplexOcrGateway(),
+        )
+
+        candidate = client.get(f"/v1/pages/{page_id}/ai-enhancements", headers=headers).json()[0]
+        assert candidate["status"] == "candidate_ready"
+        assert candidate["enhancement_kind"] == "complex_ocr"
+        assert candidate["requested_tasks"] == ["ocr_formula"]
+        assert [
+            block["block_type"]
+            for block in candidate["candidate_result"]["tasks"]["ocr_formula"]["blocks"]
+        ] == ["formula", "table", "layout"]
+        with SessionLocal() as db:
+            page = db.get(ScanPage, page_id)
+            assert page is not None and page.ocr_text is None
+            assert page.active_result_version == 1
+            assert (
+                len(list(db.scalars(select(PageResult).where(PageResult.page_id == page_id)))) == 1
+            )
+
+        accepted = client.post(f"/v1/ai-enhancements/{task_view['id']}/accept", headers=headers)
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["status"] == "accepted"
+        assert accepted.json()["evidence"]["accepted_application"]["applied"] == {
+            "ocr_text_layer": {"block_count": 3, "line_count": 4, "result_version": 1}
+        }
+
+        with SessionLocal() as db:
+            page = db.get(ScanPage, page_id)
+            result = db.scalar(
+                select(PageResult).where(PageResult.page_id == page_id, PageResult.version == 1)
+            )
+            assert page is not None
+            assert page.active_result_version == 1
+            assert page.ocr_status == "ready"
+            assert page.ocr_result_version == 1
+            assert page.ocr_model_version == "ai-ocr-formula-v1"
+            assert page.ocr_confidence == pytest.approx(0.92)
+            assert page.ocr_rotation_degrees == 0
+            assert page.ocr_text == ("x^2 + y^2 = z^2\n科目 | 成绩\n数学 | 98\n复杂版面正文")
+            details = json.loads(page.ocr_details or "{}")
+            assert details["source"] == "ai_user_accepted"
+            assert details["ai_enhancement_id"] == task_view["id"]
+            assert details["lines"][0]["box"] == [64.0, 48.0, 320.0, 144.0]
+            assert [item["block_type"] for item in details["structured_blocks"]] == [
+                "formula",
+                "table",
+                "layout",
+            ]
+            assert result is not None and result.sha256 == base_sha256
+            assert (
+                len(list(db.scalars(select(PageResult).where(PageResult.page_id == page_id)))) == 1
+            )
+
+        page_view = client.get(f"/v1/projects/{project_id}/pages", headers=headers)
+        assert page_view.status_code == 200
+        assert page_view.json()[0]["ocr_text"].startswith("x^2 + y^2")
+        after_export = client.post(
+            f"/v1/projects/{project_id}/exports",
+            json={"format": "pdf", "quality": "balanced", "include_ocr_text": True},
+            headers=headers,
+        )
+        assert after_export.status_code == 201, after_export.text
+        assert after_export.json()["ocr_pages_used"] == 1
+
+
+def test_invalid_stored_complex_ocr_candidate_fails_closed_without_page_mutation() -> None:
+    with TestClient(main.app) as client:
+        headers, _ = register(client, "ai_complex_invalid")
+        project_id, page_id = create_processed_page(client, headers)
+        enable_ai(client, headers, project_id)
+        task_view = create_enhancement(
+            client,
+            headers,
+            page_id,
+            "ai-complex-invalid-0001",
+            kind="complex_ocr",
+        )
+        process_ai_claim(
+            _claim(task_view, worker_id="ai-complex-invalid"),
+            gateway=FakeComplexOcrGateway(),
+        )
+        with SessionLocal() as db:
+            task = db.get(AiEnhancementTask, str(task_view["id"]))
+            assert task is not None and task.candidate_result is not None
+            candidate = json.loads(task.candidate_result)
+            candidate["tasks"]["ocr_formula"]["blocks"][0]["box"]["x1"] = 0.05
+            task.candidate_result = json.dumps(candidate)
+            db.commit()
+
+        rejected = client.post(f"/v1/ai-enhancements/{task_view['id']}/accept", headers=headers)
+        assert rejected.status_code == 422
+        assert rejected.json()["detail"] == "ai_complex_ocr_candidate_invalid"
+        with SessionLocal() as db:
+            page = db.get(ScanPage, page_id)
+            task = db.get(AiEnhancementTask, str(task_view["id"]))
+            assert page is not None and page.ocr_text is None
+            assert page.active_result_version == 1
+            assert task is not None and task.status == "candidate_ready"
+
+
+def test_empty_complex_ocr_candidate_does_not_erase_current_cpu_ocr() -> None:
+    with TestClient(main.app) as client:
+        headers, _ = register(client, "ai_complex_empty")
+        project_id, page_id = create_processed_page(client, headers)
+        enable_ai(client, headers, project_id)
+        task_view = create_enhancement(
+            client,
+            headers,
+            page_id,
+            "ai-complex-empty-0001",
+            kind="complex_ocr",
+        )
+        process_ai_claim(
+            _claim(task_view, worker_id="ai-complex-empty"),
+            gateway=FakeComplexOcrGateway(),
+        )
+        with SessionLocal() as db:
+            task = db.get(AiEnhancementTask, str(task_view["id"]))
+            page = db.get(ScanPage, page_id)
+            assert task is not None and task.candidate_result is not None and page is not None
+            candidate = json.loads(task.candidate_result)
+            candidate["tasks"]["ocr_formula"]["blocks"] = []
+            task.candidate_result = json.dumps(candidate)
+            page.ocr_status = "ready"
+            page.ocr_result_version = page.active_result_version
+            page.ocr_text = "基础 CPU OCR"
+            page.ocr_details = json.dumps(
+                {"schema_version": 1, "lines": [{"text": "基础 CPU OCR", "box": [1, 1, 10, 10]}]}
+            )
+            db.commit()
+
+        accepted = client.post(f"/v1/ai-enhancements/{task_view['id']}/accept", headers=headers)
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["evidence"]["accepted_application"]["applied"] == {}
+        with SessionLocal() as db:
+            page = db.get(ScanPage, page_id)
+            assert page is not None
+            assert page.ocr_text == "基础 CPU OCR"
+            assert page.ocr_result_version == page.active_result_version == 1
 
 
 def test_common_ai_worker_resumes_completed_steps_without_duplicate_results() -> None:

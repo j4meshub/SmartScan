@@ -143,6 +143,9 @@ def test_local_mock_returns_deterministic_valid_result_for_all_tasks(task_type: 
 
     assert first == second
     assert result.task_type.value == task_type
+    if task_type == "ocr_formula":
+        assert len(first["blocks"]) == 3
+        assert "Mock" in first["blocks"][0]["latex_candidate"]
 
 
 def test_schema_catalog_has_versioned_digest_for_every_task() -> None:
