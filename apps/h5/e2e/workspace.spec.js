@@ -27,7 +27,7 @@ async function installMockApi(page, {authenticated = false, aiAvailable = true, 
     if (path === "/v1/projects" && request.method() === "GET") return json([project]);
     if (path === "/v1/projects/p1/pages") return json([scanPage]);
     if (path === "/v1/pages/page1/content") return route.fulfill({status:200,contentType:"image/png",body:tinyPng});
-    if (path === "/v1/ai/capabilities") return json({available:aiAvailable,business_orchestration_ready:true,execution_mode:aiAvailable?aiExecutionMode:"unavailable",consent_version:"2026-10-01",transmission_notice_code:"project_page_to_deployment_ai",enhancement_kinds:["recommended"],task_types:["classify_page","detect_orientation","extract_title","extract_page_number"]});
+    if (path === "/v1/ai/capabilities") return json({available:aiAvailable,business_orchestration_ready:true,execution_mode:aiAvailable?aiExecutionMode:"unavailable",consent_version:"2026-10-01",transmission_notice_code:"project_page_to_deployment_ai",enhancement_kinds:["recommended","complex_ocr"],task_types:["classify_page","detect_orientation","extract_title","extract_page_number","ocr_formula"]});
     if (path === "/v1/projects/p1/ai-settings" && request.method() === "PUT") {
       const payload=request.postDataJSON();
       project={...project,ai_enabled:payload.enabled,ai_consent_version:payload.enabled?payload.consent_version:null,ai_enabled_by_user_id:payload.enabled?"u1":null,ai_enabled_at:payload.enabled?"2026-10-20T00:02:00Z":null};
@@ -36,13 +36,17 @@ async function installMockApi(page, {authenticated = false, aiAvailable = true, 
     if (path === "/v1/pages/page1/ai-enhancements" && request.method() === "GET") return json(enhancements);
     if (path === "/v1/pages/page1/ai-enhancements" && request.method() === "POST") {
       const payload=request.postDataJSON();
-      const item={id:"ai1",project_id:"p1",page_id:"page1",processing_job_id:"job-ai1",enhancement_kind:payload.enhancement_kind,requested_tasks:["classify_page","detect_orientation","extract_title","extract_page_number"],source_result_version:payload.source_result_version,status:"candidate_ready",candidate_result:{schema_version:"1.0",tasks:{classify_page:{label:"document",confidence:.91},detect_orientation:{rotation_degrees:90,confidence:.88},extract_title:{candidates:[{text:"期中复习提纲",confidence:.96}]},extract_page_number:{status:"not_found",confidence:.2}}},evidence:{mock:true},provider_id:"internal-provider",model:"internal-model",confidence:.91,error_code:null,accepted_by_user_id:null,accepted_at:null,rejected_at:null,created_at:"2026-10-20T00:03:00Z",updated_at:"2026-10-20T00:03:00Z"};
+      const complex=payload.enhancement_kind==="complex_ocr";
+      const tasks=complex
+        ?{ocr_formula:{task_type:"ocr_formula",confidence:.92,blocks:[{block_type:"formula",block_id:"f1",box:{x0:.1,y0:.1,x1:.5,y1:.2},confidence:.96,latex_candidate:"x^2 + y^2 = z^2"},{block_type:"table",block_id:"t1",box:{x0:.1,y0:.3,x1:.9,y1:.6},confidence:.9,cells:[{row:0,column:0,text_candidate:"科目"},{row:0,column:1,text_candidate:"成绩"}]},{block_type:"layout",block_id:"l1",box:{x0:.1,y0:.7,x1:.9,y1:.9},confidence:.89,role:"paragraph",text_candidate:"复杂版面正文"}]}}
+        :{classify_page:{label:"document",confidence:.91},detect_orientation:{rotation_degrees:90,confidence:.88},extract_title:{candidates:[{text:"期中复习提纲",confidence:.96}]},extract_page_number:{status:"not_found",confidence:.2}};
+      const item={id:complex?"ai-complex":"ai1",project_id:"p1",page_id:"page1",processing_job_id:complex?"job-ai-complex":"job-ai1",enhancement_kind:payload.enhancement_kind,requested_tasks:complex?["ocr_formula"]:["classify_page","detect_orientation","extract_title","extract_page_number"],source_result_version:payload.source_result_version,status:"candidate_ready",candidate_result:{schema_version:"1.0",tasks},evidence:{mock:true},provider_id:"internal-provider",model:"internal-model",confidence:.91,error_code:null,accepted_by_user_id:null,accepted_at:null,rejected_at:null,created_at:"2026-10-20T00:03:00Z",updated_at:"2026-10-20T00:03:00Z"};
       enhancements=[item];
       return route.fulfill({status:202,contentType:"application/json",body:JSON.stringify(item)});
     }
-    if (path === "/v1/ai-enhancements/ai1/accept" && request.method() === "POST") {
-      scanPage={...scanPage,rotation_degrees:90,active_result_version:2};
-      project={...project,suggested_name:"期中复习提纲",suggested_name_source:"ai"};
+    if (["/v1/ai-enhancements/ai1/accept","/v1/ai-enhancements/ai-complex/accept"].includes(path) && request.method() === "POST") {
+      if (enhancements[0].enhancement_kind==="complex_ocr") scanPage={...scanPage,ocr_status:"ready",ocr_result_version:scanPage.active_result_version,ocr_text:"x^2 + y^2 = z^2\n科目 | 成绩\n复杂版面正文"};
+      else { scanPage={...scanPage,rotation_degrees:90,active_result_version:2}; project={...project,suggested_name:"期中复习提纲",suggested_name_source:"ai"}; }
       enhancements=[{...enhancements[0],status:"accepted",accepted_by_user_id:"u1",accepted_at:"2026-10-20T00:04:00Z"}];
       return json(enhancements[0]);
     }
@@ -144,6 +148,23 @@ test("真实 AI 模式只显示用户可理解的模式标识", async ({page}) =
   const dialog=page.getByRole("dialog");
   await expect(dialog.getByText("真实 AI", {exact:true})).toBeVisible();
   await expect(dialog).not.toContainText("local-real");
+});
+
+test("用户可选择复杂 OCR、核对结构化候选并确认进入文字层", async ({page}) => {
+  await installMockApi(page, {authenticated:true});
+  await page.goto("/#project=p1");
+  const dialog=page.getByRole("dialog");
+  await dialog.getByRole("checkbox", {name:"为此项目启用 AI"}).click();
+  await dialog.getByLabel("分析类型").selectOption("complex_ocr");
+  await dialog.getByRole("button", {name:"获取当前页智能建议"}).click();
+  await expect(dialog.getByText("x^2 + y^2 = z^2")).toBeVisible();
+  await expect(dialog.getByText("科目 | 成绩")).toBeVisible();
+  await expect(dialog.getByText("复杂版面正文")).toBeVisible();
+  await expect(dialog).not.toContainText("internal-provider");
+  await expectNoWcagViolations(page);
+  await dialog.getByRole("button", {name:"接受建议"}).click();
+  await expect(dialog.getByRole("button", {name:"查看基础版本"})).toBeHidden();
+  await expect(dialog.getByLabel("PDF 包含 OCR 文本层")).toBeEnabled();
 });
 
 test("AI 未配置时保持基础编辑与导出可用且不允许发起建议", async ({page}) => {

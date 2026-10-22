@@ -43,6 +43,7 @@ let aiPollTimer = null;
 let aiBusy = false;
 let aiPreviewingSource = false;
 let aiDesiredEnabled = null;
+let aiEnhancementKind = "recommended";
 let restoredProjectId = new URLSearchParams(location.hash.slice(1)).get("project");
 let preserveEditorRestore = false;
 const $ = selector => document.querySelector(selector);
@@ -81,14 +82,14 @@ function renderEditorState(){
 function aiText(key, values={}){ return Object.entries(values).reduce((text,[name,value])=>text.replace(`{${name}}`,String(value)),editorCopy[locale][key]||key); }
 function aiStatusText(status){ return editorCopy[locale][{queued:"aiQueued",processing:"aiProcessing",candidate_ready:"aiCandidateReady",accepted:"aiAccepted",rejected:"aiRejected",stale:"aiStale",failed:"aiFailed",canceled:"aiCanceled"}[status]]||status||editorCopy[locale].aiNoSuggestion; }
 function aiCandidateLabel(row){
-  const label=editorCopy[locale][{classification:"aiClassification",orientation:"aiOrientation",title:"aiTitleSuggestion",pageNumber:"aiPageNumber"}[row.kind]]||row.kind;
+  const label=editorCopy[locale][{classification:"aiClassification",orientation:"aiOrientation",title:"aiTitleSuggestion",pageNumber:"aiPageNumber",formula:"aiFormula",table:"aiTable",layout:"aiLayout"}[row.kind]]||row.kind;
   let value=row.value;
   if(row.kind==="classification") value=t(row.value==="document"?"smartScan":row.value);
   if(row.kind==="orientation") value=aiText("aiOrientationValue",{value:row.value});
   const confidence=confidencePercent(row.confidence);
   return {label,value,confidence:confidence===null?"":aiText("aiConfidence",{value:confidence})};
 }
-function currentAiEnhancement(){ const page=editorPages[editorIndex]; return latestEnhancement(aiEnhancements,page?.active_result_version); }
+function currentAiEnhancement(){ const page=editorPages[editorIndex]; return latestEnhancement(aiEnhancements,page?.active_result_version,aiEnhancementKind); }
 function stopAiPolling(){ if(aiPollTimer!==null) clearTimeout(aiPollTimer); aiPollTimer=null; }
 function scheduleAiPolling(){ stopAiPolling(); if(editorProject&&shouldPollEnhancements(aiEnhancements)) aiPollTimer=setTimeout(()=>loadAiWorkspace({silent:true}),2500); }
 function renderAiWorkspace(){
@@ -105,10 +106,16 @@ function renderAiWorkspace(){
   $("#aiTransmissionNotice").textContent=editorCopy[locale].aiTransmissionNotice;
   $("#aiConsentVersion").textContent=aiCapabilities?.consent_version?aiText("aiConsentVersion",{version:aiCapabilities.consent_version}):"";
   const enhancement=currentAiEnhancement();
+  const kindSelect=$("#aiEnhancementKind");
+  const supportsComplex=Boolean(aiCapabilities?.enhancement_kinds?.includes("complex_ocr")&&aiCapabilities?.task_types?.includes("ocr_formula"));
+  kindSelect.value=aiEnhancementKind;
+  kindSelect.disabled=aiBusy;
+  kindSelect.querySelector('option[value="complex_ocr"]').disabled=!supportsComplex;
   const badge=$("#aiStatusBadge");
   badge.dataset.status=enhancement?.status||"idle";
   badge.textContent=enhancement?aiStatusText(enhancement.status):(editorProject?.ai_enabled?editorCopy[locale].aiNoSuggestion:editorCopy[locale].aiDisabled);
-  const canRequest=available&&editorProject?.ai_enabled&&page?.active_result_version>0&&!aiBusy&&!shouldPollEnhancements(aiEnhancements);
+  const kindSupported=aiEnhancementKind==="complex_ocr"?supportsComplex:Boolean(aiCapabilities?.enhancement_kinds?.includes("recommended"));
+  const canRequest=available&&kindSupported&&editorProject?.ai_enabled&&page?.active_result_version>0&&!aiBusy&&!shouldPollEnhancements(aiEnhancements);
   $("#requestAiSuggestion").disabled=!canRequest;
   $("#refreshAiSuggestion").disabled=!page||aiBusy;
   const rows=aiCandidateSummary(enhancement).map(aiCandidateLabel);
@@ -156,7 +163,7 @@ async function requestAiSuggestion(){
   if(!page||!editorProject?.ai_enabled||aiBusy) return;
   aiBusy=true; $("#aiMessage").textContent=editorCopy[locale].aiRequesting; renderAiWorkspace();
   try{
-    const enhancement=await request(`/v1/pages/${page.id}/ai-enhancements`,{method:"POST",headers:{"Idempotency-Key":createAiIdempotencyKey(page.id,page.active_result_version)},body:JSON.stringify({enhancement_kind:"recommended",source_result_version:page.active_result_version})});
+    const enhancement=await request(`/v1/pages/${page.id}/ai-enhancements`,{method:"POST",headers:{"Idempotency-Key":createAiIdempotencyKey(page.id,page.active_result_version)},body:JSON.stringify({enhancement_kind:aiEnhancementKind,source_result_version:page.active_result_version})});
     aiEnhancements=[enhancement,...aiEnhancements.filter(item=>item.id!==enhancement.id)];
     $("#aiMessage").textContent=aiStatusText(enhancement.status);
   }catch(error){ $("#aiMessage").textContent=`${editorCopy[locale].aiFailed}：${localizedError(error)}`; }
@@ -250,7 +257,7 @@ async function selectEditorPage(index){
   catch(error){ $("#editorMessage").textContent=localizedError(error); }
 }
 async function openProjectEditor(project){
-  const projectId=project.id; editorProject=project; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorBookIntegrity=null; pendingBookSupplement=null; editorIndex=-1; aiCapabilities=null; aiEnhancements=[]; aiPreviewingSource=false; aiDesiredEnabled=null; clearEditorImage(); history.replaceState(null,"",`#project=${encodeURIComponent(projectId)}`); $("#editorDialog").showModal(); $("#editorMessage").textContent=editorCopy[locale].loading; renderProjectFiles(); renderBookIntegrity(); renderAiWorkspace(); loadProjectFiles();
+  const projectId=project.id; editorProject=project; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorBookIntegrity=null; pendingBookSupplement=null; editorIndex=-1; aiCapabilities=null; aiEnhancements=[]; aiPreviewingSource=false; aiDesiredEnabled=null; aiEnhancementKind="recommended"; clearEditorImage(); history.replaceState(null,"",`#project=${encodeURIComponent(projectId)}`); $("#editorDialog").showModal(); $("#editorMessage").textContent=editorCopy[locale].loading; renderProjectFiles(); renderBookIntegrity(); renderAiWorkspace(); loadProjectFiles();
   try{ editorPages=await request(`/v1/projects/${projectId}/pages`); if(!editorPages.length){ $("#editorPageList").innerHTML=""; $("#editorMessage").textContent=editorCopy[locale].empty; renderAiWorkspace(); return; } await selectEditorPage(0); }
   catch(error){ $("#editorMessage").textContent=localizedError(error); }
 }
@@ -289,6 +296,7 @@ $("#movePageRight").addEventListener("click",()=>reorderEditorPage(1));
 $("#resetCorners").addEventListener("click",()=>{ editorCorners=defaultCorners(); editorCornersDirty=false; renderEditorState(); });
 $("#savePageEdit").addEventListener("click",saveEditorPage);
 $("#aiProjectEnabled").addEventListener("change",event=>updateProjectAiSetting(event.currentTarget.checked));
+$("#aiEnhancementKind").addEventListener("change",event=>{ aiEnhancementKind=event.currentTarget.value; aiPreviewingSource=false; renderAiWorkspace(); });
 $("#requestAiSuggestion").addEventListener("click",requestAiSuggestion);
 $("#refreshAiSuggestion").addEventListener("click",()=>loadAiWorkspace());
 $("#acceptAiSuggestion").addEventListener("click",()=>decideAiSuggestion(true));

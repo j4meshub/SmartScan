@@ -41,7 +41,47 @@ def deterministic_mock_result(task: StructuredTask) -> dict[str, Any]:
     if task_type == "extract_page_number":
         return {**common, "status": "not_detected"}
     if task_type == "ocr_formula":
-        return {**common, "blocks": []}
+        english = task.context.locale == "en"
+        return {
+            **common,
+            "blocks": [
+                {
+                    "block_type": "formula",
+                    "block_id": "mock-formula-1",
+                    "box": {"x0": 0.1, "y0": 0.12, "x1": 0.9, "y1": 0.28},
+                    "confidence": 0.99,
+                    "latex_candidate": r"\mathrm{Mock}: x^2+y^2=z^2",
+                },
+                {
+                    "block_type": "table",
+                    "block_id": "mock-table-1",
+                    "box": {"x0": 0.1, "y0": 0.35, "x1": 0.9, "y1": 0.58},
+                    "confidence": 0.99,
+                    "cells": [
+                        {
+                            "row": 0,
+                            "column": 0,
+                            "text_candidate": "Mock field" if english else "模拟字段",
+                        },
+                        {
+                            "row": 0,
+                            "column": 1,
+                            "text_candidate": "Mock value" if english else "模拟值",
+                        },
+                    ],
+                },
+                {
+                    "block_type": "layout",
+                    "block_id": "mock-layout-1",
+                    "box": {"x0": 0.1, "y0": 0.68, "x1": 0.9, "y1": 0.84},
+                    "confidence": 0.99,
+                    "role": "paragraph",
+                    "text_candidate": (
+                        "Simulated AI layout candidate" if english else "模拟 AI 版面候选"
+                    ),
+                },
+            ],
+        }
     if task_type == "review_cleanup_mask":
         return {
             **common,
