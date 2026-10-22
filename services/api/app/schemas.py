@@ -236,6 +236,7 @@ class PageResultView(BaseModel):
 class AiCapabilitiesView(BaseModel):
     available: bool
     business_orchestration_ready: bool
+    execution_mode: Literal["unavailable", "mock", "provider"] = "unavailable"
     consent_version: str
     transmission_notice_code: str
     enhancement_kinds: list[str]

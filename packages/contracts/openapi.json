@@ -4109,6 +4109,16 @@
             "type": "boolean",
             "title": "Business Orchestration Ready"
           },
+          "execution_mode": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "mock",
+              "provider"
+            ],
+            "title": "Execution Mode",
+            "default": "unavailable"
+          },
           "consent_version": {
             "type": "string",
             "title": "Consent Version"

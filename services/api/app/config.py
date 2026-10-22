@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     ai_internal_token: SecretStr = SecretStr("")
     ai_provider_id: str = ""
     ai_media_base_url: str = ""
+    ai_mock_mode: bool = False
     ai_media_grant_ttl_seconds: int = Field(default=600, ge=60, le=900)
     vision_document_min_area_ratio: float = Field(default=0.2, gt=0.05, lt=0.95)
     vision_max_detection_dimension: int = Field(default=1600, ge=640, le=4096)
@@ -179,6 +180,8 @@ class Settings(BaseSettings):
 
     def validate_production(self) -> None:
         if self.env == "production":
+            if self.ai_mock_mode:
+                raise RuntimeError("SMARTSCAN_AI_MOCK_MODE=true is forbidden in production")
             if len(self.secret_key) < 32 or "change" in self.secret_key.lower():
                 raise RuntimeError("SMARTSCAN_SECRET_KEY must be a strong production secret")
             if not self.phone_hmac_peppers and (

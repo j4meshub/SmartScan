@@ -7,15 +7,20 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI 业务接入 |
-| 当前工作包 | `H5-AI-001` H5 AI 产品闭环 |
-| 工作包状态 | 进行中：实现、本地门禁及代码头两套 CI 已通过，等待最终证据提交与合并 |
-| 当前分支 | `codex/h5-ai-001-product-loop` |
-| 最后验证基线 | `c3bf400`（push `39771891339` 与 PR `39771941635` 的 API、Web、Android、iOS 和容器共 10 项全部通过） |
-| 工作包提交 | `c3bf400`（H5 项目授权、AI 候选对比与决定闭环） |
-| PR | [#64](https://github.com/j4meshub/SmartScan/pull/64)，代码头两套五项 CI 全部通过，等待最终证据提交与合并 |
-| 下一工作包 | `DEVX-002`：默认 Mock、可选本机 Secret 真实 Provider 的 AI 一键启动、停止和清理 |
+| 当前工作包 | `DEVX-002` 本机 AI 一键试用 |
+| 工作包状态 | 进行中：实现、专项测试、浏览器 E2E 和真实本机 Mock 闭环已通过，等待 PR CI 与合并 |
+| 当前分支 | `codex/devx-002-local-ai-trial` |
+| 最后验证基线 | `725e0ad`（H5-AI-001 已由 PR #64 合并） |
+| 工作包提交 | 待提交（本机 Mock/真实 Provider 一键模式） |
+| PR | 待创建 |
+| 下一工作包 | `AI-009`：公式、表格与复杂版面结构化候选及确认后 OCR 文本层接入 |
 
 ## 当前工作包进展
+
+- H5-AI-001 已由 [PR #64](https://github.com/j4meshub/SmartScan/pull/64) 合并到主线，中文 squash 提交为 `725e0ad`；最终 push `39773633246` 与 PR `39773639990` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
+- DEVX-002 将既有中文启动器扩展为一次启动 API、AI 网关、AI Worker、CPU Worker 和 H5。默认 Provider 是不读取媒体、不访问外网的确定性 Mock，七类任务都通过现有结构化结果校验；能力接口、H5 双语徽标和持久化证据明确区分 `mock` 与 `provider`，生产环境禁止 Mock。
+- 可选真实模式从被 Git 忽略的 `.smartscan-trial/ai-provider.local.json` 读取 OpenAI Chat/Responses 配置。启动器拒绝非 HTTPS/IP 地址、未知字段、过宽或非受控私网；Key 只注入 AI 网关进程，不写入运行配置、状态、日志或客户端。真实模型不能访问签名 HTTPS 媒体地址时继续作为外部门禁。
+- 真实本机编排确认五个托管角色均运行，并使用自动创建的 `demo` 账号完成“项目授权→Mock AI 候选→用户接受”；候选证据为 `mock`。停止命令关闭全部五个角色并保留试用数据。专项 Python/OpenAPI `136 passed`；最终仓库级 Python `450 passed, 7 skipped`、覆盖率 `87.82%`，H5 单元 `44 passed`，Chromium E2E/axe `7 passed`；Ruff、162 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、两套 AI Schema、H5/管理后台 JavaScript 语法和差异空白均通过。首次全量回归只因 AI 网关健康响应新增脱敏 `execution_mode` 而旧精确字典断言失败，补齐契约断言后原命令全量通过；7 项跳过仍为既有 PostgreSQL/Docker/真实主机外部门禁。
 
 - AI-008 已由 [PR #63](https://github.com/j4meshub/SmartScan/pull/63) 合并到主线，中文 squash 提交为 `5ebee7f`；最终 push `39768108559` 与 PR `39768115196` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
 - H5 项目工作区新增固定传输说明与项目级 AI 开关；能力未配置时不能开启或发起建议，但页面编辑、基础预览和导出保持可用。每次建议使用安全随机幂等键并绑定当前活动页面版本，页面切换后只展示同页状态。

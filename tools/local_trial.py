@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import hashlib
+import ipaddress
 import json
 import os
 import secrets
@@ -18,6 +19,7 @@ import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 TRIAL_USERNAME = "demo"
 TRIAL_PASSWORD = "SmartScan2026!"
@@ -29,8 +31,20 @@ H5_URL = "http://localhost:8080"
 PROCESS_MARKERS = {
     "api": "services.api.app.main:app",
     "worker": "services.worker.app.main",
+    "ai_gateway": "services/ai-gateway",
+    "ai_worker": "services.worker.app.ai_main",
     "h5": "http.server 8080",
 }
+CONTROLLED_AI_NETWORKS = tuple(
+    ipaddress.ip_network(item)
+    for item in (
+        "10.0.0.0/8",
+        "100.64.0.0/10",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "fc00::/7",
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -42,6 +56,7 @@ class TrialPaths:
     storage: Path
     database: Path
     runtime_config: Path
+    ai_provider_config: Path
     dependency_fingerprint: Path
     venv_python: Path
 
@@ -59,6 +74,7 @@ def trial_paths(root: Path | None = None) -> TrialPaths:
         storage=trial / "storage",
         database=trial / "smartscan-trial.db",
         runtime_config=trial / "runtime-config.json",
+        ai_provider_config=trial / "ai-provider.local.json",
         dependency_fingerprint=project_root / ".venv" / ".smartscan-trial-dependency.sha256",
         venv_python=project_root / ".venv" / python_dir / python_name,
     )
@@ -185,26 +201,158 @@ def _load_or_create_runtime_config(paths: TrialPaths) -> dict[str, str]:
             payload = json.loads(paths.runtime_config.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"试用运行配置损坏：{paths.runtime_config}") from exc
-        if (
-            isinstance(payload, dict)
-            and isinstance(payload.get("secret_key"), str)
-            and isinstance(payload.get("phone_pepper"), str)
+        if isinstance(payload, dict) and all(
+            isinstance(payload.get(key), str) for key in ("secret_key", "phone_pepper")
         ):
+            if not isinstance(payload.get("ai_internal_token"), str):
+                payload["ai_internal_token"] = secrets.token_urlsafe(48)
+                _write_json(paths.runtime_config, payload)
             return {
-                "secret_key": payload["secret_key"],
-                "phone_pepper": payload["phone_pepper"],
+                key: str(payload[key])
+                for key in ("secret_key", "phone_pepper", "ai_internal_token")
             }
         raise RuntimeError(f"试用运行配置格式无效：{paths.runtime_config}")
     payload = {
         "secret_key": secrets.token_urlsafe(48),
         "phone_pepper": secrets.token_urlsafe(48),
+        "ai_internal_token": secrets.token_urlsafe(48),
     }
     _write_json(paths.runtime_config, payload)
     return payload
 
 
+def _validate_trial_https_url(value: object, *, trailing_slash: bool) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError("真实 AI 配置中的 URL 不能为空。")
+    parsed = urlsplit(value.strip())
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise RuntimeError("真实 AI URL 端口无效。") from exc
+    hostname = parsed.hostname
+    try:
+        ipaddress.ip_address(hostname or "")
+    except ValueError:
+        pass
+    else:
+        raise RuntimeError("真实 AI URL 必须使用完整域名，不能使用 IP 地址。")
+    if (
+        parsed.scheme != "https"
+        or not hostname
+        or "." not in hostname
+        or hostname.endswith(".")
+        or "\\" in value
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or port not in {None, 443}
+    ):
+        raise RuntimeError("真实 AI URL 必须是无账号、查询参数和片段的标准 HTTPS 地址。")
+    if trailing_slash and not parsed.path.endswith("/"):
+        raise RuntimeError("真实 AI 媒体地址必须以 / 结尾。")
+    return value.strip()
+
+
+def _controlled_private_cidrs(value: object) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise RuntimeError("allowed_private_cidrs 必须是字符串数组。")
+    result: list[str] = []
+    for item in value:
+        try:
+            network = ipaddress.ip_network(item, strict=True)
+        except ValueError as exc:
+            raise RuntimeError(f"受控网段格式无效：{item}") from exc
+        controlled = any(
+            network.version == allowed.version and network.subnet_of(allowed)
+            for allowed in CONTROLLED_AI_NETWORKS
+        )
+        if not controlled or network.prefixlen < (16 if network.version == 4 else 48):
+            raise RuntimeError(f"受控网段范围过宽或不是私网：{item}")
+        result.append(str(network))
+    if len(result) != len(set(result)):
+        raise RuntimeError("受控网段不能重复。")
+    return result
+
+
+def load_trial_ai_config(paths: TrialPaths) -> dict[str, object]:
+    if not paths.ai_provider_config.exists():
+        return {
+            "mode": "mock",
+            "provider_id": "local-mock",
+            "model": "mock-v1",
+            "api_style": "openai_responses",
+            "base_url": "https://mock.smartscan.test/v1",
+            "media_base_url": "https://local.smartscan.test/api/v1/ai-media/",
+            "api_key": "local-mock-only-not-a-real-secret",
+            "allowed_private_cidrs": [],
+        }
+    if paths.ai_provider_config.stat().st_size > 64 * 1024:
+        raise RuntimeError("真实 AI 本机 Secret 文件超过 64 KiB，已拒绝读取。")
+    try:
+        payload = json.loads(paths.ai_provider_config.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"真实 AI 本机 Secret 文件无效：{paths.ai_provider_config}") from exc
+    allowed_keys = {
+        "mode",
+        "base_url",
+        "api_key",
+        "model",
+        "api_style",
+        "media_base_url",
+        "allowed_private_cidrs",
+    }
+    if not isinstance(payload, dict) or set(payload) - allowed_keys:
+        raise RuntimeError("真实 AI 本机 Secret 含有未知字段。")
+    if payload.get("mode") != "real":
+        raise RuntimeError('真实 AI 本机 Secret 的 mode 必须为 "real"。')
+    api_style = payload.get("api_style")
+    if api_style not in {"openai_chat", "openai_responses"}:
+        raise RuntimeError("api_style 必须为 openai_chat 或 openai_responses。")
+    api_key = payload.get("api_key")
+    model = payload.get("model")
+    if not isinstance(api_key, str) or not api_key.strip():
+        raise RuntimeError("真实 AI api_key 不能为空。")
+    if not isinstance(model, str) or not 1 <= len(model.strip()) <= 200:
+        raise RuntimeError("真实 AI model 长度必须为 1～200。")
+    return {
+        "mode": "real",
+        "provider_id": "local-real",
+        "base_url": _validate_trial_https_url(payload.get("base_url"), trailing_slash=False),
+        "api_key": api_key.strip(),
+        "model": model.strip(),
+        "api_style": api_style,
+        "media_base_url": _validate_trial_https_url(
+            payload.get("media_base_url"), trailing_slash=True
+        ),
+        "allowed_private_cidrs": _controlled_private_cidrs(payload.get("allowed_private_cidrs")),
+    }
+
+
 def build_trial_environment(paths: TrialPaths) -> dict[str, str]:
     runtime_config = _load_or_create_runtime_config(paths)
+    ai_config = load_trial_ai_config(paths)
+    provider = {
+        "id": ai_config["provider_id"],
+        "display_name": "本机模拟 AI" if ai_config["mode"] == "mock" else "本机真实 AI",
+        "kind": "custom_vlm",
+        "api_style": ai_config["api_style"],
+        "enabled": True,
+        "base_url": ai_config["base_url"],
+        "api_key_env": "SMARTSCAN_LOCAL_AI_KEY",
+        "model": ai_config["model"],
+        "supports_images": True,
+        "capabilities": [
+            "ocr",
+            "document_understanding",
+            "image_classification",
+            "layout_analysis",
+        ],
+        "media_url_prefixes": [ai_config["media_base_url"]],
+        "allowed_private_cidrs": ai_config["allowed_private_cidrs"],
+    }
     environment = os.environ.copy()
     environment.update(
         {
@@ -223,7 +371,13 @@ def build_trial_environment(paths: TrialPaths) -> dict[str, str]:
             "SMARTSCAN_SMS_MODE": "disabled",
             "SMARTSCAN_WECOM_MODE": "disabled",
             "SMARTSCAN_OCR_ENABLED": "false",
-            "SMARTSCAN_AI_PROVIDERS": "[]",
+            "SMARTSCAN_AI_GATEWAY_URL": "http://127.0.0.1:8010",
+            "SMARTSCAN_AI_INTERNAL_TOKEN": runtime_config["ai_internal_token"],
+            "SMARTSCAN_AI_PROVIDER_ID": str(ai_config["provider_id"]),
+            "SMARTSCAN_AI_MEDIA_BASE_URL": str(ai_config["media_base_url"]),
+            "SMARTSCAN_AI_MOCK_MODE": "true" if ai_config["mode"] == "mock" else "false",
+            "SMARTSCAN_AI_PROVIDERS": json.dumps([provider], ensure_ascii=False),
+            "SMARTSCAN_LOCAL_AI_KEY": str(ai_config["api_key"]),
         }
     )
     return environment
@@ -329,6 +483,12 @@ def _save_process(paths: TrialPaths, role: str, process: subprocess.Popen[bytes]
     _write_json(paths.state, state)
 
 
+def _save_ai_mode(paths: TrialPaths, mode: str) -> None:
+    state = _load_state(paths)
+    state["ai_mode"] = mode
+    _write_json(paths.state, state)
+
+
 def _running_roles(paths: TrialPaths) -> list[str]:
     roles: list[str] = []
     state = _load_state(paths)
@@ -353,14 +513,14 @@ def start_trial(paths: TrialPaths, *, open_browser: bool = True) -> None:
     running = _running_roles(paths)
     if set(running) == set(PROCESS_MARKERS):
         print(f"本机试用已经在运行：{', '.join(running)}")
-        _print_access_information()
+        _print_access_information(paths)
         if open_browser:
             webbrowser.open(H5_URL)
         return
     if running:
         print(f"检测到未完整退出的试用进程：{', '.join(running)}，正在先行停止。")
         stop_trial(paths)
-    for port in (8000, 8080):
+    for port in (8000, 8010, 8080):
         if _port_in_use(port):
             raise RuntimeError(f"端口 {port} 已被其他程序占用，请先关闭占用程序后重试。")
 
@@ -368,6 +528,10 @@ def start_trial(paths: TrialPaths, *, open_browser: bool = True) -> None:
     paths.storage.mkdir(parents=True, exist_ok=True)
     python = ensure_environment(paths)
     environment = build_trial_environment(paths)
+    service_environment = environment.copy()
+    service_environment.pop("SMARTSCAN_LOCAL_AI_KEY", None)
+    service_environment.pop("SMARTSCAN_AI_PROVIDERS", None)
+    ai_config = load_trial_ai_config(paths)
     commands = {
         "api": [
             str(python),
@@ -380,6 +544,19 @@ def start_trial(paths: TrialPaths, *, open_browser: bool = True) -> None:
             "8000",
         ],
         "worker": [str(python), "-m", "services.worker.app.main"],
+        "ai_gateway": [
+            str(python),
+            "-m",
+            "uvicorn",
+            "app.main:app",
+            "--app-dir",
+            "services/ai-gateway",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8010",
+        ],
+        "ai_worker": [str(python), "-m", "services.worker.app.ai_main"],
         "h5": [
             str(python),
             "-m",
@@ -392,22 +569,29 @@ def start_trial(paths: TrialPaths, *, open_browser: bool = True) -> None:
         ],
     }
     try:
-        api = _launch(paths, "api", commands["api"], environment)
+        api = _launch(paths, "api", commands["api"], service_environment)
         _save_process(paths, "api", api)
         _wait_for_url(f"{API_URL}/openapi.json")
         ensure_trial_account()
 
-        worker = _launch(paths, "worker", commands["worker"], environment)
+        ai_gateway = _launch(paths, "ai_gateway", commands["ai_gateway"], environment)
+        _save_process(paths, "ai_gateway", ai_gateway)
+        _wait_for_url("http://localhost:8010/health")
+
+        ai_worker = _launch(paths, "ai_worker", commands["ai_worker"], service_environment)
+        _save_process(paths, "ai_worker", ai_worker)
+        worker = _launch(paths, "worker", commands["worker"], service_environment)
         _save_process(paths, "worker", worker)
-        h5 = _launch(paths, "h5", commands["h5"], environment)
+        h5 = _launch(paths, "h5", commands["h5"], service_environment)
         _save_process(paths, "h5", h5)
         _wait_for_url(H5_URL, timeout_seconds=20)
+        _save_ai_mode(paths, str(ai_config["mode"]))
     except Exception:
         stop_trial(paths)
         raise
 
     print("本机试用已启动，试用账号已自动创建。")
-    _print_access_information()
+    _print_access_information(paths)
     if open_browser:
         webbrowser.open(H5_URL)
 
@@ -438,7 +622,7 @@ def stop_trial(paths: TrialPaths) -> None:
     assert isinstance(processes, dict)
     stopped: list[str] = []
     remaining: dict[str, object] = {}
-    for role in ("h5", "worker", "api"):
+    for role in ("h5", "ai_worker", "worker", "ai_gateway", "api"):
         raw = processes.get(role)
         if not isinstance(raw, dict):
             continue
@@ -494,18 +678,27 @@ def show_status(paths: TrialPaths) -> None:
     running = _running_roles(paths)
     if running:
         print(f"运行中：{', '.join(running)}")
-        _print_access_information()
+        _print_access_information(paths)
         return
     print("本机试用未运行。")
     if paths.database.exists():
         print("试用数据仍保留，可直接再次启动。")
 
 
-def _print_access_information() -> None:
+def _print_access_information(paths: TrialPaths) -> None:
+    state = _load_state(paths)
+    mode = state.get("ai_mode")
+    if mode not in {"mock", "real"}:
+        mode = load_trial_ai_config(paths)["mode"]
     print(f"H5 地址：{H5_URL}")
     print(f"试用账号：{TRIAL_USERNAME}")
     print(f"试用密码：{TRIAL_PASSWORD}")
     print(f"API 文档：{API_URL}/docs")
+    print(
+        "AI 模式：模拟 AI（不访问真实模型，不计入质量验收）"
+        if mode == "mock"
+        else "AI 模式：真实 AI（使用本机未跟踪 Secret）"
+    )
 
 
 def run_menu(paths: TrialPaths) -> int:
