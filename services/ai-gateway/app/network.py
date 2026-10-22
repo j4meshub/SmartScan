@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import http.client
 import ipaddress
 import json
@@ -55,6 +56,7 @@ class OutboundMediaReference(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prefix_index: int = Field(default=0, ge=0, le=15)
+    prefix_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     access_token: SecretStr
     byte_size: int = Field(ge=1)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -419,6 +421,11 @@ class SecureProviderTransport:
             raise NetworkSecurityError("media_url_lifetime_too_long")
 
         prefix = definition.media_url_prefixes[media.prefix_index]
+        if media.prefix_sha256 is not None and not secrets.compare_digest(
+            media.prefix_sha256,
+            hashlib.sha256(prefix.encode()).hexdigest(),
+        ):
+            raise NetworkSecurityError("media_prefix_mismatch")
         media_url = prefix + quote(media.access_token.get_secret_value(), safe="")
         provider_url = urlsplit(definition.base_url)
         media_url_parts = urlsplit(prefix)

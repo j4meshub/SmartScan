@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -235,7 +236,7 @@ def accept_enhancement(
     task: AiEnhancementTask,
     page: ScanPage,
     actor: User,
-) -> AiEnhancementTask:
+) -> tuple[AiEnhancementTask, Path | None]:
     if task.owner_user_id != actor.id or page.owner_user_id != actor.id:
         raise AiBusinessError("ai_enhancement_not_found", 404)
     if page.active_result_version != task.source_result_version:
@@ -244,10 +245,91 @@ def accept_enhancement(
         raise AiBusinessError("ai_source_version_conflict", persist=True)
     if task.status != "candidate_ready" or task.candidate_result is None:
         raise AiBusinessError("ai_candidate_not_ready")
+    try:
+        candidate = json.loads(task.candidate_result)
+    except json.JSONDecodeError as exc:
+        raise AiBusinessError("ai_candidate_invalid", 422) from exc
+    candidate_tasks = candidate.get("tasks", {}) if isinstance(candidate, dict) else {}
+    if not isinstance(candidate_tasks, dict):
+        raise AiBusinessError("ai_candidate_invalid", 422)
+
+    destination: Path | None = None
+    applied: dict[str, object] = {}
+    orientation = candidate_tasks.get("detect_orientation")
+    if isinstance(orientation, dict):
+        degrees = orientation.get("rotation_degrees")
+        if degrees not in {0, 90, 180, 270}:
+            raise AiBusinessError("ai_orientation_candidate_invalid", 422)
+        if degrees:
+            from .page_service import PageMutationError, rotate_page
+
+            try:
+                page, destination = rotate_page(
+                    db,
+                    actor=actor,
+                    page_id=page.id,
+                    degrees=int(degrees),
+                )
+            except PageMutationError as exc:
+                raise AiBusinessError(exc.code, exc.status_code) from exc
+            applied["rotation_degrees"] = int(degrees)
+
+    project = db.scalar(
+        select(ScanProject).where(ScanProject.id == task.project_id).with_for_update()
+    )
+    if project is None or project.owner_user_id != actor.id:
+        raise AiBusinessError("ai_enhancement_not_found", 404)
+    title_result = candidate_tasks.get("extract_title")
+    if isinstance(title_result, dict) and isinstance(title_result.get("candidates"), list):
+        from services.worker.app.ocr import sanitize_title_candidate
+
+        titles = [item for item in title_result["candidates"] if isinstance(item, dict)]
+        titles.sort(key=lambda item: float(item.get("confidence", 0.0)), reverse=True)
+        title = sanitize_title_candidate(str(titles[0].get("text", ""))) if titles else None
+        if title:
+            project.suggested_name = title
+            project.suggested_name_source = "ai"
+            project.suggested_name_updated_at = datetime.now(UTC)
+            applied["suggested_name"] = title
+
+    page_number = candidate_tasks.get("extract_page_number")
+    if (
+        project.mode == "book"
+        and isinstance(page_number, dict)
+        and page_number.get("status") == "detected"
+    ):
+        value = page_number.get("normalized_number")
+        label = page_number.get("raw_label")
+        style = page_number.get("style")
+        confidence = page_number.get("confidence")
+        if (
+            not isinstance(value, int)
+            or not isinstance(label, str)
+            or style not in {"arabic", "roman"}
+            or not isinstance(confidence, (int, float))
+        ):
+            raise AiBusinessError("ai_page_number_candidate_invalid", 422)
+        page.book_page_number_status = "ready"
+        page.book_page_number_value = value
+        page.book_page_number_label = label
+        page.book_page_number_kind = str(style)
+        page.book_page_number_confidence = float(confidence)
+        page.book_page_number_reason = "ai_user_accepted"
+        page.book_page_number_result_version = page.active_result_version
+        applied["book_page_number"] = label
+
+    evidence = _json_object(task.evidence) or {}
+    evidence["accepted_application"] = {
+        "applied": applied,
+        "source_result_version": task.source_result_version,
+        "active_result_version": page.active_result_version,
+    }
+    task.evidence = json.dumps(evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     task.status = "accepted"
     task.accepted_by_user_id = actor.id
     task.accepted_at = datetime.now(UTC)
-    return task
+    task.updated_at = task.accepted_at
+    return task, destination
 
 
 def reject_enhancement(
@@ -283,6 +365,7 @@ def enhancement_view(task: AiEnhancementTask) -> AiEnhancementView:
         requested = []
     if not isinstance(requested, list) or not all(isinstance(item, str) for item in requested):
         requested = []
+    public_results = task.status in {"candidate_ready", "accepted", "rejected", "stale"}
     return AiEnhancementView(
         id=task.id,
         project_id=task.project_id,
@@ -292,8 +375,8 @@ def enhancement_view(task: AiEnhancementTask) -> AiEnhancementView:
         requested_tasks=requested,
         source_result_version=task.source_result_version,
         status=task.status,
-        candidate_result=_json_object(task.candidate_result),
-        evidence=_json_object(task.evidence),
+        candidate_result=_json_object(task.candidate_result) if public_results else None,
+        evidence=_json_object(task.evidence) if public_results else None,
         provider_id=task.provider_id,
         model=task.model,
         confidence=task.confidence,

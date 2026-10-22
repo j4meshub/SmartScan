@@ -6,6 +6,7 @@ import hashlib
 import re
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -78,6 +79,21 @@ class Settings(BaseSettings):
     ocr_min_confidence: float = Field(default=0.55, ge=0.0, le=1.0)
     ocr_title_min_confidence: float = Field(default=0.70, ge=0.0, le=1.0)
     ocr_orientation_margin: float = Field(default=0.04, ge=0.0, le=0.5)
+
+    def ai_runtime_configured(self) -> bool:
+        gateway = urlsplit(self.ai_gateway_url.strip())
+        media = urlsplit(self.ai_media_base_url.strip())
+        return bool(
+            gateway.scheme in {"http", "https"}
+            and gateway.hostname
+            and not any((gateway.username, gateway.password, gateway.query, gateway.fragment))
+            and media.scheme == "https"
+            and media.hostname
+            and not any((media.username, media.password, media.query, media.fragment))
+            and self.ai_media_base_url.endswith("/")
+            and len(self.ai_internal_token.get_secret_value()) >= 32
+            and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", self.ai_provider_id) is not None
+        )
 
     @field_validator("cors_origins", mode="before")
     @classmethod

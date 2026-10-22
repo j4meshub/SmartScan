@@ -350,6 +350,7 @@ def mark_job_failure(
     *,
     error_code: str,
     error: str,
+    retryable: bool = True,
     now: datetime | None = None,
     settings: Settings | None = None,
 ) -> ProcessingJob | None:
@@ -362,7 +363,7 @@ def mark_job_failure(
         job.status = JobStatus.canceled
         job.canceled_at = job.canceled_at or now
         job.progress = 0
-    elif job.attempts >= job.max_attempts:
+    elif not retryable or job.attempts >= job.max_attempts:
         job.status = JobStatus.failed_final
         job.completed_at = now
     else:
