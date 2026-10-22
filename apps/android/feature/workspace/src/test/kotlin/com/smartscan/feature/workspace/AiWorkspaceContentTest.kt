@@ -1,10 +1,15 @@
 package com.smartscan.feature.workspace
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -12,8 +17,6 @@ import androidx.compose.ui.test.performClick
 import com.smartscan.core.model.AiCandidate
 import com.smartscan.core.model.AiCapabilities
 import com.smartscan.core.model.AiEnhancement
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,11 +29,11 @@ class AiWorkspaceContentTest {
 
     @Test
     fun `disabled project shows notice and mock identity before explicit consent`() {
-        var toggled = false
+        var projectEnabled by mutableStateOf(false)
         compose.setContent {
             MaterialTheme {
                 AiWorkspaceContent(
-                    projectAiEnabled = false,
+                    projectAiEnabled = projectEnabled,
                     activeResultVersion = 1,
                     capabilities = capabilities(),
                     enhancements = emptyList(),
@@ -39,7 +42,7 @@ class AiWorkspaceContentTest {
                     actionBusy = false,
                     parentBusy = false,
                     failed = false,
-                    onToggleProjectAi = { toggled = true },
+                    onToggleProjectAi = { projectEnabled = true },
                     onEnhancementKindChanged = {},
                     onRequest = {},
                     onRefresh = {},
@@ -54,22 +57,22 @@ class AiWorkspaceContentTest {
             .assertIsDisplayed()
             .assertHasClickAction()
             .performClick()
-        compose.onNodeWithText("Analyze this page").assertIsNotEnabled()
+        compose.onNodeWithText("Disable AI for this project").assertIsDisplayed()
+        compose.onNodeWithText("Analyze this page").assertIsEnabled()
         compose.onAllNodesWithText("provider", substring = true, ignoreCase = true).assertCountEquals(0)
-        assertTrue(toggled)
     }
 
     @Test
     fun `current candidate exposes user decision actions`() {
-        var decision: Boolean? = null
-        val candidate = enhancement(status = "candidate_ready", sourceVersion = 2)
+        var status by mutableStateOf("candidate_ready")
+        val candidate = enhancement(status = status, sourceVersion = 2)
         compose.setContent {
             MaterialTheme {
                 AiWorkspaceContent(
                     projectAiEnabled = true,
                     activeResultVersion = 2,
                     capabilities = capabilities(),
-                    enhancements = listOf(candidate),
+                    enhancements = listOf(candidate.copy(status = status)),
                     enhancementKind = "recommended",
                     loading = false,
                     actionBusy = false,
@@ -79,7 +82,7 @@ class AiWorkspaceContentTest {
                     onEnhancementKindChanged = {},
                     onRequest = {},
                     onRefresh = {},
-                    onDecide = { _, accepted -> decision = accepted },
+                    onDecide = { _, accepted -> status = if (accepted) "accepted" else "rejected" },
                     onPreviewVersion = {},
                 )
             }
@@ -88,36 +91,39 @@ class AiWorkspaceContentTest {
         compose.onNodeWithText("Candidate ready").assertIsDisplayed()
         compose.onNodeWithText("Title suggestion").assertIsDisplayed()
         compose.onNodeWithText("Accept candidate").performClick()
-        compose.runOnIdle { assertEquals(true, decision) }
+        compose.onNodeWithText("Candidate accepted").assertIsDisplayed()
     }
 
     @Test
     fun `accepted history exposes read only baseline preview`() {
-        var previewVersion: Int? = null
+        var previewVersion by mutableStateOf<Int?>(null)
         val candidate = enhancement(status = "accepted", sourceVersion = 2)
         compose.setContent {
             MaterialTheme {
-                AiWorkspaceContent(
-                    projectAiEnabled = true,
-                    activeResultVersion = 3,
-                    capabilities = capabilities(),
-                    enhancements = listOf(candidate),
-                    enhancementKind = "recommended",
-                    loading = false,
-                    actionBusy = false,
-                    parentBusy = false,
-                    failed = false,
-                    onToggleProjectAi = {},
-                    onEnhancementKindChanged = {},
-                    onRequest = {},
-                    onRefresh = {},
-                    onDecide = { _, _ -> },
-                    onPreviewVersion = { previewVersion = it },
-                )
+                Column {
+                    AiWorkspaceContent(
+                        projectAiEnabled = true,
+                        activeResultVersion = 3,
+                        capabilities = capabilities(),
+                        enhancements = listOf(candidate),
+                        enhancementKind = "recommended",
+                        loading = false,
+                        actionBusy = false,
+                        parentBusy = false,
+                        failed = false,
+                        onToggleProjectAi = {},
+                        onEnhancementKindChanged = {},
+                        onRequest = {},
+                        onRefresh = {},
+                        onDecide = { _, _ -> },
+                        onPreviewVersion = { previewVersion = it },
+                    )
+                    Text("preview:${previewVersion ?: 0}")
+                }
             }
         }
         compose.onNodeWithText("View baseline version").performClick()
-        compose.runOnIdle { assertEquals(2, previewVersion) }
+        compose.onNodeWithText("preview:2").assertIsDisplayed()
     }
 }
 
