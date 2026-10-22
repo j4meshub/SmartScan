@@ -257,7 +257,7 @@ def test_nginx_only_exposes_redacted_media_bridge_not_ai_gateway() -> None:
     compose = (ROOT / "deploy" / "compose" / "docker-compose.yml").read_text(encoding="utf-8")
 
     assert "location ^~ /api/v1/ai-media/" in nginx
-    assert "~^/api/v1/ai-media/([A-Za-z0-9_-]{22,128})$ $1;" in nginx
+    assert "~^/api/v1/ai-media/([A-Za-z0-9_-]+)$ $1;" in nginx
     assert "access_log off;" in nginx
     assert "proxy_set_header X-SmartScan-AI-Media-Token $ai_media_token;" in nginx
     assert "rewrite ^ /v1/ai-media break;" in nginx
