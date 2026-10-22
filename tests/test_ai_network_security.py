@@ -282,6 +282,7 @@ def test_secure_transport_pins_provider_and_binds_only_allowed_media_prefix() ->
     ("changes", "error_code"),
     [
         ({"prefix_index": 1}, "media_prefix_not_allowed"),
+        ({"prefix_sha256": "0" * 64}, "media_prefix_mismatch"),
         ({"byte_size": 30 * 1024 * 1024}, "media_too_large"),
         ({"sha256": "b" * 64}, "media_sha256_mismatch"),
         ({"mime_type": "image/png"}, "media_mime_type_mismatch"),

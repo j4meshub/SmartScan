@@ -20,6 +20,7 @@ from .ai_business import (
 )
 from .ai_media import resolve_media_grant
 from .audit import record_audit
+from .config import get_settings
 from .database import get_db
 from .dependencies import current_user
 from .models import AiEnhancementTask, ScanPage, ScanProject, User
@@ -98,8 +99,9 @@ def _deny_owner_mutation(
 
 @router.get("/v1/ai/capabilities", response_model=AiCapabilitiesView)
 def get_ai_capabilities(_: User = Depends(current_user)) -> AiCapabilitiesView:
+    settings = get_settings()
     return AiCapabilitiesView(
-        available=False,
+        available=settings.ai_runtime_configured(),
         business_orchestration_ready=True,
         consent_version=AI_CONSENT_VERSION,
         transmission_notice_code=AI_TRANSMISSION_NOTICE_CODE,
@@ -286,6 +288,7 @@ def _mutate_candidate(
     *,
     accept: bool,
 ) -> AiEnhancementView:
+    destination = None
     candidate = db.get(AiEnhancementTask, enhancement_id)
     _deny_owner_mutation(
         db,
@@ -310,11 +313,18 @@ def _mutate_candidate(
         raise HTTPException(status_code=404, detail="ai_enhancement not found")
     try:
         if accept:
-            accept_enhancement(db, task=task, page=page, actor=user)
+            _, destination = accept_enhancement(db, task=task, page=page, actor=user)
         else:
             reject_enhancement(task=task, page=page, actor=user)
     except AiBusinessError as exc:
+        if destination is not None:
+            destination.unlink(missing_ok=True)
         _raise_business(db, exc)
+    except Exception:
+        db.rollback()
+        if destination is not None:
+            destination.unlink(missing_ok=True)
+        raise
     record_audit(
         db,
         request,
@@ -324,7 +334,13 @@ def _mutate_candidate(
         task.id,
         task.owner_user_id,
     )
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        if destination is not None:
+            destination.unlink(missing_ok=True)
+        raise
     db.refresh(task)
     return enhancement_view(task)
 

@@ -351,6 +351,7 @@ def validate_compose_contract(path: Path = DEFAULT_COMPOSE_FILE) -> None:
         "api",
         "worker-cpu-1",
         "worker-cpu-2",
+        "worker-ai",
         "ai-gateway",
         "nginx",
     }
@@ -361,6 +362,7 @@ def validate_compose_contract(path: Path = DEFAULT_COMPOSE_FILE) -> None:
         "api": "${SMARTSCAN_STAGING_API_IMAGE:",
         "worker-cpu-1": "${SMARTSCAN_STAGING_WORKER_IMAGE:",
         "worker-cpu-2": "${SMARTSCAN_STAGING_WORKER_IMAGE:",
+        "worker-ai": "${SMARTSCAN_STAGING_WORKER_IMAGE:",
         "ai-gateway": "${SMARTSCAN_STAGING_AI_GATEWAY_IMAGE:",
         "nginx": "${SMARTSCAN_STAGING_WEB_IMAGE:",
     }
@@ -379,6 +381,12 @@ def validate_compose_contract(path: Path = DEFAULT_COMPOSE_FILE) -> None:
         len(ports) == 1 and str(ports[0]).startswith("127.0.0.1:"), "Nginx 只能绑定主机回环地址"
     )
     _require(services["ai-gateway"].get("profiles") == ["ai"], "AI 网关必须保持显式 Profile")
+    _require(services["worker-ai"].get("profiles") == ["ai"], "AI Worker 必须保持显式 Profile")
+    _require("ports" not in services["worker-ai"], "AI Worker 禁止暴露主机端口")
+    _require(
+        services["worker-ai"].get("command") == ["python", "-m", "services.worker.app.ai_main"],
+        "AI Worker 必须使用独立执行入口",
+    )
     _require(services["postgres"].get("networks") == ["data"], "PostgreSQL 只能连接数据网络")
     socket_mounts = [
         volume
@@ -394,6 +402,14 @@ def validate_compose_contract(path: Path = DEFAULT_COMPOSE_FILE) -> None:
     _require(services["nginx"].get("networks") == ["edge"], "Nginx 只能连接入口网络")
     for worker_name in ("worker-cpu-1", "worker-cpu-2"):
         _require(services[worker_name].get("networks") == ["data"], "CPU Worker 只能连接数据网络")
+    _require(services["worker-ai"].get("networks") == ["data"], "AI Worker 只能连接数据网络")
+    ai_worker_mounts = services["worker-ai"].get("volumes", [])
+    _require(
+        len(ai_worker_mounts) == 1
+        and ai_worker_mounts[0].get("target") == "/srv/smartscan/data"
+        and ai_worker_mounts[0].get("read_only") is True,
+        "AI Worker 扫描数据挂载必须只读",
+    )
     _require(
         set(services["api"].get("networks", [])) == {"data", "edge", "egress"}, "API 网络边界不完整"
     )

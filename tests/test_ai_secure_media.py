@@ -215,6 +215,9 @@ def test_worker_gateway_client_uses_internal_token_without_redirects() -> None:
     assert captured["url"] == "http://ai-gateway:8010/v1/tasks/vision-main/execute"
     assert captured["authorization"] == f"Bearer {'i' * 32}"
     assert '"access_token":"' + "T" * 43 + '"' in str(captured["body"])
+    assert hashlib.sha256(b"https://media.example/v1/ai-media/").hexdigest() in str(
+        captured["body"]
+    )
 
 
 def test_account_deletion_removes_media_grants() -> None:
@@ -263,6 +266,11 @@ def test_nginx_only_exposes_redacted_media_bridge_not_ai_gateway() -> None:
     assert "rewrite ^ /v1/ai-media break;" in nginx
     assert "proxy_pass http://api;" in nginx
     assert "proxy_pass http://ai-gateway" not in nginx
+    ai_worker_section = compose.split("  worker-ai:", 1)[1].split("  ai-gateway:", 1)[0]
+    assert 'profiles: ["ai"]' in ai_worker_section
+    assert "services.worker.app.ai_main" in ai_worker_section
+    assert "ports:" not in ai_worker_section
+    assert 'volumes: ["scan-data:/srv/smartscan/data:ro"]' in ai_worker_section
     ai_gateway_section = compose.split("  ai-gateway:", 1)[1].split("  nginx:", 1)[0]
     assert 'expose: ["8010"]' in ai_gateway_section
     assert "ports:" not in ai_gateway_section

@@ -7,15 +7,22 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI 业务接入 |
-| 当前工作包 | `AI-007` 安全媒体与内部调用 |
-| 工作包状态 | 进行中：实现、本地门禁和修复后代码头 CI 已通过，最终证据提交等待 CI 与合并 |
-| 当前分支 | `codex/ai-007-secure-media` |
-| 最后验证基线 | `bbde50b`（push `39760674288` 与 PR `39760681719` 的 API、Web、Android、iOS 和容器共 10 项全部通过） |
-| 工作包提交 | `0824feb`（核心实现）、`641c55c`（删除清理门禁）、`bbde50b`（Nginx 语法修复） |
-| PR | [#62](https://github.com/j4meshub/SmartScan/pull/62)，修复后代码头两套五项 CI 全部通过；最终证据提交待复验后合并 |
-| 下一工作包 | `AI-008`：使用本工作包的安全媒体与内部客户端编排分类、方向、标题和页码候选；不得自动应用模型结果 |
+| 当前工作包 | `AI-008` 通用文档 AI 辅助 |
+| 工作包状态 | 进行中：实现与完整门禁均已通过，最终证据提交等待 CI 与合并 |
+| 当前分支 | `codex/ai-008-document-assistance` |
+| 最后验证基线 | `a366f05`（push `39767143470` 与 PR `39767150166` 的 API、Web、Android、iOS 和容器共 10 项全部通过） |
+| 工作包提交 | `fd39dce`（通用文档 AI 辅助闭环）、`a366f05`（AI Worker 镜像门禁） |
+| PR | [#63](https://github.com/j4meshub/SmartScan/pull/63)，最终代码头两套五项 CI 全部通过；最终证据提交待复验后合并 |
+| 下一工作包 | `H5-AI-001`：在公共 AI API 上实现项目授权、任务状态、候选对比与接受/放弃的 H5 双语闭环 |
 
 ## 当前工作包进展
+
+- AI-007 已由 [PR #62](https://github.com/j4meshub/SmartScan/pull/62) 合并到主线，中文 squash 提交为 `8ba83d4`；最终 push `39762220996` 与 PR `39762226150` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
+- AI-008 新增独立 `worker-ai` 服务，只在 `ai` Profile 中启动并领取 `ai_enhancement`。`recommended` 请求按稳定子任务 ID 调用分类、方向、标题和书籍页码 Schema；每个完成结果按任务类型写入内部检查点，租约重试会跳过已完成项，处理中检查点不通过公共 API 暴露。
+- Worker 重新核对项目授权、页面活动版本、媒体 SHA-256、网关任务身份和脱敏证据；部署配置用媒体前缀 SHA-256 与网关注册表绑定。非法证据、未配置、超时、网关离线或永久错误只结束可选任务，基础页面、预览与导出不受影响。
+- 四类输出均先成为候选，不在 Worker 阶段修改页面或项目。用户接受仍有效的候选后，方向通过现有确定性旋转生成新页面版本，标题写入 `suggested_name` 而不覆盖用户标题，书籍页码写入与活动结果版本绑定的证据；分类保留为用户已接受的结构化证据，不自动切换整个项目模式。
+- 本地完整门禁已通过：Ruff 与 161 个 Python 文件格式、迁移升级/漂移/版本、OpenAPI 当前/上一代兼容、两套 AI Schema、H5/管理后台 JavaScript 语法和差异空白均通过；Python `431 passed, 7 skipped`，覆盖率 `87.76%`；H5 `40 passed`。7 项跳过均为既有 PostgreSQL/Docker/真实主机外部门禁；当前 Windows 未安装 Docker CLI，新增 AI Profile 的动态 Compose 解析和镜像构建已由 PR 容器 CI 补证。AI-008 在合并前仍保持进行中。
+- 自审发现首个 CI 仅解析新增 AI Worker，却只构建 AI 网关镜像；没有用 Compose 解析替代镜像门禁。提交 `a366f05` 将容器步骤扩展为同时构建 `ai-gateway` 与 `worker-ai`。最终代码头 push `39767143470` 与 PR `39767150166` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过；两套容器作业均实际完成 AI 网关与专用 Worker 镜像构建。
 
 - AI-006 已由 [PR #61](https://github.com/j4meshub/SmartScan/pull/61) 合并到主线，中文 squash 提交为 `ad61afb`；项目授权、版本绑定候选、任务取消/重试、接受/放弃、IDOR 和删除解绑成为 AI-007 的已验证基线。
 - AI-007 新增迁移 `20261022_0024` 和 `ai_media_grants`：令牌由 `token_urlsafe(32)` 生成，数据库只存 SHA-256 摘要，并绑定单一增强任务、项目、页面、页面结果与源版本。读取会重验项目授权、任务状态、页面版本、路径、大小和哈希；关闭授权、换版、失败、取消及删除均撤销或清除。

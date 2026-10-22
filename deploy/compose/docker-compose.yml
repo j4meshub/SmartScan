@@ -58,6 +58,23 @@ services:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
   worker-cpu-2: *worker
+  worker-ai:
+    profiles: ["ai"]
+    build: {context: ../.., dockerfile: services/worker/Dockerfile}
+    restart: unless-stopped
+    command: ["python", "-m", "services.worker.app.ai_main"]
+    env_file: ../../.env
+    environment:
+      SMARTSCAN_DATABASE_URL: postgresql+psycopg://smartscan:${POSTGRES_PASSWORD}@postgres:5432/smartscan
+      SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+      SMARTSCAN_AI_GATEWAY_URL: http://ai-gateway:8010
+    volumes: ["scan-data:/srv/smartscan/data:ro"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      ai-gateway: {condition: service_started}
   ai-gateway:
     profiles: ["ai"]
     build: {context: ../.., dockerfile: services/ai-gateway/Dockerfile}

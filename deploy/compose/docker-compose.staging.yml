@@ -129,6 +129,28 @@ services:
 
   worker-cpu-2: *worker
 
+  worker-ai:
+    <<: *application
+    profiles: ["ai"]
+    image: ${SMARTSCAN_STAGING_WORKER_IMAGE:?必须固定 Worker 镜像 digest}
+    restart: unless-stopped
+    command: ["python", "-m", "services.worker.app.ai_main"]
+    environment:
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+      SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_AI_GATEWAY_URL: http://ai-gateway:8010
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_STAGING_DATA_ROOT:?必须设置独立数据目录}
+        target: /srv/smartscan/data
+        read_only: true
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      ai-gateway: {condition: service_started}
+    networks: [data]
+
   ai-gateway:
     <<: *application
     profiles: ["ai"]
