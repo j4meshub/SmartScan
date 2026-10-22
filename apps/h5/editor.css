@@ -240,6 +240,24 @@
   font-weight: 800;
 }
 
+.ai-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.ai-mode-badge {
+  padding: 6px 10px;
+  border: 1px solid #7c3aed;
+  border-radius: 99px;
+  color: #5b21b6;
+  background: #f5f3ff;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .ai-badge[data-status="candidate_ready"],
 .ai-badge[data-status="accepted"] {
   background: #d1fae5;

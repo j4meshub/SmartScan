@@ -50,6 +50,7 @@ test("项目页包含 AI 授权、传输说明、候选对比和用户决定入�
   const html = await readFile(htmlPath, "utf8");
   for (const id of [
     "aiWorkspace",
+    "aiModeBadge",
     "aiProjectEnabled",
     "aiTransmissionNotice",
     "requestAiSuggestion",

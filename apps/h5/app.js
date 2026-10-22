@@ -96,6 +96,10 @@ function renderAiWorkspace(){
   const available=Boolean(aiCapabilities?.available&&aiCapabilities?.business_orchestration_ready);
   const capabilityKey=!aiCapabilities?.business_orchestration_ready&&aiCapabilities?"aiOrchestrationUnavailable":available?"aiAvailable":"aiUnavailable";
   $("#aiAvailability").textContent=editorCopy[locale][capabilityKey];
+  const executionMode=aiCapabilities?.execution_mode;
+  const modeBadge=$("#aiModeBadge");
+  modeBadge.classList.toggle("hidden",!available||!(["mock","provider"].includes(executionMode)));
+  modeBadge.textContent=executionMode==="mock"?editorCopy[locale].aiMockMode:executionMode==="provider"?editorCopy[locale].aiProviderMode:"";
   $("#aiProjectEnabled").checked=aiDesiredEnabled===null?Boolean(editorProject?.ai_enabled):aiDesiredEnabled;
   $("#aiProjectEnabled").disabled=aiBusy||(!aiCapabilities&&!editorProject?.ai_enabled);
   $("#aiTransmissionNotice").textContent=editorCopy[locale].aiTransmissionNotice;

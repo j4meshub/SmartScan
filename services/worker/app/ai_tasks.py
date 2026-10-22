@@ -185,6 +185,7 @@ def sanitized_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
         "media_sha256",
         "disposition",
         "business_mutation_allowed",
+        "execution_mode",
     }
     return {key: evidence[key] for key in allowed if key in evidence}
 

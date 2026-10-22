@@ -8,7 +8,7 @@ async function expectNoWcagViolations(page) {
   expect(result.violations, result.violations.map(item => `${item.id}: ${item.help}`).join("\n")).toEqual([]);
 }
 
-async function installMockApi(page, {authenticated = false, aiAvailable = true} = {}) {
+async function installMockApi(page, {authenticated = false, aiAvailable = true, aiExecutionMode = "mock"} = {}) {
   let exports = [];
   let project = {id:"p1",owner_user_id:"u1",title:"期中资料",suggested_name:null,suggested_name_source:null,mode:"document",reading_order:"ltr",ai_enabled:false,ai_consent_version:null,ai_enabled_by_user_id:null,ai_enabled_at:null,created_at:"2026-10-20T00:00:00Z",updated_at:"2026-10-20T00:00:00Z"};
   let scanPage = {id:"page1",project_id:"p1",page_number:1,size_bytes:68,mime_type:"image/png",original_mime_type:"image/png",quality_warning:"low_contrast",quality_score:.7,quality_details:{},rotation_degrees:0,active_result_version:1,review_status:"pending",review_reason:null,reviewed_by_user_id:null,reviewed_at:null,ocr_text:null};
@@ -27,7 +27,7 @@ async function installMockApi(page, {authenticated = false, aiAvailable = true} 
     if (path === "/v1/projects" && request.method() === "GET") return json([project]);
     if (path === "/v1/projects/p1/pages") return json([scanPage]);
     if (path === "/v1/pages/page1/content") return route.fulfill({status:200,contentType:"image/png",body:tinyPng});
-    if (path === "/v1/ai/capabilities") return json({available:aiAvailable,business_orchestration_ready:true,consent_version:"2026-10-01",transmission_notice_code:"project_page_to_deployment_ai",enhancement_kinds:["recommended"],task_types:["classify_page","detect_orientation","extract_title","extract_page_number"]});
+    if (path === "/v1/ai/capabilities") return json({available:aiAvailable,business_orchestration_ready:true,execution_mode:aiAvailable?aiExecutionMode:"unavailable",consent_version:"2026-10-01",transmission_notice_code:"project_page_to_deployment_ai",enhancement_kinds:["recommended"],task_types:["classify_page","detect_orientation","extract_title","extract_page_number"]});
     if (path === "/v1/projects/p1/ai-settings" && request.method() === "PUT") {
       const payload=request.postDataJSON();
       project={...project,ai_enabled:payload.enabled,ai_consent_version:payload.enabled?payload.consent_version:null,ai_enabled_by_user_id:payload.enabled?"u1":null,ai_enabled_at:payload.enabled?"2026-10-20T00:02:00Z":null};
@@ -118,6 +118,7 @@ test("项目授权后可获取、对比、接受 AI 建议并回看基础版本"
   await page.goto("/#project=p1");
   const dialog=page.getByRole("dialog");
   await expect(dialog.getByText("AI 服务可用")).toBeVisible();
+  await expect(dialog.getByText("模拟 AI", {exact:true})).toBeVisible();
   await expect(dialog.getByText(/仅在你主动请求建议时/)).toBeVisible();
   await dialog.getByRole("checkbox", {name:"为此项目启用 AI"}).click();
   await expect(dialog.getByText("项目 AI 设置已保存。")).toBeVisible();
@@ -135,6 +136,14 @@ test("项目授权后可获取、对比、接受 AI 建议并回看基础版本"
   await expect(dialog.getByText(/正在查看建议来源的基础版本/)).toBeVisible();
   await dialog.getByRole("button", {name:"返回当前版本"}).click();
   await expect(dialog.getByText("已返回当前版本预览。")).toBeVisible();
+});
+
+test("真实 AI 模式只显示用户可理解的模式标识", async ({page}) => {
+  await installMockApi(page, {authenticated:true,aiExecutionMode:"provider"});
+  await page.goto("/#project=p1");
+  const dialog=page.getByRole("dialog");
+  await expect(dialog.getByText("真实 AI", {exact:true})).toBeVisible();
+  await expect(dialog).not.toContainText("local-real");
 });
 
 test("AI 未配置时保持基础编辑与导出可用且不允许发起建议", async ({page}) => {

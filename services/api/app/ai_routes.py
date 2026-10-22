@@ -100,9 +100,17 @@ def _deny_owner_mutation(
 @router.get("/v1/ai/capabilities", response_model=AiCapabilitiesView)
 def get_ai_capabilities(_: User = Depends(current_user)) -> AiCapabilitiesView:
     settings = get_settings()
+    available = settings.ai_runtime_configured()
     return AiCapabilitiesView(
-        available=settings.ai_runtime_configured(),
+        available=available,
         business_orchestration_ready=True,
+        execution_mode=(
+            "mock"
+            if available and settings.ai_mock_mode
+            else "provider"
+            if available
+            else "unavailable"
+        ),
         consent_version=AI_CONSENT_VERSION,
         transmission_notice_code=AI_TRANSMISSION_NOTICE_CODE,
         enhancement_kinds=list(AI_ENHANCEMENT_KINDS),

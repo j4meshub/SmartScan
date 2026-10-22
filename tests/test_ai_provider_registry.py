@@ -141,6 +141,7 @@ def test_registry_api_returns_only_sanitized_status(monkeypatch: pytest.MonkeyPa
 
     assert health.json() == {
         "status": "ok",
+        "execution_mode": "provider",
         "enabled": True,
         "provider_count": 1,
         "enabled_count": 1,

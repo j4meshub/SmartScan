@@ -662,6 +662,47 @@ def test_execute_endpoint_returns_validated_evidence_without_secrets(
     assert "media.example" not in response.text
 
 
+def test_execute_endpoint_mock_mode_is_deterministic_and_never_calls_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = provider_adapter()
+    registry = providers.ProviderRegistry(
+        [adapter.definition], {"VISION_API_KEY": "mock-credential-not-returned"}
+    )
+    monkeypatch.setattr(main, "get_registry", lambda: registry)
+    monkeypatch.setattr(main, "_mock_mode_enabled", lambda: True)
+    monkeypatch.setattr(
+        main,
+        "get_reliable_executor",
+        lambda: (_ for _ in ()).throw(AssertionError("模拟模式不得调用真实执行器")),
+    )
+    token = "AbCdEfGhIjKlMnOpQrStUvWxYz012345"
+    request = {
+        "task": task_payload(),
+        "media": {
+            "prefix_index": 0,
+            "access_token": token,
+            "byte_size": 1024,
+            "sha256": MEDIA_SHA256,
+            "mime_type": "image/jpeg",
+            "expires_at": (NOW + timedelta(minutes=10)).isoformat(),
+        },
+    }
+
+    with TestClient(main.create_app()) as client:
+        first = client.post(f"/v1/tasks/{adapter.definition.id}/execute", json=request)
+        second = client.post(f"/v1/tasks/{adapter.definition.id}/execute", json=request)
+
+    assert first.status_code == 200
+    assert first.json() == second.json()
+    payload = first.json()
+    assert payload["evidence"]["execution_mode"] == "mock"
+    assert payload["evidence"]["result"]["label"] == "ordinary_document"
+    assert payload["network"] == {"network_ready": True, "mock_mode": True}
+    assert token not in first.text
+    assert "mock-credential-not-returned" not in first.text
+
+
 def test_gateway_v1_requires_internal_bearer_when_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

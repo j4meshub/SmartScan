@@ -451,6 +451,7 @@ class ValidatedResultEvidence(StrictModel):
     media_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     disposition: ResultDisposition
     business_mutation_allowed: Literal[False] = False
+    execution_mode: Literal["provider", "mock"] = "provider"
     result: dict[str, Any]
 
 

@@ -117,6 +117,7 @@ def test_project_consent_idempotency_and_worker_isolation() -> None:
         capabilities = client.get("/v1/ai/capabilities", headers=owner_headers)
         assert capabilities.status_code == 200
         assert capabilities.json()["available"] is False
+        assert capabilities.json()["execution_mode"] == "unavailable"
         assert capabilities.json()["business_orchestration_ready"] is True
         assert "detect_orientation" in capabilities.json()["task_types"]
 

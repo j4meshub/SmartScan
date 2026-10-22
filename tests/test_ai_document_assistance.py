@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from test_ai_business import create_enhancement, create_processed_page, enable_ai, register
 
@@ -88,6 +90,7 @@ class FakeCommonGateway:
             "media_sha256": task["context"]["media"]["sha256"],
             "disposition": "candidate",
             "business_mutation_allowed": False,
+            "execution_mode": "mock",
             "result": result,
             "unexpected_secret": "must-not-be-persisted",
         }
@@ -113,6 +116,13 @@ def test_ai_runtime_capability_requires_complete_safe_server_configuration() -> 
         ai_media_base_url="https://scan.example/api/v1/ai-media/",
     )
     assert short_token.ai_runtime_configured() is False
+
+
+def test_production_rejects_mock_ai_mode() -> None:
+    settings = Settings(_env_file=None, env="production", ai_mock_mode=True)
+
+    with pytest.raises(RuntimeError, match="SMARTSCAN_AI_MOCK_MODE"):
+        settings.validate_production()
     unsafe_media = Settings(
         _env_file=None,
         ai_gateway_url="http://ai-gateway:8010",
@@ -159,6 +169,9 @@ def test_common_ai_worker_only_creates_candidates_until_user_accepts() -> None:
             assert page.rotation_degrees == 0
             assert project is not None and project.suggested_name_source != "ai"
             assert job is not None and job.status == JobStatus.ready
+            assert task.evidence is not None
+            evidence = json.loads(task.evidence)
+            assert evidence["tasks"]["classify_page"]["execution_mode"] == "mock"
             assert "must-not-be-persisted" not in str(task.evidence)
 
         listed = client.get(f"/v1/pages/{page_id}/ai-enhancements", headers=headers)

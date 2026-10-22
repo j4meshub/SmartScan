@@ -10,6 +10,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from .mock import deterministic_mock_result
 from .network import (
     NetworkSecurityError,
     OutboundMediaReference,
@@ -49,6 +50,13 @@ def _internal_security() -> tuple[str, str]:
 
     settings = get_settings()
     return settings.env, settings.ai_internal_token.get_secret_value()
+
+
+def _mock_mode_enabled() -> bool:
+    from services.api.app.config import get_settings
+
+    settings = get_settings()
+    return settings.env == "development" and settings.ai_mock_mode
 
 
 def _network_error_status(code: str) -> int:
@@ -134,6 +142,7 @@ def create_app() -> FastAPI:
         registry = get_registry()
         return {
             "status": "ok",
+            "execution_mode": "mock" if _mock_mode_enabled() else "provider",
             "enabled": registry.enabled_count > 0,
             "provider_count": len(registry.list_descriptors()),
             "enabled_count": registry.enabled_count,
@@ -279,6 +288,20 @@ def create_app() -> FastAPI:
             error_code = str(exc)
             status_code = 409 if error_code == "provider_disabled" else 503
             raise HTTPException(status_code=status_code, detail=error_code) from exc
+        if _mock_mode_enabled():
+            try:
+                result, disposition = validate_result(task, deterministic_mock_result(task))
+                evidence = build_result_evidence(adapter, task, result, disposition).model_dump(
+                    mode="json"
+                )
+                evidence["execution_mode"] = "mock"
+            except (ValidationError, StructuredTaskError, TypeError, ValueError) as exc:
+                raise HTTPException(status_code=500, detail="mock_result_invalid") from exc
+            return {
+                "accepted": True,
+                "evidence": evidence,
+                "network": {"network_ready": True, "mock_mode": True},
+            }
         executor = get_reliable_executor()
         try:
             pending = executor.execute_network(

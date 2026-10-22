@@ -16,6 +16,7 @@ sys.path.insert(0, str(AI_GATEWAY_ROOT))
 main = importlib.import_module("app.main")
 providers = importlib.import_module("app.providers")
 tasks = importlib.import_module("app.tasks")
+mock = importlib.import_module("app.mock")
 
 TASK_ID = "10000000-0000-4000-8000-000000000001"
 PAGE_ID = "20000000-0000-4000-8000-000000000002"
@@ -130,6 +131,18 @@ def test_all_seven_task_and_result_contracts_validate(task_type: str) -> None:
     assert task.task_type.value == task_type
     assert result.task_type.value == task_type
     assert disposition == tasks.ResultDisposition.CANDIDATE
+
+
+@pytest.mark.parametrize("task_type", [item.value for item in tasks.TaskType])
+def test_local_mock_returns_deterministic_valid_result_for_all_tasks(task_type: str) -> None:
+    task = tasks.validate_task(task_payload(task_type, parameters_for(task_type)))
+
+    first = mock.deterministic_mock_result(task)
+    second = mock.deterministic_mock_result(task)
+    result, _ = tasks.validate_result(task, first)
+
+    assert first == second
+    assert result.task_type.value == task_type
 
 
 def test_schema_catalog_has_versioned_digest_for_every_task() -> None:
