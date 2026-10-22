@@ -197,6 +197,7 @@ def _ensure_page_mutable(db: Session, page: ScanPage) -> None:
     active_job = db.scalar(
         select(ProcessingJob.id).where(
             ProcessingJob.page_id == page.id,
+            ProcessingJob.kind != "ai_enhancement",
             ProcessingJob.status.in_(
                 [
                     JobStatus.queued,
@@ -412,6 +413,9 @@ def save_page_result(
     page.mime_type = result.mime_type
     page.rotation_degrees = rotation_degrees
     page.active_result_version = version
+    from .ai_business import mark_page_enhancements_stale
+
+    mark_page_enhancements_stale(db, page_id=page.id, active_result_version=version)
     return result, destination
 
 

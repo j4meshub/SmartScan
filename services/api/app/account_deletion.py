@@ -10,13 +10,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from .config import Settings, get_settings
 from .models import (
     AccountDeletionRequest,
     AccountDeletionStatus,
+    AiEnhancementTask,
+    AiProviderCall,
     AuditLog,
     ExportArtifact,
     JobStatus,
@@ -347,6 +349,13 @@ def _purge_database_resources(
             select(ProcessingJob.id).where(ProcessingJob.owner_user_id == user.id).with_for_update()
         )
     )
+    ai_enhancement_ids = list(
+        db.scalars(
+            select(AiEnhancementTask.id)
+            .where(AiEnhancementTask.owner_user_id == user.id)
+            .with_for_update()
+        )
+    )
     project_deletion_ids = list(
         db.scalars(
             select(ProjectDeletion.id)
@@ -396,6 +405,7 @@ def _purge_database_resources(
         "uploads": len(upload_ids),
         "chunks": len(chunk_ids),
         "jobs": len(job_ids),
+        "ai_enhancements": len(ai_enhancement_ids),
         "project_deletions": len(project_deletion_ids),
         "exports": len(export_ids),
         "export_artifacts": len(export_artifact_ids),
@@ -404,6 +414,13 @@ def _purge_database_resources(
     }
     if chunk_ids:
         db.execute(delete(UploadChunk).where(UploadChunk.id.in_(chunk_ids)))
+    if ai_enhancement_ids:
+        db.execute(
+            update(AiProviderCall)
+            .where(AiProviderCall.enhancement_task_id.in_(ai_enhancement_ids))
+            .values(enhancement_task_id=None)
+        )
+        db.execute(delete(AiEnhancementTask).where(AiEnhancementTask.id.in_(ai_enhancement_ids)))
     if job_ids:
         db.execute(delete(ProcessingJob).where(ProcessingJob.id.in_(job_ids)))
     if project_deletion_ids:

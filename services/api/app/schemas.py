@@ -209,6 +209,10 @@ class ProjectView(BaseModel):
     suggested_name_updated_at: datetime | None
     mode: str
     reading_order: str
+    ai_enabled: bool = False
+    ai_consent_version: str | None = None
+    ai_enabled_by_user_id: str | None = None
+    ai_enabled_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -224,7 +228,50 @@ class PageResultView(BaseModel):
     size_bytes: int | None
     rotation_degrees: int
     processor_version: str
+    source_result_version: int | None = None
+    provenance: str | None = None
     created_at: datetime
+
+
+class AiCapabilitiesView(BaseModel):
+    available: bool
+    business_orchestration_ready: bool
+    consent_version: str
+    transmission_notice_code: str
+    enhancement_kinds: list[str]
+    task_types: list[str]
+
+
+class ProjectAiSettingsUpdate(BaseModel):
+    enabled: bool
+    consent_version: str | None = Field(default=None, max_length=32)
+
+
+class AiEnhancementCreate(BaseModel):
+    enhancement_kind: Literal["recommended", "complex_ocr", "exam_review", "book_review"]
+    source_result_version: int = Field(ge=1)
+
+
+class AiEnhancementView(BaseModel):
+    id: str
+    project_id: str
+    page_id: str
+    processing_job_id: str | None
+    enhancement_kind: str
+    requested_tasks: list[str]
+    source_result_version: int
+    status: str
+    candidate_result: dict[str, object] | None
+    evidence: dict[str, object] | None
+    provider_id: str | None
+    model: str | None
+    confidence: float | None
+    error_code: str | None
+    accepted_by_user_id: str | None
+    accepted_at: datetime | None
+    rejected_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class PageView(BaseModel):

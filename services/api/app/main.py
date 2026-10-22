@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .admin_routes import router as admin_router
+from .ai_routes import router as ai_router
 from .auth_routes import router as auth_router
 from .config import get_settings
 from .database import SessionLocal
@@ -19,7 +20,7 @@ from .scan_routes import router as scan_router
 
 settings = get_settings()
 API_MAJOR_VERSION = "v1"
-CONTRACT_REVISION = "2026-10-21.2"
+CONTRACT_REVISION = "2026-10-22.1"
 
 
 @asynccontextmanager
@@ -47,6 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(ai_router)
 app.include_router(scan_router)
 app.include_router(admin_router)
 app.include_router(ops_router)

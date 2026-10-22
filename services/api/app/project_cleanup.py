@@ -4,11 +4,13 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from .config import Settings, get_settings
 from .models import (
+    AiEnhancementTask,
+    AiProviderCall,
     ExportArtifact,
     PageResult,
     ProcessingJob,
@@ -70,6 +72,9 @@ def start_project_deletion(
         else []
     )
     jobs = list(db.scalars(select(ProcessingJob).where(ProcessingJob.project_id == project.id)))
+    ai_enhancements = list(
+        db.scalars(select(AiEnhancementTask).where(AiEnhancementTask.project_id == project.id))
+    )
     exports = list(db.scalars(select(ScanExport).where(ScanExport.project_id == project.id)))
     export_ids = [item.id for item in exports]
     artifacts = (
@@ -92,6 +97,7 @@ def start_project_deletion(
         "uploads": len(uploads),
         "chunks": len(chunks),
         "jobs": len(jobs),
+        "ai_enhancements": len(ai_enhancements),
         "exports": len(exports),
         "export_artifacts": len(artifacts),
         "files": len(manifest),
@@ -113,6 +119,14 @@ def start_project_deletion(
         )
     if exports:
         db.execute(delete(ScanExport).where(ScanExport.id.in_(export_ids)))
+    if ai_enhancements:
+        ai_enhancement_ids = [item.id for item in ai_enhancements]
+        db.execute(
+            update(AiProviderCall)
+            .where(AiProviderCall.enhancement_task_id.in_(ai_enhancement_ids))
+            .values(enhancement_task_id=None)
+        )
+        db.execute(delete(AiEnhancementTask).where(AiEnhancementTask.id.in_(ai_enhancement_ids)))
     if jobs:
         db.execute(delete(ProcessingJob).where(ProcessingJob.id.in_([item.id for item in jobs])))
     if chunks:

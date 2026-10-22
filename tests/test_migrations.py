@@ -1174,3 +1174,110 @@ def test_book_integrity_migration_backfills_status_and_can_downgrade(tmp_path: P
             assert connection.scalar(text("SELECT count(*) FROM scan_pages")) == 2
     finally:
         downgraded.dispose()
+
+
+def test_ai_business_migration_backfills_and_can_downgrade(tmp_path: Path) -> None:
+    url = sqlite_url(tmp_path / "ai-business.db")
+    command.upgrade(alembic_config(url), "20261022_0022")
+    with create_engine(url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, username, password_hash, phone_hmac, phone_masked, role, status, locale, "
+                "must_change_password, created_at) VALUES "
+                "('ai-user', 'ai-user', 'hash', :phone_hmac, '+86******0023', "
+                "'user', 'active', 'zh-CN', 0, CURRENT_TIMESTAMP)"
+            ),
+            {"phone_hmac": "2" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_projects "
+                "(id, owner_user_id, title, mode, reading_order, created_at, updated_at) VALUES "
+                "('ai-project', 'ai-user', 'AI 迁移', 'document', 'ltr', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO scan_pages "
+                "(id, project_id, owner_user_id, page_number, original_path, "
+                "original_mime_type, processed_path, sha256, size_bytes, mime_type, "
+                "rotation_degrees, active_result_version, review_status, ocr_status, "
+                "exam_classification_status, book_split_status, book_page_number_status, "
+                "book_assembly_included, created_at, updated_at) VALUES "
+                "('ai-page', 'ai-project', 'ai-user', 1, 'users/ai-user/originals/a.jpg', "
+                "'image/jpeg', 'users/ai-user/results/a.jpg', :sha256, 100, 'image/jpeg', "
+                "0, 1, 'not_required', 'ready', 'disabled', 'disabled', 'disabled', 1, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"sha256": "3" * 64},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO page_results "
+                "(id, page_id, owner_user_id, version, result_type, file_path, mime_type, "
+                "sha256, size_bytes, rotation_degrees, processor_version, created_at) VALUES "
+                "('ai-result', 'ai-page', 'ai-user', 1, 'baseline', "
+                "'users/ai-user/results/a.jpg', 'image/jpeg', :sha256, 100, 0, "
+                "'baseline-v2', CURRENT_TIMESTAMP)"
+            ),
+            {"sha256": "4" * 64},
+        )
+
+    command.upgrade(alembic_config(url), "head")
+    migrated = create_engine(url)
+    try:
+        schema = inspect(migrated)
+        assert "ai_enhancement_tasks" in schema.get_table_names()
+        assert {
+            "ai_enabled",
+            "ai_consent_version",
+            "ai_enabled_by_user_id",
+            "ai_enabled_at",
+        }.issubset({item["name"] for item in schema.get_columns("scan_projects")})
+        assert {"source_result_version", "provenance"}.issubset(
+            {item["name"] for item in schema.get_columns("page_results")}
+        )
+        assert "enhancement_task_id" in {
+            item["name"] for item in schema.get_columns("ai_provider_calls")
+        }
+        with migrated.begin() as connection:
+            assert (
+                connection.scalar(
+                    text("SELECT ai_enabled FROM scan_projects WHERE id = 'ai-project'")
+                )
+                == 0
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO ai_enhancement_tasks "
+                    "(id, owner_user_id, project_id, page_id, processing_job_id, "
+                    "idempotency_key, enhancement_kind, requested_tasks, "
+                    "source_result_version, status, created_at, updated_at) VALUES "
+                    "('ai-task', 'ai-user', 'ai-project', 'ai-page', NULL, "
+                    "'migration-ai-key-0001', 'recommended', '[\"classify_page\"]', "
+                    "1, 'queued', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                )
+            )
+            assert connection.scalar(text("SELECT count(*) FROM ai_enhancement_tasks")) == 1
+    finally:
+        migrated.dispose()
+
+    command.downgrade(alembic_config(url), "20261022_0022")
+    downgraded = create_engine(url)
+    try:
+        schema = inspect(downgraded)
+        assert "ai_enhancement_tasks" not in schema.get_table_names()
+        assert "ai_enabled" not in {item["name"] for item in schema.get_columns("scan_projects")}
+        assert "source_result_version" not in {
+            item["name"] for item in schema.get_columns("page_results")
+        }
+        assert "enhancement_task_id" not in {
+            item["name"] for item in schema.get_columns("ai_provider_calls")
+        }
+        with downgraded.connect() as connection:
+            assert connection.scalar(text("SELECT title FROM scan_projects")) == "AI 迁移"
+            assert connection.scalar(text("SELECT count(*) FROM page_results")) == 1
+    finally:
+        downgraded.dispose()
