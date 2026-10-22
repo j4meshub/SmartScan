@@ -11,7 +11,12 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from services.api.app.models import AiProviderAttempt, AiProviderCall, AiProviderState
+from services.api.app.models import (
+    AiEnhancementTask,
+    AiProviderAttempt,
+    AiProviderCall,
+    AiProviderState,
+)
 
 from .network import (
     NetworkSecurityError,
@@ -117,11 +122,28 @@ class ReliabilityStore:
         if stale:
             state.updated_at = now
 
-    def admit_call(self, definition: ProviderDefinition, task_type: str) -> str:
+    def admit_call(
+        self,
+        definition: ProviderDefinition,
+        task_type: str,
+        *,
+        enhancement_task_id: str | None = None,
+        page_id: str | None = None,
+        source_result_version: int | None = None,
+    ) -> str:
         now = self._now()
         provider_id = definition.id
         reserve = definition.max_cost_per_request_microusd * (definition.max_retries + 1)
         with self._session_factory() as session, session.begin():
+            if enhancement_task_id is not None:
+                enhancement = session.get(AiEnhancementTask, enhancement_task_id)
+                if (
+                    enhancement is None
+                    or enhancement.status != "processing"
+                    or enhancement.page_id != page_id
+                    or enhancement.source_result_version != source_result_version
+                ):
+                    raise ReliabilityError("ai_business_context_invalid")
             self._lock_provider(session, provider_id)
             state = self._state(session, provider_id, now)
             self._expire_stale_calls(session, provider_id, state, now)
@@ -172,6 +194,7 @@ class ReliabilityStore:
             session.add(
                 AiProviderCall(
                     id=call_id,
+                    enhancement_task_id=enhancement_task_id,
                     provider_id=provider_id,
                     task_type=task_type,
                     status="in_progress",
@@ -434,9 +457,17 @@ class ReliableProviderExecutor:
         task: StructuredTask,
         plan: ProviderRequestPlan,
         media: OutboundMediaReference,
+        *,
+        enhancement_task_id: str | None = None,
     ) -> PendingReliableResult:
         definition = adapter.definition
-        call_id = self._store.admit_call(definition, task.task_type.value)
+        call_id = self._store.admit_call(
+            definition,
+            task.task_type.value,
+            enhancement_task_id=enhancement_task_id,
+            page_id=str(task.context.page_id),
+            source_result_version=task.context.source_result_version,
+        )
         call_started = time.monotonic()
         attempts = 0
         charged_cost_microusd = 0

@@ -18,6 +18,7 @@ from .models import (
     AccountDeletionRequest,
     AccountDeletionStatus,
     AiEnhancementTask,
+    AiMediaGrant,
     AiProviderCall,
     AuditLog,
     ExportArtifact,
@@ -356,6 +357,9 @@ def _purge_database_resources(
             .with_for_update()
         )
     )
+    ai_media_grant_ids = list(
+        db.scalars(select(AiMediaGrant.id).where(AiMediaGrant.owner_user_id == user.id))
+    )
     project_deletion_ids = list(
         db.scalars(
             select(ProjectDeletion.id)
@@ -406,6 +410,7 @@ def _purge_database_resources(
         "chunks": len(chunk_ids),
         "jobs": len(job_ids),
         "ai_enhancements": len(ai_enhancement_ids),
+        "ai_media_grants": len(ai_media_grant_ids),
         "project_deletions": len(project_deletion_ids),
         "exports": len(export_ids),
         "export_artifacts": len(export_artifact_ids),
@@ -414,6 +419,8 @@ def _purge_database_resources(
     }
     if chunk_ids:
         db.execute(delete(UploadChunk).where(UploadChunk.id.in_(chunk_ids)))
+    if ai_media_grant_ids:
+        db.execute(delete(AiMediaGrant).where(AiMediaGrant.id.in_(ai_media_grant_ids)))
     if ai_enhancement_ids:
         db.execute(
             update(AiProviderCall)

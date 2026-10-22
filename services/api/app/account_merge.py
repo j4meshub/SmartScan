@@ -16,6 +16,7 @@ from .config import Settings, get_settings
 from .models import (
     AccountMergeAudit,
     AiEnhancementTask,
+    AiMediaGrant,
     BookIntegrityDecision,
     ExportArtifact,
     JobStatus,
@@ -160,6 +161,7 @@ def _load_merge_resources(
     list[ExportArtifact],
     list[BookIntegrityDecision],
     list[AiEnhancementTask],
+    list[AiMediaGrant],
 ]:
     identities = list(
         db.scalars(
@@ -231,6 +233,11 @@ def _load_merge_resources(
             .with_for_update()
         )
     )
+    ai_media_grants = list(
+        db.scalars(
+            select(AiMediaGrant).where(AiMediaGrant.owner_user_id == source_id).with_for_update()
+        )
+    )
     return (
         identities,
         projects,
@@ -243,6 +250,7 @@ def _load_merge_resources(
         artifacts,
         integrity_decisions,
         ai_enhancements,
+        ai_media_grants,
     )
 
 
@@ -303,6 +311,7 @@ def merge_accounts(
         artifacts,
         integrity_decisions,
         ai_enhancements,
+        ai_media_grants,
     ) = _load_merge_resources(db, source.id, canonical.id)
     source_identities = [item for item in identities if item.user_id == source.id]
     canonical_providers = {item.provider for item in identities if item.user_id == canonical.id}
@@ -402,6 +411,8 @@ def merge_accounts(
             enhancement.owner_user_id = canonical.id
             if enhancement.accepted_by_user_id == source.id:
                 enhancement.accepted_by_user_id = canonical.id
+        for grant in ai_media_grants:
+            grant.owner_user_id = canonical.id
         db.delete(source_phone)
         now = datetime.now(UTC)
         revoke_user_sessions(db, source.id)
@@ -420,6 +431,7 @@ def merge_accounts(
             "export_artifacts": len(artifacts),
             "book_integrity_decisions": len(integrity_decisions),
             "ai_enhancements": len(ai_enhancements),
+            "ai_media_grants": len(ai_media_grants),
             "files": len(sources_to_remove),
         }
         audit = AccountMergeAudit(

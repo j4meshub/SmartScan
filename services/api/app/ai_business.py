@@ -8,7 +8,15 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import AiEnhancementTask, JobStatus, ProcessingJob, ScanPage, ScanProject, User
+from .models import (
+    AiEnhancementTask,
+    AiMediaGrant,
+    JobStatus,
+    ProcessingJob,
+    ScanPage,
+    ScanProject,
+    User,
+)
 from .schemas import AiEnhancementView
 
 AI_CONSENT_VERSION = "2026-10-22.1"
@@ -79,6 +87,15 @@ def configure_project_ai(
         project.ai_consent_version = AI_CONSENT_VERSION
         project.ai_enabled_by_user_id = actor.id
         project.ai_enabled_at = datetime.now(UTC)
+    else:
+        db.execute(
+            update(AiMediaGrant)
+            .where(
+                AiMediaGrant.project_id == project.id,
+                AiMediaGrant.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.now(UTC))
+        )
     project.updated_at = datetime.now(UTC)
     return project
 
@@ -161,6 +178,15 @@ def mark_page_enhancements_stale(
     active_result_version: int,
 ) -> None:
     now = datetime.now(UTC)
+    db.execute(
+        update(AiMediaGrant)
+        .where(
+            AiMediaGrant.page_id == page_id,
+            AiMediaGrant.source_result_version != active_result_version,
+            AiMediaGrant.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
     processing_job_ids = list(
         db.scalars(
             select(AiEnhancementTask.processing_job_id).where(
