@@ -398,12 +398,12 @@ data class ProjectDto(
     @SerialName("suggested_name_source") val suggestedNameSource: String? = null,
     val mode: String,
     @SerialName("reading_order") val readingOrder: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
     @SerialName("ai_enabled") val aiEnabled: Boolean = false,
     @SerialName("ai_consent_version") val aiConsentVersion: String? = null,
     @SerialName("ai_enabled_by_user_id") val aiEnabledByUserId: String? = null,
     @SerialName("ai_enabled_at") val aiEnabledAt: String? = null,
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("updated_at") val updatedAt: String,
 )
 
 @Serializable

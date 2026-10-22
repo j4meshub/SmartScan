@@ -17,10 +17,10 @@ data class ScanProject(
     val suggestedName: String?,
     val mode: String,
     val readingOrder: String,
-    val aiEnabled: Boolean = false,
-    val aiConsentVersion: String? = null,
     val createdAt: String,
     val updatedAt: String,
+    val aiEnabled: Boolean = false,
+    val aiConsentVersion: String? = null,
 )
 
 data class AiCapabilities(
