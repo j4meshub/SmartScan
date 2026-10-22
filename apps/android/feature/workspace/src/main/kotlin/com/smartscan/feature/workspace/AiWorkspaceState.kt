@@ -2,6 +2,7 @@ package com.smartscan.feature.workspace
 
 import com.smartscan.core.model.AiCapabilities
 import com.smartscan.core.model.AiEnhancement
+import kotlin.math.roundToInt
 
 private val RunningAiStatuses = setOf("queued", "processing")
 
@@ -31,5 +32,5 @@ internal fun aiConfidencePercent(value: Double?): Int? = value
     ?.takeIf { it.isFinite() }
     ?.coerceIn(0.0, 1.0)
     ?.times(100)
-    ?.toInt()
+    ?.roundToInt()
 

@@ -742,14 +742,14 @@ private fun AiWorkspacePanel(
             if (!project.aiEnabled) Text(stringResource(R.string.ai_local_suggestion))
             Button(
                 onClick = {
-                    val capability = capabilities ?: return@Button
+                    val consentVersion = if (project.aiEnabled) null else capabilities?.consentVersion ?: return@Button
                     actionBusy = true
                     scope.launch {
                         when (
                             val result = repository.updateProjectAiSettings(
                                 project.id,
                                 enabled = !project.aiEnabled,
-                                consentVersion = if (project.aiEnabled) null else capability.consentVersion,
+                                consentVersion = consentVersion,
                             )
                         ) {
                             is ApiResult.Success -> {

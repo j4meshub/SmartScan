@@ -43,7 +43,7 @@ class WorkspaceStateTest {
         assertEquals(true, supportsAiEnhancement(capabilities, "recommended"))
         assertEquals(false, supportsAiEnhancement(capabilities, "complex_ocr"))
         assertEquals(true, supportsAiEnhancement(capabilities.copy(taskTypes = setOf("ocr_formula")), "complex_ocr"))
-        assertEquals(91, aiConfidencePercent(0.919))
+        assertEquals(92, aiConfidencePercent(0.919))
     }
 }
 
