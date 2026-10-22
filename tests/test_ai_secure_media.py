@@ -6,6 +6,13 @@ from pathlib import Path
 
 import httpx
 from fastapi.testclient import TestClient
+from test_account_deletion import (
+    register as register_deletion_user,
+)
+from test_account_deletion import (
+    request_deletion,
+    unique_phone,
+)
 from test_ai_business import (
     create_enhancement,
     create_processed_page,
@@ -13,15 +20,22 @@ from test_ai_business import (
     register,
 )
 
-ROOT = Path(__file__).parents[1]
-
 from services.api.app import main
+from services.api.app.account_deletion import process_account_deletion
 from services.api.app.ai_media import AiMediaError, IssuedMediaGrant, issue_media_grant
 from services.api.app.config import Settings
 from services.api.app.database import SessionLocal
 from services.api.app.job_service import claim_ai_job_by_id, claim_job_by_id
-from services.api.app.models import AiEnhancementTask, AiMediaGrant, JobStatus, ProcessingJob
+from services.api.app.models import (
+    AccountDeletionRequest,
+    AiEnhancementTask,
+    AiMediaGrant,
+    JobStatus,
+    ProcessingJob,
+)
 from services.worker.app.ai_gateway import AiGatewayClient
+
+ROOT = Path(__file__).parents[1]
 
 
 def test_media_grant_is_hashed_scoped_revocable_and_not_exposed() -> None:
@@ -85,6 +99,10 @@ def test_media_grant_is_hashed_scoped_revocable_and_not_exposed() -> None:
                 assert exc.code == "project_ai_not_enabled"
             else:
                 raise AssertionError("未授权项目不得签发媒体令牌")
+        deleted = client.delete(f"/v1/projects/{project_id}", headers=headers)
+        assert deleted.status_code == 202
+        with SessionLocal() as db:
+            assert db.get(AiMediaGrant, grant_id) is None
 
 
 def test_media_grant_expires_and_source_version_change_revokes_access() -> None:
@@ -197,6 +215,41 @@ def test_worker_gateway_client_uses_internal_token_without_redirects() -> None:
     assert captured["url"] == "http://ai-gateway:8010/v1/tasks/vision-main/execute"
     assert captured["authorization"] == f"Bearer {'i' * 32}"
     assert '"access_token":"' + "T" * 43 + '"' in str(captured["body"])
+
+
+def test_account_deletion_removes_media_grants() -> None:
+    phone = unique_phone()
+    with TestClient(main.app) as client:
+        _, _, headers = register_deletion_user(client, phone)
+        project_id, page_id = create_processed_page(client, headers)
+        enable_ai(client, headers, project_id)
+        task_view = create_enhancement(client, headers, page_id, "ai-account-delete-0001")
+        with SessionLocal() as db:
+            claim = claim_ai_job_by_id(
+                db,
+                str(task_view["processing_job_id"]),
+                worker_id="ai-account-delete",
+            )
+            assert claim is not None
+            issued = issue_media_grant(db, enhancement_task_id=str(task_view["id"]))
+            grant_id = issued.grant.id
+            db.commit()
+        canceled = client.post(
+            f"/v1/jobs/{task_view['processing_job_id']}/cancel",
+            headers=headers,
+        )
+        assert canceled.status_code == 200
+        deletion = request_deletion(client, phone=phone, headers=headers)
+        due = datetime.now(UTC) - timedelta(seconds=1)
+        with SessionLocal() as db:
+            request = db.get(AccountDeletionRequest, str(deletion["id"]))
+            assert request is not None
+            request.execute_after = due
+            db.commit()
+            result = process_account_deletion(db, request.id, now=due + timedelta(seconds=1))
+            assert result.status.value == "completed"
+        with SessionLocal() as db:
+            assert db.get(AiMediaGrant, grant_id) is None
 
 
 def test_nginx_only_exposes_redacted_media_bridge_not_ai_gateway() -> None:
