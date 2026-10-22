@@ -1,4 +1,5 @@
 import {AuthClient} from "./auth-client.js";
+import {aiCandidateSummary, canDecideEnhancement, confidencePercent, createAiIdempotencyKey, latestEnhancement, shouldPollEnhancements, sourceVersionPreview} from "./ai-enhancements.js";
 import {analyzeBookLuma, initialBookAutoCaptureState, lumaFromImageData, reduceBookAutoCapture} from "./book-auto-capture.js";
 import {bindCameraLifecycle, cameraBlobToFile, captureCameraPhoto, openEnvironmentCamera, stopCamera} from "./camera.js";
 import {integrityDecisionOptions, integrityIssueLabel, pageNumberBadge, supplementDefaults} from "./book-integrity.js";
@@ -35,19 +36,26 @@ let editorArtifacts = [];
 let editorBookIntegrity = null;
 let pendingBookSupplement = null;
 let editorPollTimer = null;
+let homeProjects = [];
+let aiCapabilities = null;
+let aiEnhancements = [];
+let aiPollTimer = null;
+let aiBusy = false;
+let aiPreviewingSource = false;
+let aiDesiredEnabled = null;
 let restoredProjectId = new URLSearchParams(location.hash.slice(1)).get("project");
 let preserveEditorRestore = false;
 const $ = selector => document.querySelector(selector);
 function t(key){ return copy[locale][key] || key; }
-function renderLocale(){ document.documentElement.lang=locale; document.querySelectorAll("[data-i18n]").forEach(el=>el.textContent=t(el.dataset.i18n)); document.querySelectorAll("[data-editor-i18n]").forEach(el=>el.textContent=editorCopy[locale][el.dataset.editorI18n]); document.querySelectorAll("[data-i18n-aria-label]").forEach(el=>el.setAttribute("aria-label",t(el.dataset.i18nAriaLabel))); document.querySelectorAll("[data-i18n-alt]").forEach(el=>el.setAttribute("alt",t(el.dataset.i18nAlt))); renderBookAutoStatus(); if(editorProject){ if(editorIndex>=0) renderEditorState(); renderProjectFiles(); renderBookIntegrity(); } }
+function renderLocale(){ document.documentElement.lang=locale; document.querySelectorAll("[data-i18n]").forEach(el=>el.textContent=t(el.dataset.i18n)); document.querySelectorAll("[data-editor-i18n]").forEach(el=>el.textContent=editorCopy[locale][el.dataset.editorI18n]); document.querySelectorAll("[data-i18n-aria-label]").forEach(el=>el.setAttribute("aria-label",t(el.dataset.i18nAriaLabel))); document.querySelectorAll("[data-i18n-alt]").forEach(el=>el.setAttribute("alt",t(el.dataset.i18nAlt))); renderBookAutoStatus(); if(editorProject){ if(editorIndex>=0) renderEditorState(); renderProjectFiles(); renderBookIntegrity(); renderAiWorkspace(); } }
 function browserDeviceName(){ const platform=navigator.userAgentData?.platform||navigator.platform||"Web"; return `SmartScan H5 · ${platform}`.slice(0,100); }
 const auth=new AuthClient({api:API,fetchImpl:fetch,sessionStorage,deviceStorage:localStorage,deviceName:browserDeviceName(),onAuthLost:()=>{ showAuth(); $("#authMessage").textContent=locale==="zh-CN"?"登录已失效，请重新登录。":"Your session expired. Please sign in again."; }});
-function localizedError(error){ const messages={"invalid credentials":["用户名或密码错误。","Incorrect username or password."],account_unavailable:["账号当前不可用。","This account is unavailable."],wecom_disabled:["企业微信登录尚未配置。","WeCom sign-in is not configured."],wecom_identity_conflict:["账号身份存在冲突，请联系管理员处理。","This identity needs administrator review."],wecom_intent_invalid:["登录状态已失效，请重新发起企业微信登录。","The sign-in state expired. Start WeCom sign-in again."],sms_provider_disabled:["短信服务尚未配置。","SMS service is not configured."],sms_challenge_invalid:["验证码无效，请重新获取。","The SMS code is invalid. Request a new one."],sms_challenge_expired:["验证码已过期，请重新获取。","The SMS code expired. Request a new one."],refresh_token_replayed:["会话存在异常，所有令牌已撤销，请重新登录。","The session was revoked. Please sign in again."],camera_insecure_context:["实时相机需要 HTTPS，请改用系统相机或选择文件。","Live camera requires HTTPS. Use the system camera or choose a file."],camera_not_supported:["当前浏览器不支持实时相机，请使用系统相机。","This browser does not support live camera. Use the system camera."],camera_permission_denied:["相机权限被拒绝，可在浏览器设置中允许或使用系统相机。","Camera permission was denied. Allow it in browser settings or use the system camera."],camera_not_found:["未找到可用相机，请使用系统相机或选择文件。","No camera was found. Use the system camera or choose a file."],camera_in_use:["相机正被其他应用占用，请关闭后重试或使用系统相机。","The camera is in use. Close the other app or use the system camera."],camera_open_failed:["实时相机打开失败，请使用系统相机或选择文件。","Live camera could not open. Use the system camera or choose a file."],camera_capture_failed:["拍摄失败，请重试或使用系统相机。","Capture failed. Try again or use the system camera."],camera_frame_unavailable:["相机画面尚未就绪，请重试。","The camera frame is not ready. Try again."]}; const pair=messages[error.message]; return pair?pair[locale==="zh-CN"?0:1]:error.message; }
+function localizedError(error){ const messages={"invalid credentials":["用户名或密码错误。","Incorrect username or password."],account_unavailable:["账号当前不可用。","This account is unavailable."],wecom_disabled:["企业微信登录尚未配置。","WeCom sign-in is not configured."],wecom_identity_conflict:["账号身份存在冲突，请联系管理员处理。","This identity needs administrator review."],wecom_intent_invalid:["登录状态已失效，请重新发起企业微信登录。","The sign-in state expired. Start WeCom sign-in again."],sms_provider_disabled:["短信服务尚未配置。","SMS service is not configured."],sms_challenge_invalid:["验证码无效，请重新获取。","The SMS code is invalid. Request a new one."],sms_challenge_expired:["验证码已过期，请重新获取。","The SMS code expired. Request a new one."],refresh_token_replayed:["会话存在异常，所有令牌已撤销，请重新登录。","The session was revoked. Please sign in again."],camera_insecure_context:["实时相机需要 HTTPS，请改用系统相机或选择文件。","Live camera requires HTTPS. Use the system camera or choose a file."],camera_not_supported:["当前浏览器不支持实时相机，请使用系统相机。","This browser does not support live camera. Use the system camera."],camera_permission_denied:["相机权限被拒绝，可在浏览器设置中允许或使用系统相机。","Camera permission was denied. Allow it in browser settings or use the system camera."],camera_not_found:["未找到可用相机，请使用系统相机或选择文件。","No camera was found. Use the system camera or choose a file."],camera_in_use:["相机正被其他应用占用，请关闭后重试或使用系统相机。","The camera is in use. Close the other app or use the system camera."],camera_open_failed:["实时相机打开失败，请使用系统相机或选择文件。","Live camera could not open. Use the system camera or choose a file."],camera_capture_failed:["拍摄失败，请重试或使用系统相机。","Capture failed. Try again or use the system camera."],camera_frame_unavailable:["相机画面尚未就绪，请重试。","The camera frame is not ready. Try again."],ai_consent_required:["请先为项目启用 AI 并确认数据传输说明。","Enable AI for this project and confirm the data transfer notice first."],ai_consent_version_required:["数据传输说明版本已更新，请重新确认。","The data transfer notice changed. Confirm it again."],ai_runtime_unavailable:["AI 服务暂不可用，基础扫描与导出不受影响。","AI is temporarily unavailable; core scanning and exports remain available."],ai_source_version_conflict:["页面版本已变化，请重新获取建议。","The page changed. Request new suggestions."],ai_candidate_not_ready:["建议尚未就绪，请稍后刷新。","Suggestions are not ready yet."],ai_budget_exceeded:["AI 使用额度已达上限，基础功能仍可使用。","The AI budget limit was reached; core features remain available."]}; const pair=messages[error.message]; return pair?pair[locale==="zh-CN"?0:1]:error.message; }
 async function request(path,options={}){ return auth.request(path,options); }
 function showAuth(){ if(editorProject){ restoredProjectId=editorProject.id; preserveEditorRestore=true; if($("#editorDialog").open) $("#editorDialog").close(); } $("#authView").classList.remove("hidden"); $("#homeView").classList.add("hidden"); $(".bottom-nav").classList.add("hidden"); $("#logoutButton").classList.add("hidden"); $("#loginForm").classList.remove("hidden"); $("#wecomActions").classList.remove("hidden"); $("#phoneBindingForm").classList.add("hidden"); }
 function showPhoneBinding(ticket){ bindingTicket=ticket; bindingChallengeId=null; $("#authMessage").textContent=""; $("#bindingMessage").textContent=""; $("#authView").classList.remove("hidden"); $("#homeView").classList.add("hidden"); $(".bottom-nav").classList.add("hidden"); $("#logoutButton").classList.add("hidden"); $("#loginForm").classList.add("hidden"); $("#wecomActions").classList.add("hidden"); $("#phoneBindingForm").classList.remove("hidden"); }
 function showHome(){ $("#authView").classList.add("hidden"); $("#homeView").classList.remove("hidden"); $(".bottom-nav").classList.remove("hidden"); $("#logoutButton").classList.remove("hidden"); loadProjects(); }
-async function loadProjects(){ try{ const projects=await request("/v1/projects"); const list=$("#projectList"); if(!projects.length){ list.innerHTML=`<div class="empty-state"><span>⌁</span><b>${t("empty")}</b><small>${t("emptyHint")}</small></div>`; return; } list.innerHTML=projects.map(p=>`<button class="project" type="button" data-project-id="${p.id}" data-project-mode="${p.mode}"><div class="project-top"><span class="project-icon"></span><small>${t(p.mode==="document"?"smartScan":p.mode)}</small></div><div><h3>${escapeHtml(p.title)}</h3><small>${new Date(p.updated_at).toLocaleDateString(locale)}</small></div></button>`).join(""); if(restoredProjectId){ const restored=projects.find(project=>project.id===restoredProjectId); restoredProjectId=null; if(restored) openProjectEditor(restored.id,restored.title,restored.mode); } }catch(error){ $("#projectList").innerHTML=`<div class="empty-state"><b>${escapeHtml(localizedError(error))}</b></div>`; } }
+async function loadProjects(){ try{ const projects=await request("/v1/projects"); homeProjects=projects; const list=$("#projectList"); if(!projects.length){ list.innerHTML=`<div class="empty-state"><span>⌁</span><b>${t("empty")}</b><small>${t("emptyHint")}</small></div>`; return; } list.innerHTML=projects.map(p=>`<button class="project" type="button" data-project-id="${p.id}" data-project-mode="${p.mode}"><div class="project-top"><span class="project-icon"></span><small>${t(p.mode==="document"?"smartScan":p.mode)}</small></div><div><h3>${escapeHtml(p.title)}</h3><small>${new Date(p.updated_at).toLocaleDateString(locale)}</small></div></button>`).join(""); if(restoredProjectId){ const restored=projects.find(project=>project.id===restoredProjectId); restoredProjectId=null; if(restored) openProjectEditor(restored); } }catch(error){ $("#projectList").innerHTML=`<div class="empty-state"><b>${escapeHtml(localizedError(error))}</b></div>`; } }
 function escapeHtml(value){ const node=document.createElement("div"); node.textContent=value; return node.innerHTML; }
 
 function clearEditorImage(){ if(editorImageUrl) URL.revokeObjectURL(editorImageUrl); editorImageUrl=null; $("#editorImage").removeAttribute("src"); }
@@ -69,6 +77,114 @@ function renderEditorState(){
   $("#editorImage").style.filter=filterPreview(editorFilter);
   renderEditorCorners();
   if(editorProject?.mode==="book") renderBookIntegrity();
+}
+function aiText(key, values={}){ return Object.entries(values).reduce((text,[name,value])=>text.replace(`{${name}}`,String(value)),editorCopy[locale][key]||key); }
+function aiStatusText(status){ return editorCopy[locale][{queued:"aiQueued",processing:"aiProcessing",candidate_ready:"aiCandidateReady",accepted:"aiAccepted",rejected:"aiRejected",stale:"aiStale",failed:"aiFailed",canceled:"aiCanceled"}[status]]||status||editorCopy[locale].aiNoSuggestion; }
+function aiCandidateLabel(row){
+  const label=editorCopy[locale][{classification:"aiClassification",orientation:"aiOrientation",title:"aiTitleSuggestion",pageNumber:"aiPageNumber"}[row.kind]]||row.kind;
+  let value=row.value;
+  if(row.kind==="classification") value=t(row.value==="document"?"smartScan":row.value);
+  if(row.kind==="orientation") value=aiText("aiOrientationValue",{value:row.value});
+  const confidence=confidencePercent(row.confidence);
+  return {label,value,confidence:confidence===null?"":aiText("aiConfidence",{value:confidence})};
+}
+function currentAiEnhancement(){ const page=editorPages[editorIndex]; return latestEnhancement(aiEnhancements,page?.active_result_version); }
+function stopAiPolling(){ if(aiPollTimer!==null) clearTimeout(aiPollTimer); aiPollTimer=null; }
+function scheduleAiPolling(){ stopAiPolling(); if(editorProject&&shouldPollEnhancements(aiEnhancements)) aiPollTimer=setTimeout(()=>loadAiWorkspace({silent:true}),2500); }
+function renderAiWorkspace(){
+  const page=editorPages[editorIndex];
+  const available=Boolean(aiCapabilities?.available&&aiCapabilities?.business_orchestration_ready);
+  const capabilityKey=!aiCapabilities?.business_orchestration_ready&&aiCapabilities?"aiOrchestrationUnavailable":available?"aiAvailable":"aiUnavailable";
+  $("#aiAvailability").textContent=editorCopy[locale][capabilityKey];
+  $("#aiProjectEnabled").checked=aiDesiredEnabled===null?Boolean(editorProject?.ai_enabled):aiDesiredEnabled;
+  $("#aiProjectEnabled").disabled=aiBusy||(!aiCapabilities&&!editorProject?.ai_enabled);
+  $("#aiTransmissionNotice").textContent=editorCopy[locale].aiTransmissionNotice;
+  $("#aiConsentVersion").textContent=aiCapabilities?.consent_version?aiText("aiConsentVersion",{version:aiCapabilities.consent_version}):"";
+  const enhancement=currentAiEnhancement();
+  const badge=$("#aiStatusBadge");
+  badge.dataset.status=enhancement?.status||"idle";
+  badge.textContent=enhancement?aiStatusText(enhancement.status):(editorProject?.ai_enabled?editorCopy[locale].aiNoSuggestion:editorCopy[locale].aiDisabled);
+  const canRequest=available&&editorProject?.ai_enabled&&page?.active_result_version>0&&!aiBusy&&!shouldPollEnhancements(aiEnhancements);
+  $("#requestAiSuggestion").disabled=!canRequest;
+  $("#refreshAiSuggestion").disabled=!page||aiBusy;
+  const rows=aiCandidateSummary(enhancement).map(aiCandidateLabel);
+  const comparison=$("#aiComparison");
+  comparison.classList.toggle("hidden",!enhancement||(!rows.length&&!enhancement.source_result_version));
+  $("#aiBaseSummary").textContent=enhancement?aiText("aiBaseVersion",{version:enhancement.source_result_version}):aiText("aiCurrentVersion",{version:page?.active_result_version||0});
+  $("#aiCandidateList").innerHTML=rows.length?rows.map(row=>`<div class="ai-candidate-row"><div><b>${escapeHtml(row.label)}</b><small>${escapeHtml(row.confidence)}</small></div><span>${escapeHtml(row.value)}</span></div>`).join(""):`<small>${editorCopy[locale].aiNoCandidate}</small>`;
+  const canDecide=canDecideEnhancement(enhancement,page?.active_result_version)&&!aiBusy;
+  $("#aiDecisionActions").classList.toggle("hidden",!canDecide);
+  $("#acceptAiSuggestion").disabled=!canDecide;
+  $("#rejectAiSuggestion").disabled=!canDecide;
+  const sourcePreview=sourceVersionPreview(enhancement,page);
+  $("#previewAiBase").classList.toggle("hidden",!sourcePreview||aiPreviewingSource);
+  $("#previewAiCurrent").classList.toggle("hidden",!sourcePreview||!aiPreviewingSource);
+}
+async function loadAiWorkspace({silent=false}={}){
+  const page=editorPages[editorIndex];
+  if(!editorProject||!page){ aiEnhancements=[]; renderAiWorkspace(); return; }
+  const expectedPageId=page.id;
+  stopAiPolling();
+  try{
+    const [capabilities,enhancements]=await Promise.all([request("/v1/ai/capabilities"),request(`/v1/pages/${expectedPageId}/ai-enhancements`)]);
+    if(editorPages[editorIndex]?.id!==expectedPageId) return;
+    aiCapabilities=capabilities;
+    aiEnhancements=enhancements;
+    if(!silent) $("#aiMessage").textContent=editorProject.ai_enabled?editorCopy[locale].aiEnabled:editorCopy[locale].aiDisabled;
+  }catch(error){
+    if(editorPages[editorIndex]?.id===expectedPageId){ aiCapabilities=null; aiEnhancements=[]; $("#aiMessage").textContent=`${editorCopy[locale].aiFailed}：${localizedError(error)}`; }
+  }finally{
+    if(editorPages[editorIndex]?.id===expectedPageId){ renderAiWorkspace(); scheduleAiPolling(); }
+  }
+}
+async function updateProjectAiSetting(enabled){
+  if(!editorProject||aiBusy) return;
+  if(enabled&&!(aiCapabilities?.available&&aiCapabilities?.business_orchestration_ready)){ $("#aiProjectEnabled").checked=false; $("#aiMessage").textContent=editorCopy[locale].aiUnavailable; return; }
+  aiBusy=true; aiDesiredEnabled=enabled; $("#aiMessage").textContent=editorCopy[locale].aiEnabling; renderAiWorkspace();
+  try{
+    editorProject=await request(`/v1/projects/${editorProject.id}/ai-settings`,{method:"PUT",body:JSON.stringify({enabled,consent_version:enabled?aiCapabilities.consent_version:null})});
+    $("#aiMessage").textContent=editorCopy[locale].aiSettingsSaved;
+  }catch(error){ $("#aiMessage").textContent=localizedError(error); }
+  finally{ aiBusy=false; aiDesiredEnabled=null; renderAiWorkspace(); }
+}
+async function requestAiSuggestion(){
+  const page=editorPages[editorIndex];
+  if(!page||!editorProject?.ai_enabled||aiBusy) return;
+  aiBusy=true; $("#aiMessage").textContent=editorCopy[locale].aiRequesting; renderAiWorkspace();
+  try{
+    const enhancement=await request(`/v1/pages/${page.id}/ai-enhancements`,{method:"POST",headers:{"Idempotency-Key":createAiIdempotencyKey(page.id,page.active_result_version)},body:JSON.stringify({enhancement_kind:"recommended",source_result_version:page.active_result_version})});
+    aiEnhancements=[enhancement,...aiEnhancements.filter(item=>item.id!==enhancement.id)];
+    $("#aiMessage").textContent=aiStatusText(enhancement.status);
+  }catch(error){ $("#aiMessage").textContent=`${editorCopy[locale].aiFailed}：${localizedError(error)}`; }
+  finally{ aiBusy=false; renderAiWorkspace(); scheduleAiPolling(); }
+}
+async function decideAiSuggestion(accept){
+  const page=editorPages[editorIndex],enhancement=currentAiEnhancement();
+  if(!canDecideEnhancement(enhancement,page?.active_result_version)||aiBusy) return;
+  aiBusy=true; renderAiWorkspace();
+  try{
+    const updated=await request(`/v1/ai-enhancements/${enhancement.id}/${accept?"accept":"reject"}`,{method:"POST"});
+    aiEnhancements=aiEnhancements.map(item=>item.id===updated.id?updated:item);
+    if(accept){
+      const pageId=page.id;
+      editorPages=await request(`/v1/projects/${editorProject.id}/pages`);
+      const index=Math.max(0,editorPages.findIndex(item=>item.id===pageId));
+      await selectEditorPage(index);
+      $("#aiMessage").textContent=editorCopy[locale].aiAcceptedDone;
+      loadProjects();
+    }else $("#aiMessage").textContent=editorCopy[locale].aiRejectedDone;
+  }catch(error){ $("#aiMessage").textContent=localizedError(error); }
+  finally{ aiBusy=false; renderAiWorkspace(); scheduleAiPolling(); }
+}
+async function previewAiSource(useSource){
+  const page=editorPages[editorIndex],enhancement=currentAiEnhancement();
+  const version=sourceVersionPreview(enhancement,page);
+  if(!page||!version) return;
+  if(!useSource){ aiPreviewingSource=false; await selectEditorPage(editorIndex); $("#aiMessage").textContent=editorCopy[locale].aiCurrentPreviewing; return; }
+  try{
+    const blob=await auth.requestBlob(`/v1/pages/${page.id}/content?version=${version}`);
+    clearEditorImage(); editorImageUrl=URL.createObjectURL(blob); $("#editorImage").src=editorImageUrl; aiPreviewingSource=true; renderAiWorkspace(); $("#aiMessage").textContent=editorCopy[locale].aiBasePreviewing;
+  }catch(error){ $("#aiMessage").textContent=localizedError(error); }
 }
 function formatBytes(size){ if(size<1024) return `${size} B`; if(size<1024*1024) return `${(size/1024).toFixed(1)} KB`; return `${(size/1024/1024).toFixed(1)} MB`; }
 function renderProjectFiles(){
@@ -124,14 +240,14 @@ async function deliverArtifact(artifact,action){
 }
 async function selectEditorPage(index){
   if(index<0||index>=editorPages.length) return;
-  editorIndex=index; editorCorners=defaultCorners(); editorCornersDirty=false; editorFilter="original"; clearEditorImage(); renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].loading;
+  editorIndex=index; editorCorners=defaultCorners(); editorCornersDirty=false; editorFilter="original"; aiEnhancements=[]; aiPreviewingSource=false; clearEditorImage(); renderEditorState(); renderAiWorkspace(); loadAiWorkspace(); $("#editorMessage").textContent=editorCopy[locale].loading;
   const expectedId=editorPages[index].id;
   try{ const blob=await auth.requestBlob(`/v1/pages/${expectedId}/content`); if(editorPages[editorIndex]?.id!==expectedId) return; editorImageUrl=URL.createObjectURL(blob); $("#editorImage").src=editorImageUrl; $("#editorMessage").textContent=""; }
   catch(error){ $("#editorMessage").textContent=localizedError(error); }
 }
-async function openProjectEditor(projectId,title,projectMode="document"){
-  editorProject={id:projectId,title,mode:projectMode}; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorBookIntegrity=null; pendingBookSupplement=null; editorIndex=-1; clearEditorImage(); history.replaceState(null,"",`#project=${encodeURIComponent(projectId)}`); $("#editorDialog").showModal(); $("#editorMessage").textContent=editorCopy[locale].loading; renderProjectFiles(); renderBookIntegrity(); loadProjectFiles();
-  try{ editorPages=await request(`/v1/projects/${projectId}/pages`); if(!editorPages.length){ $("#editorPageList").innerHTML=""; $("#editorMessage").textContent=editorCopy[locale].empty; return; } await selectEditorPage(0); }
+async function openProjectEditor(project){
+  const projectId=project.id; editorProject=project; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorBookIntegrity=null; pendingBookSupplement=null; editorIndex=-1; aiCapabilities=null; aiEnhancements=[]; aiPreviewingSource=false; aiDesiredEnabled=null; clearEditorImage(); history.replaceState(null,"",`#project=${encodeURIComponent(projectId)}`); $("#editorDialog").showModal(); $("#editorMessage").textContent=editorCopy[locale].loading; renderProjectFiles(); renderBookIntegrity(); renderAiWorkspace(); loadProjectFiles();
+  try{ editorPages=await request(`/v1/projects/${projectId}/pages`); if(!editorPages.length){ $("#editorPageList").innerHTML=""; $("#editorMessage").textContent=editorCopy[locale].empty; renderAiWorkspace(); return; } await selectEditorPage(0); }
   catch(error){ $("#editorMessage").textContent=localizedError(error); }
 }
 async function rotateEditorPage(degrees){ const page=editorPages[editorIndex]; if(!page) return; try{ const updated=await request(`/v1/pages/${page.id}/rotations`,{method:"POST",body:JSON.stringify({degrees})}); editorPages[editorIndex]=updated; await selectEditorPage(editorIndex); }catch(error){ $("#editorMessage").textContent=localizedError(error); } }
@@ -158,16 +274,23 @@ $("#backToLogin").addEventListener("click",()=>{ bindingTicket=null; bindingChal
 $("#logoutButton").addEventListener("click",async()=>{ try{ await auth.logout(); }catch{ /* 本地令牌仍会被清理。 */ } restoredProjectId=null; preserveEditorRestore=false; if($("#editorDialog").open) $("#editorDialog").close(); showAuth(); $("#authMessage").textContent=locale==="zh-CN"?"已安全退出当前设备。":"Signed out on this device."; });
 document.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>openCapture(button.dataset.mode)));
 $("#quickScan").addEventListener("click",()=>openCapture()); $("#refreshButton").addEventListener("click",loadProjects);
-$("#projectList").addEventListener("click",event=>{ const project=event.target.closest("[data-project-id]"); if(project) openProjectEditor(project.dataset.projectId,project.querySelector("h3")?.textContent||"",project.dataset.projectMode); });
+$("#projectList").addEventListener("click",event=>{ const button=event.target.closest("[data-project-id]"); if(button){ const project=homeProjects.find(item=>item.id===button.dataset.projectId); if(project) openProjectEditor(project); } });
 $("#editorPageList").addEventListener("click",event=>{ const page=event.target.closest("[data-page-index]"); if(page) selectEditorPage(Number(page.dataset.pageIndex)); });
 $("#closeEditor").addEventListener("click",()=>$("#editorDialog").close());
-$("#editorDialog").addEventListener("close",()=>{ clearEditorImage(); stopProjectFilePolling(); editorProject=null; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorBookIntegrity=null; pendingBookSupplement=null; editorIndex=-1; if(!preserveEditorRestore) restoredProjectId=null; preserveEditorRestore=false; history.replaceState(null,"","#home"); });
+$("#editorDialog").addEventListener("close",()=>{ clearEditorImage(); stopProjectFilePolling(); stopAiPolling(); editorProject=null; editorPages=[]; editorJobs=[]; editorExports=[]; editorArtifacts=[]; editorBookIntegrity=null; pendingBookSupplement=null; aiCapabilities=null; aiEnhancements=[]; aiPreviewingSource=false; aiDesiredEnabled=null; editorIndex=-1; if(!preserveEditorRestore) restoredProjectId=null; preserveEditorRestore=false; history.replaceState(null,"","#home"); });
 $("#rotatePageLeft").addEventListener("click",()=>rotateEditorPage(270));
 $("#rotatePageRight").addEventListener("click",()=>rotateEditorPage(90));
 $("#movePageLeft").addEventListener("click",()=>reorderEditorPage(-1));
 $("#movePageRight").addEventListener("click",()=>reorderEditorPage(1));
 $("#resetCorners").addEventListener("click",()=>{ editorCorners=defaultCorners(); editorCornersDirty=false; renderEditorState(); });
 $("#savePageEdit").addEventListener("click",saveEditorPage);
+$("#aiProjectEnabled").addEventListener("change",event=>updateProjectAiSetting(event.currentTarget.checked));
+$("#requestAiSuggestion").addEventListener("click",requestAiSuggestion);
+$("#refreshAiSuggestion").addEventListener("click",()=>loadAiWorkspace());
+$("#acceptAiSuggestion").addEventListener("click",()=>decideAiSuggestion(true));
+$("#rejectAiSuggestion").addEventListener("click",()=>decideAiSuggestion(false));
+$("#previewAiBase").addEventListener("click",()=>previewAiSource(true));
+$("#previewAiCurrent").addEventListener("click",()=>previewAiSource(false));
 $("#confirmReview").addEventListener("click",async()=>{ const page=editorPages[editorIndex]; if(!page) return; try{ const updated=await request(`/v1/pages/${page.id}/review`,{method:"PATCH",body:JSON.stringify({status:"confirmed",note:qualityPrompt(page,locale)})}); editorPages[editorIndex]=updated; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].confirmed; }catch(error){ $("#editorMessage").textContent=localizedError(error); } });
 $("#dismissExamSuggestion").addEventListener("click",async()=>{ const page=editorPages[editorIndex]; if(!canDismissExamSuggestion(page)) return; try{ const updated=await request(`/v1/pages/${page.id}/exam-suggestion-dismissal`,{method:"PUT",body:JSON.stringify({result_version:page.exam_result_version,reason:"user_dismissed"})}); editorPages[editorIndex]=updated; renderEditorState(); $("#editorMessage").textContent=editorCopy[locale].examDismissed; }catch(error){ $("#editorMessage").textContent=localizedError(error); } });
 $("#retakeBookSide").addEventListener("click",()=>$("#bookRetakeFile").click());

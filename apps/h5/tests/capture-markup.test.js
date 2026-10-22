@@ -45,3 +45,20 @@ test("项目恢复界面包含任务状态、导出、下载与分享入口", as
     "exportList",
   ]) assert.match(html, new RegExp(`id=["']${id}["']`));
 });
+
+test("项目页包含 AI 授权、传输说明、候选对比和用户决定入口", async () => {
+  const html = await readFile(htmlPath, "utf8");
+  for (const id of [
+    "aiWorkspace",
+    "aiProjectEnabled",
+    "aiTransmissionNotice",
+    "requestAiSuggestion",
+    "aiComparison",
+    "aiCandidateList",
+    "acceptAiSuggestion",
+    "rejectAiSuggestion",
+    "previewAiBase",
+    "previewAiCurrent",
+  ]) assert.match(html, new RegExp(`id=["']${id}["']`));
+  assert.match(html, /id="aiMessage"[^>]*aria-live="polite"/);
+});

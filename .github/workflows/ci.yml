@@ -50,6 +50,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/h5/package-lock.json
       - run: node --check apps/h5/app.js
+      - run: node --check apps/h5/ai-enhancements.js
       - run: node --check apps/h5/auth-client.js
       - run: node --check apps/h5/camera.js
       - run: node --check apps/h5/book-auto-capture.js

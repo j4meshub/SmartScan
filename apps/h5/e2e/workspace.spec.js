@@ -8,8 +8,11 @@ async function expectNoWcagViolations(page) {
   expect(result.violations, result.violations.map(item => `${item.id}: ${item.help}`).join("\n")).toEqual([]);
 }
 
-async function installMockApi(page, {authenticated = false} = {}) {
+async function installMockApi(page, {authenticated = false, aiAvailable = true} = {}) {
   let exports = [];
+  let project = {id:"p1",owner_user_id:"u1",title:"期中资料",suggested_name:null,suggested_name_source:null,mode:"document",reading_order:"ltr",ai_enabled:false,ai_consent_version:null,ai_enabled_by_user_id:null,ai_enabled_at:null,created_at:"2026-10-20T00:00:00Z",updated_at:"2026-10-20T00:00:00Z"};
+  let scanPage = {id:"page1",project_id:"p1",page_number:1,size_bytes:68,mime_type:"image/png",original_mime_type:"image/png",quality_warning:"low_contrast",quality_score:.7,quality_details:{},rotation_degrees:0,active_result_version:1,review_status:"pending",review_reason:null,reviewed_by_user_id:null,reviewed_at:null,ocr_text:null};
+  let enhancements = [];
   await page.addInitScript(({authenticated}) => {
     localStorage.setItem("smartscan.api", `${location.origin}/api`);
     localStorage.setItem("smartscan.locale", "zh-CN");
@@ -21,9 +24,32 @@ async function installMockApi(page, {authenticated = false} = {}) {
     const path = url.pathname.replace(/^\/api/, "");
     const json = body => route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
     if (path === "/v1/auth/login" && request.method() === "POST") return json({access_token:"access",refresh_token:"refresh",expires_at:"2099-01-01T00:00:00Z",refresh_expires_at:"2099-02-01T00:00:00Z",session_id:"session",device_id:"web:test"});
-    if (path === "/v1/projects" && request.method() === "GET") return json([{id:"p1",title:"期中资料",mode:"document",updated_at:"2026-10-20T00:00:00Z"}]);
-    if (path === "/v1/projects/p1/pages") return json([{id:"page1",page_number:1,quality_warning:"low_contrast",review_status:"pending"}]);
+    if (path === "/v1/projects" && request.method() === "GET") return json([project]);
+    if (path === "/v1/projects/p1/pages") return json([scanPage]);
     if (path === "/v1/pages/page1/content") return route.fulfill({status:200,contentType:"image/png",body:tinyPng});
+    if (path === "/v1/ai/capabilities") return json({available:aiAvailable,business_orchestration_ready:true,consent_version:"2026-10-01",transmission_notice_code:"project_page_to_deployment_ai",enhancement_kinds:["recommended"],task_types:["classify_page","detect_orientation","extract_title","extract_page_number"]});
+    if (path === "/v1/projects/p1/ai-settings" && request.method() === "PUT") {
+      const payload=request.postDataJSON();
+      project={...project,ai_enabled:payload.enabled,ai_consent_version:payload.enabled?payload.consent_version:null,ai_enabled_by_user_id:payload.enabled?"u1":null,ai_enabled_at:payload.enabled?"2026-10-20T00:02:00Z":null};
+      return json(project);
+    }
+    if (path === "/v1/pages/page1/ai-enhancements" && request.method() === "GET") return json(enhancements);
+    if (path === "/v1/pages/page1/ai-enhancements" && request.method() === "POST") {
+      const payload=request.postDataJSON();
+      const item={id:"ai1",project_id:"p1",page_id:"page1",processing_job_id:"job-ai1",enhancement_kind:payload.enhancement_kind,requested_tasks:["classify_page","detect_orientation","extract_title","extract_page_number"],source_result_version:payload.source_result_version,status:"candidate_ready",candidate_result:{schema_version:"1.0",tasks:{classify_page:{label:"document",confidence:.91},detect_orientation:{rotation_degrees:90,confidence:.88},extract_title:{candidates:[{text:"期中复习提纲",confidence:.96}]},extract_page_number:{status:"not_found",confidence:.2}}},evidence:{mock:true},provider_id:"internal-provider",model:"internal-model",confidence:.91,error_code:null,accepted_by_user_id:null,accepted_at:null,rejected_at:null,created_at:"2026-10-20T00:03:00Z",updated_at:"2026-10-20T00:03:00Z"};
+      enhancements=[item];
+      return route.fulfill({status:202,contentType:"application/json",body:JSON.stringify(item)});
+    }
+    if (path === "/v1/ai-enhancements/ai1/accept" && request.method() === "POST") {
+      scanPage={...scanPage,rotation_degrees:90,active_result_version:2};
+      project={...project,suggested_name:"期中复习提纲",suggested_name_source:"ai"};
+      enhancements=[{...enhancements[0],status:"accepted",accepted_by_user_id:"u1",accepted_at:"2026-10-20T00:04:00Z"}];
+      return json(enhancements[0]);
+    }
+    if (path === "/v1/ai-enhancements/ai1/reject" && request.method() === "POST") {
+      enhancements=[{...enhancements[0],status:"rejected",rejected_at:"2026-10-20T00:04:00Z"}];
+      return json(enhancements[0]);
+    }
     if (path === "/v1/jobs") return json([{id:"job1",project_id:"p1",kind:"baseline",status:"ready",progress:100,updated_at:"2026-10-20T00:00:00Z"}]);
     if (path === "/v1/projects/p1/exports" && request.method() === "GET") return json(exports);
     if (path === "/v1/projects/p1/exports" && request.method() === "POST") {
@@ -85,4 +111,53 @@ test("已认证刷新会从 URL 项目断点恢复工作区", async ({page}) => 
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByRole("dialog").getByRole("heading", {name:"期中资料"})).toBeVisible();
   await expect(page.getByText("处理完成")).toBeVisible();
+});
+
+test("项目授权后可获取、对比、接受 AI 建议并回看基础版本", async ({page}) => {
+  await installMockApi(page, {authenticated:true});
+  await page.goto("/#project=p1");
+  const dialog=page.getByRole("dialog");
+  await expect(dialog.getByText("AI 服务可用")).toBeVisible();
+  await expect(dialog.getByText(/仅在你主动请求建议时/)).toBeVisible();
+  await dialog.getByRole("checkbox", {name:"为此项目启用 AI"}).click();
+  await expect(dialog.getByText("项目 AI 设置已保存。")).toBeVisible();
+  await dialog.getByRole("button", {name:"获取当前页智能建议"}).click();
+  await expect(dialog.getByText("AI 候选建议")).toBeVisible();
+  await expect(dialog.getByText("期中复习提纲")).toBeVisible();
+  await expect(dialog.getByText("顺时针旋转 90°")).toBeVisible();
+  await expect(dialog).not.toContainText("internal-provider");
+  await expect(dialog).not.toContainText("internal-model");
+  await expectNoWcagViolations(page);
+
+  await dialog.getByRole("button", {name:"接受建议"}).click();
+  await expect(dialog.getByRole("button", {name:"查看基础版本"})).toBeVisible();
+  await dialog.getByRole("button", {name:"查看基础版本"}).click();
+  await expect(dialog.getByText(/正在查看建议来源的基础版本/)).toBeVisible();
+  await dialog.getByRole("button", {name:"返回当前版本"}).click();
+  await expect(dialog.getByText("已返回当前版本预览。")).toBeVisible();
+});
+
+test("AI 未配置时保持基础编辑与导出可用且不允许发起建议", async ({page}) => {
+  await installMockApi(page, {authenticated:true,aiAvailable:false});
+  await page.goto("/#project=p1");
+  const dialog=page.getByRole("dialog");
+  await expect(dialog.getByText(/AI 服务未配置/)).toBeVisible();
+  await expect(dialog.getByRole("button", {name:"获取当前页智能建议"})).toBeDisabled();
+  await expect(dialog.getByRole("button", {name:"生成导出"})).toBeEnabled();
+  await dialog.getByRole("checkbox", {name:"为此项目启用 AI"}).click();
+  await expect(dialog.getByRole("checkbox", {name:"为此项目启用 AI"})).not.toBeChecked();
+  await expect(dialog.locator("#aiMessage")).toContainText("基础扫描与导出不受影响");
+});
+
+test("用户可放弃 AI 候选且基础页面版本保持不变", async ({page}) => {
+  await installMockApi(page, {authenticated:true});
+  await page.goto("/#project=p1");
+  const dialog=page.getByRole("dialog");
+  await expect(dialog.getByText("AI 服务可用")).toBeVisible();
+  await dialog.getByRole("checkbox", {name:"为此项目启用 AI"}).click();
+  await expect(dialog.getByText("项目 AI 设置已保存。")).toBeVisible();
+  await dialog.getByRole("button", {name:"获取当前页智能建议"}).click();
+  await dialog.getByRole("button", {name:"放弃建议"}).click();
+  await expect(dialog.getByText("建议已放弃，基础结果未改变")).toBeVisible();
+  await expect(dialog.getByRole("button", {name:"查看基础版本"})).toBeHidden();
 });
