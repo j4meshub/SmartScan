@@ -48,4 +48,6 @@ iOS 不直接访问内部 AI 网关，也不接触媒体授权令牌。页面媒
 - 当前版本决定、运行态轮询、过期禁用、Mock 标识和来源版本预览；
 - 中英文资源、固定 Xcode/XcodeGen 工程生成、iOS Simulator 编译与 XCTest。
 
+首次 macOS 门禁成功编译全部新增 Swift，并由幂等键测试发现 Unicode 字母可能进入 HTTP 请求头；实现随后改为显式 ASCII 允许集，未放宽断言。修复后的 push `39817688932` 与 PR `39817698321` 两套 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器检查全部通过。
+
 以下仍是人工或外部门禁：真实 iPhone/iPad 的 VoiceOver、网络切换、前后台恢复和长列表性能；真实模型的数据政策、准确率、延迟和费用；Apple 签名、Archive、TestFlight 与 App Store。Simulator 或 Mock 结果不能替代这些门禁。
