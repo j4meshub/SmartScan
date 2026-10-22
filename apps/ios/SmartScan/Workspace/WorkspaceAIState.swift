@@ -41,7 +41,11 @@ func makeAIIdempotencyKey(
 ) throws -> String {
     guard sourceResultVersion > 0 else { throw WorkspaceError.invalidAISourceVersion }
     let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_.:-"))
-    let safePage = String(pageID.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "_" }.prefix(24))
+    let safePage = String(
+        pageID.unicodeScalars
+            .map { allowed.contains($0) ? Character(String($0)) : Character("_") }
+            .prefix(24)
+    )
     let page = safePage.isEmpty ? "page" : safePage
     return String("ios-ai.\(page).v\(sourceResultVersion).\(randomID)".prefix(100))
 }

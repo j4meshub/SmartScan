@@ -623,7 +623,7 @@ private struct AIWorkspacePanel: View {
         .task(id: "\(page.id)-\(page.activeResultVersion)-ai") {
             await store.loadAI(for: page)
             while !Task.isCancelled && shouldPollAIEnhancements(store.enhancements(for: page.id)) {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { return }
                 await store.refreshAI(pageID: page.id)
                 if store.aiErrorMessage != nil { return }

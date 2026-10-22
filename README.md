@@ -207,7 +207,7 @@ Provider 超时、一次重试、跨 Worker 熔断、调用租约、并发/频�
 
 基础 OCR、专业 OCR、公共 VLM 和自定义 VLM 的同集比较、授权/脱敏清单、准确率、幻觉率、结构化成功率、延迟、成本与版本门禁见[可选视觉 AI 固定评估](docs/AI_FIXED_EVALUATION.md)。评估器默认离线，示例和 Mock 不能替代真实 API 验收。
 
-AI 基础设施与扫描业务接入边界、项目级授权、候选版本、七类任务落点、三端顺序和本机 Mock/真实模式见[可选视觉 AI 业务接入架构](docs/AI_BUSINESS_INTEGRATION.md)。通用文档四任务、公式/复杂版面、H5、本机试用及 Android 业务接入已实现；iOS、试卷、扫书和真实模型验收仍按 M8 后续工作包推进。Android 的分层、用户控制、版本规则和测试边界见[Android 可选视觉 AI 接入](docs/ANDROID_AI_INTEGRATION.md)。
+AI 基础设施与扫描业务接入边界、项目级授权、候选版本、七类任务落点、三端顺序和本机 Mock/真实模式见[可选视觉 AI 业务接入架构](docs/AI_BUSINESS_INTEGRATION.md)。通用文档四任务、公式/复杂版面、H5、本机试用及 Android 业务接入已完成；iOS 接入已实现并等待固定 macOS Runner 门禁，试卷、扫书和真实模型验收仍按 M8 后续工作包推进。移动端的分层、用户控制、版本规则和测试边界见[Android 可选视觉 AI 接入](docs/ANDROID_AI_INTEGRATION.md)与[iOS 可选视觉 AI 接入](docs/IOS_AI_INTEGRATION.md)。
 
 ## 容器运行
 

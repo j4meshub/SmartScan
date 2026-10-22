@@ -1,21 +1,28 @@
 # SmartScan 长任务进度
 
-更新时间：2026-10-22
+更新时间：2026-10-23
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI 业务接入 |
-| 当前工作包 | `AND-AI-001` Android AI 接入 |
-| 工作包状态 | 完成：公共 API、仓储、Compose 产品闭环、双语与自动测试已实现；PR #67 代码头五项 CI 全部通过，等待证据提交门禁与合并 |
-| 当前分支 | `codex/and-ai-001-android-ai`（已重放到 AI-009 合并后的 `main`，三点差异仅包含 Android AI 接入） |
-| 最后验证基线 | `dfe89da`（PR #67 代码头；pull_request 运行 `39807710368` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器五项全部通过） |
-| 工作包提交 | `09ab868`（Android AI 闭环）、`77df334`（构造参数兼容）、`c4b131f`（降级语义）、`36c7914`（UI 与中文证据）及后续测试稳定性修复 |
-| PR | [#67 Android 视觉 AI 业务闭环](https://github.com/j4meshub/SmartScan/pull/67)；代码门禁通过，等待最终证据提交门禁与合并 |
-| 下一工作包 | `IOS-AI-001`：iOS 项目授权、建议、进度和候选选择 |
+| 当前工作包 | `IOS-AI-001` iOS AI 接入 |
+| 工作包状态 | 进行中：公共 API、仓储、SwiftUI 产品闭环、双语和 XCTest 已实现并推送；GitHub Actions 服务退化期间固定 macOS Runner 尚未分配，不能提前标记完成 |
+| 当前分支 | `codex/ios-ai-001-ios-ai` |
+| 最后验证基线 | `304cabb`（iOS AI 代码提交；push 运行 `39814804619` 仍排队，尚无 macOS 编译结论） |
+| 工作包提交 | `304cabb`（iOS AI 业务闭环）；当前兼容收紧和中文证据尚待提交 |
+| PR | 尚未创建；需先取得固定 Xcode 16.4 iOS Simulator 代码门禁结果 |
+| 下一工作包 | `AI-010` 与 `AI-011` 依赖真实固定数据集并保持阻塞；随后汇总 `AI-012` 集成评估与发布门禁 |
 
 ## 当前工作包进展
+
+- iOS 已在既有 `URLSessionSmartScanAPI`、`WorkspaceRepository`、`WorkspaceStore` 和 SwiftUI 项目工作区接入能力查询、项目开关、页面候选创建/列表及接受/放弃；请求继续复用 Bearer/设备会话，不直连内部网关，也不保存 Provider Key 或部署连接信息。
+- 客户端只解析分类、方向、标题、页码、公式、表格和版面文字；最多 40 个复杂块、每表 200 个单元格、每条 512 字符，非法置信度和未知类型不会进入 UI。响应中的 `provider_id`、`model`、`evidence` 等部署字段由解码模型直接忽略。
+- SwiftUI 固定展示数据传输说明，用户同意后才可开启项目 AI；支持通用建议/复杂 OCR、运行态轮询、候选置信度、接受/放弃、过期禁用及来源基础版本回看。Mock 持续显示“模拟 AI”，复杂 OCR 明确不修改图片像素，AI 错误与基础编辑/导出状态隔离。
+- 新增接口、仓储输入边界、候选收敛、状态纯函数与幂等键 XCTest；中英文资源同步补齐。Windows 本机发布草稿校验与差异空白检查通过，但本机不具备 Xcode，必须以 GitHub 固定 Xcode 16.4 macOS Runner 的 Simulator 编译和测试作为完成门禁。
+- push 工作流 `39814804619` 在 GitHub Actions 服务退化期间五个作业均停留在 `queued` 且没有 Runner 分配；这属于外部 CI 阻塞，当前仅记录“进行中”，不会用静态检查替代真实 Swift 编译。
+- AND-AI-001 已由 [PR #67](https://github.com/j4meshub/SmartScan/pull/67) 合并到主线，中文 squash 提交为 `449b4ac`；最终 push `39808869360` 五项通过，PR 运行 `39808877949` 在重新执行受影响的 iOS 作业后五项全部通过。
 
 - Android `SmartScanApi` 新增能力、项目设置、页面候选创建/列表和接受/放弃接口；版本化页面下载支持来源基础版本只读预览。所有请求继续复用现有 Bearer/设备头拦截器，移动端不建立或保存部署连接配置。
 - 仓储把不可信候选收敛为分类、方向、标题、页码、公式、表格和版面七类有限字段，最多读取 40 个复杂块、每表 200 个单元格、每条 512 字符。网络 DTO 不解析部署证据；UI 在不确定网络失败后复用同一幂等键，成功后才轮换。
