@@ -3,10 +3,13 @@ package com.smartscan.feature.workspace
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -64,66 +67,76 @@ class AiWorkspaceContentTest {
 
     @Test
     fun `current candidate exposes user decision actions`() {
-        var status by mutableStateOf("candidate_ready")
-        val candidate = enhancement(status = status, sourceVersion = 2)
         compose.setContent {
             MaterialTheme {
-                AiWorkspaceContent(
-                    projectAiEnabled = true,
-                    activeResultVersion = 2,
-                    capabilities = capabilities(),
-                    enhancements = listOf(candidate.copy(status = status)),
-                    enhancementKind = "recommended",
-                    loading = false,
-                    actionBusy = false,
-                    parentBusy = false,
-                    failed = false,
-                    onToggleProjectAi = {},
-                    onEnhancementKindChanged = {},
-                    onRequest = {},
-                    onRefresh = {},
-                    onDecide = { _, accepted -> status = if (accepted) "accepted" else "rejected" },
-                    onPreviewVersion = {},
-                )
+                DecisionHarness()
             }
         }
 
         compose.onNodeWithText("Candidate ready").assertIsDisplayed()
         compose.onNodeWithText("Title suggestion").assertIsDisplayed()
-        compose.onNodeWithText("Accept candidate").performClick()
-        compose.onNodeWithText("Candidate accepted").assertIsDisplayed()
+        compose.onNodeWithText("Accept candidate").assertHasClickAction().performClick()
+        compose.onNodeWithText("Candidate accepted").assertExists()
     }
 
     @Test
     fun `accepted history exposes read only baseline preview`() {
-        var previewVersion by mutableStateOf<Int?>(null)
-        val candidate = enhancement(status = "accepted", sourceVersion = 2)
         compose.setContent {
             MaterialTheme {
-                Column {
-                    AiWorkspaceContent(
-                        projectAiEnabled = true,
-                        activeResultVersion = 3,
-                        capabilities = capabilities(),
-                        enhancements = listOf(candidate),
-                        enhancementKind = "recommended",
-                        loading = false,
-                        actionBusy = false,
-                        parentBusy = false,
-                        failed = false,
-                        onToggleProjectAi = {},
-                        onEnhancementKindChanged = {},
-                        onRequest = {},
-                        onRefresh = {},
-                        onDecide = { _, _ -> },
-                        onPreviewVersion = { previewVersion = it },
-                    )
-                    Text("preview:${previewVersion ?: 0}")
-                }
+                PreviewHarness()
             }
         }
-        compose.onNodeWithText("View baseline version").performClick()
+        compose.onNodeWithText("View baseline version").assertHasClickAction().performClick()
         compose.onNodeWithText("preview:2").assertIsDisplayed()
+    }
+}
+
+@Composable
+private fun DecisionHarness() {
+    var candidate by remember { mutableStateOf(enhancement(status = "candidate_ready", sourceVersion = 2)) }
+    AiWorkspaceContent(
+        projectAiEnabled = true,
+        activeResultVersion = 2,
+        capabilities = capabilities(),
+        enhancements = listOf(candidate),
+        enhancementKind = "recommended",
+        loading = false,
+        actionBusy = false,
+        parentBusy = false,
+        failed = false,
+        onToggleProjectAi = {},
+        onEnhancementKindChanged = {},
+        onRequest = {},
+        onRefresh = {},
+        onDecide = { enhancement, accepted ->
+            candidate = enhancement.copy(status = if (accepted) "accepted" else "rejected")
+        },
+        onPreviewVersion = {},
+    )
+}
+
+@Composable
+private fun PreviewHarness() {
+    var previewVersion by remember { mutableStateOf<Int?>(null) }
+    Column {
+        Text("preview:${previewVersion ?: 0}")
+        AiWorkspaceContent(
+            projectAiEnabled = true,
+            activeResultVersion = 3,
+            capabilities = capabilities(),
+            enhancements = listOf(enhancement(status = "accepted", sourceVersion = 2)),
+            enhancementKind = "recommended",
+            loading = false,
+            actionBusy = false,
+            parentBusy = false,
+            failed = false,
+            onToggleProjectAi = {},
+            onEnhancementKindChanged = {},
+            onRequest = {},
+            onRefresh = {},
+            onDecide = { _, _ -> },
+            onPreviewVersion = { previewVersion = it },
+        )
     }
 }
 
