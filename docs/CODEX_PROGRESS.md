@@ -7,15 +7,19 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI 业务接入 |
-| 当前工作包 | `IOS-AI-001` iOS AI 接入 |
-| 工作包状态 | 完成：公共 API、仓储、SwiftUI 产品闭环、双语和 XCTest 已实现；首次 iOS 门禁发现非 ASCII 请求头问题，修复后两套五项 CI 全部通过 |
-| 当前分支 | `codex/ios-ai-001-ios-ai` |
-| 最后验证基线 | `5bea9b1`（ASCII 安全修复；push `39817688932` 与 PR `39817698321` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器五项全部通过） |
-| 工作包提交 | `304cabb`（iOS AI 业务闭环）、`a5a89e5`（兼容收紧与中文证据）、`5bea9b1`（幂等键 ASCII 安全修复） |
-| PR | [#68 iOS 视觉 AI 业务闭环](https://github.com/j4meshub/SmartScan/pull/68)；代码头两套五项 CI 全部通过，等待本证据提交最终门禁与合并 |
-| 下一工作包 | `AI-010` 与 `AI-011` 依赖真实固定数据集并保持阻塞；随后汇总 `AI-012` 集成评估与发布门禁 |
+| 当前工作包 | M8 外部门禁断点收口 |
+| 工作包状态 | 阻塞：仓库内可独立完成的通用 AI 业务接入已完成；`AI-010/011/012` 需要授权固定数据集、真实 Provider、目标真机与数据政策输入 |
+| 当前分支 | `codex/ai-012-blocked-handoff` |
+| 最后验证基线 | `a15b78e`（PR #68 中文 squash 合并；最终 push `39819386309` 与 PR `39819397176` 两套五项 CI 全部通过） |
+| 工作包提交 | `a15b78e`（iOS 视觉 AI 业务闭环主线提交） |
+| PR | [#68 iOS 视觉 AI 业务闭环](https://github.com/j4meshub/SmartScan/pull/68) 已合并；当前断点收口 PR 待创建 |
+| 下一工作包 | 固定数据满足后按 `EXAM-002 → EXAM-003 → AI-010` 或 `AI-011` 解锁；全部依赖满足后执行 `AI-012` |
 
 ## 当前工作包进展
+
+- `IOS-AI-001` 已由 [PR #68](https://github.com/j4meshub/SmartScan/pull/68) 合并到主线，中文 squash 提交为 `a15b78e`；最终 push `39819386309` 与 PR `39819397176` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共十项全部通过。
+- 已复核剩余依赖：`AI-010` 依赖仍被固定数据集阻塞的 `EXAM-002/003`；`AI-011` 依赖 BOOK-002 的真实书籍固定集和真机门禁；`AI-012` 同时依赖 `AI-005/010/011`、真实 Provider、费用/延迟、数据政策和三端真实闭环。当前没有可以在缺少外部输入时安全宣称完成的产品代码工作。
+- 新增 `M8_AI_EXTERNAL_GATES.md`，固定试卷、扫书、七类 AI 评估、真实 Provider 和三端导出的输入、证据与解锁顺序。Mock、合成样本、静态检查和模拟器不能替代真实质量、费用、隐私或真机门禁。
 
 - iOS 已在既有 `URLSessionSmartScanAPI`、`WorkspaceRepository`、`WorkspaceStore` 和 SwiftUI 项目工作区接入能力查询、项目开关、页面候选创建/列表及接受/放弃；请求继续复用 Bearer/设备会话，不直连内部网关，也不保存 Provider Key 或部署连接信息。
 - 客户端只解析分类、方向、标题、页码、公式、表格和版面文字；最多 40 个复杂块、每表 200 个单元格、每条 512 字符，非法置信度和未知类型不会进入 UI。响应中的 `provider_id`、`model`、`evidence` 等部署字段由解码模型直接忽略。
