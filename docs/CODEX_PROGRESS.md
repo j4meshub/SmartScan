@@ -9,13 +9,19 @@
 | 当前里程碑 | M7 与 M9 外部门禁 |
 | 当前工作包 | 外部门禁审计（当前无依赖满足的独立工作包） |
 | 工作包状态 | 等待人工验收：`EXAM-002/003` 必须等待授权固定数据集通过分类与基础净化闸门；`OPS-005` 必须等待公司服务器和 staging；正式企微、短信、移动端签名、真机与商店发布同样需要外部条件 |
-| 当前分支 | `main`（仓库侧可独立推进的计划工作包已完成） |
-| 最后验证基线 | `c61fceb`（PR #57 合并后的主分支工作流 `39685863787` 的 API、Web、Android、iOS 和容器五项全部通过） |
-| 工作包提交 | `c61fceb`（REL-002 中文 squash 合并提交） |
-| PR | [#57](https://github.com/j4meshub/SmartScan/pull/57)，已合并 |
+| 当前分支 | `main`（DEVX-001 合并后恢复外部门禁断点） |
+| 最后验证基线 | `25001f4`（PR #59 工作流 `39711732455` 的 API、Web、Android、iOS 和容器五项全部通过） |
+| 工作包提交 | `b1d8c40`（一键试用实现、测试和文档）、`25001f4`（PR 证据） |
+| PR | [#59](https://github.com/j4meshub/SmartScan/pull/59)，代码头五项 CI 全部通过 |
 | 下一工作包 | 固定数据集到位后先完成 `EXAM-001`/`POC-004` 指标再进入 `EXAM-002/003`；公司服务器恢复后执行 `OPS-005`，其余外部门禁按可用条件验收 |
 
 ## 当前工作包进展
+
+- 新增根目录中文启动器 `SmartScan本机试用.cmd` 和 `tools/local_trial.py`：首次运行自动创建 `.venv`、安装 `dev,vision` 依赖，后台启动只监听回环地址的 API、CPU Worker 与 H5，并自动创建固定 `demo` 账号；后续启动根据依赖指纹复用环境。
+- 试用数据库、扫描文件、运行密钥、PID 状态和日志全部隔离在 `.smartscan-trial/`。停止按 PID 与命令行双重核对后关闭三个进程并保留数据；清理要求中文二次确认、验证精确目录后只删除试用区，明确保留 `.venv`。
+- 真实首次启动发现 CORS 复杂字段必须使用 JSON 数组，并发现 Python 3.14/Windows 不支持 `os.kill(pid, 0)` 的存活探测；分别改为 JSON 编码和 Windows 只读进程句柄检查，没有放宽 PID 复用防护。
+- 本机端到端已验证自动安装、API/H5 就绪、自动注册、真实登录、停止后 `8000/8080` 端口关闭、数据保留重启、再次登录和清理后仅保留 `.venv`。专项 `6 passed`；仓库级 Python `414 passed, 7 skipped`，覆盖率 `88.42%`，Ruff、150 个 Python 文件格式和差异空白检查通过。
+- PR #59 代码头 `25001f4` 的工作流 `39711732455` 已完成 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器五项检查，全部通过；DEVX-001 完成后恢复固定数据集、公司服务器和签名发布等外部门禁断点。
 
 - 新增只允许人工触发的 `iOS 正式发布` 工作流：要求 `main` 历史上的受保护 `ios-vX.Y.Z-build.N` 标签、`ios-release` Environment 审批和实际 Xcode 26+ 证据；默认 `validate-only`，只有显式选择 `upload-testflight` 才产生 Apple 外部副作用。
 - 正式参数由 Environment Variables 注入，P12、描述文件、App Store Connect `.p8` 与审核账号由 Secrets 注入。脚本使用临时钥匙串，完成发行签名、Archive、IPA 导出和清理；不把正式值写回 `project.yml`，Artifact 也不保存 IPA 或密钥材料。

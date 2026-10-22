@@ -52,6 +52,42 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 
 ## 本地运行
 
+### Windows 本机一键试用
+
+Windows 用户可以直接双击仓库根目录的 `SmartScan本机试用.cmd`，通过中文菜单完成：
+
+- 启动 API、CPU Worker 和 H5，并自动打开浏览器；
+- 首次运行时自动创建 `.venv`、安装开发与基础视觉依赖；
+- 自动创建固定试用账号，无需手工调用注册接口；
+- 停止全部试用进程但保留账号和扫描数据；
+- 清理隔离的试用账号、扫描文件与日志，同时保留 `.venv` 供下次复用。
+
+固定试用账号为：
+
+```text
+用户名：demo
+密码：SmartScan2026!
+```
+
+试用数据只写入仓库根目录的 `.smartscan-trial/`，不会读取或修改普通开发使用的
+`smartscan.db` 和 `data/`。清理操作会要求输入“清理”二次确认，并且只允许删除这个固定目录。
+本机试用仅监听 `127.0.0.1`，真实短信、企业微信、OCR 和外部视觉 AI 默认关闭；基础扫描、
+页面编辑及不含 OCR 文本层的 JPG/PDF 导出可以直接体验。首次安装依赖需要联网，后续启动不需要
+重复安装。
+
+也可以从命令行执行：
+
+```powershell
+python tools/local_trial.py start
+python tools/local_trial.py status
+python tools/local_trial.py stop
+python tools/local_trial.py clean
+```
+
+运行日志位于 `.smartscan-trial/logs/`。如果启动失败，工具会自动停止本次已启动的进程并保留日志。
+
+### 手动开发方式
+
 环境要求：Python 3.11 或更高版本。
 
 ```bash

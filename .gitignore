@@ -1,5 +1,6 @@
 .env
 .env.staging
+.smartscan-trial/
 deploy/compose/staging.env
 deploy/compose/staging.runtime.env
 .ops-evidence/
