@@ -191,6 +191,61 @@ final class WorkspaceAPITests: XCTestCase {
         XCTAssertEqual(receipt.status, "pending")
     }
 
+    func testAIEndpointsUseProjectConsentAndIdempotencyWithoutClientProviderConfiguration() async throws {
+        let api = try makeAPI()
+        var requestCount = 0
+        StubURLProtocol.handler = { request in
+            requestCount += 1
+            switch requestCount {
+            case 1:
+                XCTAssertEqual(request.url?.path, "/v1/ai/capabilities")
+                XCTAssertEqual(request.httpMethod, "GET")
+                return apiResponse(for: request, body: aiCapabilitiesJSON)
+            case 2:
+                XCTAssertEqual(request.url?.path, "/v1/projects/project-1/ai-settings")
+                XCTAssertEqual(request.httpMethod, "PUT")
+                let json = try XCTUnwrap(
+                    JSONSerialization.jsonObject(with: try XCTUnwrap(requestBody(request))) as? [String: Any]
+                )
+                XCTAssertEqual(json["enabled"] as? Bool, true)
+                XCTAssertEqual(json["consent_version"] as? String, "2026-10-23.1")
+                return apiResponse(for: request, body: aiProjectJSON)
+            case 3:
+                XCTAssertEqual(request.url?.path, "/v1/pages/page-1/ai-enhancements")
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), "ios-ai.stable-key-1234")
+                let json = try XCTUnwrap(
+                    JSONSerialization.jsonObject(with: try XCTUnwrap(requestBody(request))) as? [String: Any]
+                )
+                XCTAssertEqual(json["enhancement_kind"] as? String, "complex_ocr")
+                XCTAssertEqual(json["source_result_version"] as? Int, 2)
+                return apiResponse(for: request, status: 202, body: aiEnhancementJSON)
+            default:
+                XCTAssertEqual(request.url?.path, "/v1/ai-enhancements/enhancement-1/accept")
+                XCTAssertEqual(request.httpMethod, "POST")
+                return apiResponse(for: request, body: aiEnhancementAcceptedJSON)
+            }
+        }
+
+        let capabilities = try await api.aiCapabilities()
+        let project = try await api.updateProjectAI(
+            projectID: "project-1",
+            enabled: true,
+            consentVersion: capabilities.consentVersion
+        )
+        let enhancement = try await api.createAIEnhancement(
+            pageID: "page-1",
+            kind: "complex_ocr",
+            sourceResultVersion: 2,
+            idempotencyKey: "ios-ai.stable-key-1234"
+        )
+        let accepted = try await api.decideAIEnhancement(id: enhancement.id, accepted: true)
+
+        XCTAssertEqual(capabilities.executionMode, "mock")
+        XCTAssertTrue(project.isAIEnabled)
+        XCTAssertEqual(Set(enhancement.candidates.map(\.kind)), ["formula", "table", "layout"])
+        XCTAssertEqual(accepted.status, "accepted")
+    }
+
     private func makeAPI() throws -> URLSessionSmartScanAPI {
         let sessions = TestSessionStore()
         try sessions.save(token().credentials(userID: "user-1"))
@@ -241,3 +296,7 @@ private let bookIntegrityJSON = #"{"project_id":"project-1","pages_checked":2,"i
 private let bookAssemblyJSON = #"{"id":"export-2","project_id":"project-1","format":"pdf","quality":"balanced","include_ocr_text":true,"status":"ready","page_count":2,"error_code":null,"artifacts":[],"created_at":"2026-10-21T00:00:00Z","completed_at":"2026-10-21T00:01:00Z","book_assembly_signature":"signature","book_assembly_revision":2,"book_previous_export_id":"export-previous"}"#
 private let exportJSON = #"{"id":"export-1","project_id":"project-1","format":"pdf","quality":"clear","include_ocr_text":true,"status":"ready","page_count":1,"error_code":null,"artifacts":[{"id":"artifact-1","page_id":null,"sequence":1,"file_name":"scan.pdf","mime_type":"application/pdf","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size_bytes":12}],"created_at":"2026-10-21T00:00:00Z","completed_at":"2026-10-21T00:01:00Z"}"#
 private let deletionJSON = #"{"id":"deletion-1","status":"pending","requested_at":"2026-10-21T00:00:00Z","execute_after":"2026-10-28T00:00:00Z","canceled_at":null,"completed_at":null}"#
+private let aiCapabilitiesJSON = #"{"available":true,"business_orchestration_ready":true,"execution_mode":"mock","consent_version":"2026-10-23.1","transmission_notice_code":"ai_data_transfer_v1","enhancement_kinds":["recommended","complex_ocr"],"task_types":["classify_page","ocr_formula"]}"#
+private let aiProjectJSON = #"{"id":"project-1","title":"Scan","suggested_name":null,"mode":"document","reading_order":"ltr","created_at":"2026-10-23T00:00:00Z","updated_at":"2026-10-23T00:00:01Z","ai_enabled":true,"ai_consent_version":"2026-10-23.1","provider_id":"must-not-be-modeled"}"#
+private let aiEnhancementJSON = #"{"id":"enhancement-1","project_id":"project-1","page_id":"page-1","processing_job_id":"job-1","enhancement_kind":"complex_ocr","requested_tasks":["ocr_formula"],"source_result_version":2,"status":"candidate_ready","candidate_result":{"tasks":{"ocr_formula":{"blocks":[{"block_type":"formula","latex_candidate":"x^2","confidence":0.92},{"block_type":"table","cells":[{"row":0,"column":0,"text_candidate":"A"},{"row":0,"column":1,"text_candidate":"B"}],"confidence":0.84},{"block_type":"layout","text_candidate":"Summary","confidence":0.73}]}}},"confidence":0.84,"error_code":null,"provider_id":"secret-provider","model":"secret-model","evidence":{"url":"https://internal.invalid"},"created_at":"2026-10-23T00:00:00Z","updated_at":"2026-10-23T00:00:01Z"}"#
+private let aiEnhancementAcceptedJSON = #"{"id":"enhancement-1","project_id":"project-1","page_id":"page-1","processing_job_id":"job-1","enhancement_kind":"complex_ocr","requested_tasks":["ocr_formula"],"source_result_version":2,"status":"accepted","candidate_result":{"tasks":{"ocr_formula":{"blocks":[]}}},"confidence":0.84,"error_code":null,"created_at":"2026-10-23T00:00:00Z","updated_at":"2026-10-23T00:00:02Z"}"#

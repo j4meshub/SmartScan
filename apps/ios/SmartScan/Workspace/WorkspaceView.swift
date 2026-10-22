@@ -388,6 +388,7 @@ private struct PageEditorView: View {
                         .background(.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
                     }
                     preview(page)
+                    AIWorkspacePanel(page: page, store: store)
                     HStack {
                         Button(String(localized: "Rotate 90°")) {
                             Task { await store.rotate(pageID: page.id) }
@@ -447,18 +448,25 @@ private struct PageEditorView: View {
 
     @ViewBuilder
     private func preview(_ page: WorkspacePage) -> some View {
-        if let document = store.previews[page.id], let image = UIImage(contentsOfFile: document.url.path) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 420)
-                .accessibilityLabel(String(format: String(localized: "Page %d preview"), page.pageNumber))
-        } else {
-            ContentUnavailableView("Preview unavailable", systemImage: "photo")
-                .frame(maxWidth: .infinity, minHeight: 180)
-                .task(id: "\(page.id)-\(page.activeResultVersion)") {
-                    await store.loadPreview(for: page)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            if let version = store.previewVersions[page.id] {
+                Text(String(format: String(localized: "Viewing baseline version %d"), version))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let document = store.previews[page.id], let image = UIImage(contentsOfFile: document.url.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 420)
+                    .accessibilityLabel(String(format: String(localized: "Page %d preview"), page.pageNumber))
+            } else {
+                ContentUnavailableView("Preview unavailable", systemImage: "photo")
+                    .frame(maxWidth: .infinity, minHeight: 180)
+                    .task(id: "\(page.id)-\(page.activeResultVersion)-\(store.previewVersions[page.id] ?? 0)") {
+                        await store.loadPreview(for: page)
+                    }
+            }
         }
     }
 
@@ -485,6 +493,196 @@ private struct PageEditorView: View {
                 .monospacedDigit()
                 .frame(width: 48)
         }
+    }
+}
+
+private struct AIWorkspacePanel: View {
+    let page: WorkspacePage
+    @ObservedObject var store: WorkspaceStore
+    @State private var enhancementKind = "recommended"
+
+    private var project: WorkspaceProject? { store.selectedProject }
+    private var capabilities: WorkspaceAICapabilities? { store.aiCapabilities }
+    private var enhancements: [WorkspaceAIEnhancement] { store.enhancements(for: page.id) }
+    private var current: WorkspaceAIEnhancement? {
+        latestAIEnhancement(enhancements, sourceVersion: page.activeResultVersion, enhancementKind: enhancementKind)
+    }
+    private var capabilityReady: Bool {
+        capabilities?.available == true && capabilities?.businessOrchestrationReady == true
+    }
+    private var canRequest: Bool {
+        capabilityReady
+            && project?.isAIEnabled == true
+            && page.activeResultVersion > 0
+            && supportsAIEnhancement(capabilities, kind: enhancementKind)
+            && !store.aiBusy
+            && !shouldPollAIEnhancements(enhancements)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(String(localized: "Visual AI"), systemImage: "sparkles")
+                    .font(.headline)
+                Spacer()
+                Text(modeLabel)
+                    .font(.caption.bold())
+                    .foregroundStyle(capabilityReady ? .blue : .red)
+            }
+            Text(String(localized: "When enabled, this project's page images may be sent to the deployment-configured AI service for analysis. Results are suggestions and never replace the basic result automatically."))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            if let consentVersion = capabilities?.consentVersion {
+                Text(String(format: String(localized: "Data notice version: %@"), consentVersion))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if project?.isAIEnabled != true {
+                Text(String(localized: "Basic analysis suggests that AI may help this page. No page is sent until you enable AI for this project."))
+                    .font(.footnote)
+            }
+            Button(project?.isAIEnabled == true
+                ? String(localized: "Disable AI for this project")
+                : String(localized: "Agree and enable AI for this project")) {
+                Task { await store.updateProjectAI(enabled: project?.isAIEnabled != true) }
+            }
+            .buttonStyle(.bordered)
+            .disabled(store.aiBusy || (project?.isAIEnabled != true && !capabilityReady))
+
+            Picker(String(localized: "AI task"), selection: $enhancementKind) {
+                Text(String(localized: "Smart suggestions")).tag("recommended")
+                Text(String(localized: "Formula and complex layout OCR")).tag("complex_ocr")
+            }
+            .pickerStyle(.segmented)
+
+            HStack {
+                Button(String(localized: "Analyze this page")) {
+                    Task { await store.requestAI(page: page, kind: enhancementKind) }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canRequest)
+                Button(String(localized: "Refresh AI status")) {
+                    Task { await store.refreshAI(pageID: page.id) }
+                }
+                .buttonStyle(.bordered)
+                .disabled(store.aiBusy)
+            }
+
+            if store.aiBusy { ProgressView().accessibilityLabel(String(localized: "AI request in progress")) }
+            if let current {
+                Text(aiStatusLabel(current.status)).font(.subheadline.bold())
+                Text(String(format: String(localized: "Source result version: %d"), current.sourceResultVersion))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if current.candidates.isEmpty {
+                    Text(String(localized: "No structured suggestions were returned."))
+                } else {
+                    ForEach(current.candidates) { candidate in
+                        AICandidateRow(candidate: candidate)
+                    }
+                }
+                if canDecideAIEnhancement(current, activeResultVersion: page.activeResultVersion) && !store.aiBusy {
+                    HStack {
+                        Button(String(localized: "Accept candidate")) {
+                            Task { await store.decideAI(current, accepted: true) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Button(String(localized: "Reject candidate")) {
+                            Task { await store.decideAI(current, accepted: false) }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                if current.status == "accepted", current.sourceResultVersion != page.activeResultVersion {
+                    HStack {
+                        Button(String(localized: "View baseline version")) {
+                            store.selectPreviewVersion(pageID: page.id, version: current.sourceResultVersion)
+                            Task { await store.loadPreview(for: page) }
+                        }
+                        .buttonStyle(.bordered)
+                        Button(String(localized: "View current version")) {
+                            store.selectPreviewVersion(pageID: page.id, version: nil)
+                            Task { await store.loadPreview(for: page) }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+            if enhancementKind == "complex_ocr" {
+                Text(String(localized: "Complex OCR only proposes text, formula, table, and layout blocks. It does not modify image pixels."))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if let message = store.aiErrorMessage {
+                Text(message).foregroundStyle(.red).accessibilityLabel(message)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+        .task(id: "\(page.id)-\(page.activeResultVersion)-ai") {
+            await store.loadAI(for: page)
+            while !Task.isCancelled && shouldPollAIEnhancements(store.enhancements(for: page.id)) {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled else { return }
+                await store.refreshAI(pageID: page.id)
+                if store.aiErrorMessage != nil { return }
+            }
+        }
+    }
+
+    private var modeLabel: String {
+        if capabilities?.executionMode == "mock" { return String(localized: "Simulated AI") }
+        if capabilityReady { return String(localized: "AI available") }
+        return String(localized: "AI unavailable")
+    }
+}
+
+private struct AICandidateRow: View {
+    let candidate: WorkspaceAICandidate
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(candidateLabel).font(.subheadline.bold())
+                Spacer()
+                if let percent = aiConfidencePercent(candidate.confidence) {
+                    Text(String(format: String(localized: "Confidence: %d%%"), percent))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(candidate.kind == "orientation"
+                ? String(format: String(localized: "Rotate %@°"), candidate.value)
+                : candidate.value)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var candidateLabel: String {
+        switch candidate.kind {
+        case "classification": return String(localized: "Classification suggestion")
+        case "orientation": return String(localized: "Orientation suggestion")
+        case "title": return String(localized: "Title suggestion")
+        case "page_number": return String(localized: "Page number suggestion")
+        case "formula": return String(localized: "Formula candidate")
+        case "table": return String(localized: "Table candidate")
+        default: return String(localized: "Layout candidate")
+        }
+    }
+}
+
+private func aiStatusLabel(_ status: String) -> String {
+    switch status {
+    case "queued": return String(localized: "AI queued")
+    case "processing": return String(localized: "AI processing")
+    case "candidate_ready": return String(localized: "Candidate ready")
+    case "accepted": return String(localized: "Candidate accepted")
+    case "rejected": return String(localized: "Candidate rejected")
+    case "stale": return String(localized: "Candidate expired")
+    case "canceled": return String(localized: "AI request canceled")
+    default: return String(localized: "AI request failed; the basic result is still available")
     }
 }
 

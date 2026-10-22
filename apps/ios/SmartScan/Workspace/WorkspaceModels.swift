@@ -8,8 +8,11 @@ struct WorkspaceProject: Codable, Equatable, Sendable, Identifiable, Hashable {
     let readingOrder: String
     let createdAt: String
     let updatedAt: String
+    var aiEnabled: Bool? = nil
+    var aiConsentVersion: String? = nil
 
     var displayName: String { suggestedName ?? title }
+    var isAIEnabled: Bool { aiEnabled == true }
 
     enum CodingKeys: String, CodingKey {
         case id, title, mode
@@ -17,7 +20,281 @@ struct WorkspaceProject: Codable, Equatable, Sendable, Identifiable, Hashable {
         case readingOrder = "reading_order"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case aiEnabled = "ai_enabled"
+        case aiConsentVersion = "ai_consent_version"
     }
+}
+
+struct WorkspaceAICapabilities: Codable, Equatable, Sendable {
+    let available: Bool
+    let businessOrchestrationReady: Bool
+    let executionMode: String
+    let consentVersion: String
+    let transmissionNoticeCode: String
+    let enhancementKinds: Set<String>
+    let taskTypes: Set<String>
+
+    enum CodingKeys: String, CodingKey {
+        case available
+        case businessOrchestrationReady = "business_orchestration_ready"
+        case executionMode = "execution_mode"
+        case consentVersion = "consent_version"
+        case transmissionNoticeCode = "transmission_notice_code"
+        case enhancementKinds = "enhancement_kinds"
+        case taskTypes = "task_types"
+    }
+}
+
+struct WorkspaceAICandidate: Equatable, Sendable, Identifiable {
+    let kind: String
+    let value: String
+    let confidence: Double?
+
+    var id: String { "\(kind):\(value)" }
+}
+
+struct WorkspaceAIEnhancement: Decodable, Equatable, Sendable, Identifiable {
+    let id: String
+    let projectID: String
+    let pageID: String
+    let processingJobID: String?
+    let enhancementKind: String
+    let requestedTasks: [String]
+    let sourceResultVersion: Int
+    let status: String
+    let candidates: [WorkspaceAICandidate]
+    let confidence: Double?
+    let errorCode: String?
+    let createdAt: String
+    let updatedAt: String
+
+    init(
+        id: String,
+        projectID: String,
+        pageID: String,
+        processingJobID: String?,
+        enhancementKind: String,
+        requestedTasks: [String],
+        sourceResultVersion: Int,
+        status: String,
+        candidates: [WorkspaceAICandidate],
+        confidence: Double?,
+        errorCode: String?,
+        createdAt: String,
+        updatedAt: String
+    ) {
+        self.id = id
+        self.projectID = projectID
+        self.pageID = pageID
+        self.processingJobID = processingJobID
+        self.enhancementKind = enhancementKind
+        self.requestedTasks = requestedTasks
+        self.sourceResultVersion = sourceResultVersion
+        self.status = status
+        self.candidates = candidates
+        self.confidence = confidence
+        self.errorCode = errorCode
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        projectID = try container.decode(String.self, forKey: .projectID)
+        pageID = try container.decode(String.self, forKey: .pageID)
+        processingJobID = try container.decodeIfPresent(String.self, forKey: .processingJobID)
+        enhancementKind = try container.decode(String.self, forKey: .enhancementKind)
+        requestedTasks = try container.decode([String].self, forKey: .requestedTasks)
+        sourceResultVersion = try container.decode(Int.self, forKey: .sourceResultVersion)
+        status = try container.decode(String.self, forKey: .status)
+        let result = try container.decodeIfPresent(WorkspaceAICandidateEnvelope.self, forKey: .candidateResult)
+        candidates = workspaceAICandidates(from: result)
+        confidence = validAIConfidence(try container.decodeIfPresent(Double.self, forKey: .confidence))
+        errorCode = try container.decodeIfPresent(String.self, forKey: .errorCode)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        updatedAt = try container.decode(String.self, forKey: .updatedAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status, confidence
+        case projectID = "project_id"
+        case pageID = "page_id"
+        case processingJobID = "processing_job_id"
+        case enhancementKind = "enhancement_kind"
+        case requestedTasks = "requested_tasks"
+        case sourceResultVersion = "source_result_version"
+        case candidateResult = "candidate_result"
+        case errorCode = "error_code"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+private struct WorkspaceAICandidateEnvelope: Decodable {
+    let tasks: WorkspaceAITasks?
+}
+
+private struct WorkspaceAITasks: Decodable {
+    let classifyPage: WorkspaceAIClassification?
+    let detectOrientation: WorkspaceAIOrientation?
+    let extractTitle: WorkspaceAITitleResult?
+    let extractPageNumber: WorkspaceAIPageNumber?
+    let ocrFormula: WorkspaceAIFormulaResult?
+
+    enum CodingKeys: String, CodingKey {
+        case classifyPage = "classify_page"
+        case detectOrientation = "detect_orientation"
+        case extractTitle = "extract_title"
+        case extractPageNumber = "extract_page_number"
+        case ocrFormula = "ocr_formula"
+    }
+}
+
+private struct WorkspaceAIClassification: Decodable {
+    let label: String?
+    let confidence: Double?
+}
+
+private struct WorkspaceAIOrientation: Decodable {
+    let rotationDegrees: Int?
+    let confidence: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case confidence
+        case rotationDegrees = "rotation_degrees"
+    }
+}
+
+private struct WorkspaceAITitleResult: Decodable {
+    let candidates: [WorkspaceAITitleCandidate]?
+}
+
+private struct WorkspaceAITitleCandidate: Decodable {
+    let text: String?
+    let confidence: Double?
+}
+
+private struct WorkspaceAIPageNumber: Decodable {
+    let status: String?
+    let rawLabel: String?
+    let normalizedNumber: Int?
+    let confidence: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case status, confidence
+        case rawLabel = "raw_label"
+        case normalizedNumber = "normalized_number"
+    }
+}
+
+private struct WorkspaceAIFormulaResult: Decodable {
+    let blocks: [WorkspaceAIBlock]?
+}
+
+private struct WorkspaceAIBlock: Decodable {
+    let blockType: String?
+    let latexCandidate: String?
+    let textCandidate: String?
+    let cells: [WorkspaceAITableCell]?
+    let confidence: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case cells, confidence
+        case blockType = "block_type"
+        case latexCandidate = "latex_candidate"
+        case textCandidate = "text_candidate"
+    }
+}
+
+private struct WorkspaceAITableCell: Decodable {
+    let row: Int?
+    let column: Int?
+    let textCandidate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case row, column
+        case textCandidate = "text_candidate"
+    }
+}
+
+private func workspaceAICandidates(from envelope: WorkspaceAICandidateEnvelope?) -> [WorkspaceAICandidate] {
+    guard let tasks = envelope?.tasks else { return [] }
+    var candidates: [WorkspaceAICandidate] = []
+    if let classification = aiPreview(tasks.classifyPage?.label) {
+        candidates.append(.init(
+            kind: "classification",
+            value: classification,
+            confidence: validAIConfidence(tasks.classifyPage?.confidence)
+        ))
+    }
+    if let orientation = tasks.detectOrientation,
+       let degrees = orientation.rotationDegrees,
+       [0, 90, 180, 270].contains(degrees) {
+        candidates.append(.init(
+            kind: "orientation",
+            value: String(degrees),
+            confidence: validAIConfidence(orientation.confidence)
+        ))
+    }
+    let title = tasks.extractTitle?.candidates?
+        .filter { aiPreview($0.text) != nil }
+        .max { (validAIConfidence($0.confidence) ?? 0) < (validAIConfidence($1.confidence) ?? 0) }
+    if let value = aiPreview(title?.text) {
+        candidates.append(.init(kind: "title", value: value, confidence: validAIConfidence(title?.confidence)))
+    }
+    if tasks.extractPageNumber?.status == "detected" {
+        let pageNumber = aiPreview(tasks.extractPageNumber?.rawLabel)
+            ?? tasks.extractPageNumber?.normalizedNumber.map { String($0) }
+        if let pageNumber {
+            candidates.append(.init(
+                kind: "page_number",
+                value: pageNumber,
+                confidence: validAIConfidence(tasks.extractPageNumber?.confidence)
+            ))
+        }
+    }
+    for block in (tasks.ocrFormula?.blocks ?? []).prefix(40) {
+        let confidence = validAIConfidence(block.confidence)
+        switch block.blockType {
+        case "formula":
+            if let value = aiPreview(block.latexCandidate) {
+                candidates.append(.init(kind: "formula", value: value, confidence: confidence))
+            }
+        case "layout":
+            if let value = aiPreview(block.textCandidate) {
+                candidates.append(.init(kind: "layout", value: value, confidence: confidence))
+            }
+        case "table":
+            var rows: [Int: [(Int, String)]] = [:]
+            for cell in (block.cells ?? []).prefix(200) {
+                guard let row = cell.row, row >= 0,
+                      let column = cell.column, column >= 0,
+                      let text = aiPreview(cell.textCandidate) else { continue }
+                rows[row, default: []].append((column, text))
+            }
+            let table = rows.keys.sorted().map { row in
+                rows[row, default: []].sorted { $0.0 < $1.0 }.map { $0.1 }.joined(separator: " | ")
+            }.joined(separator: " / ")
+            if let value = aiPreview(table) {
+                candidates.append(.init(kind: "table", value: value, confidence: confidence))
+            }
+        default: break
+        }
+    }
+    return candidates
+}
+
+private func validAIConfidence(_ value: Double?) -> Double? {
+    guard let value, value.isFinite, (0 ... 1).contains(value) else { return nil }
+    return value
+}
+
+private func aiPreview(_ value: String?) -> String? {
+    guard let value else { return nil }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    return String(trimmed.prefix(512))
 }
 
 struct WorkspacePage: Codable, Equatable, Sendable, Identifiable, Hashable {
@@ -278,4 +555,9 @@ enum WorkspaceError: Error, Equatable {
     case downloadSizeMismatch
     case downloadHashMismatch
     case localFileUnavailable
+    case invalidAIConsent
+    case invalidAIEnhancementKind
+    case invalidAISourceVersion
+    case invalidAIIdempotencyKey
+    case invalidAIEnhancement
 }

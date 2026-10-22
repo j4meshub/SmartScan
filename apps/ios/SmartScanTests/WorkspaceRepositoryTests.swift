@@ -100,6 +100,41 @@ final class WorkspaceRepositoryTests: XCTestCase {
         XCTAssertEqual(replacement.id, "replacement-page")
         XCTAssertEqual(replacement.bookSide, "left")
     }
+
+    func testAIRequestsRequireConsentVersionAndStableIdempotencyInput() async throws {
+        let fixture = try WorkspaceFixture()
+        defer { fixture.cleanup() }
+        let api = FakeWorkspaceAPI()
+        let repository = fixture.repository(api: api)
+
+        do {
+            _ = try await repository.updateProjectAI(projectID: "project-1", enabled: true, consentVersion: nil)
+            XCTFail("开启 AI 必须携带数据说明版本")
+        } catch {
+            XCTAssertEqual(error as? WorkspaceError, .invalidAIConsent)
+        }
+        do {
+            _ = try await repository.requestAIEnhancement(
+                pageID: "page-1",
+                kind: "unknown",
+                sourceResultVersion: 1,
+                idempotencyKey: "ios-ai.valid-key-1234"
+            )
+            XCTFail("未知 AI 类型必须被拒绝")
+        } catch {
+            XCTAssertEqual(error as? WorkspaceError, .invalidAIEnhancementKind)
+        }
+
+        let enhancement = try await repository.requestAIEnhancement(
+            pageID: "page-1",
+            kind: "recommended",
+            sourceResultVersion: 1,
+            idempotencyKey: "ios-ai.stable-key-1234"
+        )
+
+        XCTAssertEqual(enhancement.status, "candidate_ready")
+        XCTAssertEqual(api.lastAIIdempotencyKey, "ios-ai.stable-key-1234")
+    }
 }
 
 private struct WorkspaceFixture {
@@ -147,6 +182,7 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
     var editCount = 0
     var reorderCount = 0
     var retakeCount = 0
+    var lastAIIdempotencyKey: String?
 
     func listProjects() async throws -> [WorkspaceProject] {
         if let projectError { throw projectError }
@@ -223,7 +259,7 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
 
     func getExport(id: String) async throws -> WorkspaceExport { workspaceExport() }
 
-    func downloadPage(id: String) async throws -> RemoteDownload {
+    func downloadPage(id: String, version: Int?) async throws -> RemoteDownload {
         throw WorkspaceError.localFileUnavailable
     }
 
@@ -231,6 +267,80 @@ private final class FakeWorkspaceAPI: SmartScanWorkspaceAPI {
         guard let artifactDownload else { throw WorkspaceError.localFileUnavailable }
         return artifactDownload
     }
+
+    func aiCapabilities() async throws -> WorkspaceAICapabilities {
+        WorkspaceAICapabilities(
+            available: true,
+            businessOrchestrationReady: true,
+            executionMode: "mock",
+            consentVersion: "2026-10-23.1",
+            transmissionNoticeCode: "ai_data_transfer_v1",
+            enhancementKinds: ["recommended", "complex_ocr"],
+            taskTypes: ["classify_page", "ocr_formula"]
+        )
+    }
+
+    func updateProjectAI(
+        projectID: String,
+        enabled: Bool,
+        consentVersion: String?
+    ) async throws -> WorkspaceProject {
+        workspaceProject(aiEnabled: enabled, consentVersion: consentVersion)
+    }
+
+    func createAIEnhancement(
+        pageID: String,
+        kind: String,
+        sourceResultVersion: Int,
+        idempotencyKey: String
+    ) async throws -> WorkspaceAIEnhancement {
+        lastAIIdempotencyKey = idempotencyKey
+        return workspaceAIEnhancement(kind: kind, sourceVersion: sourceResultVersion)
+    }
+
+    func listAIEnhancements(pageID: String) async throws -> [WorkspaceAIEnhancement] {
+        [workspaceAIEnhancement()]
+    }
+
+    func decideAIEnhancement(id: String, accepted: Bool) async throws -> WorkspaceAIEnhancement {
+        workspaceAIEnhancement(status: accepted ? "accepted" : "rejected")
+    }
+}
+
+private func workspaceProject(aiEnabled: Bool = false, consentVersion: String? = nil) -> WorkspaceProject {
+    WorkspaceProject(
+        id: "project-1",
+        title: "Scan",
+        suggestedName: nil,
+        mode: "document",
+        readingOrder: "ltr",
+        createdAt: "2026-10-23T00:00:00Z",
+        updatedAt: "2026-10-23T00:00:00Z",
+        aiEnabled: aiEnabled,
+        aiConsentVersion: consentVersion
+    )
+}
+
+private func workspaceAIEnhancement(
+    kind: String = "recommended",
+    sourceVersion: Int = 1,
+    status: String = "candidate_ready"
+) -> WorkspaceAIEnhancement {
+    WorkspaceAIEnhancement(
+        id: "enhancement-1",
+        projectID: "project-1",
+        pageID: "page-1",
+        processingJobID: nil,
+        enhancementKind: kind,
+        requestedTasks: ["extract_title"],
+        sourceResultVersion: sourceVersion,
+        status: status,
+        candidates: [.init(kind: "title", value: "Candidate", confidence: 0.9)],
+        confidence: 0.9,
+        errorCode: nil,
+        createdAt: "2026-10-23T00:00:00Z",
+        updatedAt: "2026-10-23T00:00:01Z"
+    )
 }
 
 private func workspaceBookIntegrity(projectID: String) -> WorkspaceBookIntegrityReport {

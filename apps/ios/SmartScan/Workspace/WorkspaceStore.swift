@@ -21,12 +21,18 @@ final class WorkspaceStore: ObservableObject {
     @Published private(set) var exports: [WorkspaceExport] = []
     @Published private(set) var bookIntegrity: WorkspaceBookIntegrityReport?
     @Published private(set) var previews: [String: DownloadedDocument] = [:]
+    @Published private(set) var previewVersions: [String: Int] = [:]
+    @Published private(set) var aiCapabilities: WorkspaceAICapabilities?
+    @Published private(set) var aiEnhancements: [String: [WorkspaceAIEnhancement]] = [:]
+    @Published private(set) var aiBusy = false
+    @Published private(set) var aiErrorMessage: String?
     @Published private(set) var busy = false
     @Published private(set) var errorMessage: String?
     @Published var presentation: WorkspacePresentation?
 
     private let repository: WorkspaceServicing
     private let userID: String
+    private var aiIdempotencyKeys: [String: String] = [:]
 
     init(repository: WorkspaceServicing, userID: String) {
         self.repository = repository
@@ -43,6 +49,9 @@ final class WorkspaceStore: ObservableObject {
         exports = []
         bookIntegrity = nil
         previews = [:]
+        previewVersions = [:]
+        aiEnhancements = [:]
+        aiErrorMessage = nil
         await perform {
             async let pages = self.repository.pages(projectID: project.id)
             async let exports = self.repository.exports(projectID: project.id)
@@ -62,6 +71,11 @@ final class WorkspaceStore: ObservableObject {
         exports = []
         bookIntegrity = nil
         previews = [:]
+        previewVersions = [:]
+        aiCapabilities = nil
+        aiEnhancements = [:]
+        aiErrorMessage = nil
+        aiIdempotencyKeys = [:]
         errorMessage = nil
     }
 
@@ -169,11 +183,92 @@ final class WorkspaceStore: ObservableObject {
         await perform {
             let document = try await self.repository.downloadPreview(
                 pageID: page.id,
-                version: page.activeResultVersion,
+                activeVersion: page.activeResultVersion,
+                requestedVersion: self.previewVersions[page.id],
                 userID: self.userID
             )
             self.previews[page.id] = document
         }
+    }
+
+    func selectPreviewVersion(pageID: String, version: Int?) {
+        if let version { previewVersions[pageID] = version } else { previewVersions[pageID] = nil }
+        previews[pageID] = nil
+    }
+
+    func loadAI(for page: WorkspacePage) async {
+        await performAI {
+            async let capabilities = self.repository.aiCapabilities()
+            async let enhancements = self.repository.aiEnhancements(pageID: page.id)
+            self.aiCapabilities = try await capabilities
+            self.aiEnhancements[page.id] = try await enhancements
+        }
+    }
+
+    func refreshAI(pageID: String) async {
+        await performAI {
+            self.aiEnhancements[pageID] = try await self.repository.aiEnhancements(pageID: pageID)
+        }
+    }
+
+    func updateProjectAI(enabled: Bool) async {
+        guard let project = selectedProject else { return }
+        let consentVersion = enabled ? aiCapabilities?.consentVersion : nil
+        await performAI {
+            let updated = try await self.repository.updateProjectAI(
+                projectID: project.id,
+                enabled: enabled,
+                consentVersion: consentVersion
+            )
+            self.selectedProject = updated
+            if let index = self.projects.firstIndex(where: { $0.id == updated.id }) {
+                self.projects[index] = updated
+            }
+            if !enabled { self.aiEnhancements = [:] }
+        }
+    }
+
+    func requestAI(page: WorkspacePage, kind: String) async {
+        let identity = "\(page.id):\(page.activeResultVersion):\(kind)"
+        await performAI {
+            let key: String
+            if let existing = self.aiIdempotencyKeys[identity] {
+                key = existing
+            } else {
+                key = try makeAIIdempotencyKey(
+                    pageID: page.id,
+                    sourceResultVersion: page.activeResultVersion
+                )
+                self.aiIdempotencyKeys[identity] = key
+            }
+            let enhancement = try await self.repository.requestAIEnhancement(
+                pageID: page.id,
+                kind: kind,
+                sourceResultVersion: page.activeResultVersion,
+                idempotencyKey: key
+            )
+            self.aiIdempotencyKeys[identity] = nil
+            self.replaceAIEnhancement(enhancement)
+        }
+    }
+
+    func decideAI(_ enhancement: WorkspaceAIEnhancement, accepted: Bool) async {
+        await performAI {
+            let updated = try await self.repository.decideAIEnhancement(id: enhancement.id, accepted: accepted)
+            self.replaceAIEnhancement(updated)
+            guard accepted, let project = self.selectedProject else { return }
+            self.pages = try await self.repository.pages(projectID: project.id)
+                .sorted(by: { $0.pageNumber < $1.pageNumber })
+            let refreshedProjects = try await self.repository.projects(userID: self.userID)
+            self.projects = refreshedProjects
+            self.selectedProject = refreshedProjects.first { $0.id == project.id } ?? project
+            self.previews[enhancement.pageID] = nil
+            self.previewVersions[enhancement.pageID] = nil
+        }
+    }
+
+    func enhancements(for pageID: String) -> [WorkspaceAIEnhancement] {
+        aiEnhancements[pageID] ?? []
     }
 
     func createExport(
@@ -214,6 +309,8 @@ final class WorkspaceStore: ObservableObject {
 
     func clearError() { errorMessage = nil }
 
+    func clearAIError() { aiErrorMessage = nil }
+
     private func updatePage(_ operation: () async throws -> WorkspacePage) async {
         await perform {
             let updated = try await operation()
@@ -236,6 +333,24 @@ final class WorkspaceStore: ObservableObject {
         }
     }
 
+    private func performAI(_ operation: () async throws -> Void) async {
+        aiBusy = true
+        aiErrorMessage = nil
+        defer { aiBusy = false }
+        do {
+            try await operation()
+        } catch {
+            aiErrorMessage = String(localized: "AI is temporarily unavailable. Basic editing and export remain available.")
+        }
+    }
+
+    private func replaceAIEnhancement(_ enhancement: WorkspaceAIEnhancement) {
+        var values = aiEnhancements[enhancement.pageID] ?? []
+        values.removeAll { $0.id == enhancement.id }
+        values.insert(enhancement, at: 0)
+        aiEnhancements[enhancement.pageID] = values
+    }
+
     private func message(for error: Error) -> String {
         if let apiError = error as? APIClientError {
             switch apiError {
@@ -253,6 +368,6 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func previewIdentifier(_ page: WorkspacePage) -> String {
-        "page-\(page.id)-v\(page.activeResultVersion)"
+        "page-\(page.id)-v\(previewVersions[page.id] ?? page.activeResultVersion)"
     }
 }
