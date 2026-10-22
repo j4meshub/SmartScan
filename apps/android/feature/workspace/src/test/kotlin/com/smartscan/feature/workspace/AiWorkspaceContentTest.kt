@@ -88,7 +88,7 @@ class AiWorkspaceContentTest {
         compose.onNodeWithText("Candidate ready").assertIsDisplayed()
         compose.onNodeWithText("Title suggestion").assertIsDisplayed()
         compose.onNodeWithText("Accept candidate").performClick()
-        assertEquals(true, decision)
+        compose.runOnIdle { assertEquals(true, decision) }
     }
 
     @Test
@@ -117,7 +117,7 @@ class AiWorkspaceContentTest {
             }
         }
         compose.onNodeWithText("View baseline version").performClick()
-        assertEquals(2, previewVersion)
+        compose.runOnIdle { assertEquals(2, previewVersion) }
     }
 }
 
