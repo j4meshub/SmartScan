@@ -31,8 +31,18 @@ protocol SmartScanWorkspaceAPI {
         includeOCRText: Bool
     ) async throws -> WorkspaceExport
     func getExport(id: String) async throws -> WorkspaceExport
-    func downloadPage(id: String) async throws -> RemoteDownload
+    func downloadPage(id: String, version: Int?) async throws -> RemoteDownload
     func downloadArtifact(id: String) async throws -> RemoteDownload
+    func aiCapabilities() async throws -> WorkspaceAICapabilities
+    func updateProjectAI(projectID: String, enabled: Bool, consentVersion: String?) async throws -> WorkspaceProject
+    func createAIEnhancement(
+        pageID: String,
+        kind: String,
+        sourceResultVersion: Int,
+        idempotencyKey: String
+    ) async throws -> WorkspaceAIEnhancement
+    func listAIEnhancements(pageID: String) async throws -> [WorkspaceAIEnhancement]
+    func decideAIEnhancement(id: String, accepted: Bool) async throws -> WorkspaceAIEnhancement
 }
 
 protocol SmartScanAccountDeletionAPI {
@@ -210,15 +220,74 @@ extension URLSessionSmartScanAPI: SmartScanWorkspaceAPI, SmartScanAccountDeletio
         try await execute(makeRequest(path: "v1/exports/\(id)", method: "GET", authenticated: true))
     }
 
-    func downloadPage(id: String) async throws -> RemoteDownload {
-        try await executeDownload(
-            makeRequest(path: "v1/pages/\(id)/content?variant=active", method: "GET", authenticated: true)
+    func downloadPage(id: String, version: Int?) async throws -> RemoteDownload {
+        let versionQuery = version.map { "&version=\($0)" } ?? ""
+        return try await executeDownload(
+            makeRequest(
+                path: "v1/pages/\(id)/content?variant=active\(versionQuery)",
+                method: "GET",
+                authenticated: true
+            )
         )
     }
 
     func downloadArtifact(id: String) async throws -> RemoteDownload {
         try await executeDownload(
             makeRequest(path: "v1/export-artifacts/\(id)/content", method: "GET", authenticated: true)
+        )
+    }
+
+    func aiCapabilities() async throws -> WorkspaceAICapabilities {
+        try await execute(makeRequest(path: "v1/ai/capabilities", method: "GET", authenticated: true))
+    }
+
+    func updateProjectAI(
+        projectID: String,
+        enabled: Bool,
+        consentVersion: String?
+    ) async throws -> WorkspaceProject {
+        var request = try makeRequest(
+            path: "v1/projects/\(projectID)/ai-settings",
+            method: "PUT",
+            authenticated: true
+        )
+        request.httpBody = try JSONEncoder().encode(
+            ProjectAISettingsRequest(enabled: enabled, consentVersion: enabled ? consentVersion : nil)
+        )
+        return try await execute(request)
+    }
+
+    func createAIEnhancement(
+        pageID: String,
+        kind: String,
+        sourceResultVersion: Int,
+        idempotencyKey: String
+    ) async throws -> WorkspaceAIEnhancement {
+        var request = try makeRequest(
+            path: "v1/pages/\(pageID)/ai-enhancements",
+            method: "POST",
+            authenticated: true
+        )
+        request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        request.httpBody = try JSONEncoder().encode(
+            AIEnhancementRequest(enhancementKind: kind, sourceResultVersion: sourceResultVersion)
+        )
+        return try await execute(request)
+    }
+
+    func listAIEnhancements(pageID: String) async throws -> [WorkspaceAIEnhancement] {
+        try await execute(
+            makeRequest(path: "v1/pages/\(pageID)/ai-enhancements", method: "GET", authenticated: true)
+        )
+    }
+
+    func decideAIEnhancement(id: String, accepted: Bool) async throws -> WorkspaceAIEnhancement {
+        try await execute(
+            makeRequest(
+                path: "v1/ai-enhancements/\(id)/\(accepted ? "accept" : "reject")",
+                method: "POST",
+                authenticated: true
+            )
         )
     }
 
@@ -357,5 +426,25 @@ private struct AccountDeletionRequest: Encodable {
         case phone
         case challengeID = "sms_challenge_id"
         case code = "sms_code"
+    }
+}
+
+private struct ProjectAISettingsRequest: Encodable {
+    let enabled: Bool
+    let consentVersion: String?
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case consentVersion = "consent_version"
+    }
+}
+
+private struct AIEnhancementRequest: Encodable {
+    let enhancementKind: String
+    let sourceResultVersion: Int
+
+    enum CodingKeys: String, CodingKey {
+        case enhancementKind = "enhancement_kind"
+        case sourceResultVersion = "source_result_version"
     }
 }

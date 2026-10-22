@@ -32,8 +32,23 @@ protocol WorkspaceServicing {
         includeOCRText: Bool
     ) async throws -> WorkspaceExport
     func refreshExport(id: String) async throws -> WorkspaceExport
-    func downloadPreview(pageID: String, version: Int, userID: String) async throws -> DownloadedDocument
+    func downloadPreview(
+        pageID: String,
+        activeVersion: Int,
+        requestedVersion: Int?,
+        userID: String
+    ) async throws -> DownloadedDocument
     func downloadArtifact(_ artifact: WorkspaceExportArtifact, userID: String) async throws -> DownloadedDocument
+    func aiCapabilities() async throws -> WorkspaceAICapabilities
+    func updateProjectAI(projectID: String, enabled: Bool, consentVersion: String?) async throws -> WorkspaceProject
+    func aiEnhancements(pageID: String) async throws -> [WorkspaceAIEnhancement]
+    func requestAIEnhancement(
+        pageID: String,
+        kind: String,
+        sourceResultVersion: Int,
+        idempotencyKey: String
+    ) async throws -> WorkspaceAIEnhancement
+    func decideAIEnhancement(id: String, accepted: Bool) async throws -> WorkspaceAIEnhancement
 }
 
 actor WorkspaceRepository: WorkspaceServicing {
@@ -76,6 +91,61 @@ actor WorkspaceRepository: WorkspaceServicing {
 
     func exports(projectID: String) async throws -> [WorkspaceExport] {
         try await withSingleRefresh { try await api.listExports(projectID: projectID) }
+    }
+
+    func aiCapabilities() async throws -> WorkspaceAICapabilities {
+        try await withSingleRefresh { try await api.aiCapabilities() }
+    }
+
+    func updateProjectAI(
+        projectID: String,
+        enabled: Bool,
+        consentVersion: String?
+    ) async throws -> WorkspaceProject {
+        guard !enabled || !(consentVersion?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) else {
+            throw WorkspaceError.invalidAIConsent
+        }
+        return try await withSingleRefresh {
+            try await api.updateProjectAI(
+                projectID: projectID,
+                enabled: enabled,
+                consentVersion: enabled ? consentVersion : nil
+            )
+        }
+    }
+
+    func aiEnhancements(pageID: String) async throws -> [WorkspaceAIEnhancement] {
+        try await withSingleRefresh { try await api.listAIEnhancements(pageID: pageID) }
+    }
+
+    func requestAIEnhancement(
+        pageID: String,
+        kind: String,
+        sourceResultVersion: Int,
+        idempotencyKey: String
+    ) async throws -> WorkspaceAIEnhancement {
+        guard ["recommended", "complex_ocr"].contains(kind) else {
+            throw WorkspaceError.invalidAIEnhancementKind
+        }
+        guard sourceResultVersion > 0 else { throw WorkspaceError.invalidAISourceVersion }
+        guard (16 ... 100).contains(idempotencyKey.count) else {
+            throw WorkspaceError.invalidAIIdempotencyKey
+        }
+        return try await withSingleRefresh {
+            try await api.createAIEnhancement(
+                pageID: pageID,
+                kind: kind,
+                sourceResultVersion: sourceResultVersion,
+                idempotencyKey: idempotencyKey
+            )
+        }
+    }
+
+    func decideAIEnhancement(id: String, accepted: Bool) async throws -> WorkspaceAIEnhancement {
+        guard !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw WorkspaceError.invalidAIEnhancement
+        }
+        return try await withSingleRefresh { try await api.decideAIEnhancement(id: id, accepted: accepted) }
     }
 
     func reorder(projectID: String, pageIDs: [String]) async throws -> [WorkspacePage] {
@@ -199,9 +269,18 @@ actor WorkspaceRepository: WorkspaceServicing {
         try await withSingleRefresh { try await api.getExport(id: id) }
     }
 
-    func downloadPreview(pageID: String, version: Int, userID: String) async throws -> DownloadedDocument {
-        let download = try await withSingleRefresh { try await api.downloadPage(id: pageID) }
+    func downloadPreview(
+        pageID: String,
+        activeVersion: Int,
+        requestedVersion: Int?,
+        userID: String
+    ) async throws -> DownloadedDocument {
+        guard requestedVersion == nil || requestedVersion! > 0 else { throw WorkspaceError.invalidAISourceVersion }
+        let download = try await withSingleRefresh {
+            try await api.downloadPage(id: pageID, version: requestedVersion)
+        }
         let fileExtension = extensionFor(mimeType: download.mimeType) ?? "img"
+        let version = requestedVersion ?? activeVersion
         let name = "page-\(stableDigest(pageID).prefix(16))-v\(version).\(fileExtension)"
         return try persist(
             download,
