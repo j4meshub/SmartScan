@@ -4,11 +4,11 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.orm import Session, aliased
 
 from .config import Settings, get_settings
-from .models import AiEnhancementTask, JobStatus, ProcessingJob, User
+from .models import AiEnhancementTask, AiMediaGrant, JobStatus, ProcessingJob, User
 
 
 class JobFlowError(RuntimeError):
@@ -49,7 +49,7 @@ def _finalize_exhausted_leases(db: Session, now: datetime) -> None:
     exhausted = db.scalars(
         select(ProcessingJob)
         .where(
-            ProcessingJob.status == JobStatus.baseline_processing,
+            ProcessingJob.status.in_([JobStatus.baseline_processing, JobStatus.optional_enhancing]),
             ProcessingJob.lease_until < now,
             ProcessingJob.attempts >= ProcessingJob.max_attempts,
         )
@@ -61,6 +61,22 @@ def _finalize_exhausted_leases(db: Session, now: datetime) -> None:
         job.error = job.error or "worker lease expired after maximum attempts"
         job.completed_at = now
         _clear_lease(job)
+        if job.kind == "ai_enhancement":
+            task = db.scalar(
+                select(AiEnhancementTask).where(AiEnhancementTask.processing_job_id == job.id)
+            )
+            if task is not None:
+                task.status = "failed"
+                task.error_code = job.error_code
+                task.updated_at = now
+                db.execute(
+                    update(AiMediaGrant)
+                    .where(
+                        AiMediaGrant.enhancement_task_id == task.id,
+                        AiMediaGrant.revoked_at.is_(None),
+                    )
+                    .values(revoked_at=now)
+                )
 
 
 def _claim_job_row(
@@ -69,9 +85,10 @@ def _claim_job_row(
     worker_id: str,
     now: datetime,
     settings: Settings,
+    processing_status: JobStatus = JobStatus.baseline_processing,
 ) -> JobClaim:
     token = str(uuid.uuid4())
-    job.status = JobStatus.baseline_processing
+    job.status = processing_status
     job.attempts += 1
     job.progress = max(job.progress, 5)
     job.started_at = job.started_at or now
@@ -99,7 +116,9 @@ def _active_owner_jobs(db: Session, owner_user_id: str, now: datetime) -> int:
             .select_from(ProcessingJob)
             .where(
                 ProcessingJob.owner_user_id == owner_user_id,
-                ProcessingJob.status == JobStatus.baseline_processing,
+                ProcessingJob.status.in_(
+                    [JobStatus.baseline_processing, JobStatus.optional_enhancing]
+                ),
                 ProcessingJob.lease_until >= now,
             )
         )
@@ -131,7 +150,7 @@ def claim_next_job(
         .select_from(active)
         .where(
             active.owner_user_id == ProcessingJob.owner_user_id,
-            active.status == JobStatus.baseline_processing,
+            active.status.in_([JobStatus.baseline_processing, JobStatus.optional_enhancing]),
             active.lease_until >= now,
         )
         .correlate(ProcessingJob)
@@ -160,6 +179,107 @@ def claim_next_job(
     if _active_owner_jobs(db, job.owner_user_id, now) >= settings.max_active_jobs_per_user:
         return None
     claim = _claim_job_row(job, worker_id=worker_id, now=now, settings=settings)
+    db.flush()
+    return claim
+
+
+def claim_next_ai_job(
+    db: Session,
+    *,
+    worker_id: str,
+    now: datetime | None = None,
+    settings: Settings | None = None,
+) -> JobClaim | None:
+    settings = settings or get_settings()
+    now = now or datetime.now(UTC)
+    _finalize_exhausted_leases(db, now)
+    claimable_status = or_(
+        ProcessingJob.status == JobStatus.queued,
+        ProcessingJob.status == JobStatus.failed_retryable,
+        (
+            (ProcessingJob.status == JobStatus.optional_enhancing)
+            & (ProcessingJob.lease_until < now)
+        ),
+    )
+    job = db.scalar(
+        select(ProcessingJob)
+        .where(
+            claimable_status,
+            ProcessingJob.kind == "ai_enhancement",
+            ProcessingJob.available_at <= now,
+            ProcessingJob.attempts < ProcessingJob.max_attempts,
+        )
+        .order_by(ProcessingJob.priority.desc(), ProcessingJob.created_at, ProcessingJob.id)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    if job is None:
+        return None
+    _lock_job_owner(db, job.owner_user_id)
+    if _active_owner_jobs(db, job.owner_user_id, now) >= settings.max_active_jobs_per_user:
+        return None
+    claim = _claim_job_row(
+        job,
+        worker_id=worker_id,
+        now=now,
+        settings=settings,
+        processing_status=JobStatus.optional_enhancing,
+    )
+    task = db.scalar(select(AiEnhancementTask).where(AiEnhancementTask.processing_job_id == job.id))
+    if task is None or task.status not in {"queued", "processing"}:
+        job.status = JobStatus.failed_final
+        job.error_code = "ai_enhancement_missing"
+        job.completed_at = now
+        _clear_lease(job)
+        return None
+    task.status = "processing"
+    task.updated_at = now
+    db.flush()
+    return claim
+
+
+def claim_ai_job_by_id(
+    db: Session,
+    job_id: str,
+    *,
+    worker_id: str,
+    now: datetime | None = None,
+    settings: Settings | None = None,
+) -> JobClaim | None:
+    settings = settings or get_settings()
+    now = now or datetime.now(UTC)
+    _finalize_exhausted_leases(db, now)
+    job = db.scalar(select(ProcessingJob).where(ProcessingJob.id == job_id).with_for_update())
+    if job is None or job.kind != "ai_enhancement" or job.attempts >= job.max_attempts:
+        return None
+    due = job.available_at if job.available_at.tzinfo else job.available_at.replace(tzinfo=UTC)
+    lease_until = job.lease_until
+    if lease_until is not None and lease_until.tzinfo is None:
+        lease_until = lease_until.replace(tzinfo=UTC)
+    claimable = job.status in (JobStatus.queued, JobStatus.failed_retryable) or (
+        job.status == JobStatus.optional_enhancing and lease_until is not None and lease_until < now
+    )
+    if not claimable or due > now:
+        return None
+    _lock_job_owner(db, job.owner_user_id)
+    if _active_owner_jobs(db, job.owner_user_id, now) >= settings.max_active_jobs_per_user:
+        return None
+    claim = _claim_job_row(
+        job,
+        worker_id=worker_id,
+        now=now,
+        settings=settings,
+        processing_status=JobStatus.optional_enhancing,
+    )
+    task = db.scalar(select(AiEnhancementTask).where(AiEnhancementTask.processing_job_id == job.id))
+    if task is None or task.status not in {"queued", "processing"}:
+        job.status = JobStatus.failed_final
+        job.error_code = "ai_enhancement_missing"
+        job.completed_at = now
+        _clear_lease(job)
+        return None
+    task.status = "processing"
+    task.updated_at = now
     db.flush()
     return claim
 
@@ -213,7 +333,7 @@ def heartbeat_job(
     job = db.scalar(select(ProcessingJob).where(ProcessingJob.id == claim.job_id).with_for_update())
     if (
         job is None
-        or job.status != JobStatus.baseline_processing
+        or job.status not in (JobStatus.baseline_processing, JobStatus.optional_enhancing)
         or job.lease_token != claim.lease_token
         or job.cancel_requested_at is not None
     ):
@@ -252,6 +372,22 @@ def mark_job_failure(
     job.error_code = error_code[:64]
     job.error = error[:1000]
     _clear_lease(job)
+    if job.kind == "ai_enhancement":
+        task = db.scalar(
+            select(AiEnhancementTask).where(AiEnhancementTask.processing_job_id == job.id)
+        )
+        if task is not None:
+            task.status = "failed" if job.status == JobStatus.failed_final else "queued"
+            task.error_code = job.error_code
+            task.updated_at = now
+            db.execute(
+                update(AiMediaGrant)
+                .where(
+                    AiMediaGrant.enhancement_task_id == task.id,
+                    AiMediaGrant.revoked_at.is_(None),
+                )
+                .values(revoked_at=now)
+            )
     return job
 
 
@@ -278,6 +414,14 @@ def cancel_job(
         if task is not None:
             task.status = "canceled"
             task.updated_at = now
+            db.execute(
+                update(AiMediaGrant)
+                .where(
+                    AiMediaGrant.enhancement_task_id == task.id,
+                    AiMediaGrant.revoked_at.is_(None),
+                )
+                .values(revoked_at=now)
+            )
     return job
 
 

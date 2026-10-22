@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from .ai_business import (
     enhancement_view,
     reject_enhancement,
 )
+from .ai_media import resolve_media_grant
 from .audit import record_audit
 from .database import get_db
 from .dependencies import current_user
@@ -32,6 +34,33 @@ from .schemas import (
 )
 
 router = APIRouter()
+
+
+@router.get("/v1/ai-media", include_in_schema=False)
+def read_ai_media(
+    access_token: str | None = Header(
+        None,
+        alias="X-SmartScan-AI-Media-Token",
+    ),
+    db: Session = Depends(get_db),
+):
+    resolved = (
+        resolve_media_grant(db, access_token=access_token) if access_token is not None else None
+    )
+    if resolved is None:
+        db.commit()
+        raise HTTPException(status_code=404, detail="ai_media_not_found")
+    grant, absolute = resolved
+    db.commit()
+    return FileResponse(
+        absolute,
+        media_type=grant.mime_type,
+        headers={
+            "Cache-Control": "private, no-store, max-age=0",
+            "Content-Security-Policy": "default-src 'none'",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 def _raise_business(db: Session, exc: AiBusinessError) -> None:

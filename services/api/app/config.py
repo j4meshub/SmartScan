@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     worker_stale_seconds: int = Field(default=45, ge=10, le=600)
     ops_metrics_enabled: bool = False
     ops_metrics_token: SecretStr = SecretStr("")
+    ai_gateway_url: str = ""
+    ai_internal_token: SecretStr = SecretStr("")
+    ai_provider_id: str = ""
+    ai_media_base_url: str = ""
+    ai_media_grant_ttl_seconds: int = Field(default=600, ge=60, le=900)
     vision_document_min_area_ratio: float = Field(default=0.2, gt=0.05, lt=0.95)
     vision_max_detection_dimension: int = Field(default=1600, ge=640, le=4096)
     ocr_enabled: bool = False
@@ -204,6 +209,23 @@ class Settings(BaseSettings):
                 raise RuntimeError(
                     "SMARTSCAN_OPS_METRICS_TOKEN must be at least 32 characters when enabled"
                 )
+            ai_values = (
+                self.ai_gateway_url,
+                self.ai_internal_token.get_secret_value(),
+                self.ai_provider_id,
+                self.ai_media_base_url,
+            )
+            if any((self.ai_gateway_url, self.ai_provider_id, self.ai_media_base_url)) and not all(
+                ai_values
+            ):
+                raise RuntimeError(
+                    "AI execution requires gateway URL, internal token, provider ID and media URL"
+                )
+            if (
+                self.ai_internal_token.get_secret_value()
+                and len(self.ai_internal_token.get_secret_value()) < 32
+            ):
+                raise RuntimeError("SMARTSCAN_AI_INTERNAL_TOKEN must be at least 32 characters")
 
 
 @lru_cache

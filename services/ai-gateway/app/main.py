@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import secrets
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Any
+from uuid import UUID
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .network import (
@@ -41,6 +44,13 @@ def get_reliable_executor() -> ReliableProviderExecutor:
     return ReliableProviderExecutor(ReliabilityStore(SessionLocal), get_network_transport())
 
 
+def _internal_security() -> tuple[str, str]:
+    from services.api.app.config import get_settings
+
+    settings = get_settings()
+    return settings.env, settings.ai_internal_token.get_secret_value()
+
+
 def _network_error_status(code: str) -> int:
     if code in {
         "provider_redirect_rejected",
@@ -68,6 +78,8 @@ def _network_error_status(code: str) -> int:
 
 
 def _reliability_error_status(code: str) -> int:
+    if code == "ai_business_context_invalid":
+        return 409
     if code == "ai_circuit_open":
         return 503
     if code in {
@@ -98,6 +110,24 @@ def create_app() -> FastAPI:
         version="0.4.0",
         lifespan=lifespan,
     )
+
+    @application.middleware("http")
+    async def require_internal_auth(request: Request, call_next):
+        if request.url.path.startswith("/v1/"):
+            environment, expected = _internal_security()
+            if not expected:
+                if environment == "production":
+                    return JSONResponse(status_code=503, content={"detail": "ai_gateway_disabled"})
+            else:
+                authorization = request.headers.get("authorization", "")
+                supplied = authorization[7:] if authorization.startswith("Bearer ") else ""
+                if not supplied or not secrets.compare_digest(supplied, expected):
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "internal_auth_required"},
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+        return await call_next(request)
 
     @application.get("/health")
     def health():
@@ -210,7 +240,11 @@ def create_app() -> FastAPI:
 
     @application.post("/v1/tasks/{provider_id}/execute")
     def execute_structured_task(provider_id: str, payload: dict[str, Any] = Body()):
-        if set(payload) != {"task", "media"} or not isinstance(payload["media"], dict):
+        if (
+            not {"task", "media"}.issubset(payload)
+            or set(payload) - {"task", "media", "enhancement_task_id"}
+            or not isinstance(payload["media"], dict)
+        ):
             raise HTTPException(status_code=422, detail="task_execution_envelope_invalid")
         try:
             adapter = get_registry().get(provider_id)
@@ -219,12 +253,22 @@ def create_app() -> FastAPI:
         try:
             task = validate_task(payload["task"])
             media = OutboundMediaReference.model_validate(payload["media"])
-        except ValidationError as exc:
+            enhancement_task_id = (
+                str(UUID(payload["enhancement_task_id"]))
+                if payload.get("enhancement_task_id") is not None
+                else None
+            )
+        except (ValidationError, ValueError, TypeError) as exc:
+            errors = (
+                validation_error_details(exc)
+                if isinstance(exc, ValidationError)
+                else [{"type": "value_error", "loc": ["enhancement_task_id"]}]
+            )
             raise HTTPException(
                 status_code=422,
                 detail={
                     "code": "task_execution_invalid",
-                    "errors": validation_error_details(exc),
+                    "errors": errors,
                 },
             ) from exc
         try:
@@ -237,7 +281,13 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=status_code, detail=error_code) from exc
         executor = get_reliable_executor()
         try:
-            pending = executor.execute_network(adapter, task, plan, media)
+            pending = executor.execute_network(
+                adapter,
+                task,
+                plan,
+                media,
+                enhancement_task_id=enhancement_task_id,
+            )
             network_result = pending.result
         except ReliabilityError as exc:
             code = str(exc)

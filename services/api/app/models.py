@@ -857,6 +857,44 @@ class AiEnhancementTask(Base):
     )
 
 
+class AiMediaGrant(Base):
+    __tablename__ = "ai_media_grants"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_ai_media_grants_token_hash"),
+        CheckConstraint("source_result_version >= 1", name="ck_ai_media_grants_source_version"),
+        CheckConstraint("byte_size >= 0", name="ck_ai_media_grants_byte_size"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    enhancement_task_id: Mapped[str] = mapped_column(
+        ForeignKey("ai_enhancement_tasks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    page_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_pages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    page_result_id: Mapped[str] = mapped_column(
+        ForeignKey("page_results.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_result_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    access_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)

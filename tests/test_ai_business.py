@@ -127,7 +127,10 @@ def test_project_consent_idempotency_and_worker_isolation() -> None:
         )
         assert no_consent.status_code == 409
         with SessionLocal() as db:
-            assert db.scalar(select(AiEnhancementTask.id)) is None
+            assert (
+                db.scalar(select(AiEnhancementTask.id).where(AiEnhancementTask.page_id == page_id))
+                is None
+            )
 
         wrong_consent = client.put(
             f"/v1/projects/{project_id}/ai-settings",

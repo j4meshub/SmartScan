@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from .config import Settings, get_settings
 from .models import (
     AiEnhancementTask,
+    AiMediaGrant,
     AiProviderCall,
     ExportArtifact,
     PageResult,
@@ -75,6 +76,9 @@ def start_project_deletion(
     ai_enhancements = list(
         db.scalars(select(AiEnhancementTask).where(AiEnhancementTask.project_id == project.id))
     )
+    ai_media_grants = list(
+        db.scalars(select(AiMediaGrant).where(AiMediaGrant.project_id == project.id))
+    )
     exports = list(db.scalars(select(ScanExport).where(ScanExport.project_id == project.id)))
     export_ids = [item.id for item in exports]
     artifacts = (
@@ -98,6 +102,7 @@ def start_project_deletion(
         "chunks": len(chunks),
         "jobs": len(jobs),
         "ai_enhancements": len(ai_enhancements),
+        "ai_media_grants": len(ai_media_grants),
         "exports": len(exports),
         "export_artifacts": len(artifacts),
         "files": len(manifest),
@@ -119,6 +124,10 @@ def start_project_deletion(
         )
     if exports:
         db.execute(delete(ScanExport).where(ScanExport.id.in_(export_ids)))
+    if ai_media_grants:
+        db.execute(
+            delete(AiMediaGrant).where(AiMediaGrant.id.in_([item.id for item in ai_media_grants]))
+        )
     if ai_enhancements:
         ai_enhancement_ids = [item.id for item in ai_enhancements]
         db.execute(

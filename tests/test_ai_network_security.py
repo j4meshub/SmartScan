@@ -661,6 +661,22 @@ def test_execute_endpoint_returns_validated_evidence_without_secrets(
     assert "media.example" not in response.text
 
 
+def test_gateway_v1_requires_internal_bearer_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main, "_internal_security", lambda: ("production", "s" * 32))
+    with TestClient(main.create_app()) as client:
+        missing = client.get("/v1/task-schemas")
+        wrong = client.get("/v1/task-schemas", headers={"Authorization": f"Bearer {'x' * 32}"})
+        accepted = client.get("/v1/task-schemas", headers={"Authorization": f"Bearer {'s' * 32}"})
+        health = client.get("/health")
+
+    assert missing.status_code == 401
+    assert wrong.status_code == 401
+    assert accepted.status_code == 200
+    assert health.status_code == 200
+
+
 def test_execute_endpoint_maps_network_security_failure_without_leaking_details(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

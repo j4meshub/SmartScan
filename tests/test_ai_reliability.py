@@ -12,7 +12,12 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from services.api.app.database import Base
-from services.api.app.models import AiProviderAttempt, AiProviderCall, AiProviderState
+from services.api.app.models import (
+    AiEnhancementTask,
+    AiProviderAttempt,
+    AiProviderCall,
+    AiProviderState,
+)
 
 AI_GATEWAY_ROOT = Path(__file__).parents[1] / "services" / "ai-gateway"
 sys.path.insert(0, str(AI_GATEWAY_ROOT))
@@ -128,6 +133,47 @@ def test_reliability_configuration_rejects_budget_that_cannot_cover_one_call() -
             max_cost_per_request_usd="0.10",
             daily_cost_limit_usd="0.19",
         )
+
+
+def test_business_call_requires_matching_processing_task_and_persists_link(
+    session_factory,
+) -> None:
+    enhancement_id = "40000000-0000-4000-8000-000000000004"
+    with session_factory.begin() as session:
+        session.add(
+            AiEnhancementTask(
+                id=enhancement_id,
+                owner_user_id="owner-1",
+                project_id="project-1",
+                page_id=PAGE_ID,
+                idempotency_key="reliability-business-link-0001",
+                enhancement_kind="recommended",
+                requested_tasks='["classify_page"]',
+                source_result_version=1,
+                status="processing",
+            )
+        )
+    selected = adapter()
+    store = reliability.ReliabilityStore(session_factory, clock=lambda: NOW)
+    with pytest.raises(reliability.ReliabilityError, match="ai_business_context_invalid"):
+        store.admit_call(
+            selected.definition,
+            "classify_page",
+            enhancement_task_id=enhancement_id,
+            page_id="wrong-page",
+            source_result_version=1,
+        )
+
+    call_id = store.admit_call(
+        selected.definition,
+        "classify_page",
+        enhancement_task_id=enhancement_id,
+        page_id=PAGE_ID,
+        source_result_version=1,
+    )
+    with session_factory() as session:
+        call = session.get(AiProviderCall, call_id)
+    assert call is not None and call.enhancement_task_id == enhancement_id
 
 
 def test_timeout_retries_once_and_persists_conservative_cost(session_factory) -> None:
