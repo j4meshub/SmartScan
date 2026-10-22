@@ -691,6 +691,11 @@ private fun AiWorkspacePanel(
     var actionBusy by remember(page.id) { mutableStateOf(false) }
     var failed by remember(page.id) { mutableStateOf(false) }
     var reloadToken by remember(page.id) { mutableStateOf(0) }
+    var requestIdempotencyKey by remember(page.id, page.activeResultVersion, enhancementKind) {
+        mutableStateOf(
+            if (page.activeResultVersion > 0) createAiUiIdempotencyKey(page.id, page.activeResultVersion) else "",
+        )
+    }
 
     LaunchedEffect(project.id, page.id, reloadToken) {
         loading = true
@@ -717,12 +722,103 @@ private fun AiWorkspacePanel(
         loading = false
     }
 
+    AiWorkspaceContent(
+        projectAiEnabled = project.aiEnabled,
+        activeResultVersion = page.activeResultVersion,
+        capabilities = capabilities,
+        enhancements = enhancements,
+        enhancementKind = enhancementKind,
+        loading = loading,
+        actionBusy = actionBusy,
+        parentBusy = busy,
+        failed = failed,
+        onToggleProjectAi = {
+            val consentVersion = if (project.aiEnabled) null else capabilities?.consentVersion ?: return@AiWorkspaceContent
+            actionBusy = true
+            scope.launch {
+                when (
+                    val result = repository.updateProjectAiSettings(
+                        project.id,
+                        enabled = !project.aiEnabled,
+                        consentVersion = consentVersion,
+                    )
+                ) {
+                    is ApiResult.Success -> {
+                        onProjectUpdated(result.value)
+                        onPreviewVersion(null)
+                    }
+                    is ApiResult.Failure -> failed = true
+                }
+                actionBusy = false
+            }
+        },
+        onEnhancementKindChanged = { enhancementKind = it },
+        onRequest = {
+            actionBusy = true
+            scope.launch {
+                when (
+                    val result = repository.requestAiEnhancement(
+                        page.id,
+                        enhancementKind,
+                        page.activeResultVersion,
+                        requestIdempotencyKey,
+                    )
+                ) {
+                    is ApiResult.Success -> {
+                        enhancements = listOf(result.value) + enhancements.filterNot { it.id == result.value.id }
+                        requestIdempotencyKey = createAiUiIdempotencyKey(page.id, page.activeResultVersion)
+                        reloadToken += 1
+                    }
+                    is ApiResult.Failure -> failed = true
+                }
+                actionBusy = false
+            }
+        },
+        onRefresh = { reloadToken += 1 },
+        onDecide = { enhancement, accept ->
+            actionBusy = true
+            scope.launch {
+                when (val result = repository.decideAiEnhancement(enhancement.id, accept)) {
+                    is ApiResult.Success -> {
+                        enhancements = enhancements.map { if (it.id == result.value.id) result.value else it }
+                        if (accept) {
+                            onPreviewVersion(null)
+                            onReloadPages()
+                        }
+                    }
+                    is ApiResult.Failure -> failed = true
+                }
+                actionBusy = false
+            }
+        },
+        onPreviewVersion = onPreviewVersion,
+    )
+}
+
+@Composable
+internal fun AiWorkspaceContent(
+    projectAiEnabled: Boolean,
+    activeResultVersion: Int,
+    capabilities: AiCapabilities?,
+    enhancements: List<AiEnhancement>,
+    enhancementKind: String,
+    loading: Boolean,
+    actionBusy: Boolean,
+    parentBusy: Boolean,
+    failed: Boolean,
+    onToggleProjectAi: () -> Unit,
+    onEnhancementKindChanged: (String) -> Unit,
+    onRequest: () -> Unit,
+    onRefresh: () -> Unit,
+    onDecide: (AiEnhancement, Boolean) -> Unit,
+    onPreviewVersion: (Int?) -> Unit,
+) {
     val capabilityReady = capabilities?.let { it.available && it.businessOrchestrationReady } == true
-    val current = latestAiEnhancement(enhancements, page.activeResultVersion, enhancementKind)
+    val current = latestAiEnhancement(enhancements, activeResultVersion, enhancementKind)
     val kindSupported = supportsAiEnhancement(capabilities, enhancementKind)
-    val canRequest = capabilityReady && kindSupported && project.aiEnabled && page.activeResultVersion > 0 &&
-        !busy && !actionBusy && !shouldPollAiEnhancements(enhancements)
-    val canDecide = canDecideAiEnhancement(current, page.activeResultVersion) && !busy && !actionBusy
+    val canRequest = capabilityReady && kindSupported && projectAiEnabled && activeResultVersion > 0 &&
+        !parentBusy && !actionBusy && !shouldPollAiEnhancements(enhancements)
+    val canDecide = canDecideAiEnhancement(current, activeResultVersion) && !parentBusy && !actionBusy
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -739,73 +835,30 @@ private fun AiWorkspacePanel(
             }
             Text(stringResource(R.string.ai_transmission_notice))
             capabilities?.consentVersion?.let { Text(stringResource(R.string.ai_consent_version, it)) }
-            if (!project.aiEnabled) Text(stringResource(R.string.ai_local_suggestion))
+            if (!projectAiEnabled) Text(stringResource(R.string.ai_local_suggestion))
             Button(
-                onClick = {
-                    val consentVersion = if (project.aiEnabled) null else capabilities?.consentVersion ?: return@Button
-                    actionBusy = true
-                    scope.launch {
-                        when (
-                            val result = repository.updateProjectAiSettings(
-                                project.id,
-                                enabled = !project.aiEnabled,
-                                consentVersion = consentVersion,
-                            )
-                        ) {
-                            is ApiResult.Success -> {
-                                onProjectUpdated(result.value)
-                                onPreviewVersion(null)
-                            }
-                            is ApiResult.Failure -> failed = true
-                        }
-                        actionBusy = false
-                    }
-                },
-                enabled = !busy && !actionBusy && (project.aiEnabled || capabilityReady),
+                onClick = onToggleProjectAi,
+                enabled = !parentBusy && !actionBusy && (projectAiEnabled || capabilityReady),
             ) {
-                Text(stringResource(if (project.aiEnabled) R.string.ai_disable else R.string.ai_enable_with_consent))
+                Text(stringResource(if (projectAiEnabled) R.string.ai_disable else R.string.ai_enable_with_consent))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = enhancementKind == "recommended",
-                    onClick = { enhancementKind = "recommended" },
+                    onClick = { onEnhancementKindChanged("recommended") },
                     label = { Text(stringResource(R.string.ai_kind_recommended)) },
                     enabled = supportsAiEnhancement(capabilities, "recommended") && !actionBusy,
                 )
                 FilterChip(
                     selected = enhancementKind == "complex_ocr",
-                    onClick = { enhancementKind = "complex_ocr" },
+                    onClick = { onEnhancementKindChanged("complex_ocr") },
                     label = { Text(stringResource(R.string.ai_kind_complex_ocr)) },
                     enabled = supportsAiEnhancement(capabilities, "complex_ocr") && !actionBusy,
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        actionBusy = true
-                        scope.launch {
-                            when (
-                                val result = repository.requestAiEnhancement(
-                                    page.id,
-                                    enhancementKind,
-                                    page.activeResultVersion,
-                                )
-                            ) {
-                                is ApiResult.Success -> {
-                                    enhancements = listOf(result.value) + enhancements.filterNot { it.id == result.value.id }
-                                    reloadToken += 1
-                                }
-                                is ApiResult.Failure -> failed = true
-                            }
-                            actionBusy = false
-                        }
-                    },
-                    enabled = canRequest,
-                ) { Text(stringResource(R.string.ai_request)) }
-                OutlinedButton(
-                    onClick = { reloadToken += 1 },
-                    enabled = !actionBusy,
-                ) { Text(stringResource(R.string.ai_refresh)) }
+                Button(onClick = onRequest, enabled = canRequest) { Text(stringResource(R.string.ai_request)) }
+                OutlinedButton(onClick = onRefresh, enabled = !actionBusy) { Text(stringResource(R.string.ai_refresh)) }
             }
             if (loading || shouldPollAiEnhancements(enhancements)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -823,39 +876,13 @@ private fun AiWorkspacePanel(
                 }
                 if (canDecide) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                actionBusy = true
-                                scope.launch {
-                                    when (val result = repository.decideAiEnhancement(enhancement.id, accept = true)) {
-                                        is ApiResult.Success -> {
-                                            enhancements = enhancements.map { if (it.id == result.value.id) result.value else it }
-                                            onPreviewVersion(null)
-                                            onReloadPages()
-                                        }
-                                        is ApiResult.Failure -> failed = true
-                                    }
-                                    actionBusy = false
-                                }
-                            },
-                        ) { Text(stringResource(R.string.ai_accept)) }
-                        OutlinedButton(
-                            onClick = {
-                                actionBusy = true
-                                scope.launch {
-                                    when (val result = repository.decideAiEnhancement(enhancement.id, accept = false)) {
-                                        is ApiResult.Success -> enhancements = enhancements.map {
-                                            if (it.id == result.value.id) result.value else it
-                                        }
-                                        is ApiResult.Failure -> failed = true
-                                    }
-                                    actionBusy = false
-                                }
-                            },
-                        ) { Text(stringResource(R.string.ai_reject)) }
+                        Button(onClick = { onDecide(enhancement, true) }) { Text(stringResource(R.string.ai_accept)) }
+                        OutlinedButton(onClick = { onDecide(enhancement, false) }) {
+                            Text(stringResource(R.string.ai_reject))
+                        }
                     }
                 }
-                if (enhancement.status == "accepted" && enhancement.sourceResultVersion != page.activeResultVersion) {
+                if (enhancement.status == "accepted" && enhancement.sourceResultVersion != activeResultVersion) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { onPreviewVersion(enhancement.sourceResultVersion) }) {
                             Text(stringResource(R.string.ai_preview_source))

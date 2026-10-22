@@ -51,17 +51,13 @@ class AiRepositoryTest {
     fun `request uses stable explicit idempotency key and supported kinds only`() = runTest {
         val ai = FakeAiApi()
         val repository = DefaultProjectRepository(EmptyScanApi(), aiApi = ai)
-        val key = createAndroidAiIdempotencyKey(
-            "page/with spaces",
-            4,
-            "00000000-0000-4000-8000-000000000001",
-        )
+        val key = "android-ai.page-1.v4.00000000-0000-4000-8000-000000000001"
 
         val result = repository.requestAiEnhancement("page-1", "complex_ocr", 4, key)
 
         assertTrue(result is ApiResult.Success)
         assertEquals(key, ai.lastIdempotencyKey)
-        assertTrue(key.startsWith("android-ai.page_with_spaces.v4."))
+        assertTrue(key.startsWith("android-ai.page-1.v4."))
         val unsupported = repository.requestAiEnhancement("page-1", "exam_review", 4, key)
         assertEquals(FailureKind.INVALID_RESPONSE, (unsupported as ApiResult.Failure).kind)
     }

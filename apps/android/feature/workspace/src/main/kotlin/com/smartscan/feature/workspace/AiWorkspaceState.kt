@@ -2,6 +2,7 @@ package com.smartscan.feature.workspace
 
 import com.smartscan.core.model.AiCapabilities
 import com.smartscan.core.model.AiEnhancement
+import java.util.UUID
 import kotlin.math.roundToInt
 
 private val RunningAiStatuses = setOf("queued", "processing")
@@ -33,4 +34,14 @@ internal fun aiConfidencePercent(value: Double?): Int? = value
     ?.coerceIn(0.0, 1.0)
     ?.times(100)
     ?.roundToInt()
+
+internal fun createAiUiIdempotencyKey(
+    pageId: String,
+    sourceResultVersion: Int,
+    randomId: String = UUID.randomUUID().toString(),
+): String {
+    require(sourceResultVersion > 0) { "ai_source_version_invalid" }
+    val safePage = pageId.replace(Regex("[^A-Za-z0-9_.:-]"), "_").take(24).ifBlank { "page" }
+    return "android-ai.$safePage.v$sourceResultVersion.$randomId".take(100)
+}
 

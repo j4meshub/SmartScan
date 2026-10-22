@@ -45,6 +45,20 @@ class WorkspaceStateTest {
         assertEquals(true, supportsAiEnhancement(capabilities.copy(taskTypes = setOf("ocr_formula")), "complex_ocr"))
         assertEquals(92, aiConfidencePercent(0.919))
     }
+
+    @Test
+    fun `AI request key is stable when caller reuses it and hides unsafe page characters`() {
+        val key = createAiUiIdempotencyKey(
+            "page/with spaces",
+            7,
+            "00000000-0000-4000-8000-000000000001",
+        )
+
+        assertEquals(
+            "android-ai.page_with_spaces.v7.00000000-0000-4000-8000-000000000001",
+            key,
+        )
+    }
 }
 
 private fun enhancement(id: String, status: String, version: Int) = AiEnhancement(

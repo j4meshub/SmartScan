@@ -94,7 +94,7 @@ interface ProjectRepository {
         pageId: String,
         enhancementKind: String,
         sourceResultVersion: Int,
-        idempotencyKey: String = createAndroidAiIdempotencyKey(pageId, sourceResultVersion),
+        idempotencyKey: String,
     ): ApiResult<AiEnhancement>
     suspend fun decideAiEnhancement(enhancementId: String, accept: Boolean): ApiResult<AiEnhancement>
 }
@@ -354,16 +354,6 @@ private fun AiEnhancementDto.toModel() = AiEnhancement(
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
-
-internal fun createAndroidAiIdempotencyKey(
-    pageId: String,
-    sourceResultVersion: Int,
-    randomId: String = UUID.randomUUID().toString(),
-): String {
-    require(sourceResultVersion > 0) { "ai_source_version_invalid" }
-    val safePage = pageId.replace(Regex("[^A-Za-z0-9_.:-]"), "_").take(24).ifBlank { "page" }
-    return "android-ai.$safePage.v$sourceResultVersion.$randomId".take(100)
-}
 
 internal fun parseAiCandidates(candidateResult: JsonObject?): List<AiCandidate> {
     val tasks = candidateResult?.get("tasks") as? JsonObject ?: return emptyList()
