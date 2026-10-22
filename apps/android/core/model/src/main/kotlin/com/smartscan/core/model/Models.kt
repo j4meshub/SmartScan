@@ -17,6 +17,40 @@ data class ScanProject(
     val suggestedName: String?,
     val mode: String,
     val readingOrder: String,
+    val aiEnabled: Boolean = false,
+    val aiConsentVersion: String? = null,
+    val createdAt: String,
+    val updatedAt: String,
+)
+
+data class AiCapabilities(
+    val available: Boolean,
+    val businessOrchestrationReady: Boolean,
+    val executionMode: String,
+    val consentVersion: String,
+    val transmissionNoticeCode: String,
+    val enhancementKinds: Set<String>,
+    val taskTypes: Set<String>,
+)
+
+data class AiCandidate(
+    val kind: String,
+    val value: String,
+    val confidence: Double?,
+)
+
+data class AiEnhancement(
+    val id: String,
+    val projectId: String,
+    val pageId: String,
+    val processingJobId: String?,
+    val enhancementKind: String,
+    val requestedTasks: List<String>,
+    val sourceResultVersion: Int,
+    val status: String,
+    val candidates: List<AiCandidate>,
+    val confidence: Double?,
+    val errorCode: String?,
     val createdAt: String,
     val updatedAt: String,
 )

@@ -22,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -45,6 +46,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smartscan.core.model.DownloadedArtifact
+import com.smartscan.core.model.AiCapabilities
+import com.smartscan.core.model.AiCandidate
+import com.smartscan.core.model.AiEnhancement
 import com.smartscan.core.model.BookIntegrityIssue
 import com.smartscan.core.model.BookIntegrityReport
 import com.smartscan.core.model.ProjectExport
@@ -53,6 +57,7 @@ import com.smartscan.core.model.ScanProject
 import com.smartscan.data.repository.ApiResult
 import com.smartscan.data.repository.ProjectRepository
 import java.io.File
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val DefaultCorners = listOf(0f to 0f, 1f to 0f, 1f to 1f, 0f to 1f)
@@ -91,7 +96,10 @@ fun ProjectWorkspaceScreen(
             loading = true
             failed = false
             when (val result = repository.listPages(project.id)) {
-                is ApiResult.Success -> pages = result.value
+                is ApiResult.Success -> {
+                    pages = result.value
+                    selectedPage = selectedPage?.let { selected -> result.value.firstOrNull { it.id == selected.id } }
+                }
                 is ApiResult.Failure -> failed = true
             }
             if (project.mode == "book") {
@@ -154,6 +162,11 @@ fun ProjectWorkspaceScreen(
                 pages = pages.map { if (it.id == updated.id) updated else it }.sortedBy { it.pageNumber }
                 selectedPage = updated
             },
+            onProjectUpdated = { updated ->
+                projects = projects.map { if (it.id == updated.id) updated else it }
+                selectedProject = updated
+            },
+            onReloadPages = { loadPages(requireNotNull(selectedProject)) },
             onBookIntegrityUpdated = { bookIntegrity = it },
             onBookSupplemented = { loadPages(requireNotNull(selectedProject)) },
             onBookAssembled = { currentExport = it },
@@ -390,6 +403,8 @@ private fun ProjectDetail(
     onSelectPage: (ScanPage) -> Unit,
     onMove: (ScanPage, Int) -> Unit,
     onPageUpdated: (ScanPage) -> Unit,
+    onProjectUpdated: (ScanProject) -> Unit,
+    onReloadPages: () -> Unit,
     onBookIntegrityUpdated: (BookIntegrityReport) -> Unit,
     onBookSupplemented: () -> Unit,
     onBookAssembled: (ProjectExport) -> Unit,
@@ -397,6 +412,7 @@ private fun ProjectDetail(
     onShareArtifact: (com.smartscan.core.model.ExportArtifact) -> Unit,
     repository: ProjectRepository,
 ) {
+    var previewVersion by remember(selectedPage?.id, selectedPage?.activeResultVersion) { mutableStateOf<Int?>(null) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -456,7 +472,17 @@ private fun ProjectDetail(
         selectedPage?.let { page ->
             item {
                 HorizontalDivider()
-                PageEditor(page, previewDirectory, repository, busy, onPageUpdated)
+                PageEditor(page, previewDirectory, repository, busy, previewVersion, onPageUpdated)
+                Spacer(Modifier.height(12.dp))
+                AiWorkspacePanel(
+                    project = project,
+                    page = page,
+                    busy = busy,
+                    repository = repository,
+                    onProjectUpdated = onProjectUpdated,
+                    onReloadPages = onReloadPages,
+                    onPreviewVersion = { previewVersion = it },
+                )
             }
         }
         if (project.mode == "book") {
@@ -487,6 +513,7 @@ private fun PageEditor(
     previewDirectory: File,
     repository: ProjectRepository,
     busy: Boolean,
+    previewVersion: Int?,
     onUpdated: (ScanPage) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -523,8 +550,8 @@ private fun PageEditor(
         }
     }
 
-    LaunchedEffect(page.id, page.activeResultVersion) {
-        when (val result = repository.downloadPagePreview(page.id, previewDirectory)) {
+    LaunchedEffect(page.id, page.activeResultVersion, previewVersion) {
+        when (val result = repository.downloadPagePreview(page.id, previewDirectory, previewVersion)) {
             is ApiResult.Success -> previewPath = result.value.filePath
             is ApiResult.Failure -> failed = true
         }
@@ -532,6 +559,9 @@ private fun PageEditor(
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.workspace_page, page.pageNumber), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        if (previewVersion != null) {
+            Text(stringResource(R.string.ai_previewing_source_version, previewVersion))
+        }
         if (canRetakeBookSide) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -642,6 +672,242 @@ private fun PageEditor(
         }
     }
 }
+
+@Composable
+private fun AiWorkspacePanel(
+    project: ScanProject,
+    page: ScanPage,
+    busy: Boolean,
+    repository: ProjectRepository,
+    onProjectUpdated: (ScanProject) -> Unit,
+    onReloadPages: () -> Unit,
+    onPreviewVersion: (Int?) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var capabilities by remember(project.id) { mutableStateOf<AiCapabilities?>(null) }
+    var enhancements by remember(page.id) { mutableStateOf<List<AiEnhancement>>(emptyList()) }
+    var enhancementKind by remember(page.id) { mutableStateOf("recommended") }
+    var loading by remember(page.id) { mutableStateOf(true) }
+    var actionBusy by remember(page.id) { mutableStateOf(false) }
+    var failed by remember(page.id) { mutableStateOf(false) }
+    var reloadToken by remember(page.id) { mutableStateOf(0) }
+
+    LaunchedEffect(project.id, page.id, reloadToken) {
+        loading = true
+        failed = false
+        when (val result = repository.getAiCapabilities()) {
+            is ApiResult.Success -> capabilities = result.value
+            is ApiResult.Failure -> {
+                capabilities = null
+                failed = true
+            }
+        }
+        while (true) {
+            when (val result = repository.listAiEnhancements(page.id)) {
+                is ApiResult.Success -> enhancements = result.value
+                is ApiResult.Failure -> {
+                    failed = true
+                    break
+                }
+            }
+            loading = false
+            if (!shouldPollAiEnhancements(enhancements)) break
+            delay(2_500)
+        }
+        loading = false
+    }
+
+    val capabilityReady = capabilities?.let { it.available && it.businessOrchestrationReady } == true
+    val current = latestAiEnhancement(enhancements, page.activeResultVersion, enhancementKind)
+    val kindSupported = supportsAiEnhancement(capabilities, enhancementKind)
+    val canRequest = capabilityReady && kindSupported && project.aiEnabled && page.activeResultVersion > 0 &&
+        !busy && !actionBusy && !shouldPollAiEnhancements(enhancements)
+    val canDecide = canDecideAiEnhancement(current, page.activeResultVersion) && !busy && !actionBusy
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(stringResource(R.string.ai_title), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text(
+                    when {
+                        capabilities?.executionMode == "mock" -> stringResource(R.string.ai_mode_mock)
+                        capabilityReady -> stringResource(R.string.ai_mode_connected)
+                        else -> stringResource(R.string.ai_mode_unavailable)
+                    },
+                    color = if (capabilityReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+            }
+            Text(stringResource(R.string.ai_transmission_notice))
+            capabilities?.consentVersion?.let { Text(stringResource(R.string.ai_consent_version, it)) }
+            if (!project.aiEnabled) Text(stringResource(R.string.ai_local_suggestion))
+            Button(
+                onClick = {
+                    val capability = capabilities ?: return@Button
+                    actionBusy = true
+                    scope.launch {
+                        when (
+                            val result = repository.updateProjectAiSettings(
+                                project.id,
+                                enabled = !project.aiEnabled,
+                                consentVersion = if (project.aiEnabled) null else capability.consentVersion,
+                            )
+                        ) {
+                            is ApiResult.Success -> {
+                                onProjectUpdated(result.value)
+                                onPreviewVersion(null)
+                            }
+                            is ApiResult.Failure -> failed = true
+                        }
+                        actionBusy = false
+                    }
+                },
+                enabled = !busy && !actionBusy && (project.aiEnabled || capabilityReady),
+            ) {
+                Text(stringResource(if (project.aiEnabled) R.string.ai_disable else R.string.ai_enable_with_consent))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = enhancementKind == "recommended",
+                    onClick = { enhancementKind = "recommended" },
+                    label = { Text(stringResource(R.string.ai_kind_recommended)) },
+                    enabled = supportsAiEnhancement(capabilities, "recommended") && !actionBusy,
+                )
+                FilterChip(
+                    selected = enhancementKind == "complex_ocr",
+                    onClick = { enhancementKind = "complex_ocr" },
+                    label = { Text(stringResource(R.string.ai_kind_complex_ocr)) },
+                    enabled = supportsAiEnhancement(capabilities, "complex_ocr") && !actionBusy,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        actionBusy = true
+                        scope.launch {
+                            when (
+                                val result = repository.requestAiEnhancement(
+                                    page.id,
+                                    enhancementKind,
+                                    page.activeResultVersion,
+                                )
+                            ) {
+                                is ApiResult.Success -> {
+                                    enhancements = listOf(result.value) + enhancements.filterNot { it.id == result.value.id }
+                                    reloadToken += 1
+                                }
+                                is ApiResult.Failure -> failed = true
+                            }
+                            actionBusy = false
+                        }
+                    },
+                    enabled = canRequest,
+                ) { Text(stringResource(R.string.ai_request)) }
+                OutlinedButton(
+                    onClick = { reloadToken += 1 },
+                    enabled = !actionBusy,
+                ) { Text(stringResource(R.string.ai_refresh)) }
+            }
+            if (loading || shouldPollAiEnhancements(enhancements)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(modifier = Modifier.width(22.dp).height(22.dp))
+                    Text(stringResource(R.string.ai_processing))
+                }
+            }
+            current?.let { enhancement ->
+                Text(aiStatusLabel(enhancement.status), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ai_source_version, enhancement.sourceResultVersion))
+                if (enhancement.candidates.isEmpty()) {
+                    Text(stringResource(R.string.ai_no_candidates))
+                } else {
+                    enhancement.candidates.forEach { AiCandidateRow(it) }
+                }
+                if (canDecide) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                actionBusy = true
+                                scope.launch {
+                                    when (val result = repository.decideAiEnhancement(enhancement.id, accept = true)) {
+                                        is ApiResult.Success -> {
+                                            enhancements = enhancements.map { if (it.id == result.value.id) result.value else it }
+                                            onPreviewVersion(null)
+                                            onReloadPages()
+                                        }
+                                        is ApiResult.Failure -> failed = true
+                                    }
+                                    actionBusy = false
+                                }
+                            },
+                        ) { Text(stringResource(R.string.ai_accept)) }
+                        OutlinedButton(
+                            onClick = {
+                                actionBusy = true
+                                scope.launch {
+                                    when (val result = repository.decideAiEnhancement(enhancement.id, accept = false)) {
+                                        is ApiResult.Success -> enhancements = enhancements.map {
+                                            if (it.id == result.value.id) result.value else it
+                                        }
+                                        is ApiResult.Failure -> failed = true
+                                    }
+                                    actionBusy = false
+                                }
+                            },
+                        ) { Text(stringResource(R.string.ai_reject)) }
+                    }
+                }
+                if (enhancement.status == "accepted" && enhancement.sourceResultVersion != page.activeResultVersion) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { onPreviewVersion(enhancement.sourceResultVersion) }) {
+                            Text(stringResource(R.string.ai_preview_source))
+                        }
+                        TextButton(onClick = { onPreviewVersion(null) }) {
+                            Text(stringResource(R.string.ai_preview_current))
+                        }
+                    }
+                }
+            }
+            if (enhancementKind == "complex_ocr") Text(stringResource(R.string.ai_complex_ocr_notice))
+            if (failed) Text(stringResource(R.string.ai_failed_non_blocking), color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+@Composable
+private fun AiCandidateRow(candidate: AiCandidate) {
+    val label = when (candidate.kind) {
+        "classification" -> R.string.ai_candidate_classification
+        "orientation" -> R.string.ai_candidate_orientation
+        "title" -> R.string.ai_candidate_title
+        "page_number" -> R.string.ai_candidate_page_number
+        "formula" -> R.string.ai_candidate_formula
+        "table" -> R.string.ai_candidate_table
+        else -> R.string.ai_candidate_layout
+    }
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(stringResource(label), fontWeight = FontWeight.Bold)
+            aiConfidencePercent(candidate.confidence)?.let { Text(stringResource(R.string.ai_confidence, it)) }
+        }
+        Text(
+            if (candidate.kind == "orientation") stringResource(R.string.ai_orientation_value, candidate.value)
+            else candidate.value,
+        )
+    }
+}
+
+@Composable
+private fun aiStatusLabel(status: String): String = stringResource(
+    when (status) {
+        "queued" -> R.string.ai_status_queued
+        "processing" -> R.string.ai_status_processing
+        "candidate_ready" -> R.string.ai_status_candidate_ready
+        "accepted" -> R.string.ai_status_accepted
+        "rejected" -> R.string.ai_status_rejected
+        "stale" -> R.string.ai_status_stale
+        "canceled" -> R.string.ai_status_canceled
+        else -> R.string.ai_status_failed
+    },
+)
 
 @Composable
 private fun CoordinateSlider(label: String, value: Float, onChange: (Float) -> Unit) {

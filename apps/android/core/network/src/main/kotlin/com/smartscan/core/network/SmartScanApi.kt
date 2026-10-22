@@ -18,7 +18,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Query
 
-interface SmartScanApi : AuthenticationApi, ScanApi, WorkspaceApi
+interface SmartScanApi : AuthenticationApi, ScanApi, WorkspaceApi, AiApi
 
 interface AuthenticationApi {
     @POST("v1/auth/sms-challenges")
@@ -147,12 +147,86 @@ interface WorkspaceApi {
     suspend fun downloadPageContent(
         @Path("pageId") pageId: String,
         @Query("variant") variant: String = "active",
+        @Query("version") version: Int? = null,
     ): ResponseBody
 
     @Streaming
     @GET("v1/export-artifacts/{artifactId}/content")
     suspend fun downloadExportArtifact(@Path("artifactId") artifactId: String): ResponseBody
 }
+
+interface AiApi {
+    @GET("v1/ai/capabilities")
+    suspend fun getAiCapabilities(): AiCapabilitiesDto
+
+    @PUT("v1/projects/{projectId}/ai-settings")
+    suspend fun updateProjectAiSettings(
+        @Path("projectId") projectId: String,
+        @Body request: ProjectAiSettingsRequestDto,
+    ): ProjectDto
+
+    @POST("v1/pages/{pageId}/ai-enhancements")
+    suspend fun createAiEnhancement(
+        @Path("pageId") pageId: String,
+        @Header("Idempotency-Key") idempotencyKey: String,
+        @Body request: AiEnhancementRequestDto,
+    ): AiEnhancementDto
+
+    @GET("v1/pages/{pageId}/ai-enhancements")
+    suspend fun listAiEnhancements(@Path("pageId") pageId: String): List<AiEnhancementDto>
+
+    @POST("v1/ai-enhancements/{enhancementId}/accept")
+    suspend fun acceptAiEnhancement(@Path("enhancementId") enhancementId: String): AiEnhancementDto
+
+    @POST("v1/ai-enhancements/{enhancementId}/reject")
+    suspend fun rejectAiEnhancement(@Path("enhancementId") enhancementId: String): AiEnhancementDto
+}
+
+@Serializable
+data class AiCapabilitiesDto(
+    val available: Boolean,
+    @SerialName("business_orchestration_ready") val businessOrchestrationReady: Boolean,
+    @SerialName("execution_mode") val executionMode: String,
+    @SerialName("consent_version") val consentVersion: String,
+    @SerialName("transmission_notice_code") val transmissionNoticeCode: String,
+    @SerialName("enhancement_kinds") val enhancementKinds: List<String>,
+    @SerialName("task_types") val taskTypes: List<String>,
+)
+
+@Serializable
+data class ProjectAiSettingsRequestDto(
+    val enabled: Boolean,
+    @SerialName("consent_version") val consentVersion: String? = null,
+)
+
+@Serializable
+data class AiEnhancementRequestDto(
+    @SerialName("enhancement_kind") val enhancementKind: String,
+    @SerialName("source_result_version") val sourceResultVersion: Int,
+)
+
+@Serializable
+data class AiEnhancementDto(
+    val id: String,
+    @SerialName("project_id") val projectId: String,
+    @SerialName("page_id") val pageId: String,
+    @SerialName("processing_job_id") val processingJobId: String? = null,
+    @SerialName("enhancement_kind") val enhancementKind: String,
+    @SerialName("requested_tasks") val requestedTasks: List<String>,
+    @SerialName("source_result_version") val sourceResultVersion: Int,
+    val status: String,
+    @SerialName("candidate_result") val candidateResult: JsonElement? = null,
+    val evidence: JsonElement? = null,
+    @SerialName("provider_id") val providerId: String? = null,
+    val model: String? = null,
+    val confidence: Double? = null,
+    @SerialName("error_code") val errorCode: String? = null,
+    @SerialName("accepted_by_user_id") val acceptedByUserId: String? = null,
+    @SerialName("accepted_at") val acceptedAt: String? = null,
+    @SerialName("rejected_at") val rejectedAt: String? = null,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
 
 @Serializable
 data class AccountDeletionRequestDto(
@@ -324,6 +398,10 @@ data class ProjectDto(
     @SerialName("suggested_name_source") val suggestedNameSource: String? = null,
     val mode: String,
     @SerialName("reading_order") val readingOrder: String,
+    @SerialName("ai_enabled") val aiEnabled: Boolean = false,
+    @SerialName("ai_consent_version") val aiConsentVersion: String? = null,
+    @SerialName("ai_enabled_by_user_id") val aiEnabledByUserId: String? = null,
+    @SerialName("ai_enabled_at") val aiEnabledAt: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
 )
