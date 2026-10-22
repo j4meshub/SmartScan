@@ -1,6 +1,10 @@
 package com.smartscan.feature.workspace
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,6 +20,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.Modifier
 import com.smartscan.core.model.AiCandidate
 import com.smartscan.core.model.AiCapabilities
 import com.smartscan.core.model.AiEnhancement
@@ -74,7 +80,7 @@ class AiWorkspaceContentTest {
 
         compose.onNodeWithText("Candidate ready").assertIsDisplayed()
         compose.onNodeWithText("Title suggestion").assertIsDisplayed()
-        compose.onNodeWithText("Accept candidate").assertHasClickAction().performClick()
+        compose.onNodeWithText("Accept candidate").performScrollTo().assertHasClickAction().performClick()
         compose.onNodeWithText("Candidate accepted").assertExists()
     }
 
@@ -85,7 +91,7 @@ class AiWorkspaceContentTest {
                 PreviewHarness()
             }
         }
-        compose.onNodeWithText("View baseline version").assertHasClickAction().performClick()
+        compose.onNodeWithText("View baseline version").performScrollTo().assertHasClickAction().performClick()
         compose.onNodeWithText("preview:2").assertIsDisplayed()
     }
 }
@@ -93,37 +99,12 @@ class AiWorkspaceContentTest {
 @Composable
 private fun DecisionHarness() {
     var candidate by remember { mutableStateOf(enhancement(status = "candidate_ready", sourceVersion = 2)) }
-    AiWorkspaceContent(
-        projectAiEnabled = true,
-        activeResultVersion = 2,
-        capabilities = capabilities(),
-        enhancements = listOf(candidate),
-        enhancementKind = "recommended",
-        loading = false,
-        actionBusy = false,
-        parentBusy = false,
-        failed = false,
-        onToggleProjectAi = {},
-        onEnhancementKindChanged = {},
-        onRequest = {},
-        onRefresh = {},
-        onDecide = { enhancement, accepted ->
-            candidate = enhancement.copy(status = if (accepted) "accepted" else "rejected")
-        },
-        onPreviewVersion = {},
-    )
-}
-
-@Composable
-private fun PreviewHarness() {
-    var previewVersion by remember { mutableStateOf<Int?>(null) }
-    Column {
-        Text("preview:${previewVersion ?: 0}")
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         AiWorkspaceContent(
             projectAiEnabled = true,
-            activeResultVersion = 3,
+            activeResultVersion = 2,
             capabilities = capabilities(),
-            enhancements = listOf(enhancement(status = "accepted", sourceVersion = 2)),
+            enhancements = listOf(candidate),
             enhancementKind = "recommended",
             loading = false,
             actionBusy = false,
@@ -133,9 +114,38 @@ private fun PreviewHarness() {
             onEnhancementKindChanged = {},
             onRequest = {},
             onRefresh = {},
-            onDecide = { _, _ -> },
-            onPreviewVersion = { previewVersion = it },
+            onDecide = { enhancement, accepted ->
+                candidate = enhancement.copy(status = if (accepted) "accepted" else "rejected")
+            },
+            onPreviewVersion = {},
         )
+    }
+}
+
+@Composable
+private fun PreviewHarness() {
+    var previewVersion by remember { mutableStateOf<Int?>(null) }
+    Column(Modifier.fillMaxSize()) {
+        Text("preview:${previewVersion ?: 0}")
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            AiWorkspaceContent(
+                projectAiEnabled = true,
+                activeResultVersion = 3,
+                capabilities = capabilities(),
+                enhancements = listOf(enhancement(status = "accepted", sourceVersion = 2)),
+                enhancementKind = "recommended",
+                loading = false,
+                actionBusy = false,
+                parentBusy = false,
+                failed = false,
+                onToggleProjectAi = {},
+                onEnhancementKindChanged = {},
+                onRequest = {},
+                onRefresh = {},
+                onDecide = { _, _ -> },
+                onPreviewVersion = { previewVersion = it },
+            )
+        }
     }
 }
 
