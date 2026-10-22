@@ -28,6 +28,8 @@ EXPECTED_OPERATIONS = {
     ("GET", "/v1/projects", 200),
     ("POST", "/v1/projects", 201),
     ("GET", "/v1/projects/{project_id}", 200),
+    ("GET", "/v1/ai/capabilities", 200),
+    ("PUT", "/v1/projects/{project_id}/ai-settings", 200),
     ("DELETE", "/v1/projects/{project_id}", 202),
     ("GET", "/v1/projects/{project_id}/pages", 200),
     ("PATCH", "/v1/projects/{project_id}/pages/order", 200),
@@ -42,6 +44,10 @@ EXPECTED_OPERATIONS = {
     ("GET", "/v1/export-artifacts/{artifact_id}/content", 200),
     ("GET", "/v1/project-deletions/{deletion_id}", 200),
     ("GET", "/v1/pages/{page_id}", 200),
+    ("GET", "/v1/pages/{page_id}/ai-enhancements", 200),
+    ("POST", "/v1/pages/{page_id}/ai-enhancements", 202),
+    ("POST", "/v1/ai-enhancements/{enhancement_id}/accept", 200),
+    ("POST", "/v1/ai-enhancements/{enhancement_id}/reject", 200),
     ("POST", "/v1/uploads", 201),
     ("GET", "/v1/uploads/{upload_id}", 200),
     ("DELETE", "/v1/uploads/{upload_id}", 204),
@@ -106,6 +112,8 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
         "AuditLogView",
         "BookIntegrityReport",
         "BookIntegrityIssueView",
+        "AiCapabilitiesView",
+        "AiEnhancementView",
     }.issubset(component_schemas)
     assert "securitySchemes" not in schema["components"]
     assert schema["paths"]["/v1/uploads/{upload_id}/complete"]["post"]["responses"]["202"]
@@ -174,6 +182,14 @@ def test_openapi_exposes_existing_models_and_security_scheme() -> None:
     assert {"suggested_name", "suggested_name_source", "suggested_name_updated_at"}.issubset(
         project_properties
     )
+    assert {
+        "ai_enabled",
+        "ai_consent_version",
+        "ai_enabled_by_user_id",
+        "ai_enabled_at",
+    }.issubset(project_properties)
+    page_result_properties = component_schemas["PageResultView"]["properties"]
+    assert {"source_result_version", "provenance"}.issubset(page_result_properties)
 
 
 def test_openapi_matches_committed_snapshot() -> None:

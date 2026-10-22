@@ -3,7 +3,7 @@
   "info": {
     "title": "SmartScan 接口",
     "description": "统一账号、权限、扫描项目、上传、处理、导出与文件生命周期接口。",
-    "version": "2026-10-21.2"
+    "version": "2026-10-22.1"
   },
   "paths": {
     "/v1/auth/account-merges": {
@@ -650,6 +650,361 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai/capabilities": {
+      "get": {
+        "summary": "Get Ai Capabilities",
+        "operationId": "get_ai_capabilities_v1_ai_capabilities_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiCapabilitiesView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/ai-settings": {
+      "put": {
+        "summary": "Put Project Ai Settings",
+        "operationId": "put_project_ai_settings_v1_projects__project_id__ai_settings_put",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectAiSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pages/{page_id}/ai-enhancements": {
+      "post": {
+        "summary": "Create Page Ai Enhancement",
+        "operationId": "create_page_ai_enhancement_v1_pages__page_id__ai_enhancements_post",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 100,
+              "pattern": "^[A-Za-z0-9_.:-]+$",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiEnhancementCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiEnhancementView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Page Ai Enhancements",
+        "operationId": "list_page_ai_enhancements_v1_pages__page_id__ai_enhancements_get",
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Page Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AiEnhancementView"
+                  },
+                  "title": "Response List Page Ai Enhancements V1 Pages  Page Id  Ai Enhancements Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai-enhancements/{enhancement_id}/accept": {
+      "post": {
+        "summary": "Accept Page Ai Enhancement",
+        "operationId": "accept_page_ai_enhancement_v1_ai_enhancements__enhancement_id__accept_post",
+        "parameters": [
+          {
+            "name": "enhancement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Enhancement Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiEnhancementView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai-enhancements/{enhancement_id}/reject": {
+      "post": {
+        "summary": "Reject Page Ai Enhancement",
+        "operationId": "reject_page_ai_enhancement_v1_ai_enhancements__enhancement_id__reject_post",
+        "parameters": [
+          {
+            "name": "enhancement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Enhancement Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiEnhancementView"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3744,6 +4099,257 @@
         ],
         "title": "AdminAccountDeletionView"
       },
+      "AiCapabilitiesView": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "business_orchestration_ready": {
+            "type": "boolean",
+            "title": "Business Orchestration Ready"
+          },
+          "consent_version": {
+            "type": "string",
+            "title": "Consent Version"
+          },
+          "transmission_notice_code": {
+            "type": "string",
+            "title": "Transmission Notice Code"
+          },
+          "enhancement_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Enhancement Kinds"
+          },
+          "task_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Task Types"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "business_orchestration_ready",
+          "consent_version",
+          "transmission_notice_code",
+          "enhancement_kinds",
+          "task_types"
+        ],
+        "title": "AiCapabilitiesView"
+      },
+      "AiEnhancementCreate": {
+        "properties": {
+          "enhancement_kind": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "complex_ocr",
+              "exam_review",
+              "book_review"
+            ],
+            "title": "Enhancement Kind"
+          },
+          "source_result_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Source Result Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enhancement_kind",
+          "source_result_version"
+        ],
+        "title": "AiEnhancementCreate"
+      },
+      "AiEnhancementView": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "page_id": {
+            "type": "string",
+            "title": "Page Id"
+          },
+          "processing_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Job Id"
+          },
+          "enhancement_kind": {
+            "type": "string",
+            "title": "Enhancement Kind"
+          },
+          "requested_tasks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requested Tasks"
+          },
+          "source_result_version": {
+            "type": "integer",
+            "title": "Source Result Version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "candidate_result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Result"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "accepted_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted By User Id"
+          },
+          "accepted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "page_id",
+          "processing_job_id",
+          "enhancement_kind",
+          "requested_tasks",
+          "source_result_version",
+          "status",
+          "candidate_result",
+          "evidence",
+          "provider_id",
+          "model",
+          "confidence",
+          "error_code",
+          "accepted_by_user_id",
+          "accepted_at",
+          "rejected_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AiEnhancementView"
+      },
       "AuditLogView": {
         "properties": {
           "id": {
@@ -4823,6 +5429,28 @@
             "type": "string",
             "title": "Processor Version"
           },
+          "source_result_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Result Version"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -5577,6 +6205,31 @@
         ],
         "title": "PasswordChange"
       },
+      "ProjectAiSettingsUpdate": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "consent_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "ProjectAiSettingsUpdate"
+      },
       "ProjectCreate": {
         "properties": {
           "title": {
@@ -5730,6 +6383,45 @@
           "reading_order": {
             "type": "string",
             "title": "Reading Order"
+          },
+          "ai_enabled": {
+            "type": "boolean",
+            "title": "Ai Enabled",
+            "default": false
+          },
+          "ai_consent_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Consent Version"
+          },
+          "ai_enabled_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Enabled By User Id"
+          },
+          "ai_enabled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Enabled At"
           },
           "created_at": {
             "type": "string",

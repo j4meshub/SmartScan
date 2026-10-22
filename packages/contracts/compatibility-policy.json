@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "api_major": "v1",
-  "current_contract_revision": "2026-10-21.2",
+  "current_contract_revision": "2026-10-22.1",
   "previous_contract_revision": "2026-10-20.0",
   "supported_client_generations": [
     "current",

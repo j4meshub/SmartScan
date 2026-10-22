@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from .config import Settings, get_settings
 from .models import (
     AccountMergeAudit,
+    AiEnhancementTask,
     BookIntegrityDecision,
     ExportArtifact,
     JobStatus,
@@ -158,6 +159,7 @@ def _load_merge_resources(
     list[ScanExport],
     list[ExportArtifact],
     list[BookIntegrityDecision],
+    list[AiEnhancementTask],
 ]:
     identities = list(
         db.scalars(
@@ -222,6 +224,13 @@ def _load_merge_resources(
             .with_for_update()
         )
     )
+    ai_enhancements = list(
+        db.scalars(
+            select(AiEnhancementTask)
+            .where(AiEnhancementTask.owner_user_id == source_id)
+            .with_for_update()
+        )
+    )
     return (
         identities,
         projects,
@@ -233,6 +242,7 @@ def _load_merge_resources(
         exports,
         artifacts,
         integrity_decisions,
+        ai_enhancements,
     )
 
 
@@ -292,6 +302,7 @@ def merge_accounts(
         exports,
         artifacts,
         integrity_decisions,
+        ai_enhancements,
     ) = _load_merge_resources(db, source.id, canonical.id)
     source_identities = [item for item in identities if item.user_id == source.id]
     canonical_providers = {item.provider for item in identities if item.user_id == canonical.id}
@@ -370,6 +381,8 @@ def merge_accounts(
                 canonical.password_hash = identity.credential_hash or canonical.password_hash
         for project in projects:
             project.owner_user_id = canonical.id
+            if project.ai_enabled_by_user_id == source.id:
+                project.ai_enabled_by_user_id = canonical.id
         for page in pages:
             page.owner_user_id = canonical.id
         for result in page_results:
@@ -385,6 +398,10 @@ def merge_accounts(
         for decision in integrity_decisions:
             decision.owner_user_id = canonical.id
             decision.decided_by_user_id = canonical.id
+        for enhancement in ai_enhancements:
+            enhancement.owner_user_id = canonical.id
+            if enhancement.accepted_by_user_id == source.id:
+                enhancement.accepted_by_user_id = canonical.id
         db.delete(source_phone)
         now = datetime.now(UTC)
         revoke_user_sessions(db, source.id)
@@ -402,6 +419,7 @@ def merge_accounts(
             "exports": len(exports),
             "export_artifacts": len(artifacts),
             "book_integrity_decisions": len(integrity_decisions),
+            "ai_enhancements": len(ai_enhancements),
             "files": len(sources_to_remove),
         }
         audit = AccountMergeAudit(

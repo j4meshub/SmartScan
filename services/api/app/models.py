@@ -317,6 +317,10 @@ class ScanProject(Base):
     suggested_name_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     mode: Mapped[str] = mapped_column(String(24), default="document", nullable=False)
     reading_order: Mapped[str] = mapped_column(String(12), default="ltr", nullable=False)
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ai_consent_version: Mapped[str | None] = mapped_column(String(32))
+    ai_enabled_by_user_id: Mapped[str | None] = mapped_column(String(36))
+    ai_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -529,6 +533,10 @@ class PageResult(Base):
     __table_args__ = (
         UniqueConstraint("page_id", "version", name="uq_page_result_version"),
         CheckConstraint("rotation_degrees IN (0, 90, 180, 270)", name="ck_page_result_rotation"),
+        CheckConstraint(
+            "source_result_version IS NULL OR source_result_version >= 1",
+            name="ck_page_results_source_version",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
@@ -546,6 +554,8 @@ class PageResult(Base):
     size_bytes: Mapped[int | None] = mapped_column(Integer)
     rotation_degrees: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     processor_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_result_version: Mapped[int | None] = mapped_column(Integer)
+    provenance: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     page: Mapped[ScanPage] = relationship(back_populates="results")
 
@@ -793,6 +803,60 @@ class ProcessingJob(Base):
     )
 
 
+class AiEnhancementTask(Base):
+    __tablename__ = "ai_enhancement_tasks"
+    __table_args__ = (
+        UniqueConstraint("page_id", "idempotency_key", name="uq_ai_enhancement_page_key"),
+        UniqueConstraint("processing_job_id", name="uq_ai_enhancement_processing_job"),
+        CheckConstraint(
+            "enhancement_kind IN ('recommended', 'complex_ocr', 'exam_review', 'book_review')",
+            name="ck_ai_enhancement_kind",
+        ),
+        CheckConstraint(
+            "status IN ('queued', 'processing', 'candidate_ready', 'accepted', 'rejected', "
+            "'stale', 'failed', 'canceled')",
+            name="ck_ai_enhancement_status",
+        ),
+        CheckConstraint("source_result_version >= 1", name="ck_ai_enhancement_source_version"),
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
+            name="ck_ai_enhancement_confidence",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    page_id: Mapped[str] = mapped_column(
+        ForeignKey("scan_pages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    processing_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("processing_jobs.id", ondelete="SET NULL"), index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    enhancement_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    requested_tasks: Mapped[str] = mapped_column(Text, nullable=False)
+    source_result_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="queued", nullable=False, index=True)
+    candidate_result: Mapped[str | None] = mapped_column(Text)
+    evidence: Mapped[str | None] = mapped_column(Text)
+    provider_id: Mapped[str | None] = mapped_column(String(64))
+    model: Mapped[str | None] = mapped_column(String(128))
+    confidence: Mapped[float | None] = mapped_column(Float)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    accepted_by_user_id: Mapped[str | None] = mapped_column(String(36))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
@@ -861,6 +925,9 @@ class AiProviderCall(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    enhancement_task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("ai_enhancement_tasks.id", ondelete="SET NULL"), index=True
+    )
     provider_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     task_type: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)

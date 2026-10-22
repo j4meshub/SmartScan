@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
 from .config import Settings, get_settings
-from .models import JobStatus, ProcessingJob, User
+from .models import AiEnhancementTask, JobStatus, ProcessingJob, User
 
 
 class JobFlowError(RuntimeError):
@@ -141,6 +141,7 @@ def claim_next_job(
         select(ProcessingJob)
         .where(
             claimable_status,
+            ProcessingJob.kind != "ai_enhancement",
             ProcessingJob.available_at <= now,
             ProcessingJob.attempts < ProcessingJob.max_attempts,
             active_owner_count < settings.max_active_jobs_per_user,
@@ -175,6 +176,8 @@ def claim_job_by_id(
     now = now or datetime.now(UTC)
     job = db.scalar(select(ProcessingJob).where(ProcessingJob.id == job_id).with_for_update())
     if job is None or job.attempts >= job.max_attempts:
+        return None
+    if job.kind == "ai_enhancement":
         return None
     due = job.available_at
     if due.tzinfo is None:
@@ -268,6 +271,13 @@ def cancel_job(
     job.canceled_at = now
     job.progress = 0
     _clear_lease(job)
+    if job.kind == "ai_enhancement":
+        task = db.scalar(
+            select(AiEnhancementTask).where(AiEnhancementTask.processing_job_id == job.id)
+        )
+        if task is not None:
+            task.status = "canceled"
+            task.updated_at = now
     return job
 
 
@@ -293,4 +303,12 @@ def retry_job(
     job.error_code = None
     job.error = None
     _clear_lease(job)
+    if job.kind == "ai_enhancement":
+        task = db.scalar(
+            select(AiEnhancementTask).where(AiEnhancementTask.processing_job_id == job.id)
+        )
+        if task is not None:
+            task.status = "queued"
+            task.error_code = None
+            task.updated_at = now
     return job
