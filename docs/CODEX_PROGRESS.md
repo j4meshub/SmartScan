@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI 业务接入 |
 | 当前工作包 | `AI-009` 公式与复杂版面 |
-| 工作包状态 | 进行中：Worker、确认后 OCR 文字层、H5 选择/对比及 Mock 候选已实现，正在执行仓库级门禁 |
+| 工作包状态 | 完成：实现、本机闭环、全量本地门禁与 PR 代码头五项 CI 已通过；当前提交只补录证据 |
 | 当前分支 | `codex/ai-009-formula-layout` |
 | 最后验证基线 | `be45ee1`（PR #65 合并后的主线；主分支运行 `39786355074` 五项全部通过） |
-| 工作包提交 | 尚未提交 |
-| PR | 尚未创建 |
+| 工作包提交 | `0d601d5`（公式/表格/版面候选、确认后 OCR 文字层、H5 与 Mock 试用） |
+| PR | [#66](https://github.com/j4meshub/SmartScan/pull/66)，代码头 PR 运行五项全部通过，等待最终证据提交 CI 与合并 |
 | 下一工作包 | `AND-AI-001`：Android 项目授权、建议、进度和候选选择 |
 
 ## 当前工作包进展
@@ -21,7 +21,8 @@
 - 用户接受仍绑定当前活动版本的候选时，API 会再次校验结构化块，把归一化坐标映射到源图片像素并写入版本绑定 OCR 详情；PDF 仅在此后采用文字层。专项验证活动版本、`PageResult` 数量及图片 SHA-256 全部不变，非法存储候选返回 `422` 且不修改页面。
 - H5 增加通用建议/公式与复杂版面 OCR 类型选择，按类型隔离当前候选，并展示长度受限的公式、表格和版面文字；中英文、键盘名称、Provider 字段隐藏和 axe 继续受测试保护。本机 Mock 返回明确含“模拟”标识的三类可重复块，不读取媒体或计入真实验收。
 - 本机一键试用实际启动 API、AI 网关、AI Worker、CPU Worker 和 H5，在固定 `demo` 账号下完成“项目授权→Mock `complex_ocr`→公式/表格/版面候选→接受→PDF 文字层导出”；证据为 `execution_mode=mock`、三类块齐全、活动图片版本不变、OCR `ready`、导出采用一页文字层。随后停止全部五个托管进程并保留隔离数据。
-- 完整本地门禁通过：Ruff 与 162 个 Python 文件格式、iOS/Android 发布草稿、两套 AI Schema、OpenAPI 当前/上一代兼容、迁移漂移、H5/管理后台 JavaScript 语法和差异空白均通过；Python `453 passed, 7 skipped`、覆盖率 `87.81%`，H5 单元 `45 passed`，Chromium E2E/axe `8 passed`。一次联合回归先因误写不存在的 `tests/test_ai_media_security.py` 而未收集测试，纠正为实际 `tests/test_ai_secure_media.py` 后相关 `160 passed`；7 项跳过仍是既有 PostgreSQL/Docker/真实主机外部门禁。PR CI 尚待执行。
+- 完整本地门禁通过：Ruff 与 162 个 Python 文件格式、iOS/Android 发布草稿、两套 AI Schema、OpenAPI 当前/上一代兼容、迁移漂移、H5/管理后台 JavaScript 语法和差异空白均通过；Python `453 passed, 7 skipped`、覆盖率 `87.81%`，H5 单元 `45 passed`，Chromium E2E/axe `8 passed`。一次联合回归先因误写不存在的 `tests/test_ai_media_security.py` 而未收集测试，纠正为实际 `tests/test_ai_secure_media.py` 后相关 `160 passed`；7 项跳过仍是既有 PostgreSQL/Docker/真实主机外部门禁。
+- 代码提交 `0d601d5` 的 PR 工作流 `39792248750` 已完成 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器五项检查，全部通过。重复 push 工作流 `39792163156` 的 API/Web/Android/容器通过，iOS 每个内部步骤均成功但 Check Run 汇总较晚收敛；没有用该重复运行替代 PR 五项门禁。当前证据提交只更新中文状态文档，仍需在同一 PR 完成 CI 后合并。
 
 - H5-AI-001 已由 [PR #64](https://github.com/j4meshub/SmartScan/pull/64) 合并到主线，中文 squash 提交为 `725e0ad`；最终 push `39773633246` 与 PR `39773639990` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
 - DEVX-002 将既有中文启动器扩展为一次启动 API、AI 网关、AI Worker、CPU Worker 和 H5。默认 Provider 是不读取媒体、不访问外网的确定性 Mock，七类任务都通过现有结构化结果校验；能力接口、H5 双语徽标和持久化证据明确区分 `mock` 与 `provider`，生产环境禁止 Mock。
