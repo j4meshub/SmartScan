@@ -7,15 +7,20 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI 业务接入 |
-| 当前工作包 | `AI-008` 通用文档 AI 辅助 |
-| 工作包状态 | 进行中：实现与完整门禁均已通过，最终证据提交等待 CI 与合并 |
-| 当前分支 | `codex/ai-008-document-assistance` |
-| 最后验证基线 | `a366f05`（push `39767143470` 与 PR `39767150166` 的 API、Web、Android、iOS 和容器共 10 项全部通过） |
-| 工作包提交 | `fd39dce`（通用文档 AI 辅助闭环）、`a366f05`（AI Worker 镜像门禁） |
-| PR | [#63](https://github.com/j4meshub/SmartScan/pull/63)，最终代码头两套五项 CI 全部通过；最终证据提交待复验后合并 |
-| 下一工作包 | `H5-AI-001`：在公共 AI API 上实现项目授权、任务状态、候选对比与接受/放弃的 H5 双语闭环 |
+| 当前工作包 | `H5-AI-001` H5 AI 产品闭环 |
+| 工作包状态 | 进行中：实现、本地门禁及代码头两套 CI 已通过，等待最终证据提交与合并 |
+| 当前分支 | `codex/h5-ai-001-product-loop` |
+| 最后验证基线 | `c3bf400`（push `39771891339` 与 PR `39771941635` 的 API、Web、Android、iOS 和容器共 10 项全部通过） |
+| 工作包提交 | `c3bf400`（H5 项目授权、AI 候选对比与决定闭环） |
+| PR | [#64](https://github.com/j4meshub/SmartScan/pull/64)，代码头两套五项 CI 全部通过，等待最终证据提交与合并 |
+| 下一工作包 | `DEVX-002`：默认 Mock、可选本机 Secret 真实 Provider 的 AI 一键启动、停止和清理 |
 
 ## 当前工作包进展
+
+- AI-008 已由 [PR #63](https://github.com/j4meshub/SmartScan/pull/63) 合并到主线，中文 squash 提交为 `5ebee7f`；最终 push `39768108559` 与 PR `39768115196` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
+- H5 项目工作区新增固定传输说明与项目级 AI 开关；能力未配置时不能开启或发起建议，但页面编辑、基础预览和导出保持可用。每次建议使用安全随机幂等键并绑定当前活动页面版本，页面切换后只展示同页状态。
+- 分类、方向、标题和页码候选以业务字段和置信度对比，不读取或显示 Provider ID、模型、URL 或 Key。用户可以接受或放弃仍有效的候选；接受导致确定性旋转生成新版本时，可在来源基础版本和当前版本之间只读回看，不把普通文档伪装成 AI 图像。
+- H5 中英文词条、键盘焦点、ARIA 状态区和移动端布局已补齐。本地 `node --check` 通过，H5 单元测试 `44 passed`；Chromium E2E/axe `6 passed`，覆盖授权、建议、候选对比、接受、放弃、基础版本回看和 AI 不可用降级。仓库级 Python `431 passed, 7 skipped`、覆盖率 `87.76%`；Ruff、161 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、两套 AI Schema、Android/iOS 发布草稿、H5/管理后台 JavaScript 语法及差异空白均通过。7 项跳过仍是既有 PostgreSQL/Docker/真实主机外部门禁。代码头 push `39771891339` 与 PR `39771941635` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
 
 - AI-007 已由 [PR #62](https://github.com/j4meshub/SmartScan/pull/62) 合并到主线，中文 squash 提交为 `8ba83d4`；最终 push `39762220996` 与 PR `39762226150` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
 - AI-008 新增独立 `worker-ai` 服务，只在 `ai` Profile 中启动并领取 `ai_enhancement`。`recommended` 请求按稳定子任务 ID 调用分类、方向、标题和书籍页码 Schema；每个完成结果按任务类型写入内部检查点，租约重试会跳过已完成项，处理中检查点不通过公共 API 暴露。

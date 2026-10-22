@@ -210,6 +210,123 @@
   min-height: 36px;
 }
 
+.ai-workspace {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #c9d8cf;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f6fff9, #fff);
+}
+
+.ai-workspace h3,
+.ai-workspace h4,
+.ai-workspace p {
+  margin: 0;
+}
+
+.ai-workspace small,
+.ai-safety-note {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.ai-badge {
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 99px;
+  background: #e5e7eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ai-badge[data-status="candidate_ready"],
+.ai-badge[data-status="accepted"] {
+  background: #d1fae5;
+  color: #166534;
+}
+
+.ai-badge[data-status="failed"],
+.ai-badge[data-status="stale"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ai-consent-card {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.82);
+}
+
+.ai-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+}
+
+.ai-toggle input {
+  width: 20px;
+  height: 20px;
+}
+
+.ai-consent-card p,
+.ai-safety-note {
+  font-size: 13px;
+}
+
+.ai-actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.ai-message {
+  color: var(--muted);
+}
+
+.ai-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-comparison article {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.ai-candidate-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-candidate-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.ai-candidate-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.ai-candidate-row small {
+  display: block;
+}
+
 :focus-visible {
   outline: 3px solid #2563eb;
   outline-offset: 3px;
@@ -229,4 +346,6 @@
   .editor-toolbar > *, .editor-actions > * { flex: 1 1 42%; }
   .export-controls { grid-template-columns: 1fr; }
   .artifact-row { align-items: flex-start; flex-direction: column; }
+  .ai-comparison { grid-template-columns: 1fr; }
+  .ai-actions > * { flex: 1 1 42%; }
 }

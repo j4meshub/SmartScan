@@ -174,6 +174,42 @@
         <button id="confirmReview" class="secondary hidden" type="button" data-editor-i18n="confirm">确认已复核</button>
         <button id="savePageEdit" class="primary" type="button" data-editor-i18n="save">应用裁切与滤镜</button>
       </div>
+      <section id="aiWorkspace" class="ai-workspace" aria-labelledby="aiWorkspaceTitle">
+        <div class="project-files-heading">
+          <div>
+            <h3 id="aiWorkspaceTitle" data-editor-i18n="aiTitle">AI 智能建议</h3>
+            <small id="aiAvailability"></small>
+          </div>
+          <span id="aiStatusBadge" class="ai-badge" aria-live="polite"></span>
+        </div>
+        <div class="ai-consent-card">
+          <label class="ai-toggle"><input id="aiProjectEnabled" type="checkbox" aria-describedby="aiTransmissionNotice aiConsentVersion"><span data-editor-i18n="aiEnable">为此项目启用 AI</span></label>
+          <p id="aiTransmissionNotice" data-editor-i18n="aiTransmissionNotice">启用后，仅在你主动请求建议时，将当前页面发送至部署方配置的 AI 服务；原图和基础结果仍会保留。关闭后不会发起新的 AI 请求。</p>
+          <small id="aiConsentVersion"></small>
+        </div>
+        <div class="ai-actions">
+          <button id="requestAiSuggestion" class="primary" type="button" data-editor-i18n="aiRequest">获取当前页智能建议</button>
+          <button id="refreshAiSuggestion" class="secondary" type="button" data-editor-i18n="aiRefresh">刷新建议状态</button>
+        </div>
+        <p id="aiMessage" class="message ai-message" role="status" aria-live="polite"></p>
+        <div id="aiComparison" class="ai-comparison hidden" aria-live="polite">
+          <article>
+            <h4 data-editor-i18n="aiBaseResult">基础结果</h4>
+            <p id="aiBaseSummary"></p>
+            <button id="previewAiBase" class="secondary hidden" type="button" data-editor-i18n="aiPreviewBase">查看基础版本</button>
+            <button id="previewAiCurrent" class="secondary hidden" type="button" data-editor-i18n="aiPreviewCurrent">返回当前版本</button>
+          </article>
+          <article>
+            <h4 data-editor-i18n="aiCandidateResult">AI 候选建议</h4>
+            <div id="aiCandidateList" class="ai-candidate-list"></div>
+          </article>
+        </div>
+        <div id="aiDecisionActions" class="ai-actions hidden">
+          <button id="acceptAiSuggestion" class="primary" type="button" data-editor-i18n="aiAccept">接受建议</button>
+          <button id="rejectAiSuggestion" class="secondary" type="button" data-editor-i18n="aiReject">放弃建议</button>
+        </div>
+        <p class="ai-safety-note" data-editor-i18n="aiSafety">AI 仅提供候选建议。普通文档不会生成虚假的“AI 增强图”，接受后仍由确定性处理管线执行修改。</p>
+      </section>
       <section id="bookIntegrity" class="project-files hidden" aria-labelledby="bookIntegrityTitle">
         <div class="project-files-heading">
           <div>
