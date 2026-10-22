@@ -94,6 +94,8 @@ docker compose --profile ai -f deploy/compose/docker-compose.yml up --build ai-g
 
 ## 当前边界与后续门禁
 
+当前注册表、结构化任务、安全传输、可靠性和评估能力属于 AI 基础设施。API、Worker 与客户端尚未创建或消费页面 AI 增强任务，不能据此宣称 SmartScan 已提供 AI 产品功能。后续业务闭环见[可选视觉 AI 业务接入架构](AI_BUSINESS_INTEGRATION.md)。
+
 - AI-002 已提供七类任务/结果 JSON Schema、无网络请求计划和带 Provider/模型版本的候选证据信封；AI 网关仍不直接修改业务数据，增强版本保存必须经过后续 Worker 活动版本核对。
 - AI-003 已实现 HTTPS 固定目标、全部 DNS 答案校验、解析后连接固定、TLS 原主机名验证、公网/受控网段策略、禁重定向、固定媒体前缀和请求/响应大小限制。完整说明见[可选视觉 AI 出站网络与媒体安全](AI_NETWORK_SECURITY.md)。
 - AI-004 已实现可配置网络超时、一次重试、PostgreSQL 共享熔断/租约、并发/频率/UTC 日费用门禁和脱敏调用证据。完整说明见[可选视觉 AI 可靠性、熔断与费用门禁](AI_RELIABILITY_COST.md)。
