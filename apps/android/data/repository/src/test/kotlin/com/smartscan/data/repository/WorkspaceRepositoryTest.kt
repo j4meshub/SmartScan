@@ -218,7 +218,7 @@ private class FakeWorkspaceApi(private val downloadBytes: ByteArray = "preview".
 
     override suspend fun createExport(projectId: String, request: ExportCreateRequestDto) = export(projectId, request)
     override suspend fun getExport(exportId: String) = export("project-1", ExportCreateRequestDto("pdf"))
-    override suspend fun downloadPageContent(pageId: String, variant: String) = downloadBytes.toResponseBody()
+    override suspend fun downloadPageContent(pageId: String, variant: String, version: Int?) = downloadBytes.toResponseBody()
     override suspend fun downloadExportArtifact(artifactId: String) = downloadBytes.toResponseBody()
 }
 

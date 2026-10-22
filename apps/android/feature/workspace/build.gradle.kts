@@ -9,6 +9,7 @@ android {
     compileSdk = 35
     defaultConfig { minSdk = 26 }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -26,4 +27,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.activity:activity-compose:1.10.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

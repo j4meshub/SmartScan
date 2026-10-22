@@ -1,6 +1,9 @@
 package com.smartscan.data.repository
 
 import com.smartscan.core.model.DownloadedArtifact
+import com.smartscan.core.model.AiCandidate
+import com.smartscan.core.model.AiCapabilities
+import com.smartscan.core.model.AiEnhancement
 import com.smartscan.core.model.BookIntegrityIssue
 import com.smartscan.core.model.BookIntegrityReport
 import com.smartscan.core.model.ExportArtifact
@@ -9,6 +12,9 @@ import com.smartscan.core.model.ScanProject
 import com.smartscan.core.model.ScanPage
 import com.smartscan.core.network.ExportCreateRequestDto
 import com.smartscan.core.network.ExportDto
+import com.smartscan.core.network.AiApi
+import com.smartscan.core.network.AiEnhancementDto
+import com.smartscan.core.network.AiEnhancementRequestDto
 import com.smartscan.core.network.ExamSuggestionDismissalRequestDto
 import com.smartscan.core.network.BookAssemblyRequestDto
 import com.smartscan.core.network.BookIntegrityDecisionRequestDto
@@ -19,6 +25,7 @@ import com.smartscan.core.network.PageOrderRequestDto
 import com.smartscan.core.network.PageReviewRequestDto
 import com.smartscan.core.network.PageRotationRequestDto
 import com.smartscan.core.network.ProjectDto
+import com.smartscan.core.network.ProjectAiSettingsRequestDto
 import com.smartscan.core.network.ScanApi
 import com.smartscan.core.network.WorkspaceApi
 import java.io.File
@@ -28,6 +35,12 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -68,13 +81,28 @@ interface ProjectRepository {
         includeOcrText: Boolean,
     ): ApiResult<ProjectExport>
     suspend fun refreshExport(exportId: String): ApiResult<ProjectExport>
-    suspend fun downloadPagePreview(pageId: String, directory: File): ApiResult<DownloadedArtifact>
+    suspend fun downloadPagePreview(pageId: String, directory: File, version: Int? = null): ApiResult<DownloadedArtifact>
     suspend fun downloadExportArtifact(artifact: ExportArtifact, directory: File): ApiResult<DownloadedArtifact>
+    suspend fun getAiCapabilities(): ApiResult<AiCapabilities>
+    suspend fun updateProjectAiSettings(
+        projectId: String,
+        enabled: Boolean,
+        consentVersion: String?,
+    ): ApiResult<ScanProject>
+    suspend fun listAiEnhancements(pageId: String): ApiResult<List<AiEnhancement>>
+    suspend fun requestAiEnhancement(
+        pageId: String,
+        enhancementKind: String,
+        sourceResultVersion: Int,
+        idempotencyKey: String,
+    ): ApiResult<AiEnhancement>
+    suspend fun decideAiEnhancement(enhancementId: String, accept: Boolean): ApiResult<AiEnhancement>
 }
 
 class DefaultProjectRepository(
     private val api: ScanApi,
     private val workspaceApi: WorkspaceApi? = null,
+    private val aiApi: AiApi? = null,
     private val cache: UserScopedCache? = null,
     private val currentUserId: () -> String? = { null },
 ) : ProjectRepository {
@@ -204,10 +232,16 @@ class DefaultProjectRepository(
         it.getExport(exportId).toModel()
     }
 
-    override suspend fun downloadPagePreview(pageId: String, directory: File): ApiResult<DownloadedArtifact> = withWorkspace {
+    override suspend fun downloadPagePreview(
+        pageId: String,
+        directory: File,
+        version: Int?,
+    ): ApiResult<DownloadedArtifact> = withWorkspace {
+        require(version == null || version > 0) { "page_result_version_invalid" }
         withContext(Dispatchers.IO) {
-            val stableName = "page-${sha256(pageId.toByteArray()).take(16)}.img"
-            saveDownload(it.downloadPageContent(pageId), directory, stableName, null, null)
+            val versionSuffix = version?.let { value -> "-v$value" } ?: "-active"
+            val stableName = "page-${sha256(pageId.toByteArray()).take(16)}$versionSuffix.img"
+            saveDownload(it.downloadPageContent(pageId, version = version), directory, stableName, null, null)
         }
     }
 
@@ -228,8 +262,67 @@ class DefaultProjectRepository(
         }
     }
 
+    override suspend fun getAiCapabilities(): ApiResult<AiCapabilities> = withAi {
+        it.getAiCapabilities().let { dto ->
+            AiCapabilities(
+                available = dto.available,
+                businessOrchestrationReady = dto.businessOrchestrationReady,
+                executionMode = dto.executionMode,
+                consentVersion = dto.consentVersion,
+                transmissionNoticeCode = dto.transmissionNoticeCode,
+                enhancementKinds = dto.enhancementKinds.toSet(),
+                taskTypes = dto.taskTypes.toSet(),
+            )
+        }
+    }
+
+    override suspend fun updateProjectAiSettings(
+        projectId: String,
+        enabled: Boolean,
+        consentVersion: String?,
+    ): ApiResult<ScanProject> = withAi {
+        require(!enabled || !consentVersion.isNullOrBlank()) { "ai_consent_required" }
+        it.updateProjectAiSettings(
+            projectId,
+            ProjectAiSettingsRequestDto(enabled = enabled, consentVersion = if (enabled) consentVersion else null),
+        ).toModel()
+    }
+
+    override suspend fun listAiEnhancements(pageId: String): ApiResult<List<AiEnhancement>> = withAi {
+        it.listAiEnhancements(pageId).map(AiEnhancementDto::toModel)
+    }
+
+    override suspend fun requestAiEnhancement(
+        pageId: String,
+        enhancementKind: String,
+        sourceResultVersion: Int,
+        idempotencyKey: String,
+    ): ApiResult<AiEnhancement> = withAi {
+        require(enhancementKind in setOf("recommended", "complex_ocr")) { "ai_enhancement_kind_invalid" }
+        require(sourceResultVersion > 0) { "ai_source_version_invalid" }
+        require(idempotencyKey.length in 16..100) { "ai_idempotency_key_invalid" }
+        it.createAiEnhancement(
+            pageId,
+            idempotencyKey,
+            AiEnhancementRequestDto(enhancementKind, sourceResultVersion),
+        ).toModel()
+    }
+
+    override suspend fun decideAiEnhancement(
+        enhancementId: String,
+        accept: Boolean,
+    ): ApiResult<AiEnhancement> = withAi {
+        require(enhancementId.isNotBlank()) { "ai_enhancement_id_invalid" }
+        (if (accept) it.acceptAiEnhancement(enhancementId) else it.rejectAiEnhancement(enhancementId)).toModel()
+    }
+
     private suspend fun <T> withWorkspace(block: suspend (WorkspaceApi) -> T): ApiResult<T> {
         val endpoint = workspaceApi ?: return ApiResult.Failure(FailureKind.INVALID_RESPONSE, retryable = false)
+        return safeApiCall { block(endpoint) }
+    }
+
+    private suspend fun <T> withAi(block: suspend (AiApi) -> T): ApiResult<T> {
+        val endpoint = aiApi ?: return ApiResult.Failure(FailureKind.INVALID_RESPONSE, retryable = false)
         return safeApiCall { block(endpoint) }
     }
 }
@@ -240,9 +333,87 @@ private fun ProjectDto.toModel() = ScanProject(
     suggestedName = suggestedName,
     mode = mode,
     readingOrder = readingOrder,
+    aiEnabled = aiEnabled,
+    aiConsentVersion = aiConsentVersion,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
+
+private fun AiEnhancementDto.toModel() = AiEnhancement(
+    id = id,
+    projectId = projectId,
+    pageId = pageId,
+    processingJobId = processingJobId,
+    enhancementKind = enhancementKind,
+    requestedTasks = requestedTasks,
+    sourceResultVersion = sourceResultVersion,
+    status = status,
+    candidates = parseAiCandidates(candidateResult as? JsonObject),
+    confidence = confidence,
+    errorCode = errorCode,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+internal fun parseAiCandidates(candidateResult: JsonObject?): List<AiCandidate> {
+    val tasks = candidateResult?.get("tasks") as? JsonObject ?: return emptyList()
+    return buildList {
+        val classification = tasks["classify_page"] as? JsonObject
+        classification.string("label")?.let {
+            add(AiCandidate("classification", it.preview(), classification.confidence()))
+        }
+        val orientation = tasks["detect_orientation"] as? JsonObject
+        orientation?.int("rotation_degrees")?.takeIf { it in setOf(0, 90, 180, 270) }?.let {
+            add(AiCandidate("orientation", it.toString(), orientation.confidence()))
+        }
+        val title = ((tasks["extract_title"] as? JsonObject)?.get("candidates") as? JsonArray)
+            ?.mapNotNull { it as? JsonObject }
+            ?.filter { !it.string("text").isNullOrBlank() }
+            ?.maxByOrNull { it.confidence() ?: 0.0 }
+        title?.string("text")?.let { add(AiCandidate("title", it.preview(), title.confidence())) }
+        val pageNumber = tasks["extract_page_number"] as? JsonObject
+        if (pageNumber.string("status") == "detected") {
+            val value = pageNumber.string("raw_label") ?: pageNumber.int("normalized_number")?.toString()
+            value?.let { add(AiCandidate("page_number", it.preview(), pageNumber.confidence())) }
+        }
+        val blocks = (((tasks["ocr_formula"] as? JsonObject)?.get("blocks") as? JsonArray)
+            ?.take(40)).orEmpty()
+        for (element in blocks) {
+            val block = element as? JsonObject ?: continue
+            when (block.string("block_type")) {
+                "formula" -> block.string("latex_candidate")?.let {
+                    add(AiCandidate("formula", it.preview(), block.confidence()))
+                }
+                "layout" -> block.string("text_candidate")?.let {
+                    add(AiCandidate("layout", it.preview(), block.confidence()))
+                }
+                "table" -> {
+                    val rows = sortedMapOf<Int, MutableList<Pair<Int, String>>>()
+                    val cells = (block["cells"] as? JsonArray)?.take(200).orEmpty()
+                    for (cellElement in cells) {
+                        val cell = cellElement as? JsonObject ?: continue
+                        val row = cell.int("row") ?: continue
+                        val column = cell.int("column") ?: continue
+                        val text = cell.string("text_candidate")?.trim().orEmpty()
+                        if (row < 0 || column < 0 || text.isBlank()) continue
+                        rows.getOrPut(row) { mutableListOf() }.add(column to text)
+                    }
+                    val text = rows.values.joinToString(" / ") { row ->
+                        row.sortedBy { it.first }.joinToString(" | ") { it.second }
+                    }.preview()
+                    if (text.isNotBlank()) add(AiCandidate("table", text, block.confidence()))
+                }
+            }
+        }
+    }
+}
+
+private fun JsonObject?.string(name: String): String? = ((this?.get(name) as? JsonPrimitive)?.contentOrNull)
+    ?.trim()?.takeIf(String::isNotEmpty)
+private fun JsonObject?.int(name: String): Int? = (this?.get(name) as? JsonPrimitive)?.intOrNull
+private fun JsonObject?.confidence(): Double? = (this?.get("confidence") as? JsonPrimitive)?.doubleOrNull
+    ?.takeIf { it in 0.0..1.0 }
+private fun String.preview(): String = trim().take(512)
 
 private fun com.smartscan.core.network.PageDto.toModel() = ScanPage(
     id = id,

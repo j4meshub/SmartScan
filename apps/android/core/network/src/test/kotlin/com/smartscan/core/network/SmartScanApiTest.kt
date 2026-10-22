@@ -201,6 +201,78 @@ class SmartScanApiTest {
         assertFalse(request.requestUrl!!.queryParameterNames.contains("token"))
     }
 
+    @Test
+    fun `AI capability and project consent use public contract without client provider configuration`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"available":true,"business_orchestration_ready":true,"execution_mode":"mock","consent_version":"2026-10-22.1","transmission_notice_code":"ai_data_transfer_v1","enhancement_kinds":["recommended","complex_ocr"],"task_types":["classify_page","ocr_formula"]}""",
+            ),
+        )
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"id":"project-1","owner_user_id":"user-1","title":"资料","suggested_name":null,"suggested_name_source":null,"suggested_name_updated_at":null,"mode":"document","reading_order":"ltr","ai_enabled":true,"ai_consent_version":"2026-10-22.1","ai_enabled_by_user_id":"user-1","ai_enabled_at":"2026-10-22T00:00:00Z","created_at":"2026-10-22T00:00:00Z","updated_at":"2026-10-22T00:00:00Z"}""",
+            ),
+        )
+        val api = api()
+
+        val capabilities = api.getAiCapabilities()
+        val project = api.updateProjectAiSettings(
+            "project-1",
+            ProjectAiSettingsRequestDto(enabled = true, consentVersion = capabilities.consentVersion),
+        )
+        val capabilityRequest = server.takeRequest()
+        val settingsRequest = server.takeRequest()
+
+        assertEquals("mock", capabilities.executionMode)
+        assertTrue(project.aiEnabled)
+        assertEquals("/v1/ai/capabilities", capabilityRequest.path)
+        assertEquals("/v1/projects/project-1/ai-settings", settingsRequest.path)
+        val body = settingsRequest.body.readUtf8()
+        assertTrue(body.contains("\"consent_version\":\"2026-10-22.1\""))
+        assertFalse(body.contains("provider"))
+        assertFalse(body.contains("api_key"))
+    }
+
+    @Test
+    fun `AI enhancement request carries idempotency header and versioned kind`() = runTest {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"id":"enhancement-1","project_id":"project-1","page_id":"page-1","processing_job_id":"job-1","enhancement_kind":"complex_ocr","requested_tasks":["ocr_formula"],"source_result_version":3,"status":"queued","candidate_result":null,"evidence":null,"provider_id":null,"model":null,"confidence":null,"error_code":null,"accepted_by_user_id":null,"accepted_at":null,"rejected_at":null,"created_at":"2026-10-22T00:00:00Z","updated_at":"2026-10-22T00:00:00Z"}""",
+            ),
+        )
+        val api = api()
+
+        val result = api.createAiEnhancement(
+            "page-1",
+            "android-ai.page-1.v3.00000000-0000-4000-8000-000000000001",
+            AiEnhancementRequestDto("complex_ocr", 3),
+        )
+        val request = server.takeRequest()
+        val body = request.body.readUtf8()
+
+        assertEquals("queued", result.status)
+        assertEquals("/v1/pages/page-1/ai-enhancements", request.path)
+        assertEquals(
+            "android-ai.page-1.v3.00000000-0000-4000-8000-000000000001",
+            request.getHeader("Idempotency-Key"),
+        )
+        assertTrue(body.contains("\"enhancement_kind\":\"complex_ocr\""))
+        assertTrue(body.contains("\"source_result_version\":3"))
+    }
+
+    @Test
+    fun `baseline preview uses authenticated version query without token`() = runTest {
+        server.enqueue(MockResponse().setHeader("Content-Type", "image/jpeg").setBody("image"))
+        val api = api()
+
+        api.downloadPageContent("page-1", version = 2).close()
+        val request = server.takeRequest()
+
+        assertEquals("/v1/pages/page-1/content?variant=active&version=2", request.path)
+        assertEquals("Bearer access-token", request.getHeader("Authorization"))
+        assertFalse(request.requestUrl!!.queryParameterNames.contains("token"))
+    }
+
     private fun api() = SmartScanApiFactory.create(
         ApiClientConfig(
             baseUrl = server.url("/").toString(),

@@ -159,7 +159,7 @@ M7 门禁：固定数据集达到 v1.4 指标；所有低置信处理保留原�
 | `AI-009` 公式与复杂版面 | 完成 | AI-008, OCR-001 | `ocr_formula` Worker、结构化候选、确认后版本绑定 OCR 文字层、H5 选择/对比和可试用 Mock 已实现；本地全量门禁及 PR #66 代码头五项 CI 通过，不修改图片像素 |
 | `AI-010` 试卷 AI 复核 | 阻塞 | AI-007, EXAM-002, EXAM-003 | `review_cleanup_mask` 只向确定性净化管线提供区域分类；等待试卷固定数据集和基础净化产品化门禁 |
 | `AI-011` 扫书 AI 复核 | 阻塞 | AI-007, BOOK-002 | `review_book_split` 只复核困难书脊、左右页和页码；等待真实书籍固定数据集门禁 |
-| `AND-AI-001` Android AI 接入 | 未开始 | H5-AI-001, AI-009 | 复用冻结后的公共 API，实现项目授权、建议、进度和候选选择；客户端不保存 Provider Key |
+| `AND-AI-001` Android AI 接入 | 完成 | H5-AI-001, AI-009 | 公共 API DTO、仓储候选收敛、项目授权、双类型任务、轮询、接受/放弃、来源版本预览及双语界面已实现；PR #67 代码头五项 CI 全部通过，客户端不保存 Provider Key 或部署连接信息 |
 | `IOS-AI-001` iOS AI 接入 | 未开始 | H5-AI-001, AI-009 | 与 H5/Android 能力对齐，并由 GitHub macOS Runner 完成 Simulator 编译与测试；客户端不保存 Provider Key |
 | `AI-012` 集成评估与发布门禁 | 未开始 | AI-005, AI-008～AI-011, AND-AI-001, IOS-AI-001 | 七类任务业务 E2E、真实 Provider、固定数据集、费用、延迟、隐私政策和关闭/故障降级验收 |
 

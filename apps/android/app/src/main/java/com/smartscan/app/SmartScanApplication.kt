@@ -58,6 +58,7 @@ class SmartScanApplication : Application(), UploadWorkerDependencies {
             projectRepository = DefaultProjectRepository(
                 api = api,
                 workspaceApi = api,
+                aiApi = api,
                 cache = localStores.userCache,
                 currentUserId = { sessionStore.current()?.userId },
             ),
