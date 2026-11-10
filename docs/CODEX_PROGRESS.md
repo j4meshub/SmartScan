@@ -12,7 +12,7 @@
 | 当前分支 | `codex/ops-000-shared-host-preflight` |
 | 最后验证基线 | `b5fc592`（PR #70 中文 squash 合并，共享服务器执行计划纠偏完成） |
 | 工作包提交 | `433e5e4`（增加共享宿主机只读预检门禁） |
-| PR | [#71 增加共享宿主机只读预检门禁](https://github.com/j4meshub/SmartScan/pull/71) 已创建，等待 CI 与合并 |
+| PR | [#71 增加共享宿主机只读预检门禁](https://github.com/j4meshub/SmartScan/pull/71) 代码头首轮 10 项 CI 全部通过，等待最终文档头复核与合并 |
 | 下一工作包 | 等待 OPS-000 外部输入期间推进 `OPS-REG-001` 与 `AI-013`；真实资源创建仍由 OPS-000 门禁 |
 
 ## 当前工作包进展
@@ -23,7 +23,8 @@
 - 新增失败关闭资源审批模板；模板保留显式占位、端口 `0` 和未确认硬限制，不能被误用为可部署配置。真实 CIDR、端口、域名、审批人和端点继续只存在于仓库外证据，不进入公开仓库或 PR。
 - 校验输出只包含输入 SHA-256、时间、环境、项目名和检查项，不包含 CIDR、域名或端口。自动化通过只能证明规则可运行，不能替代公司运维在真实宿主机采集、审批和人工复核。
 - OPS-000 最终本地门禁通过：Ruff 检查、164 个 Python 文件格式检查、迁移漂移和差异空白检查通过；专项 `18 passed`，全量 Python `471 passed, 7 skipped`，覆盖率 `87.81%`。首次定向失败源于测试夹具中的广域保留网段覆盖合法网络，修正夹具后重跑通过；没有降低校验规则。
-- OPS-000 首个中文提交为 `433e5e4`，已推送并创建 [PR #71](https://github.com/j4meshub/SmartScan/pull/71)；GitHub Actions 证据将在 CI 完成后补充，真实宿主机现场门禁仍保持未通过。
+- OPS-000 首个中文提交为 `433e5e4`，已推送并创建 [PR #71](https://github.com/j4meshub/SmartScan/pull/71)；GitHub Actions 证据如下，真实宿主机现场门禁仍保持未通过。
+- PR #71 代码头 `fb29291` 的 push 工作流 `42753053080` 与 PR 工作流 `42753046403` 中，API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过；本证据不解除真实宿主机、资源审批或备份端点门禁。
 
 - `IOS-AI-001` 已由 [PR #68](https://github.com/j4meshub/SmartScan/pull/68) 合并到主线，中文 squash 提交为 `a15b78e`；最终 push `39819386309` 与 PR `39819397176` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共十项全部通过。
 - 此前已复核的 M8 外部门禁仍成立：`AI-010` 依赖固定数据集阻塞的 `EXAM-002/003`，`AI-011` 依赖 BOOK-002 真实书籍固定集和真机门禁；`AI-012` 现在还增加 `AI-013` 公司 Provider 主动上传依赖。`AI-013` 与共享主机仓库适配可以在固定数据集到位前继续推进。
