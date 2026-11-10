@@ -23,6 +23,7 @@
 - 新增共享服务器部署边界，固定 UAT/生产项目与 `/mnt/data` 目录、专用 PostgreSQL、固定网络、资源/日志限制、现有监控复用、异机备份、GitHub 评审与 GitLab 生产镜像分工。固定 CIDR、入口、资源和备份端点未审批前保持失败关闭。
 - GOV-003 本地门禁通过：Ruff 检查、162 个 Python 文件格式检查和差异空白检查通过；全量 Python `453 passed, 7 skipped`，覆盖率 `87.81%`。7 项跳过均为既有 PostgreSQL/Docker/真实主机外部门禁，没有把 2026-10-12 历史快照或文档修改误记为现场验收。
 - GOV-003 首个中文提交为 `e589f76`，已推送并创建 [PR #70](https://github.com/j4meshub/SmartScan/pull/70)；待 GitHub Actions 全部通过并完成自审后合并，再从 `OPS-000` 续接。
+- PR #70 文档头 `69f0a77` 的 push 工作流 `42746261181` 与 PR 工作流 `42746267398` 中，API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过；没有以本地文档检查替代移动端、数据库或容器门禁。
 
 - `IOS-AI-001` 已由 [PR #68](https://github.com/j4meshub/SmartScan/pull/68) 合并到主线，中文 squash 提交为 `a15b78e`；最终 push `39819386309` 与 PR `39819397176` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共十项全部通过。
 - 此前已复核的 M8 外部门禁仍成立：`AI-010` 依赖固定数据集阻塞的 `EXAM-002/003`，`AI-011` 依赖 BOOK-002 真实书籍固定集和真机门禁；`AI-012` 现在还增加 `AI-013` 公司 Provider 主动上传依赖。`AI-013` 与共享主机仓库适配可以在固定数据集到位前继续推进。
