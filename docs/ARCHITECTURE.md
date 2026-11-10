@@ -95,13 +95,15 @@ AI 候选系统使用同一份已授权、已脱敏且按来源分组切分的�
 
 扫描业务现已接入项目级授权、版本绑定任务、候选决策、AI 专用租约、安全媒体授权和 Worker→网关内部认证边界。媒体令牌至少 256 位随机、数据库只存摘要，并绑定单一页面结果、源版本和有效期；读取会复核授权、任务状态、文件路径、大小与哈希。独立 AI Worker 已编排分类、方向、标题、书籍页码和公式/复杂版面任务，内部检查点支持租约重试且不会向客户端暴露半成品；所有输出先成为候选，用户接受后才调用确定性旋转、标题建议、页码证据或版本绑定文字层写入。H5、Android 与 iOS 项目工作区已通过各自自动门禁提供显式项目授权、传输说明、任务状态、候选对比、接受/放弃和来源基础版本回看。普通文档不伪造 AI 图像，AI 不可用时基础编辑与导出保持可用。客户端代码不读取或显示部署标识、连接地址、密钥或内部网络信息，公网 Nginx 也不代理 AI 网关。试卷、扫书和真实模型验收仍未完成，因此 M8 仍是进行中。完整断点和任务落点见[可选视觉 AI 业务接入架构](AI_BUSINESS_INTEGRATION.md)，移动端边界见[Android 可选视觉 AI 接入](ANDROID_AI_INTEGRATION.md)与[iOS 可选视觉 AI 接入](IOS_AI_INTEGRATION.md)。
 
-隔离 staging 使用独立 Compose 项目和 `/srv/smartscan/staging/` 主机根目录，应用继续启用生产安全校验。数据库、入口和出站网络分层；只有打包 H5/后台/Nginx 的固定 digest Web 镜像绑定主机回环端口，数据库与 API 不直接发布端口。目标服务器只拉取镜像并显式运行迁移，不挂载仓库源码或现场构建。详见[隔离 staging 部署基线](STAGING_DEPLOYMENT.md)。
+目标服务器是承载大量现有容器、网络、入口、数据库、监控与 GPU 推理服务的共享生产宿主机，不再按可独占主机设计。第一阶段使用按需启停的 `smartscan-uat`，生产使用 `smartscan-prod`；两者分别位于 `/mnt/data/smartscan/uat` 与 `/mnt/data/smartscan/production`，并使用独立 PostgreSQL、固定 CIDR 网络、Secret、端口和 digest 锁文件。UAT 不自动重启，生产也不得复用 UAT 数据。所有容器设置 CPU、内存、PID 和日志轮转限制，服务器只拉取 GitLab Runner 构建的固定 digest 镜像并显式运行迁移，不挂载仓库源码或现场构建。详见[共享生产服务器部署边界](SHARED_HOST_DEPLOYMENT.md)。
 
-公网 TLS 由主机 Nginx 终止，再只代理到回环地址上的 staging Web Nginx。主机层负责 TLS 1.2/1.3、HTTP/2、真实客户端限频和安全日志；容器层负责静态入口、API 前缀转换及鉴权后的 `internal` 文件发送。BBR 变更前后以只读快照固定内核、拥塞控制和 qdisc，回滚始终使用实际原值；配置生效只允许进入受控网络对照，不能直接解除上线门禁。详见[TLS、内部文件发送与 BBR 基线](NETWORK_AND_FILE_DELIVERY.md)。
+第一阶段入口仅面向公司内网/VPN，并由运维分配可信 HTTPS 域名或共享网关增量路由；SmartScan 不占用宿主机现有 80/443，也不覆盖全局 Nginx。容器层继续承担静态入口、API 前缀转换及鉴权后的 `internal` 文件发送。公网或零信任访问是后续独立门禁；BBR、Docker daemon、主机防火墙、系统升级和全局 Nginx 调优均属于平台级变更，不由 SmartScan 部署脚本执行。原有 TLS、Range 和 BBR 只读证据工具仍可用于验证，但不构成修改共享主机的授权。详见[TLS、内部文件发送与 BBR 基线](NETWORK_AND_FILE_DELIVERY.md)。
 
-运维指标只通过内部数据网络暴露：API 多进程请求指标与数据库派生的队列、租约、审计、AI 和磁盘指标由 Bearer Token 保护，公网 Nginx 不代理内部路径。Worker 定期在 PostgreSQL 保存不含用户数据的存活心跳；任务真实性仍由独立租约决定。新上传、组装和 Worker 领取分别受到队列高水位、每用户并发、用户目录实际占用、未接收上传预留和磁盘最低空间约束，下载与清理不被写入保护阻断。Prometheus、Alertmanager 与 Node Exporter 只在显式 monitoring Profile 中启动且无主机端口。详见[监控、容量配额与磁盘保护](MONITORING_AND_CAPACITY.md)。
+运维指标只通过运维批准的内部路径暴露：API 多进程请求指标与数据库派生的队列、租约、审计、AI 和磁盘指标由 Bearer Token 保护，用户入口不代理内部指标。Worker 定期在 PostgreSQL 保存不含用户数据的存活心跳；任务真实性仍由独立租约决定。新上传、组装和 Worker 领取分别受到队列高水位、每用户并发、用户目录实际占用、未接收上传预留和磁盘最低空间约束，下载与清理不被写入保护阻断。共享主机复用现有 Prometheus、Grafana 和 Alertmanager，只增加 SmartScan 抓取、看板和告警；不再部署重复 Node Exporter，也不挂载宿主机 `/`、`/proc` 或 `/sys`。详见[监控、容量配额与磁盘保护](MONITORING_AND_CAPACITY.md)。
 
-备份面与服务面分离：PostgreSQL 连续归档 WAL，每日物理全备先经 `pg_verifybackup` 校验，再与用户文件、WAL 分别写入 Restic 加密异机快照。成功证据固定三个完整快照 ID；恢复只在独立目录和内部网络中执行，并验证迁移头、资源所有权、审计计数及文件哈希。详见[加密异机备份与恢复演练](BACKUP_AND_RECOVERY.md)。
+备份面与服务面分离：PostgreSQL 连续归档 WAL，每日物理全备先经 `pg_verifybackup` 校验，再与用户文件、WAL 分别写入 Restic 加密异机快照；同一 `/mnt/data` 上的副本不算灾备。执行器改为固定 digest 运维镜像，不依赖生产机源码或 Python 虚拟环境。成功证据固定三个完整快照 ID；恢复只在独立临时 Compose 项目、批准的固定网络和独立目录中执行，并验证迁移头、资源所有权、审计计数及文件哈希。详见[加密异机备份与恢复演练](BACKUP_AND_RECOVERY.md)。
+
+AI 媒体传输在 `AI-013` 后改为主动出站：AI Gateway 通过内部鉴权读取并校验单页媒体，再使用部署级 `inline_data_url`、`multipart` 或 `files_api` 适配器发送给公司首选 Provider。Provider 选择、URL、Key 和传输方式均不进入客户端；禁止自动失败切换到外部供应商。现有签名媒体 URL 只保留为默认关闭、需显式审批的兼容兜底，第一阶段不向公网路由 AI 媒体下载端点。
 
 ## 单机部署基线
 
