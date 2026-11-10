@@ -26,7 +26,7 @@ HOST_LABEL_PATTERN = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 CONTROL_CHARACTER_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
 URL_PATH_PATTERN = re.compile(r"/[A-Za-z0-9._~/-]*")
 MAX_MEDIA_BYTES = 100 * 1024 * 1024
-MAX_REQUEST_BYTES = 2 * 1024 * 1024
+MAX_REQUEST_BYTES = 140 * 1024 * 1024
 MAX_RESPONSE_BYTES = 64 * 1024
 CONTROLLED_NETWORKS = tuple(
     ipaddress.ip_network(item)
@@ -62,6 +62,13 @@ class ApiStyle(StrEnum):
     OPENAI_CHAT = "openai_chat"
     OPENAI_RESPONSES = "openai_responses"
     CUSTOM = "custom"
+
+
+class MediaTransferMode(StrEnum):
+    INLINE_DATA_URL = "inline_data_url"
+    MULTIPART = "multipart"
+    FILES_API = "files_api"
+    SIGNED_URL = "signed_url"
 
 
 ProviderCapability = Literal[
@@ -139,10 +146,11 @@ class ProviderDefinition(BaseModel):
     model: str | None = Field(default=None, max_length=200)
     supports_images: bool = True
     capabilities: frozenset[ProviderCapability] = Field(default_factory=frozenset)
+    media_transfer_mode: MediaTransferMode = MediaTransferMode.INLINE_DATA_URL
     media_url_prefixes: tuple[str, ...] = Field(default=(), max_length=16)
     allowed_private_cidrs: tuple[str, ...] = Field(default=(), max_length=16)
     max_media_bytes: int = Field(default=20 * 1024 * 1024, ge=1024, le=MAX_MEDIA_BYTES)
-    max_request_bytes: int = Field(default=512 * 1024, ge=16 * 1024, le=MAX_REQUEST_BYTES)
+    max_request_bytes: int = Field(default=32 * 1024 * 1024, ge=16 * 1024, le=MAX_REQUEST_BYTES)
     max_response_bytes: int = Field(default=MAX_RESPONSE_BYTES, ge=1024, le=MAX_RESPONSE_BYTES)
     timeout_seconds: float = Field(default=90.0, ge=1.0, le=300.0)
     max_retries: int = Field(default=1, ge=0, le=1)
@@ -208,12 +216,29 @@ class ProviderDefinition(BaseModel):
 
     @model_validator(mode="after")
     def validate_enabled_definition(self) -> ProviderDefinition:
+        if self.media_url_prefixes and "media_transfer_mode" not in self.model_fields_set:
+            self.media_transfer_mode = MediaTransferMode.SIGNED_URL
         if self.enabled and not all((self.base_url, self.api_key_env, self.model)):
             raise ValueError("enabled provider requires base_url, api_key_env and model")
         if self.capabilities and not self.supports_images:
             raise ValueError("visual capabilities require supports_images=true")
         if self.allowed_private_cidrs and self.kind != ProviderKind.CUSTOM_VLM:
             raise ValueError("private CIDRs are only allowed for custom VLM providers")
+        if self.media_transfer_mode == MediaTransferMode.SIGNED_URL:
+            if not self.media_url_prefixes:
+                raise ValueError("signed_url requires an explicit media URL allowlist")
+        elif self.media_url_prefixes:
+            raise ValueError("media URL allowlist is only valid for signed_url")
+        if (
+            self.media_transfer_mode == MediaTransferMode.MULTIPART
+            and self.api_style != ApiStyle.CUSTOM
+        ):
+            raise ValueError("multipart media transfer requires custom API style")
+        if (
+            self.media_transfer_mode == MediaTransferMode.FILES_API
+            and self.api_style != ApiStyle.OPENAI_RESPONSES
+        ):
+            raise ValueError("files_api media transfer requires OpenAI Responses style")
         maximum_call_cost = self.max_cost_per_request_usd * (self.max_retries + 1)
         if self.daily_cost_limit_usd < maximum_call_cost:
             raise ValueError("daily cost limit must cover one worst-case call")
@@ -221,7 +246,12 @@ class ProviderDefinition(BaseModel):
 
     @property
     def outbound_policy_configured(self) -> bool:
-        return bool(self.base_url and self.media_url_prefixes)
+        return bool(
+            self.base_url
+            and (
+                self.media_transfer_mode != MediaTransferMode.SIGNED_URL or self.media_url_prefixes
+            )
+        )
 
     @property
     def daily_cost_limit_microusd(self) -> int:

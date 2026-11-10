@@ -17,7 +17,7 @@ from urllib.parse import quote, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
-from .providers import BaseProviderAdapter
+from .providers import BaseProviderAdapter, MediaTransferMode
 from .tasks import ProviderRequestPlan, StructuredTask
 
 MEDIA_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_-]{22,128}")
@@ -96,6 +96,8 @@ class NetworkSecurityEvidence(BaseModel):
     redirects_followed: Literal[0] = 0
     tls_hostname_verified: Literal[True] = True
     destination_pinned: Literal[True] = True
+    media_transfer_mode: MediaTransferMode = MediaTransferMode.SIGNED_URL
+    temporary_file_deleted: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,7 @@ class PinnedRequest:
     headers: Mapping[str, str]
     body: bytes
     max_response_bytes: int
+    method: Literal["POST", "DELETE"] = "POST"
 
 
 @dataclass(frozen=True)
@@ -221,7 +224,7 @@ class StdlibPinnedRequestSender:
         )
         try:
             connection.request(
-                "POST",
+                request.method,
                 request.target,
                 body=request.body,
                 headers=dict(request.headers),
@@ -376,6 +379,68 @@ def _replace_media_placeholder(value: object, media_url: str) -> tuple[object, i
     return value, 0
 
 
+def _json_request_body(value: object) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _multipart_body(
+    *,
+    fields: Mapping[str, str],
+    file_field: str,
+    filename: str,
+    mime_type: str,
+    content: bytes,
+) -> tuple[bytes, str]:
+    boundary = f"smartscan-{secrets.token_hex(24)}"
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.extend(
+            (
+                f"--{boundary}\r\n".encode(),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode(),
+                value.encode("utf-8"),
+                b"\r\n",
+            )
+        )
+    chunks.extend(
+        (
+            f"--{boundary}\r\n".encode(),
+            (
+                f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'
+            ).encode(),
+            f"Content-Type: {mime_type}\r\n\r\n".encode(),
+            content,
+            b"\r\n",
+            f"--{boundary}--\r\n".encode(),
+        )
+    )
+    return b"".join(chunks), boundary
+
+
+def _media_filename(mime_type: str) -> str:
+    return {
+        "image/jpeg": "smartscan.jpg",
+        "image/png": "smartscan.png",
+        "image/webp": "smartscan.webp",
+    }[mime_type]
+
+
+def _files_api_id(body: bytes) -> str:
+    try:
+        payload = json.loads(body)
+        file_id = payload["id"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise NetworkSecurityError("provider_file_upload_invalid", request_sent=True) from exc
+    if not isinstance(file_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,200}", file_id) is None:
+        raise NetworkSecurityError("provider_file_upload_invalid", request_sent=True)
+    return file_id
+
+
 class SecureProviderTransport:
     def __init__(
         self,
@@ -397,12 +462,13 @@ class SecureProviderTransport:
         plan: ProviderRequestPlan,
         media: OutboundMediaReference,
         timeout_seconds: float | None = None,
+        *,
+        media_content: bytes | None = None,
     ) -> SecureNetworkResult:
         definition = adapter.definition
+        transfer_mode = definition.media_transfer_mode
         if not definition.outbound_policy_configured or not definition.base_url:
             raise NetworkSecurityError("provider_network_policy_missing")
-        if media.prefix_index >= len(definition.media_url_prefixes):
-            raise NetworkSecurityError("media_prefix_not_allowed")
         if media.byte_size > definition.max_media_bytes:
             raise NetworkSecurityError("media_too_large")
         if media.sha256 != task.context.media.sha256:
@@ -420,17 +486,25 @@ class SecureProviderTransport:
         if remaining > MAX_MEDIA_URL_LIFETIME:
             raise NetworkSecurityError("media_url_lifetime_too_long")
 
-        prefix = definition.media_url_prefixes[media.prefix_index]
-        if media.prefix_sha256 is not None and not secrets.compare_digest(
-            media.prefix_sha256,
-            hashlib.sha256(prefix.encode()).hexdigest(),
-        ):
-            raise NetworkSecurityError("media_prefix_mismatch")
-        media_url = prefix + quote(media.access_token.get_secret_value(), safe="")
+        signed_prefix: str | None = None
+        signed_media_host: str | None = None
+        signed_media_value: str | None = None
+        if transfer_mode == MediaTransferMode.SIGNED_URL:
+            if media.prefix_index >= len(definition.media_url_prefixes):
+                raise NetworkSecurityError("media_prefix_not_allowed")
+            signed_prefix = definition.media_url_prefixes[media.prefix_index]
+            if media.prefix_sha256 is not None and not secrets.compare_digest(
+                media.prefix_sha256,
+                hashlib.sha256(signed_prefix.encode()).hexdigest(),
+            ):
+                raise NetworkSecurityError("media_prefix_mismatch")
+            signed_media_host = urlsplit(signed_prefix).hostname or ""
+            signed_media_value = signed_prefix + quote(
+                media.access_token.get_secret_value(), safe=""
+            )
+
         provider_url = urlsplit(definition.base_url)
-        media_url_parts = urlsplit(prefix)
         provider_host = provider_url.hostname or ""
-        media_host = media_url_parts.hostname or ""
         port = provider_url.port or 443
         controlled_cidrs = definition.allowed_private_cidrs
 
@@ -445,60 +519,141 @@ class SecureProviderTransport:
         provider_addresses = validate_resolved_addresses(
             self._resolver.resolve(provider_host, port), controlled_cidrs
         )
-        if media_host == provider_host:
-            media_addresses = provider_addresses
-        else:
-            media_addresses = validate_resolved_addresses(
-                self._resolver.resolve(media_host, 443), controlled_cidrs
-            )
-        if not media_addresses:
-            raise NetworkSecurityError("media_dns_no_addresses")
-
-        request_body, replacements = _replace_media_placeholder(plan.request_body, media_url)
-        if replacements != 1:
-            raise NetworkSecurityError("media_placeholder_count_invalid")
-        body = json.dumps(
-            request_body,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        if len(body) > definition.max_request_bytes:
-            raise NetworkSecurityError("provider_request_too_large")
-
         target = f"{provider_url.path.rstrip('/')}{plan.endpoint_path}"
         if not target.startswith("/") or "?" in target or "#" in target:
             raise NetworkSecurityError("provider_request_target_invalid")
         pinned_address = provider_addresses[0]
-        response = self._sender.send(
-            PinnedRequest(
-                host=provider_host,
-                port=port,
-                pinned_address=pinned_address,
-                target=target,
-                headers={
-                    "Accept": "application/json",
-                    "Accept-Encoding": "identity",
-                    "Authorization": f"Bearer {credential}",
-                    "Connection": "close",
-                    "Content-Type": "application/json; charset=utf-8",
-                    "Host": provider_host,
-                    "User-Agent": "SmartScan-AI-Gateway/0.3",
-                },
-                body=body,
-                max_response_bytes=definition.max_response_bytes,
-            ),
-            timeout_seconds=timeout_seconds or self._timeout_seconds,
-        )
-        if not 200 <= response.status < 300:
-            raise NetworkSecurityError("provider_http_error", request_sent=True)
+        timeout = timeout_seconds or self._timeout_seconds
+        common_headers = {
+            "Accept": "application/json",
+            "Accept-Encoding": "identity",
+            "Authorization": f"Bearer {credential}",
+            "Connection": "close",
+            "Host": provider_host,
+            "User-Agent": "SmartScan-AI-Gateway/0.5",
+        }
+
+        temporary_file_deleted: bool | None = None
+        file_id: str | None = None
+        request_body_bytes = 0
+        if transfer_mode == MediaTransferMode.SIGNED_URL:
+            if signed_media_host != provider_host:
+                validate_resolved_addresses(
+                    self._resolver.resolve(signed_media_host or "", 443), controlled_cidrs
+                )
+            request_body, replacements = _replace_media_placeholder(
+                plan.request_body, signed_media_value
+            )
+            body = _json_request_body(request_body)
+            content_type = "application/json; charset=utf-8"
+        else:
+            if media_content is None:
+                raise NetworkSecurityError("internal_media_missing")
+            if len(media_content) != media.byte_size:
+                raise NetworkSecurityError("internal_media_size_mismatch")
+            if not secrets.compare_digest(hashlib.sha256(media_content).hexdigest(), media.sha256):
+                raise NetworkSecurityError("internal_media_sha256_mismatch")
+            if transfer_mode == MediaTransferMode.INLINE_DATA_URL:
+                media_value = f"data:{media.mime_type};base64," + base64.b64encode(
+                    media_content
+                ).decode("ascii")
+                request_body, replacements = _replace_media_placeholder(
+                    plan.request_body, media_value
+                )
+                body = _json_request_body(request_body)
+                content_type = "application/json; charset=utf-8"
+            elif transfer_mode == MediaTransferMode.MULTIPART:
+                request_body, replacements = _replace_media_placeholder(
+                    plan.request_body, "cid:media"
+                )
+                body, boundary = _multipart_body(
+                    fields={"payload": _json_request_body(request_body).decode("utf-8")},
+                    file_field="media",
+                    filename=_media_filename(media.mime_type),
+                    mime_type=media.mime_type,
+                    content=media_content,
+                )
+                content_type = f"multipart/form-data; boundary={boundary}"
+            elif transfer_mode == MediaTransferMode.FILES_API:
+                replacements = 1
+                upload_body, upload_boundary = _multipart_body(
+                    fields={"purpose": "vision"},
+                    file_field="file",
+                    filename=_media_filename(media.mime_type),
+                    mime_type=media.mime_type,
+                    content=media_content,
+                )
+                if len(upload_body) > definition.max_request_bytes:
+                    raise NetworkSecurityError("provider_request_too_large")
+                upload_response = self._sender.send(
+                    PinnedRequest(
+                        host=provider_host,
+                        port=port,
+                        pinned_address=pinned_address,
+                        target=f"{provider_url.path.rstrip('/')}/files",
+                        headers={
+                            **common_headers,
+                            "Content-Type": f"multipart/form-data; boundary={upload_boundary}",
+                        },
+                        body=upload_body,
+                        max_response_bytes=definition.max_response_bytes,
+                    ),
+                    timeout_seconds=timeout,
+                )
+                file_id = _files_api_id(upload_response.body)
+                body = b""
+                replacements = 0
+                content_type = "application/json; charset=utf-8"
+                request_body_bytes += len(upload_body)
+            else:
+                raise NetworkSecurityError("media_transfer_mode_invalid")
+
+        try:
+            if transfer_mode == MediaTransferMode.FILES_API:
+                request_body, replacements = _replace_media_placeholder(plan.request_body, file_id)
+                body = _json_request_body(request_body)
+            if replacements != 1:
+                raise NetworkSecurityError("media_placeholder_count_invalid")
+            if len(body) > definition.max_request_bytes:
+                raise NetworkSecurityError("provider_request_too_large")
+            request_body_bytes += len(body)
+            response = self._sender.send(
+                PinnedRequest(
+                    host=provider_host,
+                    port=port,
+                    pinned_address=pinned_address,
+                    target=target,
+                    headers={**common_headers, "Content-Type": content_type},
+                    body=body,
+                    max_response_bytes=definition.max_response_bytes,
+                ),
+                timeout_seconds=timeout,
+            )
+        finally:
+            if transfer_mode == MediaTransferMode.FILES_API and file_id is not None:
+                self._sender.send(
+                    PinnedRequest(
+                        host=provider_host,
+                        port=port,
+                        pinned_address=pinned_address,
+                        target=f"{provider_url.path.rstrip('/')}/files/{quote(file_id, safe='')}",
+                        headers=common_headers,
+                        body=b"",
+                        max_response_bytes=definition.max_response_bytes,
+                        method="DELETE",
+                    ),
+                    timeout_seconds=timeout,
+                )
+                temporary_file_deleted = True
         if len(response.body) > definition.max_response_bytes:
-            raise NetworkSecurityError("provider_response_too_large")
+            raise NetworkSecurityError("provider_response_too_large", request_sent=True)
         return SecureNetworkResult(
             provider_output=response.body,
             evidence=NetworkSecurityEvidence(
                 provider_id=definition.id,
-                request_body_bytes=len(body),
+                request_body_bytes=request_body_bytes,
                 response_body_bytes=len(response.body),
+                media_transfer_mode=transfer_mode,
+                temporary_file_deleted=temporary_file_deleted,
             ),
         )

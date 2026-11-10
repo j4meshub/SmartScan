@@ -70,6 +70,8 @@ services:
       SMARTSCAN_ENV: production
       SMARTSCAN_AUTO_MIGRATE: "false"
       SMARTSCAN_AI_GATEWAY_URL: http://ai-gateway:8010
+      SMARTSCAN_AI_MEDIA_TRANSFER_MODE: ${SMARTSCAN_AI_MEDIA_TRANSFER_MODE:-inline_data_url}
+      SMARTSCAN_AI_INTERNAL_MEDIA_URL: http://api:8000/v1/internal/ai-media
     volumes: ["scan-data:/srv/smartscan/data:ro"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -90,9 +92,11 @@ services:
       SMARTSCAN_ENV: production
       SMARTSCAN_AUTO_MIGRATE: "false"
       SMARTSCAN_AI_PROVIDERS: ${SMARTSCAN_AI_PROVIDERS:-[]}
+      SMARTSCAN_AI_INTERNAL_MEDIA_URL: http://api:8000/v1/internal/ai-media
     depends_on:
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
+      api: {condition: service_started}
     expose: ["8010"]
   nginx:
     image: nginx:1.27-alpine

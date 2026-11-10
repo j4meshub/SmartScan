@@ -457,6 +457,7 @@ class ReliableProviderExecutor:
         task: StructuredTask,
         plan: ProviderRequestPlan,
         media: OutboundMediaReference,
+        media_content: bytes | None = None,
         *,
         enhancement_task_id: str | None = None,
     ) -> PendingReliableResult:
@@ -493,13 +494,23 @@ class ReliableProviderExecutor:
                 )
                 raise
             try:
-                result = self._transport.execute(
-                    adapter,
-                    task,
-                    plan,
-                    media,
-                    definition.timeout_seconds,
-                )
+                if media_content is None:
+                    result = self._transport.execute(
+                        adapter,
+                        task,
+                        plan,
+                        media,
+                        definition.timeout_seconds,
+                    )
+                else:
+                    result = self._transport.execute(
+                        adapter,
+                        task,
+                        plan,
+                        media,
+                        definition.timeout_seconds,
+                        media_content=media_content,
+                    )
             except NetworkSecurityError as exc:
                 self._store.finish_attempt(
                     call_id,

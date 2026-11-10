@@ -35,14 +35,15 @@ Python 环境，随后一次启动 API、AI 网关、AI Worker、CPU Worker 和 
   "api_key": "请替换为本机真实密钥",
   "model": "company-vlm-1",
   "api_style": "openai_responses",
-  "media_base_url": "https://scan.corp.example/api/v1/ai-media/",
+  "media_transfer_mode": "inline_data_url",
   "allowed_private_cidrs": ["10.20.0.0/16"]
 }
 ```
 
 - `api_style` 只能是 `openai_chat` 或 `openai_responses`。
-- 两个 URL 必须使用完整 DNS 域名、默认 HTTPS 端口，不能含账号、查询参数、片段或 IP 地址；
-  `media_base_url` 必须以 `/` 结尾。
+- `base_url` 必须使用完整 DNS 域名、默认 HTTPS 端口，不能含账号、查询参数、片段或 IP 地址。
+- `media_transfer_mode` 默认并推荐使用 `inline_data_url`；`files_api` 只支持 `openai_responses`，会在任务结束时删除临时文件。
+- `signed_url` 仅作为兼容模式。只有明确选择它时才增加以 `/` 结尾的 HTTPS `media_base_url`；此模式需要模型网络能够反向访问 SmartScan，不是共享服务器的默认方案。
 - `allowed_private_cidrs` 只在公司域名解析到受控私网时填写。每项必须位于 RFC 1918、
   `100.64.0.0/10` 或 `fc00::/7` 内，IPv4 不得宽于 `/16`，IPv6 不得宽于 `/48`。
 - 文件不能加入 Git；`.smartscan-trial/` 已整体写入 `.gitignore`。启动器拒绝未知字段、过宽网段、
@@ -52,9 +53,10 @@ Python 环境，随后一次启动 API、AI 网关、AI Worker、CPU Worker 和 
 进程环境，不会进入 `runtime-config.json`、`state.json`、Provider 描述、日志、API 响应或 H5 存储。
 生产环境会拒绝开启 Mock 模式。
 
-真实模型必须能够读取 `media_base_url` 签发的限时单页 HTTPS 地址。如果公司模型只能读取 URL，
-而该地址从模型所在网络不可达，则启动器仍可拉起服务，但真实页面任务不能视为验收通过。此时需要
-先由部署方提供可达的 HTTPS 反向代理和精确受控网段；不要改用公网暴露 AI 网关或在客户端填写 Key。
+默认主动模式由 AI 网关通过内部鉴权读取单页，核对 MIME、大小和 SHA-256 后将图片内容上传到公司模型，
+模型不需要反向访问 SmartScan。`files_api` 的真实验收还必须确认临时文件删除以及上传响应异常时的供应商
+自动过期策略。无论选择哪种模式，都不得通过公网暴露 AI 网关、在客户端填写 Key，或在公司 Provider
+失败时自动把页面转发给外部供应商。
 
 ## 命令行等价操作
 

@@ -140,6 +140,7 @@ services:
       SMARTSCAN_AUTO_MIGRATE: "false"
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_AI_GATEWAY_URL: http://ai-gateway:8010
+      SMARTSCAN_AI_INTERNAL_MEDIA_URL: http://api:8000/v1/internal/ai-media
     volumes:
       - type: bind
         source: ${SMARTSCAN_STAGING_DATA_ROOT:?必须设置独立数据目录}
@@ -160,6 +161,7 @@ services:
     cap_drop: ["ALL"]
     tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
     depends_on:
+      api: {condition: service_healthy}
       postgres: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
     networks: [data, egress]

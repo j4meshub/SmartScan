@@ -285,7 +285,8 @@ def load_trial_ai_config(paths: TrialPaths) -> dict[str, object]:
             "model": "mock-v1",
             "api_style": "openai_responses",
             "base_url": "https://mock.smartscan.test/v1",
-            "media_base_url": "https://local.smartscan.test/api/v1/ai-media/",
+            "media_transfer_mode": "inline_data_url",
+            "media_base_url": "",
             "api_key": "local-mock-only-not-a-real-secret",
             "allowed_private_cidrs": [],
         }
@@ -301,6 +302,7 @@ def load_trial_ai_config(paths: TrialPaths) -> dict[str, object]:
         "api_key",
         "model",
         "api_style",
+        "media_transfer_mode",
         "media_base_url",
         "allowed_private_cidrs",
     }
@@ -311,12 +313,24 @@ def load_trial_ai_config(paths: TrialPaths) -> dict[str, object]:
     api_style = payload.get("api_style")
     if api_style not in {"openai_chat", "openai_responses"}:
         raise RuntimeError("api_style 必须为 openai_chat 或 openai_responses。")
+    media_transfer_mode = payload.get("media_transfer_mode")
+    if media_transfer_mode is None:
+        media_transfer_mode = "signed_url" if payload.get("media_base_url") else "inline_data_url"
+    if media_transfer_mode not in {"inline_data_url", "files_api", "signed_url"}:
+        raise RuntimeError("media_transfer_mode 必须为 inline_data_url、files_api 或 signed_url。")
+    if media_transfer_mode == "files_api" and api_style != "openai_responses":
+        raise RuntimeError("files_api 只支持 openai_responses。")
     api_key = payload.get("api_key")
     model = payload.get("model")
     if not isinstance(api_key, str) or not api_key.strip():
         raise RuntimeError("真实 AI api_key 不能为空。")
     if not isinstance(model, str) or not 1 <= len(model.strip()) <= 200:
         raise RuntimeError("真实 AI model 长度必须为 1～200。")
+    media_base_url = ""
+    if media_transfer_mode == "signed_url":
+        media_base_url = _validate_trial_https_url(
+            payload.get("media_base_url"), trailing_slash=True
+        )
     return {
         "mode": "real",
         "provider_id": "local-real",
@@ -324,9 +338,8 @@ def load_trial_ai_config(paths: TrialPaths) -> dict[str, object]:
         "api_key": api_key.strip(),
         "model": model.strip(),
         "api_style": api_style,
-        "media_base_url": _validate_trial_https_url(
-            payload.get("media_base_url"), trailing_slash=True
-        ),
+        "media_transfer_mode": media_transfer_mode,
+        "media_base_url": media_base_url,
         "allowed_private_cidrs": _controlled_private_cidrs(payload.get("allowed_private_cidrs")),
     }
 
@@ -350,9 +363,11 @@ def build_trial_environment(paths: TrialPaths) -> dict[str, str]:
             "image_classification",
             "layout_analysis",
         ],
-        "media_url_prefixes": [ai_config["media_base_url"]],
+        "media_transfer_mode": ai_config["media_transfer_mode"],
         "allowed_private_cidrs": ai_config["allowed_private_cidrs"],
     }
+    if ai_config["media_transfer_mode"] == "signed_url":
+        provider["media_url_prefixes"] = [ai_config["media_base_url"]]
     environment = os.environ.copy()
     environment.update(
         {
@@ -374,6 +389,8 @@ def build_trial_environment(paths: TrialPaths) -> dict[str, str]:
             "SMARTSCAN_AI_GATEWAY_URL": "http://127.0.0.1:8010",
             "SMARTSCAN_AI_INTERNAL_TOKEN": runtime_config["ai_internal_token"],
             "SMARTSCAN_AI_PROVIDER_ID": str(ai_config["provider_id"]),
+            "SMARTSCAN_AI_MEDIA_TRANSFER_MODE": str(ai_config["media_transfer_mode"]),
+            "SMARTSCAN_AI_INTERNAL_MEDIA_URL": "http://127.0.0.1:8000/v1/internal/ai-media",
             "SMARTSCAN_AI_MEDIA_BASE_URL": str(ai_config["media_base_url"]),
             "SMARTSCAN_AI_MOCK_MODE": "true" if ai_config["mode"] == "mock" else "false",
             "SMARTSCAN_AI_PROVIDERS": json.dumps([provider], ensure_ascii=False),

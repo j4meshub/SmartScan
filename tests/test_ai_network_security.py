@@ -171,14 +171,17 @@ def test_descriptor_reports_outbound_readiness_without_exposing_policy() -> None
 
 
 def test_enabled_provider_without_media_allowlist_is_not_outbound_ready() -> None:
-    definition = provider_definition(media_url_prefixes=[])
+    with pytest.raises(ValidationError, match="signed_url"):
+        provider_definition(media_transfer_mode="signed_url", media_url_prefixes=[])
+
+    definition = provider_definition(media_transfer_mode="inline_data_url", media_url_prefixes=[])
     adapter = providers.create_adapter(definition, {"VISION_API_KEY": "secret"})
 
     descriptor = adapter.descriptor()
     assert descriptor.configured is True
-    assert descriptor.outbound_policy_configured is False
-    assert descriptor.outbound_ready is False
-    assert descriptor.unavailable_reason == "network_policy_missing"
+    assert descriptor.outbound_policy_configured is True
+    assert descriptor.outbound_ready is True
+    assert descriptor.unavailable_reason is None
 
 
 @pytest.mark.parametrize(

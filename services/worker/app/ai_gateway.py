@@ -35,16 +35,28 @@ class AiGatewayClient:
         self._settings = settings or get_settings()
         self._transport = transport
 
-    def _configuration(self) -> tuple[str, str, str, str]:
+    def _configuration(self) -> tuple[str, str, str, str, str]:
         base_url = self._settings.ai_gateway_url.rstrip("/")
         token = self._settings.ai_internal_token.get_secret_value()
         provider_id = self._settings.ai_provider_id
+        transfer_mode = self._settings.ai_media_transfer_mode
         media_base_url = self._settings.ai_media_base_url
         parsed = urlsplit(base_url)
         media_parsed = urlsplit(media_base_url)
+        signed_url_ready = bool(
+            media_parsed.scheme == "https"
+            and media_parsed.hostname
+            and not media_parsed.username
+            and not media_parsed.password
+            and not media_parsed.query
+            and not media_parsed.fragment
+            and media_base_url.endswith("/")
+        )
         if (
             not base_url
             or len(token) < 32
+            or len(token) > 8192
+            or any(ord(char) < 33 or ord(char) > 126 for char in token)
             or re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", provider_id) is None
             or parsed.scheme not in {"http", "https"}
             or not parsed.hostname
@@ -52,16 +64,10 @@ class AiGatewayClient:
             or parsed.password
             or parsed.query
             or parsed.fragment
-            or media_parsed.scheme != "https"
-            or not media_parsed.hostname
-            or media_parsed.username
-            or media_parsed.password
-            or media_parsed.query
-            or media_parsed.fragment
-            or not media_base_url.endswith("/")
+            or (transfer_mode == "signed_url" and not signed_url_ready)
         ):
             raise AiGatewayError("ai_gateway_not_configured", retryable=False)
-        return base_url, token, provider_id, media_base_url
+        return base_url, token, provider_id, transfer_mode, media_base_url
 
     def execute(
         self,
@@ -70,20 +76,26 @@ class AiGatewayClient:
         task: dict[str, Any],
         media: IssuedMediaGrant,
     ) -> AiGatewayResult:
-        base_url, token, provider_id, media_base_url = self._configuration()
+        base_url, token, provider_id, transfer_mode, media_base_url = self._configuration()
         grant = media.grant
+        media_payload = {
+            "access_token": media.access_token,
+            "byte_size": grant.byte_size,
+            "sha256": grant.sha256,
+            "mime_type": grant.mime_type,
+            "expires_at": grant.expires_at.isoformat(),
+        }
+        if transfer_mode == "signed_url":
+            media_payload.update(
+                {
+                    "prefix_index": 0,
+                    "prefix_sha256": hashlib.sha256(media_base_url.encode()).hexdigest(),
+                }
+            )
         payload = {
             "enhancement_task_id": enhancement_task_id,
             "task": task,
-            "media": {
-                "prefix_index": 0,
-                "prefix_sha256": hashlib.sha256(media_base_url.encode()).hexdigest(),
-                "access_token": media.access_token,
-                "byte_size": grant.byte_size,
-                "sha256": grant.sha256,
-                "mime_type": grant.mime_type,
-                "expires_at": grant.expires_at.isoformat(),
-            },
+            "media": media_payload,
         }
         try:
             with httpx.Client(

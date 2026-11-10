@@ -18,7 +18,7 @@ from pydantic import (
     model_validator,
 )
 
-from .providers import BaseProviderAdapter, ProviderCapability
+from .providers import BaseProviderAdapter, MediaTransferMode, ProviderCapability
 
 SCHEMA_VERSION = "1.0"
 MAX_PROVIDER_OUTPUT_BYTES = 64 * 1024
@@ -647,6 +647,11 @@ def build_provider_request_plan(
     model = definition.model or ""
     if definition.api_style.value == "openai_responses":
         endpoint_path = "/responses"
+        image_content = (
+            {"type": "input_image", "file_id": "$SMARTSCAN_MEDIA"}
+            if definition.media_transfer_mode == MediaTransferMode.FILES_API
+            else {"type": "input_image", "image_url": "$SMARTSCAN_MEDIA"}
+        )
         request_body = {
             "model": model,
             "temperature": 0,
@@ -656,7 +661,7 @@ def build_provider_request_plan(
                     "role": "user",
                     "content": [
                         {"type": "input_text", "text": instructions},
-                        {"type": "input_image", "image_url": "$SMARTSCAN_MEDIA"},
+                        image_content,
                     ],
                 }
             ],

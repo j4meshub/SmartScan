@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from sqlalchemy import select
@@ -37,14 +39,7 @@ from .schemas import (
 router = APIRouter()
 
 
-@router.get("/v1/ai-media", include_in_schema=False)
-def read_ai_media(
-    access_token: str | None = Header(
-        None,
-        alias="X-SmartScan-AI-Media-Token",
-    ),
-    db: Session = Depends(get_db),
-):
+def _media_response(db: Session, access_token: str | None):
     resolved = (
         resolve_media_grant(db, access_token=access_token) if access_token is not None else None
     )
@@ -62,6 +57,30 @@ def read_ai_media(
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+@router.get("/v1/internal/ai-media", include_in_schema=False)
+def read_internal_ai_media(
+    authorization: str | None = Header(None, alias="Authorization"),
+    access_token: str | None = Header(None, alias="X-SmartScan-AI-Media-Token"),
+    db: Session = Depends(get_db),
+):
+    expected = get_settings().ai_internal_token.get_secret_value()
+    supplied = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
+    if not expected or not supplied or not secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=404, detail="ai_media_not_found")
+    return _media_response(db, access_token)
+
+
+@router.get("/v1/ai-media", include_in_schema=False)
+def read_ai_media(
+    access_token: str | None = Header(
+        None,
+        alias="X-SmartScan-AI-Media-Token",
+    ),
+    db: Session = Depends(get_db),
+):
+    return _media_response(db, access_token)
 
 
 def _raise_business(db: Session, exc: AiBusinessError) -> None:
