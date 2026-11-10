@@ -6,6 +6,7 @@ import hashlib
 import re
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator
@@ -66,6 +67,10 @@ class Settings(BaseSettings):
     ai_gateway_url: str = ""
     ai_internal_token: SecretStr = SecretStr("")
     ai_provider_id: str = ""
+    ai_media_transfer_mode: Literal["inline_data_url", "multipart", "files_api", "signed_url"] = (
+        "inline_data_url"
+    )
+    ai_internal_media_url: str = ""
     ai_media_base_url: str = ""
     ai_mock_mode: bool = False
     ai_media_grant_ttl_seconds: int = Field(default=600, ge=60, le=900)
@@ -83,16 +88,39 @@ class Settings(BaseSettings):
 
     def ai_runtime_configured(self) -> bool:
         gateway = urlsplit(self.ai_gateway_url.strip())
+        internal_media = urlsplit(self.ai_internal_media_url.strip())
         media = urlsplit(self.ai_media_base_url.strip())
+        internal_token = self.ai_internal_token.get_secret_value()
+        active_media_ready = bool(
+            internal_media.scheme in {"http", "https"}
+            and internal_media.hostname
+            and not any(
+                (
+                    internal_media.username,
+                    internal_media.password,
+                    internal_media.query,
+                    internal_media.fragment,
+                )
+            )
+            and internal_media.path == "/v1/internal/ai-media"
+        )
+        signed_media_ready = bool(
+            media.scheme == "https"
+            and media.hostname
+            and not any((media.username, media.password, media.query, media.fragment))
+            and self.ai_media_base_url.endswith("/")
+        )
         return bool(
             gateway.scheme in {"http", "https"}
             and gateway.hostname
             and not any((gateway.username, gateway.password, gateway.query, gateway.fragment))
-            and media.scheme == "https"
-            and media.hostname
-            and not any((media.username, media.password, media.query, media.fragment))
-            and self.ai_media_base_url.endswith("/")
-            and len(self.ai_internal_token.get_secret_value()) >= 32
+            and (
+                signed_media_ready
+                if self.ai_media_transfer_mode == "signed_url"
+                else active_media_ready
+            )
+            and 32 <= len(internal_token) <= 8192
+            and all(33 <= ord(char) <= 126 for char in internal_token)
             and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", self.ai_provider_id) is not None
         )
 
@@ -228,17 +256,16 @@ class Settings(BaseSettings):
                 raise RuntimeError(
                     "SMARTSCAN_OPS_METRICS_TOKEN must be at least 32 characters when enabled"
                 )
-            ai_values = (
-                self.ai_gateway_url,
-                self.ai_internal_token.get_secret_value(),
-                self.ai_provider_id,
-                self.ai_media_base_url,
+            ai_requested = any(
+                (
+                    self.ai_gateway_url,
+                    self.ai_provider_id,
+                    self.ai_media_base_url,
+                )
             )
-            if any((self.ai_gateway_url, self.ai_provider_id, self.ai_media_base_url)) and not all(
-                ai_values
-            ):
+            if ai_requested and not self.ai_runtime_configured():
                 raise RuntimeError(
-                    "AI execution requires gateway URL, internal token, provider ID and media URL"
+                    "AI execution requires a complete gateway, provider and media transfer configuration"
                 )
             if (
                 self.ai_internal_token.get_secret_value()

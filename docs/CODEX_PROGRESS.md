@@ -6,16 +6,23 @@
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M9 共享生产服务器部署与发布 |
-| 当前工作包 | `OPS-000` 共享宿主机预检与资源分配 |
-| 工作包状态 | 等待人工验收：仓库侧只读采集、离线校验、审批模板和失败关闭测试已完成；真实目标主机快照、资源审批与人工复核尚未取得 |
-| 当前分支 | `codex/ops-000-shared-host-preflight` |
-| 最后验证基线 | `b5fc592`（PR #70 中文 squash 合并，共享服务器执行计划纠偏完成） |
-| 工作包提交 | `433e5e4`（增加共享宿主机只读预检门禁） |
-| PR | [#71 增加共享宿主机只读预检门禁](https://github.com/j4meshub/SmartScan/pull/71) 代码头首轮 10 项 CI 全部通过，等待最终文档头复核与合并 |
-| 下一工作包 | 等待 OPS-000 外部输入期间推进 `OPS-REG-001` 与 `AI-013`；真实资源创建仍由 OPS-000 门禁 |
+| 当前里程碑 | M8 可选视觉 AI / M9 共享服务器并行适配 |
+| 当前工作包 | `AI-013` AI 主动媒体上传 |
+| 工作包状态 | 进行中：内部取图和三种主动上传已实现，相关自动测试通过；正在完成全量回归、PR 与 CI 证据，真实公司 Provider 仍保留人工门禁 |
+| 当前分支 | `codex/ai-013-active-media-upload` |
+| 最后验证基线 | `1980408`（PR #71 中文 squash 合并，OPS-000 仓库门禁完成） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `OPS-REG-001` 双仓库与镜像供应链；真实主机资源创建继续等待 OPS-000 人工验收 |
 
 ## 当前工作包进展
+
+- AI 网关新增 `inline_data_url`、`multipart`、`files_api` 和兼容 `signed_url` 四种部署级传输模式；默认主动模式不把 SmartScan 媒体 URL 或授权令牌发送给 Provider，公司 Provider 失败时不会自动切换外部供应商。
+- 新增不公开的内部媒体客户端与 `/v1/internal/ai-media`：使用部署级 Bearer Token 加单页授权，拒绝重定向，并再次校验 MIME、大小和 SHA-256。共享 Nginx 对该路径固定返回 `404`。
+- Files API 使用固定 `/files` 上传和删除路径，业务请求使用受限文件 ID；成功或业务请求失败都会在 `finally` 删除临时文件，删除失败使调用失败，证据不保存远端文件 ID。上传响应无法取得文件 ID时仍需由真实 Provider 的过期政策兜底并人工验收。
+- 本机一键试用默认真实模式改用 `inline_data_url`，旧配置只有显式媒体基址时兼容推断为 `signed_url`；Key 继续只进入 AI 网关进程。UAT Compose 已补充内部媒体地址和 API 健康依赖。
+- 当前本地门禁通过：Ruff 检查与 166 个 Python 文件格式、迁移漂移和差异空白检查通过；主动上传、Provider 注册、网络安全、可靠性、安全媒体、通用文档、本机试用及 UAT 配置专项 `153 passed, 1 skipped`；全量 Python `482 passed, 7 skipped`，覆盖率 `87.79%`。首次全量回归有 1 项失败：新增测试直接调用完整生产校验但未提供与本工作包无关的生产 Secret；移除错误夹具后相关 40 项及原全量命令通过，没有跳过测试或放宽安全断言。本机没有 Docker CLI，Compose 动态解析和镜像构建留给 PR 容器 CI 补证。
+- `OPS-000` 已由 [PR #71](https://github.com/j4meshub/SmartScan/pull/71) 中文 squash 合并为 `1980408`；最终代码头两套 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项 CI 全部通过。真实主机快照、资源审批与人工复核未取得，工作包继续保持“等待人工验收”。
 
 - `GOV-003` 已由 [PR #70](https://github.com/j4meshub/SmartScan/pull/70) 中文 squash 合并为 `b5fc592`；最终代码头的 push 与 PR 工作流中，API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
 - 新增 `tools/shared_host_preflight.py`：现场采集仅执行固定只读命令，裁剪 Docker 容器和网络信息，不读取容器环境、挂载内容或 Secret；原始快照必须写入新的绝对路径，使用 `0600` 权限且拒绝覆盖。
@@ -53,7 +60,7 @@
 
 - H5-AI-001 已由 [PR #64](https://github.com/j4meshub/SmartScan/pull/64) 合并到主线，中文 squash 提交为 `725e0ad`；最终 push `39773633246` 与 PR `39773639990` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
 - DEVX-002 将既有中文启动器扩展为一次启动 API、AI 网关、AI Worker、CPU Worker 和 H5。默认 Provider 是不读取媒体、不访问外网的确定性 Mock，七类任务都通过现有结构化结果校验；能力接口、H5 双语徽标和持久化证据明确区分 `mock` 与 `provider`，生产环境禁止 Mock。
-- 可选真实模式从被 Git 忽略的 `.smartscan-trial/ai-provider.local.json` 读取 OpenAI Chat/Responses 配置。启动器拒绝非 HTTPS/IP 地址、未知字段、过宽或非受控私网；Key 只注入 AI 网关进程，不写入运行配置、状态、日志或客户端。真实模型不能访问签名 HTTPS 媒体地址时继续作为外部门禁。
+- 可选真实模式从被 Git 忽略的 `.smartscan-trial/ai-provider.local.json` 读取 OpenAI Chat/Responses 配置。启动器拒绝非 HTTPS/IP 地址、未知字段、过宽或非受控私网；Key 只注入 AI 网关进程，不写入运行配置、状态、日志或客户端。该工作包当时仍把签名 HTTPS 媒体可达性作为门禁，现已由 AI-013 的默认主动上传取代。
 - 真实本机编排确认五个托管角色均运行，并使用自动创建的 `demo` 账号完成“项目授权→Mock AI 候选→用户接受”；候选证据为 `mock`。停止命令关闭全部五个角色并保留试用数据。专项 Python/OpenAPI `136 passed`；最终仓库级 Python `450 passed, 7 skipped`、覆盖率 `87.82%`，H5 单元 `44 passed`，Chromium E2E/axe `7 passed`；Ruff、162 个 Python 文件格式、迁移漂移、OpenAPI 当前/上一代兼容、两套 AI Schema、H5/管理后台 JavaScript 语法和差异空白均通过。首次全量回归只因 AI 网关健康响应新增脱敏 `execution_mode` 而旧精确字典断言失败，补齐契约断言后原命令全量通过；7 项跳过仍为既有 PostgreSQL/Docker/真实主机外部门禁。
 - DEVX-002 代码提交为 `b2696c0`。首次 push `39779325414` 的 API/Web/Android/容器成功，但 iOS Simulator 长时间不收敛；同提交 PR `39779395427` 五项全部成功。取消请求同样未及时收敛后，强制取消旧 push，并以中文空提交 `59fe5e6` 原样重触发，没有修改或跳过测试。新代码头 push `39781073863` 与 PR `39781082752` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
 
@@ -913,6 +920,6 @@ git diff --check
 ## 下一步
 
 1. 由公司运维在目标 Linux 宿主机按 `SHARED_HOST_PREFLIGHT.md` 采集 24 小时内只读快照，并在仓库外填写资源审批文件、运行离线校验与人工复核；未取得脱敏通过摘要前，`OPS-000` 保持“等待人工验收”，不得创建网络、目录或容器。
-2. `OPS-000` 等待现场权限和资源审批期间，独立推进 `OPS-REG-001` GitHub/GitLab 双仓库与镜像供应链，以及 `AI-013` 公司 AI 优先的主动媒体上传；服务器禁止检出源码或现场构建。
+2. `AI-013` 仓库实现完成后，在 UAT 使用公司真实 Provider 验证主动上传、临时文件删除/过期、费用、延迟、日志和数据政策；自动测试与 Mock 不解除该门禁。OPS-000 等待期间继续推进 `OPS-REG-001`，服务器禁止检出源码或现场构建。
 3. 资源获批后依次完成 `OPS-001 → OPS-002A/OPS-003/OPS-004 → OPS-005 → OPS-006`。UAT 按需启停，公网/零信任入口 `OPS-002B`、真实企微外网回调和非 VPN 移动使用继续保持阻塞。
 4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。

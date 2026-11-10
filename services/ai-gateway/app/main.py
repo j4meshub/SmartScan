@@ -10,13 +10,20 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from .media import InternalMediaClient, InternalMediaError
 from .mock import deterministic_mock_result
 from .network import (
     NetworkSecurityError,
     OutboundMediaReference,
     SecureProviderTransport,
 )
-from .providers import ProviderDefinition, ProviderRegistry, create_adapter, load_provider_registry
+from .providers import (
+    MediaTransferMode,
+    ProviderDefinition,
+    ProviderRegistry,
+    create_adapter,
+    load_provider_registry,
+)
 from .reliability import ReliabilityError, ReliabilityStore, ReliableProviderExecutor
 from .tasks import (
     StructuredTaskError,
@@ -43,6 +50,17 @@ def get_reliable_executor() -> ReliableProviderExecutor:
     from services.api.app.database import SessionLocal
 
     return ReliableProviderExecutor(ReliabilityStore(SessionLocal), get_network_transport())
+
+
+@lru_cache
+def get_internal_media_client() -> InternalMediaClient:
+    from services.api.app.config import get_settings
+
+    settings = get_settings()
+    return InternalMediaClient(
+        settings.ai_internal_media_url,
+        settings.ai_internal_token.get_secret_value(),
+    )
 
 
 def _internal_security() -> tuple[str, str]:
@@ -115,7 +133,7 @@ async def lifespan(_: FastAPI):
 def create_app() -> FastAPI:
     application = FastAPI(
         title="SmartScan 可选视觉 AI 网关",
-        version="0.4.0",
+        version="0.5.0",
         lifespan=lifespan,
     )
 
@@ -302,6 +320,15 @@ def create_app() -> FastAPI:
                 "evidence": evidence,
                 "network": {"network_ready": True, "mock_mode": True},
             }
+        media_content: bytes | None = None
+        if adapter.definition.media_transfer_mode != MediaTransferMode.SIGNED_URL:
+            try:
+                media_content = get_internal_media_client().fetch(media).content
+            except InternalMediaError as exc:
+                raise HTTPException(
+                    status_code=503 if exc.retryable else 409,
+                    detail=exc.code,
+                ) from exc
         executor = get_reliable_executor()
         try:
             pending = executor.execute_network(
@@ -309,6 +336,7 @@ def create_app() -> FastAPI:
                 task,
                 plan,
                 media,
+                media_content=media_content,
                 enhancement_task_id=enhancement_task_id,
             )
             network_result = pending.result

@@ -141,7 +141,7 @@ def test_real_ai_uses_only_ignored_local_secret_without_persisting_key(tmp_path:
                 "api_key": "real-key-only-in-process-environment",
                 "model": "company-vlm-1",
                 "api_style": "openai_responses",
-                "media_base_url": "https://scan.corp.example/api/v1/ai-media/",
+                "media_transfer_mode": "inline_data_url",
                 "allowed_private_cidrs": ["10.20.0.0/16"],
             }
         ),
@@ -157,6 +157,11 @@ def test_real_ai_uses_only_ignored_local_secret_without_persisting_key(tmp_path:
     assert provider["base_url"] == "https://vlm.corp.example/v1"
     assert provider["allowed_private_cidrs"] == ["10.20.0.0/16"]
     assert provider["api_key_env"] == "SMARTSCAN_LOCAL_AI_KEY"
+    assert provider["media_transfer_mode"] == "inline_data_url"
+    assert "media_url_prefixes" not in provider
+    assert environment["SMARTSCAN_AI_INTERNAL_MEDIA_URL"] == (
+        "http://127.0.0.1:8000/v1/internal/ai-media"
+    )
     assert "real-key-only-in-process-environment" not in paths.runtime_config.read_text(
         encoding="utf-8"
     )

@@ -31,9 +31,9 @@ AI-001 为专业 OCR、OpenAI-compatible 视觉模型和自定义视觉模型建
     "model": "vision-1",
     "supports_images": true,
     "capabilities": ["document_understanding", "image_classification"],
-    "media_url_prefixes": ["https://media.example/ai-media/"],
+    "media_transfer_mode": "inline_data_url",
     "max_media_bytes": 20971520,
-    "max_request_bytes": 524288,
+    "max_request_bytes": 33554432,
     "max_response_bytes": 65536,
     "timeout_seconds": 90,
     "max_retries": 1,
@@ -56,10 +56,11 @@ AI-001 为专业 OCR、OpenAI-compatible 视觉模型和自定义视觉模型建
 | `base_url` | 默认 443 端口、无凭据/查询/片段/歧义路径的 HTTPS DNS 地址；拒绝 IP 字面量 |
 | `api_key_env` | 只保存安全的环境变量名；实际值由运行环境 Secret 注入 |
 | `capabilities` | 当前可声明 OCR、文档理解、图像分类和版面分析能力 |
-| `media_url_prefixes` | 固定媒体 HTTPS 前缀允许列表；不接受调用方提供完整 URL |
+| `media_transfer_mode` | 默认 `inline_data_url`；还可选择 `multipart`、`files_api` 或兼容 `signed_url` |
+| `media_url_prefixes` | 只允许 `signed_url` 使用的固定 HTTPS 前缀；主动模式拒绝该字段 |
 | `allowed_private_cidrs` | 仅 `custom_vlm` 可用的显式受控网段；公网 Provider 禁止设置 |
 | `max_media_bytes` | 单个媒体声明大小，默认 20 MiB、最高 100 MiB |
-| `max_request_bytes` | JSON 请求体，默认 512 KiB、最高 2 MiB |
+| `max_request_bytes` | 包含内联或 multipart 媒体的请求体，默认 32 MiB、最高 140 MiB |
 | `max_response_bytes` | JSON 响应体，默认且最高 64 KiB |
 | `timeout_seconds` | 单次 HTTPS 网络操作超时，默认 90 秒，范围 1～300 秒 |
 | `max_retries` | 可重试供应商故障的重试次数，只允许 0 或 1 |
@@ -70,7 +71,7 @@ AI-001 为专业 OCR、OpenAI-compatible 视觉模型和自定义视觉模型建
 | `circuit_failure_threshold` | 打开熔断器前的连续供应商失败数，默认 3 |
 | `circuit_open_seconds` | 熔断冷却时间，默认 60 秒 |
 
-OpenAI Chat/Responses 风格统一选择 `openai_compatible` 适配器；专业 OCR 的自定义协议选择 `professional_ocr`；其余自定义协议选择 `custom`。业务任务以后只依赖 Provider ID 和能力，不直接依赖具体供应商名称。
+OpenAI Chat/Responses 风格统一选择 `openai_compatible` 适配器；专业 OCR 的自定义协议选择 `professional_ocr`；其余自定义协议选择 `custom`。`multipart` 只用于 `custom`，`files_api` 只用于 Responses。业务任务只依赖部署选择的 Provider ID 和能力，不直接依赖具体供应商名称，也不会在公司 Provider 失败时自动切换外部供应商。
 
 ## 状态接口
 
@@ -80,7 +81,7 @@ OpenAI Chat/Responses 风格统一选择 `openai_compatible` 适配器；专业 
 - `GET /v1/providers/{provider_id}/runtime`：返回内部使用的熔断、活动调用、频率和当日保守费用摘要；不返回业务标识或 Secret。
 - `POST /v1/providers/check`：只校验一份定义并返回适配器选择，不解析 DNS、不连接供应商、不发送媒体。
 
-响应不会包含 `api_key_env`、地址、网段、媒体前缀或 Secret 值。`configured=true` 只表示被引用的环境变量非空；`outbound_policy_configured=true` 只表示固定地址和媒体允许列表完整；`outbound_ready=true` 才表示配置与凭据都已具备，但仍不代表供应商可访问、模型存在或账号配额充足。
+响应不会包含 `api_key_env`、地址、网段、传输模式、媒体前缀或 Secret 值。`configured=true` 只表示被引用的环境变量非空；`outbound_policy_configured=true` 只表示固定地址和所选传输策略完整；`outbound_ready=true` 才表示配置与凭据都已具备，但仍不代表供应商可访问、模型存在或账号配额充足。
 
 ## 容器运行
 
@@ -94,10 +95,10 @@ docker compose --profile ai -f deploy/compose/docker-compose.yml up --build ai-g
 
 ## 当前边界与后续门禁
 
-当前注册表、结构化任务、安全传输、可靠性和评估能力属于 AI 基础设施。API、Worker 与客户端尚未创建或消费页面 AI 增强任务，不能据此宣称 SmartScan 已提供 AI 产品功能。后续业务闭环见[可选视觉 AI 业务接入架构](AI_BUSINESS_INTEGRATION.md)。
+注册表、结构化任务、安全传输和可靠性属于 AI 基础设施；页面授权、候选、接受及三端业务接入已由 AI-006～AI-009 和客户端工作包实现。AI-013 已增加内部取图与主动上传，但真实公司 Provider、试卷/扫书复核和发布门禁仍未通过，因此不能把 M8 标记为完成。完整边界见[可选视觉 AI 业务接入架构](AI_BUSINESS_INTEGRATION.md)。
 
 - AI-002 已提供七类任务/结果 JSON Schema、无网络请求计划和带 Provider/模型版本的候选证据信封；AI 网关仍不直接修改业务数据，增强版本保存必须经过后续 Worker 活动版本核对。
-- AI-003 已实现 HTTPS 固定目标、全部 DNS 答案校验、解析后连接固定、TLS 原主机名验证、公网/受控网段策略、禁重定向、固定媒体前缀和请求/响应大小限制。完整说明见[可选视觉 AI 出站网络与媒体安全](AI_NETWORK_SECURITY.md)。
+- AI-003/AI-013 已实现 HTTPS 固定目标、全部 DNS 答案校验、解析后连接固定、TLS 原主机名验证、公网/受控网段策略、禁重定向、内部媒体校验、三种主动上传和签名 URL 兼容模式。完整说明见[可选视觉 AI 出站网络与媒体安全](AI_NETWORK_SECURITY.md)。
 - AI-004 已实现可配置网络超时、一次重试、PostgreSQL 共享熔断/租约、并发/频率/UTC 日费用门禁和脱敏调用证据。完整说明见[可选视觉 AI 可靠性、熔断与费用门禁](AI_RELIABILITY_COST.md)。
 - 固定数据集、准确率、幻觉率、延迟和成本报告属于 AI-005。
 

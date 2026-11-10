@@ -20,7 +20,7 @@ from test_ai_business import (
     register,
 )
 
-from services.api.app import main
+from services.api.app import ai_routes, main
 from services.api.app.account_deletion import process_account_deletion
 from services.api.app.ai_media import AiMediaError, IssuedMediaGrant, issue_media_grant
 from services.api.app.config import Settings
@@ -38,7 +38,7 @@ from services.worker.app.ai_gateway import AiGatewayClient
 ROOT = Path(__file__).parents[1]
 
 
-def test_media_grant_is_hashed_scoped_revocable_and_not_exposed() -> None:
+def test_media_grant_is_hashed_scoped_revocable_and_not_exposed(monkeypatch) -> None:
     with TestClient(main.app) as client:
         headers, _ = register(client, "ai_media")
         project_id, page_id = create_processed_page(client, headers)
@@ -72,9 +72,30 @@ def test_media_grant_is_hashed_scoped_revocable_and_not_exposed() -> None:
         assert media.headers["cache-control"] == "private, no-store, max-age=0"
         assert media.headers["content-type"].startswith("image/jpeg")
         assert len(media.content) > 0
+        monkeypatch.setattr(
+            ai_routes,
+            "get_settings",
+            lambda: Settings(_env_file=None, ai_internal_token="i" * 32),
+        )
+        assert (
+            client.get(
+                "/v1/internal/ai-media",
+                headers={"X-SmartScan-AI-Media-Token": raw_token},
+            ).status_code
+            == 404
+        )
+        internal = client.get(
+            "/v1/internal/ai-media",
+            headers={
+                "Authorization": f"Bearer {'i' * 32}",
+                "X-SmartScan-AI-Media-Token": raw_token,
+            },
+        )
+        assert internal.status_code == 200
+        assert internal.content == media.content
         with SessionLocal() as db:
             grant = db.get(AiMediaGrant, grant_id)
-            assert grant is not None and grant.access_count == 1
+            assert grant is not None and grant.access_count == 2
             assert grant.last_accessed_at is not None
 
         disabled = client.put(
@@ -184,6 +205,7 @@ def test_worker_gateway_client_uses_internal_token_without_redirects() -> None:
         ai_gateway_url="http://ai-gateway:8010",
         ai_internal_token="i" * 32,
         ai_provider_id="vision-main",
+        ai_media_transfer_mode="signed_url",
         ai_media_base_url="https://media.example/v1/ai-media/",
     )
     grant = AiMediaGrant(

@@ -170,11 +170,37 @@ class FakeComplexOcrGateway:
 
 
 def test_ai_runtime_capability_requires_complete_safe_server_configuration() -> None:
+    active_upload = Settings(
+        _env_file=None,
+        ai_gateway_url="http://ai-gateway:8010",
+        ai_internal_token="i" * 32,
+        ai_provider_id="vision-main",
+        ai_media_transfer_mode="inline_data_url",
+        ai_internal_media_url="http://api:8000/v1/internal/ai-media",
+    )
+    assert active_upload.ai_runtime_configured() is True
+    missing_internal_media = Settings(
+        _env_file=None,
+        ai_gateway_url="http://ai-gateway:8010",
+        ai_internal_token="i" * 32,
+        ai_provider_id="vision-main",
+        ai_media_transfer_mode="inline_data_url",
+    )
+    assert missing_internal_media.ai_runtime_configured() is False
+    invalid_header_token = Settings(
+        _env_file=None,
+        ai_gateway_url="http://ai-gateway:8010",
+        ai_internal_token=("i" * 31) + " ",
+        ai_provider_id="vision-main",
+        ai_internal_media_url="http://api:8000/v1/internal/ai-media",
+    )
+    assert invalid_header_token.ai_runtime_configured() is False
     configured = Settings(
         _env_file=None,
         ai_gateway_url="http://ai-gateway:8010",
         ai_internal_token="i" * 32,
         ai_provider_id="vision-main",
+        ai_media_transfer_mode="signed_url",
         ai_media_base_url="https://scan.example/api/v1/ai-media/",
     )
     assert configured.ai_runtime_configured() is True
@@ -183,6 +209,7 @@ def test_ai_runtime_capability_requires_complete_safe_server_configuration() -> 
         ai_gateway_url="http://ai-gateway:8010",
         ai_internal_token="short",
         ai_provider_id="vision-main",
+        ai_media_transfer_mode="signed_url",
         ai_media_base_url="https://scan.example/api/v1/ai-media/",
     )
     assert short_token.ai_runtime_configured() is False
@@ -198,6 +225,7 @@ def test_production_rejects_mock_ai_mode() -> None:
         ai_gateway_url="http://ai-gateway:8010",
         ai_internal_token="i" * 32,
         ai_provider_id="vision-main",
+        ai_media_transfer_mode="signed_url",
         ai_media_base_url="http://scan.example/media/",
     )
     assert unsafe_media.ai_runtime_configured() is False
