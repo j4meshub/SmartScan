@@ -11,8 +11,8 @@
 | 工作包状态 | 完成：共享宿主机、内网/VPN、公司 AI 主动上传和 GitLab 生产制品路线已写入计划并通过本地门禁，等待 PR 合并后从 `OPS-000` 续接 |
 | 当前分支 | `codex/gov-003-shared-host-plan` |
 | 最后验证基线 | `fea5746`（PR #69 中文 squash 合并，M8 外部门禁断点已收口） |
-| 工作包提交 | 本分支中文提交待创建 |
-| PR | 待创建 |
+| 工作包提交 | `e589f76`（共享生产服务器执行计划纠偏） |
+| PR | [#70 纠偏共享生产服务器执行计划](https://github.com/j4meshub/SmartScan/pull/70) 已创建，等待 CI 与合并 |
 | 下一工作包 | `OPS-000` 共享宿主机只读预检与资源分配；其后 `OPS-REG-001` 与 `AI-013` 可独立推进 |
 
 ## 当前工作包进展
@@ -22,6 +22,7 @@
 - 新增 `AI-013`：公司 AI 优先，AI Gateway 默认主动使用 data URL、multipart 或 Files API 上传媒体，禁止自动向外部供应商降级；现有签名公网 URL 降为审批后才可启用的兼容兜底。
 - 新增共享服务器部署边界，固定 UAT/生产项目与 `/mnt/data` 目录、专用 PostgreSQL、固定网络、资源/日志限制、现有监控复用、异机备份、GitHub 评审与 GitLab 生产镜像分工。固定 CIDR、入口、资源和备份端点未审批前保持失败关闭。
 - GOV-003 本地门禁通过：Ruff 检查、162 个 Python 文件格式检查和差异空白检查通过；全量 Python `453 passed, 7 skipped`，覆盖率 `87.81%`。7 项跳过均为既有 PostgreSQL/Docker/真实主机外部门禁，没有把 2026-10-12 历史快照或文档修改误记为现场验收。
+- GOV-003 首个中文提交为 `e589f76`，已推送并创建 [PR #70](https://github.com/j4meshub/SmartScan/pull/70)；待 GitHub Actions 全部通过并完成自审后合并，再从 `OPS-000` 续接。
 
 - `IOS-AI-001` 已由 [PR #68](https://github.com/j4meshub/SmartScan/pull/68) 合并到主线，中文 squash 提交为 `a15b78e`；最终 push `39819386309` 与 PR `39819397176` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共十项全部通过。
 - 此前已复核的 M8 外部门禁仍成立：`AI-010` 依赖固定数据集阻塞的 `EXAM-002/003`，`AI-011` 依赖 BOOK-002 真实书籍固定集和真机门禁；`AI-012` 现在还增加 `AI-013` 公司 Provider 主动上传依赖。`AI-013` 与共享主机仓库适配可以在固定数据集到位前继续推进。
