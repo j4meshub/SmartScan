@@ -32,9 +32,11 @@ smartscan-uat Web ── API ── 专用 PostgreSQL
 
 ## OPS-000 只读预检
 
+仓库侧采集器、离线校验器、失败关闭规则和人工解锁流程见[共享宿主机只读预检与资源审批](SHARED_HOST_PREFLIGHT.md)。
+
 部署当天必须重新采集并保存脱敏证据：
 
-1. 主机标识、系统、内核、Docker 与 Compose 版本、CPU、内存和挂载点。
+1. 主机标识、系统、内核、Docker 与 Compose 版本、CPU、内存、15 分钟负载、接口地址和挂载点。
 2. `docker ps`、现有 Compose 项目、全部已创建网络及其 IPAM。
 3. 全部主机路由表、策略路由、VPN 路由和公司保留网段。
 4. 已监听端口、共享 Nginx include 结构、内部 DNS/TLS 入口及现有监控接入方式。

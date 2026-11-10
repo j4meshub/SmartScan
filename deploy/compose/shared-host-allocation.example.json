@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "environment": "uat",
+  "compose_project_name": "smartscan-uat",
+  "target_hostname": "REPLACE_WITH_APPROVED_HOSTNAME",
+  "approval": {
+    "approved_by": "REPLACE_WITH_APPROVER",
+    "approved_at": "REPLACE_WITH_ISO8601_TIME",
+    "change_ticket": "REPLACE_WITH_CHANGE_TICKET"
+  },
+  "networks": {
+    "data": {
+      "subnet": "REPLACE_WITH_APPROVED_DATA_CIDR",
+      "gateway": "REPLACE_WITH_APPROVED_DATA_GATEWAY"
+    },
+    "edge": {
+      "subnet": "REPLACE_WITH_APPROVED_EDGE_CIDR",
+      "gateway": "REPLACE_WITH_APPROVED_EDGE_GATEWAY"
+    },
+    "egress": {
+      "subnet": "REPLACE_WITH_APPROVED_EGRESS_CIDR",
+      "gateway": "REPLACE_WITH_APPROVED_EGRESS_GATEWAY"
+    }
+  },
+  "reserved_cidrs": [
+    "REPLACE_WITH_COMPANY_RESERVED_CIDR"
+  ],
+  "host_ports": [
+    {
+      "purpose": "UAT Web 回环或批准的内网入口",
+      "port": 0,
+      "bind_address": "REPLACE_WITH_APPROVED_BIND_ADDRESS"
+    },
+    {
+      "purpose": "内部指标入口",
+      "port": 0,
+      "bind_address": "REPLACE_WITH_APPROVED_BIND_ADDRESS"
+    }
+  ],
+  "storage": {
+    "root": "/mnt/data/smartscan/uat",
+    "quota_bytes": 107374182400,
+    "hard_limit_confirmed": false
+  },
+  "resources": {
+    "cpu_limit": 8,
+    "memory_limit_bytes": 17179869184
+  },
+  "ingress": {
+    "internal_https": true,
+    "public_access": false,
+    "hostname": "REPLACE_WITH_INTERNAL_HTTPS_HOSTNAME"
+  },
+  "monitoring": {
+    "reuse_existing": true,
+    "deploy_node_exporter": false,
+    "metrics_target_reference": "REPLACE_WITH_MONITORING_TICKET"
+  },
+  "backup": {
+    "off_host": true,
+    "endpoint_reference": "REPLACE_WITH_BACKUP_TICKET"
+  }
+}
