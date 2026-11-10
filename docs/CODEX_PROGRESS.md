@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M8 可选视觉 AI / M9 共享服务器并行适配 |
 | 当前工作包 | `AI-013` AI 主动媒体上传 |
-| 工作包状态 | 进行中：内部取图和三种主动上传已实现，本地门禁通过；PR 已创建并等待 CI，真实公司 Provider 仍保留人工门禁 |
+| 工作包状态 | 等待人工验收：仓库实现、本地门禁和 PR 代码头 CI 已完成；公司真实 Provider 的协议、删除/过期、费用、延迟和数据政策尚未验收 |
 | 当前分支 | `codex/ai-013-active-media-upload` |
 | 最后验证基线 | `1980408`（PR #71 中文 squash 合并，OPS-000 仓库门禁完成） |
 | 工作包提交 | `9513526`（实现 AI 媒体主动上传） |
-| PR | [#72 实现 AI 媒体主动上传](https://github.com/j4meshub/SmartScan/pull/72)，等待最终代码头 CI |
+| PR | [#72 实现 AI 媒体主动上传](https://github.com/j4meshub/SmartScan/pull/72)，代码头两套 10 项 CI 全部通过，等待最终证据提交复核与合并 |
 | 下一工作包 | `OPS-REG-001` 双仓库与镜像供应链；真实主机资源创建继续等待 OPS-000 人工验收 |
 
 ## 当前工作包进展
@@ -22,6 +22,7 @@
 - Files API 使用固定 `/files` 上传和删除路径，业务请求使用受限文件 ID；成功或业务请求失败都会在 `finally` 删除临时文件，删除失败使调用失败，证据不保存远端文件 ID。上传响应无法取得文件 ID时仍需由真实 Provider 的过期政策兜底并人工验收。
 - 本机一键试用默认真实模式改用 `inline_data_url`，旧配置只有显式媒体基址时兼容推断为 `signed_url`；Key 继续只进入 AI 网关进程。UAT Compose 已补充内部媒体地址和 API 健康依赖。
 - 当前本地门禁通过：Ruff 检查与 166 个 Python 文件格式、迁移漂移和差异空白检查通过；主动上传、Provider 注册、网络安全、可靠性、安全媒体、通用文档、本机试用及 UAT 配置专项 `153 passed, 1 skipped`；全量 Python `482 passed, 7 skipped`，覆盖率 `87.79%`。首次全量回归有 1 项失败：新增测试直接调用完整生产校验但未提供与本工作包无关的生产 Secret；移除错误夹具后相关 40 项及原全量命令通过，没有跳过测试或放宽安全断言。本机没有 Docker CLI，Compose 动态解析和镜像构建留给 PR 容器 CI 补证。
+- PR #72 代码头 `bc3797a` 的 push 工作流 `42763761963` 与 PR 工作流 `42763767674` 中，API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过；两套容器作业均解析开发/UAT Compose 并实际构建 AI Gateway 与专用 Worker 镜像。该证据不解除公司真实 Provider 与 AI-012 人工门禁。
 - `OPS-000` 已由 [PR #71](https://github.com/j4meshub/SmartScan/pull/71) 中文 squash 合并为 `1980408`；最终代码头两套 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项 CI 全部通过。真实主机快照、资源审批与人工复核未取得，工作包继续保持“等待人工验收”。
 
 - `GOV-003` 已由 [PR #70](https://github.com/j4meshub/SmartScan/pull/70) 中文 squash 合并为 `b5fc592`；最终代码头的 push 与 PR 工作流中，API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过。
