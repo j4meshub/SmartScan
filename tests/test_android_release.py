@@ -202,8 +202,7 @@ def test_signed_channel_must_match_real_candidate_apk(tmp_path: Path) -> None:
             version_code=12,
             version_name="1.2.0",
             minimum_supported_version_code=11,
-            apk_url="https://gitlab.example.test/api/v4/projects/1/packages/generic/"
-            "smartscan-android/1.2.0/SmartScan-release.apk",
+            apk_url="https://updates.example.test/android/1.2.0/SmartScan-release.apk",
             signing_certificate_sha256=CERTIFICATE,
             published_at="2026-10-22T00:00:00Z",
         )

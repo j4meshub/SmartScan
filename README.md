@@ -47,7 +47,7 @@ SmartScan 是一套注重隐私的文档扫描平台，为企业微信 H5、Andr
 - CPU Worker：保留原图，并在不依赖外部 AI 的情况下完成 EXIF 方向修正、文档边缘检测、透视校正、对比度增强和锐化；边缘检测失败时保留完整画面并进入人工复核。
 - 无需前端构建工具即可运行的双语响应式 H5 与管理后台。
 - Kotlin/Compose Android 和 SwiftUI iOS 工程起点。
-- Docker Compose、Nginx、PostgreSQL 加固 SQL、GitHub Actions 和 GitLab CI。
+- Docker Compose、Nginx、PostgreSQL 加固 SQL 与 GitHub Actions；GitHub 是当前唯一代码仓库，后续容器镜像由公开 GHCR 按固定 digest 分发。
 - 运维保护：受保护的 Prometheus 多进程指标、Worker 数据库心跳、队列/用户并发/存储配额/磁盘预留，以及默认不暴露端口的 monitoring Profile。
 - 备份恢复：PostgreSQL 物理全备与 WAL 归档、Restic 加密异机快照、7 日/4 周保留、精确快照恢复和数据库/文件一致性证据；真实异机与 RPO/RTO 仍待 staging 验收。
 
@@ -167,7 +167,7 @@ Android 页面编辑、导出鉴权下载、受限 FileProvider 分享和账号�
 
 Android 签名更新清单、APK 哈希/包名/版本/证书校验和系统安装确认见[Android 安全更新](docs/ANDROID_SECURE_UPDATE.md)。
 
-Android 受保护标签、正式签名变量、不可变 GitLab 制品、Pages 更新频道、上一版本证据和回滚边界见[Android 正式签名与发布](docs/ANDROID_RELEASE.md)。
+Android 正式签名、上一版本证据和回滚边界见[Android 正式签名与发布](docs/ANDROID_RELEASE.md)。正式分发渠道已延期到稳定版本后评估，开发阶段只使用本地或 CI 测试 APK。
 
 iOS 固定 XcodeGen 版本、生成工程规范、Simulator 测试和 macOS CI 边界见[iOS 可复现工程与 CI 基线](docs/IOS_ARCHITECTURE.md)。
 

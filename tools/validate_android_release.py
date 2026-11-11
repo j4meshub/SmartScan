@@ -23,7 +23,6 @@ from cryptography.hazmat.primitives.asymmetric import ec
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "apps" / "android" / "release" / "release-config.example.yml"
 GRADLE = ROOT / "apps" / "android" / "app" / "build.gradle.kts"
-GITLAB = ROOT / ".gitlab" / "ci" / "android-release.yml"
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 VERSION_NAME = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
@@ -107,26 +106,6 @@ def validate_draft(root: Path = ROOT) -> list[str]:
     ):
         if token not in gradle:
             errors.append(f"Gradle 缺少发布门禁：{token}")
-    gitlab_path = root / ".gitlab" / "ci" / "android-release.yml"
-    if not gitlab_path.is_file():
-        errors.append("缺少 GitLab Android 发布流水线")
-    else:
-        gitlab = gitlab_path.read_text(encoding="utf-8")
-        for token in (
-            "CI_COMMIT_REF_PROTECTED",
-            "@sha256:",
-            "SMARTSCAN_ANDROID_PREVIOUS_VERSION_NAME",
-            "validate_android_release.py configuration",
-            "validate_android_release.py candidate",
-            "android_update_manifest.py",
-            "packages/generic",
-            "public/android",
-            "public/index.html",
-            "validate_android_release.py channel",
-            "pages:",
-        ):
-            if token not in gitlab:
-                errors.append(f"GitLab 发布流水线缺少门禁：{token}")
     return errors
 
 

@@ -2,7 +2,7 @@
 
 ## 信任模型
 
-`AND-006` 为自有 GitLab APK 分发建立客户端安全边界，但不在仓库保存正式签名材料，也不把 Mock 或调试包当作正式发布验收。
+`AND-006` 为未来自有 APK 分发建立平台无关的客户端安全边界，但不在仓库保存正式签名材料，也不把 Mock 或调试包当作正式发布验收。当前正式分发渠道延期到稳定版本后由 `REL-001` 重新选择。
 
 更新信任链按以下顺序执行：
 
@@ -64,7 +64,7 @@ SMARTSCAN_UPDATE_SIGNATURE_URL=https://updates.example.com/latest.json.sig
 SMARTSCAN_UPDATE_PUBLIC_KEY=<X.509 SubjectPublicKeyInfo 的 Base64>
 ```
 
-三项必须同时存在且两个地址必须为安全 HTTPS URL，否则 `AndroidUpdateManager` 不创建。公钥可以进入客户端，但正式值、GitLab 项目、更新域名、APK 包名和证书仍需在 `REL-001` 前冻结。
+三项必须同时存在且两个地址必须为安全 HTTPS URL，否则 `AndroidUpdateManager` 不创建。公钥可以进入客户端，但正式值、分发渠道、更新域名、APK 包名和证书仍需在 `REL-001` 前冻结。
 
 ## 检查与安装体验
 
@@ -78,4 +78,4 @@ SMARTSCAN_UPDATE_PUBLIC_KEY=<X.509 SubjectPublicKeyInfo 的 Base64>
 
 自动测试覆盖清单篡改、包名、版本、最低版本、URL 凭据、证书摘要、APK 哈希、APK 身份规则、24 小时检查策略和生成器签名。GitHub CI 负责 Android 编译、单元测试和 Lint。
 
-`REL-001` 已建立 GitLab Generic Package Registry、Pages 频道、受保护变量、上一稳定 APK 与保守回滚的仓库流程，详见[Android 正式签名与发布](ANDROID_RELEASE.md)。正式清单公钥、正式 APK keystore、真实 GitLab 流水线、系统未知来源授权、Android 安装器、升级后数据保留和真机回滚/前滚修复仍需人工验收；没有这些证据时不得声明正式签名分发通过。
+`REL-001` 已延期到稳定版本后重新选择正式渠道；平台无关的上一稳定 APK、签名清单和保守回滚校验继续保留，详见[Android 正式签名与发布](ANDROID_RELEASE.md)。正式清单公钥、正式 APK keystore、实际分发服务、系统未知来源授权、Android 安装器、升级后数据保留和真机回滚/前滚修复仍需人工验收；没有这些证据时不得声明正式签名分发通过。
