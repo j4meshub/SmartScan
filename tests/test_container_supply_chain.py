@@ -15,6 +15,12 @@ from tools.generate_container_manifest import (
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "container-publish.yml"
+PYTHON_DOCKERFILES = (
+    ROOT / "services" / "api" / "Dockerfile",
+    ROOT / "services" / "worker" / "Dockerfile",
+    ROOT / "services" / "ai-gateway" / "Dockerfile",
+    ROOT / "deploy" / "ops" / "Dockerfile",
+)
 
 
 def _entry(service: str, commit: str = "a" * 40) -> dict[str, object]:
@@ -53,6 +59,19 @@ def test_pull_requests_cannot_publish_or_deploy() -> None:
     assert "attestations: write" in text
     for forbidden in ("ssh ", "scp ", "rsync ", "docker context", "appleboy/"):
         assert forbidden not in text.lower()
+
+
+def test_images_install_available_security_updates() -> None:
+    for dockerfile in PYTHON_DOCKERFILES:
+        text = dockerfile.read_text(encoding="utf-8")
+        assert "apt-get update" in text
+        assert "apt-get upgrade -y" in text
+        assert "rm -rf /var/lib/apt/lists/*" in text
+
+    nginx_dockerfile = (ROOT / "deploy" / "nginx" / "Dockerfile").read_text(encoding="utf-8")
+    assert "apk upgrade --no-cache" in nginx_dockerfile
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"pillow>=13.0,<14"' in pyproject
 
 
 def test_manifest_is_complete_sorted_and_secret_free(tmp_path: Path) -> None:
