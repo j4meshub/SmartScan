@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器与镜像供应链纠偏 |
 | 当前工作包 | `GOV-004` GitHub 单仓策略纠偏 |
-| 工作包状态 | 进行中：移除尚未启用的 GitLab CI 与双仓库依赖，改用 GitHub Actions 和公开 GHCR；不修改提交身份、不重写历史 |
+| 工作包状态 | 完成：已移除尚未启用的 GitLab CI 与双仓库依赖，改用 GitHub Actions 和公开 GHCR；未修改提交身份或历史 |
 | 当前分支 | `codex/gov-004-github-only` |
 | 最后验证基线 | `84913a7`（PR #72 中文 squash 合并，AI-013 仓库实现完成） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `21f6055`（调整为 GitHub 单仓开发策略） |
+| PR | [#73 调整为 GitHub 单仓开发策略](https://github.com/j4meshub/SmartScan/pull/73)，首个代码头两套 10 项 CI 全部通过 |
 | 下一工作包 | `OPS-REG-002` GitHub Actions 与公开 GHCR 镜像供应链；真实主机资源创建继续等待 OPS-000 人工验收 |
 
 ## 当前工作包进展
@@ -21,6 +21,7 @@
 - Android 正式分发自动化延期到稳定版本后重新选型；APK 签名、版本递增、上一稳定版本、签名更新清单和保守回滚的通用安全能力继续保留。
 - AI-013 已由 [PR #72](https://github.com/j4meshub/SmartScan/pull/72) 中文 squash 合并为 `84913a7`；仓库实现与代码头 CI 已完成，公司真实 Provider 的协议、删除/过期、费用、延迟和数据政策仍保持人工门禁。
 - 已删除根 GitLab 流水线和 Android 发布模板；Android 草稿校验不再依赖托管平台文件，通用实包、签名、版本和频道校验保持不变。专项 `15 passed`，Ruff 与 166 个 Python 文件格式检查通过；全量 Python `482 passed, 7 skipped`，覆盖率 `87.79%`，差异空白检查通过。远程仓库仍只有 GitHub `origin`，未修改 Git 身份或历史。
+- PR #73 首个代码头 `21f6055` 的 push 工作流 `42979913872` 与 PR 工作流 `42980180718` 中，API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器共 10 项全部通过；该证据不代表 GHCR 已发布，也不解除 OPS-000 真实宿主机门禁。
 
 - AI 网关新增 `inline_data_url`、`multipart`、`files_api` 和兼容 `signed_url` 四种部署级传输模式；默认主动模式不把 SmartScan 媒体 URL 或授权令牌发送给 Provider，公司 Provider 失败时不会自动切换外部供应商。
 - 新增不公开的内部媒体客户端与 `/v1/internal/ai-media`：使用部署级 Bearer Token 加单页授权，拒绝重定向，并再次校验 MIME、大小和 SHA-256。共享 Nginx 对该路径固定返回 `404`。
