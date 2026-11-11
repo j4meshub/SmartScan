@@ -7,15 +7,20 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器与镜像供应链纠偏 |
-| 当前工作包 | `GOV-004` GitHub 单仓策略纠偏 |
-| 工作包状态 | 完成：已移除尚未启用的 GitLab CI 与双仓库依赖，改用 GitHub Actions 和公开 GHCR；未修改提交身份或历史 |
-| 当前分支 | `codex/gov-004-github-only` |
-| 最后验证基线 | `84913a7`（PR #72 中文 squash 合并，AI-013 仓库实现完成） |
-| 工作包提交 | `21f6055`（调整为 GitHub 单仓开发策略） |
-| PR | [#73 调整为 GitHub 单仓开发策略](https://github.com/j4meshub/SmartScan/pull/73)，首个代码头两套 10 项 CI 全部通过 |
-| 下一工作包 | `OPS-REG-002` GitHub Actions 与公开 GHCR 镜像供应链；真实主机资源创建继续等待 OPS-000 人工验收 |
+| 当前工作包 | `OPS-REG-002` GitHub Actions 与公开 GHCR 镜像供应链 |
+| 工作包状态 | 进行中：实现五类镜像的 PR 构建/扫描、主线发布、SBOM、来源证明和中文 digest 清单；首次公开仍保留人工门禁 |
+| 当前分支 | `codex/ops-reg-002-ghcr-supply-chain` |
+| 最后验证基线 | `6faebee`（PR #73 中文 squash 合并，GOV-004 完成） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `OPS-001` 共享主机验收栈；真实主机资源创建继续等待 OPS-000 人工验收 |
 
 ## 当前工作包进展
+
+- GOV-004 已由 [PR #73](https://github.com/j4meshub/SmartScan/pull/73) 中文 squash 合并为 `6faebee`；GitHub 是唯一 SCM，原 GitLab 流水线已删除，提交身份和历史未修改。
+- OPS-REG-002 新增五类镜像矩阵：PR 和手工运行只构建、生成 SPDX JSON SBOM 并扫描；只有 `main` push 在验证成功后使用 `GITHUB_TOKEN` 发布 GHCR、BuildKit/GitHub 来源证明及中文不可变引用清单，不包含服务器自动部署。
+- GHCR 首次 Package 可见性仍需用户在检查镜像、SBOM 和来源证明后人工设为 Public；公开不可逆，完成匿名按 digest 拉取前不得把工作包标记为完成。
+- 本地专项 `4 passed`；Ruff 与 168 个 Python 文件格式、迁移漂移和差异空白检查通过；全量 Python `486 passed, 7 skipped`，覆盖率 `87.79%`。本机没有 Docker 与 actionlint，五类镜像构建、工作流表达式、SBOM 和漏洞扫描必须由 PR GitHub Runner 补证。
 
 - GitHub 保持唯一代码仓库与版本事实来源；不新增公司 remote、不修改当前提交身份、不重写历史。原 `OPS-REG-001` 明确放弃并由 `OPS-REG-002` 替代，公司 GitLab 导入移入稳定版本后的 `SCM-001`，不再是当前依赖。
 - Android 正式分发自动化延期到稳定版本后重新选型；APK 签名、版本递增、上一稳定版本、签名更新清单和保守回滚的通用安全能力继续保留。

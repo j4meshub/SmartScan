@@ -1,0 +1,207 @@
+name: 容器镜像供应链
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: container-supply-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-images:
+    name: 验证镜像 / ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            image: smartscan-api
+            dockerfile: services/api/Dockerfile
+            build_args: ""
+          - service: worker
+            image: smartscan-worker
+            dockerfile: services/worker/Dockerfile
+            build_args: ""
+          - service: ai-gateway
+            image: smartscan-ai-gateway
+            dockerfile: services/ai-gateway/Dockerfile
+            build_args: ""
+          - service: web
+            image: smartscan-web
+            dockerfile: deploy/nginx/Dockerfile
+            build_args: NGINX_BASE_IMAGE=nginx:1.27-alpine
+          - service: ops
+            image: smartscan-ops
+            dockerfile: deploy/ops/Dockerfile
+            build_args: ""
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 准备 Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 构建本地待检镜像
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: local/${{ matrix.image }}:${{ github.sha }}
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: 准备证据目录
+        run: mkdir -p container-evidence
+      - name: 生成 SPDX JSON SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: local/${{ matrix.image }}:${{ github.sha }}
+          format: spdx-json
+          output-file: container-evidence/${{ matrix.service }}.spdx.json
+          upload-artifact: false
+      - name: 拦截可修复的 High 与 Critical 漏洞
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          image-ref: local/${{ matrix.image }}:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: 保存 SBOM 证据
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: container-evidence-${{ matrix.service }}
+          path: container-evidence/${{ matrix.service }}.spdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-images:
+    name: 发布镜像 / ${{ matrix.service }}
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            image: smartscan-api
+            dockerfile: services/api/Dockerfile
+            build_args: ""
+          - service: worker
+            image: smartscan-worker
+            dockerfile: services/worker/Dockerfile
+            build_args: ""
+          - service: ai-gateway
+            image: smartscan-ai-gateway
+            dockerfile: services/ai-gateway/Dockerfile
+            build_args: ""
+          - service: web
+            image: smartscan-web
+            dockerfile: deploy/nginx/Dockerfile
+            build_args: NGINX_BASE_IMAGE=nginx:1.27-alpine
+          - service: ops
+            image: smartscan-ops
+            dockerfile: deploy/ops/Dockerfile
+            build_args: ""
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 准备 Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 登录 GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 构建并推送已验证镜像
+        id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ghcr.io/j4meshub/${{ matrix.image }}:sha-${{ github.sha }}
+            ghcr.io/j4meshub/${{ matrix.image }}:main
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          provenance: mode=max
+          sbom: true
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=sha-${{ github.sha }}
+      - name: 生成 GitHub 来源证明
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-name: ghcr.io/j4meshub/${{ matrix.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: 生成单服务不可变引用
+        env:
+          SMARTSCAN_IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+        run: >-
+          python tools/generate_container_manifest.py entry
+          --service "${{ matrix.service }}"
+          --image "ghcr.io/j4meshub/${{ matrix.image }}"
+          --digest "$SMARTSCAN_IMAGE_DIGEST"
+          --source-commit "${{ github.sha }}"
+          --sbom-artifact "container-evidence-${{ matrix.service }}"
+          --output "${{ matrix.service }}.json"
+      - name: 保存发布条目
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: container-publish-${{ matrix.service }}
+          path: ${{ matrix.service }}.json
+          if-no-files-found: error
+          retention-days: 90
+
+  release-manifest:
+    name: 汇总中文镜像清单
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 检出清单生成器
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 下载五类镜像条目
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: container-publish-*
+          path: release/entries
+          merge-multiple: true
+      - name: 生成中文 JSON 与 Markdown 清单
+        run: >-
+          python tools/generate_container_manifest.py combine
+          --entries-dir release/entries
+          --output-json release/smartscan-images.json
+          --output-markdown release/smartscan-images.md
+      - name: 保存固定 digest 发布清单
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smartscan-container-release-${{ github.sha }}
+          path: |
+            release/smartscan-images.json
+            release/smartscan-images.md
+          if-no-files-found: error
+          retention-days: 90

@@ -91,6 +91,8 @@ smartscan-uat Web ── API ── 专用 PostgreSQL
 - PostgreSQL 物理全备、WAL 和业务文件分别写入 Restic 加密快照；备份执行器使用固定 digest 运维镜像。
 - 恢复演练使用独立临时 Compose 项目、批准的固定网络、独立目录和资源限制；清理由人工核对精确目标后执行。
 
+镜像构建、SBOM、漏洞扫描、首次公开和人工按 digest 部署的详细流程见[GitHub Actions 与公开 GHCR 镜像供应链](CONTAINER_SUPPLY_CHAIN.md)。
+
 ## 上线门禁
 
 只有以下条件全部满足，才能从 UAT 进入生产：
