@@ -7,15 +7,22 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器与镜像供应链纠偏 |
-| 当前工作包 | `GOV-004` GitHub 单仓策略纠偏 |
-| 工作包状态 | 完成：已移除尚未启用的 GitLab CI 与双仓库依赖，改用 GitHub Actions 和公开 GHCR；未修改提交身份或历史 |
-| 当前分支 | `codex/gov-004-github-only` |
-| 最后验证基线 | `84913a7`（PR #72 中文 squash 合并，AI-013 仓库实现完成） |
-| 工作包提交 | `21f6055`（调整为 GitHub 单仓开发策略） |
-| PR | [#73 调整为 GitHub 单仓开发策略](https://github.com/j4meshub/SmartScan/pull/73)，首个代码头两套 10 项 CI 全部通过 |
-| 下一工作包 | `OPS-REG-002` GitHub Actions 与公开 GHCR 镜像供应链；真实主机资源创建继续等待 OPS-000 人工验收 |
+| 当前工作包 | `OPS-REG-002` GitHub Actions 与公开 GHCR 镜像供应链 |
+| 工作包状态 | 进行中：PR 五类镜像构建、SBOM 与 High/Critical 扫描已通过；等待常规 CI 收敛、合并后 main 发布及首次公开人工门禁 |
+| 当前分支 | `codex/ops-reg-002-ghcr-supply-chain` |
+| 最后验证基线 | `6faebee`（PR #73 中文 squash 合并，GOV-004 完成） |
+| 工作包提交 | `1359cfa`（实现）、`4fb5c35`（Runner 兼容）、`d140c6e`（漏洞修复） |
+| PR | [#74](https://github.com/j4meshub/SmartScan/pull/74)（等待 CI 与合并） |
+| 下一工作包 | `OPS-001` 共享主机验收栈；真实主机资源创建继续等待 OPS-000 人工验收 |
 
 ## 当前工作包进展
+
+- GOV-004 已由 [PR #73](https://github.com/j4meshub/SmartScan/pull/73) 中文 squash 合并为 `6faebee`；GitHub 是唯一 SCM，原 GitLab 流水线已删除，提交身份和历史未修改。
+- OPS-REG-002 新增五类镜像矩阵：PR 和手工运行只构建、生成 SPDX JSON SBOM 并扫描；只有 `main` push 在验证成功后使用 `GITHUB_TOKEN` 发布 GHCR、BuildKit/GitHub 来源证明及中文不可变引用清单，不包含服务器自动部署。
+- GHCR 首次 Package 可见性仍需用户在检查镜像、SBOM 和来源证明后人工设为 Public；公开不可逆，完成匿名按 digest 拉取前不得把工作包标记为完成。
+- 本地专项初始 `4 passed`，增加安全更新回归后 `5 passed`；Ruff 与 168 个 Python 文件格式、迁移漂移和差异空白检查通过；全量 Python `486 passed, 7 skipped`，覆盖率 `87.79%`。本机没有 Docker 与 actionlint，五类镜像构建、工作流表达式、SBOM 和漏洞扫描由 PR GitHub Runner 补证。
+- PR #74 首轮镜像构建成功，但旧版 Trivy Action 的安装脚本在当前 Runner 下载阶段失败；升级到官方签名的 v0.36.0 固定提交后扫描实际运行，并发现 Pillow 12.3.0 与 Debian zlib 的可修复 High/Critical 漏洞。没有加入忽略规则：把 Pillow 约束升级到 13 系列，并让 Python/Nginx 镜像安装发行版安全更新。
+- 代码头 `d140c6e` 的容器供应链运行 `42988387159` 中，API、Worker、AI Gateway、Web、Ops 五类镜像均已完成构建、SPDX JSON SBOM 和 High/Critical 扫描并通过；PR 条件下发布与清单汇总任务按设计跳过，没有登录 GHCR 或推送镜像。常规 PR CI `42988387210` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器五项全部通过；合并前最终文档证据提交仍须重跑同等门禁。
 
 - GitHub 保持唯一代码仓库与版本事实来源；不新增公司 remote、不修改当前提交身份、不重写历史。原 `OPS-REG-001` 明确放弃并由 `OPS-REG-002` 替代，公司 GitLab 导入移入稳定版本后的 `SCM-001`，不再是当前依赖。
 - Android 正式分发自动化延期到稳定版本后重新选型；APK 签名、版本递增、上一稳定版本、签名更新清单和保守回滚的通用安全能力继续保留。
@@ -927,6 +934,6 @@ git diff --check
 ## 下一步
 
 1. 由公司运维在目标 Linux 宿主机按 `SHARED_HOST_PREFLIGHT.md` 采集 24 小时内只读快照，并在仓库外填写资源审批文件、运行离线校验与人工复核；未取得脱敏通过摘要前，`OPS-000` 保持“等待人工验收”，不得创建网络、目录或容器。
-2. `AI-013` 仓库实现已完成；在 UAT 使用公司真实 Provider 验证主动上传、临时文件删除/过期、费用、延迟、日志和数据政策，自动测试与 Mock 不解除该门禁。OPS-000 等待期间先完成 `GOV-004`，随后推进 `OPS-REG-002`，服务器禁止检出源码或现场构建。
+2. `AI-013` 仓库实现已完成；在 UAT 使用公司真实 Provider 验证主动上传、临时文件删除/过期、费用、延迟、日志和数据政策，自动测试与 Mock 不解除该门禁。`GOV-004` 已完成，`OPS-REG-002` 正在 PR #74 验证；合并后的首次 GHCR 发布、内容检查、人工公开和匿名按 digest 拉取通过前保持进行中，服务器禁止检出源码或现场构建。
 3. 资源获批后依次完成 `OPS-001 → OPS-002A/OPS-003/OPS-004 → OPS-005 → OPS-006`。UAT 按需启停，公网/零信任入口 `OPS-002B`、真实企微外网回调和非 VPN 移动使用继续保持阻塞。
 4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。

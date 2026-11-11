@@ -2,6 +2,8 @@
 
 SmartScan 的测试基线覆盖 Python 静态检查、数据库迁移、API 契约、权限与上传集成测试、视觉算法、前端语法和 Compose 配置。GitHub Actions 是当前唯一远程 CI，并执行完整核心 Python 门禁。
 
+容器供应链另在 PR 对 API、Worker、AI Gateway、Web 和运维工具五类镜像执行真实构建、SPDX JSON SBOM 与 High/Critical 漏洞扫描；只有 `main` push 才允许写入 GHCR，详细门禁见[容器镜像供应链](CONTAINER_SUPPLY_CHAIN.md)。
+
 CI 的迁移漂移检查使用独立 `ci-smartscan.db`：先显式执行版本化升级，再运行应用级 `migrations drift` 命令。升级与漂移检查通过同一配置入口读取 `SMARTSCAN_DATABASE_URL`，且不能依赖 Pytest 留下数据库文件，因为测试会话必须在结束时完整清理隔离资源。
 
 ## 隔离资源

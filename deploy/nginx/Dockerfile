@@ -1,6 +1,8 @@
 ARG NGINX_BASE_IMAGE
 FROM ${NGINX_BASE_IMAGE}
 
+RUN apk upgrade --no-cache
+
 LABEL org.opencontainers.image.title="SmartScan Web" \
       org.opencontainers.image.description="SmartScan H5、管理后台与内部文件发送入口"
 
