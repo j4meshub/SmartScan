@@ -95,7 +95,7 @@ AI 候选系统使用同一份已授权、已脱敏且按来源分组切分的�
 
 扫描业务现已接入项目级授权、版本绑定任务、候选决策、AI 专用租约、安全媒体授权和 Worker→网关内部认证边界。媒体令牌至少 256 位随机、数据库只存摘要，并绑定单一页面结果、源版本和有效期；读取会复核授权、任务状态、文件路径、大小与哈希。独立 AI Worker 已编排分类、方向、标题、书籍页码和公式/复杂版面任务，内部检查点支持租约重试且不会向客户端暴露半成品；所有输出先成为候选，用户接受后才调用确定性旋转、标题建议、页码证据或版本绑定文字层写入。H5、Android 与 iOS 项目工作区已通过各自自动门禁提供显式项目授权、传输说明、任务状态、候选对比、接受/放弃和来源基础版本回看。普通文档不伪造 AI 图像，AI 不可用时基础编辑与导出保持可用。客户端代码不读取或显示部署标识、连接地址、密钥或内部网络信息，公网 Nginx 也不代理 AI 网关。试卷、扫书和真实模型验收仍未完成，因此 M8 仍是进行中。完整断点和任务落点见[可选视觉 AI 业务接入架构](AI_BUSINESS_INTEGRATION.md)，移动端边界见[Android 可选视觉 AI 接入](ANDROID_AI_INTEGRATION.md)与[iOS 可选视觉 AI 接入](IOS_AI_INTEGRATION.md)。
 
-目标服务器是承载大量现有容器、网络、入口、数据库、监控与 GPU 推理服务的共享生产宿主机，不再按可独占主机设计。第一阶段使用按需启停的 `smartscan-uat`，生产使用 `smartscan-prod`；两者分别位于 `/mnt/data/smartscan/uat` 与 `/mnt/data/smartscan/production`，并使用独立 PostgreSQL、固定 CIDR 网络、Secret、端口和 digest 锁文件。UAT 不自动重启，生产也不得复用 UAT 数据。所有容器设置 CPU、内存、PID 和日志轮转限制，服务器只拉取 GitLab Runner 构建的固定 digest 镜像并显式运行迁移，不挂载仓库源码或现场构建。详见[共享生产服务器部署边界](SHARED_HOST_DEPLOYMENT.md)。
+目标服务器是承载大量现有容器、网络、入口、数据库、监控与 GPU 推理服务的共享生产宿主机，不再按可独占主机设计。第一阶段使用按需启停的 `smartscan-uat`，生产使用 `smartscan-prod`；两者分别位于 `/mnt/data/smartscan/uat` 与 `/mnt/data/smartscan/production`，并使用独立 PostgreSQL、固定 CIDR 网络、Secret、端口和 digest 锁文件。UAT 不自动重启，生产也不得复用 UAT 数据。所有容器设置 CPU、内存、PID 和日志轮转限制，GitHub Actions 发布公开 GHCR 镜像，服务器只在人工审批后按固定 digest 拉取并显式运行迁移，不挂载仓库源码、现场构建或接受自动部署。详见[共享生产服务器部署边界](SHARED_HOST_DEPLOYMENT.md)。
 
 第一阶段入口仅面向公司内网/VPN，并由运维分配可信 HTTPS 域名或共享网关增量路由；SmartScan 不占用宿主机现有 80/443，也不覆盖全局 Nginx。容器层继续承担静态入口、API 前缀转换及鉴权后的 `internal` 文件发送。公网或零信任访问是后续独立门禁；BBR、Docker daemon、主机防火墙、系统升级和全局 Nginx 调优均属于平台级变更，不由 SmartScan 部署脚本执行。原有 TLS、Range 和 BBR 只读证据工具仍可用于验证，但不构成修改共享主机的授权。详见[TLS、内部文件发送与 BBR 基线](NETWORK_AND_FILE_DELIVERY.md)。
 
@@ -111,9 +111,9 @@ AI 媒体传输在 `AI-013` 后改为主动出站：AI Gateway 通过内部鉴�
 
 ## Android 发布边界
 
-Android 普通构建与正式发布分离。GitHub Actions 持续验证 Debug 单元、Robolectric、应用编译、Lint 和无密钥发布契约；GitLab 仅在受保护的 `android-vX.Y.Z` 标签上使用正式 APK keystore 和独立 ECDSA P-256 清单私钥。流水线从 APK 实包读取包名、版本和证书，并要求至少一个同包名、同证书、低 `versionCode` 的上一稳定 APK 作为升级证据。
+Android 普通构建与正式发布分离。GitHub Actions 持续验证 Debug 单元、Robolectric、应用编译、Lint 和无密钥、平台无关的发布安全契约。开发阶段只产生本地或 CI 测试 APK，不保存或使用正式 APK keystore；正式签名、分发与更新频道在稳定版本后由 `REL-001` 重新选择。
 
-每个版本的 APK、签名清单、独立签名和校验报告写入不可变 Generic Package 路径，GitLab Pages 只承载 `/android/latest.json` 与 `.sig` 当前频道。频道回滚只能原样恢复一组能被当前公钥验证且与保存 APK 匹配的旧文件；已经升级的设备必须使用更高 `versionCode` 前滚修复。正式密钥、GitLab 运行、匿名下载、目标真机升级和数据保留均不由仓库自动化替代。详见[Android 正式签名与发布](ANDROID_RELEASE.md)。
+未来正式渠道仍必须保存不可变 APK、签名清单、独立签名和校验报告，并从 APK 实包核对包名、版本、证书和至少一个上一稳定版本。频道回滚只能原样恢复已经验签且与保存 APK 匹配的旧文件；已经升级的设备必须使用更高 `versionCode` 前滚修复。正式密钥、分发域名、目标真机升级和数据保留均不由普通 CI 替代。详见[Android 正式签名与发布](ANDROID_RELEASE.md)。
 
 ## iOS 发布边界
 

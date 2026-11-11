@@ -68,6 +68,8 @@ docker compose -f deploy/compose/docker-compose.yml config
 
 ## Git 提交语言
 
+- GitHub `origin` 是当前唯一代码仓库；未经用户重新决策，不新增公司 GitLab remote、不执行双仓库同步。
+- 不为适配其他托管平台修改当前 Git 提交身份或重写既有历史；分支、PR、合并、Tag 和版本管理仅在 GitHub 完成。
 - Git 提交标题和正文统一使用中文，准确描述本次变更。
 - 可以保留 `feat`、`fix`、`docs`、`test`、`refactor` 等 Conventional Commits 类型前缀，冒号后的说明必须使用中文。
 - 除非用户明确要求，不为修改提交语言而重写已经推送的历史。

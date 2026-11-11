@@ -6,7 +6,7 @@
 - `packages/contracts/openapi-baseline.json`：仍受支持的上一代客户端基线；只在上一代客户端支持窗口结束后推进。
 - `packages/contracts/compatibility-policy.json`：当前/上一修订号、客户端实际消费的 `operationId` 和弃用登记。
 
-`python tools/api_compatibility.py` 同时在 GitHub Actions、GitLab CI 和 Pytest 中执行。仅更新当前快照不能绕过兼容门禁，因为检查器仍会把它与上一代基线比较。
+`python tools/api_compatibility.py` 同时在 GitHub Actions 和 Pytest 中执行。仅更新当前快照不能绕过兼容门禁，因为检查器仍会把它与上一代基线比较。
 
 ## 当前兼容矩阵
 
