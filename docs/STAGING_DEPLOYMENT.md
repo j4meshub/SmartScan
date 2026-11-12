@@ -1,6 +1,6 @@
 # 隔离 staging 部署基线
 
-> 适用性警告：本文记录 `OPS-001` 原始独占式 staging 基线，不能直接用于当前共享生产宿主机。`/srv/smartscan/staging`、自动创建网络、长期运行和独占入口等假设已由 [共享生产服务器部署边界](SHARED_HOST_DEPLOYMENT.md) 取代；保留的 Compose 资产将在 `OPS-001` 中改造为按需启停的 `smartscan-uat`。在改造、固定 CIDR 审批和现场只读预检完成前，禁止按本文创建真实资源。
+> 历史资产警告：本文与 `docker-compose.staging.yml` 只保留 PR #52 的原始实现证据，不能用于当前共享生产宿主机。`/srv/smartscan/staging`、自动创建网络、长期运行、重复监控和独占入口等假设已由 [共享宿主机 UAT 部署](UAT_DEPLOYMENT.md) 取代；任何真实验收必须使用 `docker-compose.uat.yml`，并先完成 OPS-000 现场预检和资源审批。禁止按本文创建真实资源。
 
 ## 状态与边界
 

@@ -100,13 +100,28 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - name: 安装 staging 配置校验依赖
+      - name: 安装部署配置校验依赖
         run: python -m pip install "pyyaml>=6.0,<7" "cryptography>=46,<51"
       - name: 准备 Compose 校验环境变量
         run: cp .env.example .env
       - run: docker compose -f deploy/compose/docker-compose.yml config
         env:
           POSTGRES_PASSWORD: ci-only-password
+      - name: 校验共享宿主机 UAT 配置契约
+        run: >-
+          python tools/validate_uat_config.py
+          --deploy-env tests/fixtures/uat/deploy.env
+          --runtime-env tests/fixtures/uat/runtime.env
+          --allocation tests/fixtures/uat/allocation.json
+          --ci-fixture
+      - name: 解析共享宿主机 UAT Compose
+        run: >-
+          docker compose
+          --env-file tests/fixtures/uat/deploy.env
+          -f deploy/compose/docker-compose.uat.yml
+          config
+        env:
+          SMARTSCAN_UAT_RUNTIME_ENV_FILE: ../../tests/fixtures/uat/runtime.env
       - name: 校验隔离 staging 配置契约
         run: >-
           python tools/validate_staging_config.py

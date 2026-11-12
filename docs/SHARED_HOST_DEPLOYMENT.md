@@ -85,7 +85,7 @@ smartscan-uat Web ── API ── 专用 PostgreSQL
 
 - GitHub 是唯一代码仓库、PR、评审、合并、Tag 和版本事实来源；GitHub Actions 构建并发布公开 GHCR 镜像。
 - API、Web、CPU Worker、AI Worker、AI Gateway 和运维工具均发布固定 digest，同时生成漏洞扫描、SBOM 和版本锁文件。
-- 首次发布后先人工检查镜像不含 Secret，再将 Package 设为公开；服务器无需托管平台令牌即可匿名按固定 digest 拉取。
+- 首次发布的五个镜像已检查不含 Secret，并由用户于 2026-11-12 明确接受其公开状态；服务器无需托管平台令牌即可匿名按固定 digest 拉取。后续新版本仍须重复内容、漏洞和来源检查。
 - 服务器不检出源码、不安装项目虚拟环境、不现场构建，也不接受 GitHub 自动 SSH 部署；每次变更仍由人工审批并执行 Compose 更新。
 - 复用现有 Prometheus、Grafana、Alertmanager；不部署第二套 Node Exporter，也不挂载宿主机 `/`、`/proc`、`/sys`。
 - PostgreSQL 物理全备、WAL 和业务文件分别写入 Restic 加密快照；备份执行器使用固定 digest 运维镜像。

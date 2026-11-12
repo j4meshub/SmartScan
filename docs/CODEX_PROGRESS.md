@@ -1,28 +1,28 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-11
+更新时间：2026-11-12
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
-| 当前里程碑 | M9 共享服务器与镜像供应链纠偏 |
-| 当前工作包 | `OPS-REG-002` GitHub Actions 与公开 GHCR 镜像供应链 |
-| 工作包状态 | 进行中：PR 五类镜像构建、SBOM 与 High/Critical 扫描已通过；等待常规 CI 收敛、合并后 main 发布及首次公开人工门禁 |
-| 当前分支 | `codex/ops-reg-002-ghcr-supply-chain` |
-| 最后验证基线 | `6faebee`（PR #73 中文 squash 合并，GOV-004 完成） |
-| 工作包提交 | `1359cfa`（实现）、`4fb5c35`（Runner 兼容）、`d140c6e`（漏洞修复） |
-| PR | [#74](https://github.com/j4meshub/SmartScan/pull/74)（等待 CI 与合并） |
-| 下一工作包 | `OPS-001` 共享主机验收栈；真实主机资源创建继续等待 OPS-000 人工验收 |
+| 当前里程碑 | M9 共享服务器 UAT 适配 |
+| 当前工作包 | `OPS-001` 共享主机验收栈 |
+| 工作包状态 | 进行中：仓库侧 UAT Compose、失败关闭校验、测试和部署说明已落地；真实资源创建仍等待 OPS-000 现场预检与运维审批 |
+| 当前分支 | `codex/ops-001-uat-stack` |
+| 最后验证基线 | `0be3225`（PR #74 中文 squash 合并，OPS-REG-002 代码与主线发布完成） |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | `OPS-002A` 内网/VPN 安全入口；只有 OPS-000 与 OPS-001 人工门禁通过后才可执行真实接入 |
 
 ## 当前工作包进展
 
 - GOV-004 已由 [PR #73](https://github.com/j4meshub/SmartScan/pull/73) 中文 squash 合并为 `6faebee`；GitHub 是唯一 SCM，原 GitLab 流水线已删除，提交身份和历史未修改。
-- OPS-REG-002 新增五类镜像矩阵：PR 和手工运行只构建、生成 SPDX JSON SBOM 并扫描；只有 `main` push 在验证成功后使用 `GITHUB_TOKEN` 发布 GHCR、BuildKit/GitHub 来源证明及中文不可变引用清单，不包含服务器自动部署。
-- GHCR 首次 Package 可见性仍需用户在检查镜像、SBOM 和来源证明后人工设为 Public；公开不可逆，完成匿名按 digest 拉取前不得把工作包标记为完成。
-- 本地专项初始 `4 passed`，增加安全更新回归后 `5 passed`；Ruff 与 168 个 Python 文件格式、迁移漂移和差异空白检查通过；全量 Python `486 passed, 7 skipped`，覆盖率 `87.79%`。本机没有 Docker 与 actionlint，五类镜像构建、工作流表达式、SBOM 和漏洞扫描由 PR GitHub Runner 补证。
-- PR #74 首轮镜像构建成功，但旧版 Trivy Action 的安装脚本在当前 Runner 下载阶段失败；升级到官方签名的 v0.36.0 固定提交后扫描实际运行，并发现 Pillow 12.3.0 与 Debian zlib 的可修复 High/Critical 漏洞。没有加入忽略规则：把 Pillow 约束升级到 13 系列，并让 Python/Nginx 镜像安装发行版安全更新。
-- 代码头 `d140c6e` 的容器供应链运行 `42988387159` 中，API、Worker、AI Gateway、Web、Ops 五类镜像均已完成构建、SPDX JSON SBOM 和 High/Critical 扫描并通过；PR 条件下发布与清单汇总任务按设计跳过，没有登录 GHCR 或推送镜像。常规 PR CI `42988387210` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器五项全部通过；合并前最终文档证据提交仍须重跑同等门禁。
+- OPS-REG-002 已由 [PR #74](https://github.com/j4meshub/SmartScan/pull/74) 中文 squash 合并为 `0be3225`。主线容器供应链运行 `42991426483` 成功发布 API、Worker、AI Gateway、Web 和 Ops 五个镜像，常规主线 CI `42991426472` 的 API、Web、Android、固定 Xcode 16.4 iOS Simulator和容器检查全部通过。
+- 五个 GHCR Package 的 OCI 来源与提交标签已核对，未发现 Secret 或可疑构建历史；未登录条件下按五个固定 digest 请求均返回成功。用户于 2026-11-12 明确确认接受当前五个公开镜像，OPS-REG-002 因此完成；公开状态不授权服务器自动部署。
+- OPS-001 新增 `smartscan-uat` 独立 Compose：数据只允许位于 `/mnt/data/smartscan/uat`，三张网络显式使用审批 CIDR/网关，全部服务禁用自动重启并设置 CPU、内存、PID 与日志轮转限制；迁移使用固定 Ops 镜像，AI 保持显式 Profile。
+- 新校验器把部署参数绑定到仓库外 OPS-000 资源审批和脱敏证据摘要，拒绝自动网段、审批不一致、80/443、旧 `/srv` 路径、错误 GHCR 仓库、可变镜像、现场构建、重复 Node Exporter、宿主机敏感挂载和超配。CI 夹具不代表真实主机通过。
+- OPS-001 专项首次 `13 passed, 1 failed`：失败用例没有实际破坏 Compose 网段字段，同时直接脚本执行的导入路径不兼容；修正测试变异和脚本导入并增加公网监听拒绝用例后，专项 `15 passed`、关联回归 `57 passed, 1 skipped`。全量 Python `502 passed, 7 skipped`、覆盖率 `87.79%`，Ruff、170 个 Python 文件格式、迁移漂移和差异空白检查均通过。本机没有 Docker CLI，Compose 动态解析由 PR Runner 补证。当前已确认 Ops digest 尚不包含本次未合并校验器；合并后新 Ops digest 必须重复供应链人工门禁，不能用现有公开状态提前宣称现场容器化校验通过。
 
 - GitHub 保持唯一代码仓库与版本事实来源；不新增公司 remote、不修改当前提交身份、不重写历史。原 `OPS-REG-001` 明确放弃并由 `OPS-REG-002` 替代，公司 GitLab 导入移入稳定版本后的 `SCM-001`，不再是当前依赖。
 - Android 正式分发自动化延期到稳定版本后重新选型；APK 签名、版本递增、上一稳定版本、签名更新清单和保守回滚的通用安全能力继续保留。
@@ -934,6 +934,6 @@ git diff --check
 ## 下一步
 
 1. 由公司运维在目标 Linux 宿主机按 `SHARED_HOST_PREFLIGHT.md` 采集 24 小时内只读快照，并在仓库外填写资源审批文件、运行离线校验与人工复核；未取得脱敏通过摘要前，`OPS-000` 保持“等待人工验收”，不得创建网络、目录或容器。
-2. `AI-013` 仓库实现已完成；在 UAT 使用公司真实 Provider 验证主动上传、临时文件删除/过期、费用、延迟、日志和数据政策，自动测试与 Mock 不解除该门禁。`GOV-004` 已完成，`OPS-REG-002` 正在 PR #74 验证；合并后的首次 GHCR 发布、内容检查、人工公开和匿名按 digest 拉取通过前保持进行中，服务器禁止检出源码或现场构建。
-3. 资源获批后依次完成 `OPS-001 → OPS-002A/OPS-003/OPS-004 → OPS-005 → OPS-006`。UAT 按需启停，公网/零信任入口 `OPS-002B`、真实企微外网回调和非 VPN 移动使用继续保持阻塞。
+2. `OPS-REG-002` 已完成，当前固定五个公开 GHCR digest 进入 OPS-001 配置基线；服务器仍禁止检出源码、现场构建或使用 `main` 等可变标签。完成 OPS-001 仓库 PR 后，等待 OPS-000 真实主机资源审批与人工创建门禁。
+3. 资源获批后依次完成人工 OPS-001 验收，再执行 `OPS-002A/OPS-003/OPS-004 → OPS-005 → OPS-006`。UAT 按需启停，公网/零信任入口 `OPS-002B`、真实企微外网回调和非 VPN 移动使用继续保持阻塞。
 4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。

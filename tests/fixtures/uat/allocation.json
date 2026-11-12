@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "environment": "uat",
+  "compose_project_name": "smartscan-uat",
+  "target_hostname": "ci-shared-host",
+  "approval": {
+    "approved_by": "ci-fixture-approver",
+    "approved_at": "2026-11-12T00:00:00Z",
+    "change_ticket": "CI-FIXTURE-001"
+  },
+  "networks": {
+    "data": {"subnet": "172.30.10.0/24", "gateway": "172.30.10.1"},
+    "edge": {"subnet": "172.30.11.0/24", "gateway": "172.30.11.1"},
+    "egress": {"subnet": "172.30.12.0/24", "gateway": "172.30.12.1"}
+  },
+  "reserved_cidrs": ["10.0.0.0/8"],
+  "host_ports": [
+    {
+      "purpose": "UAT Web 回环或批准的内网入口",
+      "port": 18081,
+      "bind_address": "127.0.0.1"
+    }
+  ],
+  "storage": {
+    "root": "/mnt/data/smartscan/uat",
+    "quota_bytes": 107374182400,
+    "hard_limit_confirmed": true
+  },
+  "resources": {"cpu_limit": 8, "memory_limit_bytes": 17179869184},
+  "ingress": {
+    "internal_https": true,
+    "public_access": false,
+    "hostname": "uat.ci.smartscan.test"
+  },
+  "monitoring": {
+    "reuse_existing": true,
+    "deploy_node_exporter": false,
+    "metrics_target_reference": "CI-FIXTURE-MONITORING"
+  },
+  "backup": {"off_host": true, "endpoint_reference": "CI-FIXTURE-BACKUP"}
+}
