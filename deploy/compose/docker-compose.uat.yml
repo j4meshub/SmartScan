@@ -1,0 +1,245 @@
+name: ${COMPOSE_PROJECT_NAME:?必须设置 smartscan-uat Compose 项目名}
+
+x-common: &common
+  init: true
+  pull_policy: always
+  restart: "no"
+  env_file:
+    - ${SMARTSCAN_UAT_RUNTIME_ENV_FILE:?必须设置 UAT 运行配置文件}
+  labels:
+    com.smartscan.environment: uat
+    com.smartscan.managed-by: docker-compose
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  postgres:
+    image: ${SMARTSCAN_UAT_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
+    pull_policy: always
+    restart: "no"
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=900s
+      - -c
+      - archive_command=test ! -f /var/lib/smartscan-wal/%f && cp %p /var/lib/smartscan-wal/%f
+    environment:
+      POSTGRES_DB: smartscan
+      POSTGRES_USER: smartscan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?必须设置 UAT 数据库密码}
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_UAT_POSTGRES_ROOT:?必须设置 UAT PostgreSQL 目录}
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: ${SMARTSCAN_UAT_WAL_ROOT:?必须设置 UAT WAL 目录}
+        target: /var/lib/smartscan-wal
+      - type: volume
+        source: postgres-socket
+        target: /var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    cpus: "1.00"
+    mem_limit: 2g
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    labels:
+      com.smartscan.environment: uat
+      com.smartscan.managed-by: docker-compose
+    security_opt: ["no-new-privileges:true"]
+    networks: [data]
+
+  migrate:
+    <<: *common
+    image: ${SMARTSCAN_UAT_OPS_IMAGE:?必须固定运维镜像 digest}
+    entrypoint: ["python"]
+    command: ["-m", "services.api.app.migrations", "upgrade"]
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
+        target: /srv/smartscan/data
+    depends_on:
+      postgres: {condition: service_healthy}
+    cpus: "0.25"
+    mem_limit: 512m
+    pids_limit: 128
+    networks: [data]
+
+  api:
+    <<: *common
+    image: ${SMARTSCAN_UAT_API_IMAGE:?必须固定 API 镜像 digest}
+    command:
+      - uvicorn
+      - services.api.app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "4"
+    environment:
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+      SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_INTERNAL_FILE_SEND_PREFIX: /_smartscan_files
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    tmpfs:
+      - /tmp/prometheus:rw,noexec,nosuid,nodev,size=32m,mode=0770,uid=10001,gid=10001
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
+        target: /srv/smartscan/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    cpus: "1.50"
+    mem_limit: 2g
+    pids_limit: 512
+    networks: [data, edge, egress]
+
+  worker-cpu-1: &worker
+    <<: *common
+    image: ${SMARTSCAN_UAT_WORKER_IMAGE:?必须固定 Worker 镜像 digest}
+    environment:
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+      SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_OCR_MODEL_ROOT: /opt/smartscan/models/ocr
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
+        target: /srv/smartscan/data
+      - type: bind
+        source: ${SMARTSCAN_UAT_MODEL_ROOT:?必须设置 UAT OCR 模型目录}
+        target: /opt/smartscan/models/ocr
+        read_only: true
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    cpus: "1.25"
+    mem_limit: 2g
+    pids_limit: 256
+    networks: [data]
+
+  worker-cpu-2: *worker
+
+  worker-ai:
+    <<: *common
+    profiles: ["ai"]
+    image: ${SMARTSCAN_UAT_WORKER_IMAGE:?必须固定 Worker 镜像 digest}
+    command: ["python", "-m", "services.worker.app.ai_main"]
+    environment:
+      SMARTSCAN_ENV: production
+      SMARTSCAN_AUTO_MIGRATE: "false"
+      SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
+      SMARTSCAN_AI_GATEWAY_URL: http://ai-gateway:8010
+      SMARTSCAN_AI_INTERNAL_MEDIA_URL: http://api:8000/v1/internal/ai-media
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
+        target: /srv/smartscan/data
+        read_only: true
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      ai-gateway: {condition: service_started}
+    cpus: "1.00"
+    mem_limit: 2g
+    pids_limit: 256
+    networks: [data]
+
+  ai-gateway:
+    <<: *common
+    profiles: ["ai"]
+    image: ${SMARTSCAN_UAT_AI_GATEWAY_IMAGE:?必须固定 AI 网关镜像 digest}
+    read_only: true
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
+    depends_on:
+      api: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    cpus: "1.00"
+    mem_limit: 1g
+    pids_limit: 256
+    networks: [data, egress]
+
+  nginx:
+    image: ${SMARTSCAN_UAT_WEB_IMAGE:?必须固定 Web 镜像 digest}
+    pull_policy: always
+    restart: "no"
+    ports:
+      - ${SMARTSCAN_UAT_BIND_ADDRESS:?必须设置批准的监听地址}:${SMARTSCAN_UAT_HTTP_PORT:?必须设置批准的 UAT 端口}:80
+    volumes:
+      - type: bind
+        source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
+        target: /srv/smartscan/data
+        read_only: true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      api: {condition: service_healthy}
+    cpus: "0.25"
+    mem_limit: 256m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    labels:
+      com.smartscan.environment: uat
+      com.smartscan.managed-by: docker-compose
+    security_opt: ["no-new-privileges:true"]
+    networks: [edge]
+
+networks:
+  data:
+    name: ${COMPOSE_PROJECT_NAME}-data
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: ${SMARTSCAN_UAT_DATA_SUBNET:?必须设置批准的 data CIDR}
+          gateway: ${SMARTSCAN_UAT_DATA_GATEWAY:?必须设置批准的 data 网关}
+  edge:
+    name: ${COMPOSE_PROJECT_NAME}-edge
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: ${SMARTSCAN_UAT_EDGE_SUBNET:?必须设置批准的 edge CIDR}
+          gateway: ${SMARTSCAN_UAT_EDGE_GATEWAY:?必须设置批准的 edge 网关}
+  egress:
+    name: ${COMPOSE_PROJECT_NAME}-egress
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${SMARTSCAN_UAT_EGRESS_SUBNET:?必须设置批准的 egress CIDR}
+          gateway: ${SMARTSCAN_UAT_EGRESS_GATEWAY:?必须设置批准的 egress 网关}
+
+volumes:
+  postgres-socket:
