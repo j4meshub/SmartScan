@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001` 共享主机验收栈 |
-| 工作包状态 | 进行中：仓库侧 UAT Compose、失败关闭校验、测试和部署说明已落地；真实资源创建仍等待 OPS-000 现场预检与运维审批 |
+| 工作包状态 | 等待人工验收：仓库实现与代码头两套 CI 已通过；真实资源创建仍等待 OPS-000 现场预检、运维审批与现场验收 |
 | 当前分支 | `codex/ops-001-uat-stack` |
 | 最后验证基线 | `0be3225`（PR #74 中文 squash 合并，OPS-REG-002 代码与主线发布完成） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `b18faf8`（实现与本地证据） |
+| PR | [#75](https://github.com/j4meshub/SmartScan/pull/75)（代码头两套 CI 通过，等待最终证据提交与合并） |
 | 下一工作包 | `OPS-002A` 内网/VPN 安全入口；只有 OPS-000 与 OPS-001 人工门禁通过后才可执行真实接入 |
 
 ## 当前工作包进展
@@ -23,6 +23,7 @@
 - OPS-001 新增 `smartscan-uat` 独立 Compose：数据只允许位于 `/mnt/data/smartscan/uat`，三张网络显式使用审批 CIDR/网关，全部服务禁用自动重启并设置 CPU、内存、PID 与日志轮转限制；迁移使用固定 Ops 镜像，AI 保持显式 Profile。
 - 新校验器把部署参数绑定到仓库外 OPS-000 资源审批和脱敏证据摘要，拒绝自动网段、审批不一致、80/443、旧 `/srv` 路径、错误 GHCR 仓库、可变镜像、现场构建、重复 Node Exporter、宿主机敏感挂载和超配。CI 夹具不代表真实主机通过。
 - OPS-001 专项首次 `13 passed, 1 failed`：失败用例没有实际破坏 Compose 网段字段，同时直接脚本执行的导入路径不兼容；修正测试变异和脚本导入并增加公网监听拒绝用例后，专项 `15 passed`、关联回归 `57 passed, 1 skipped`。全量 Python `502 passed, 7 skipped`、覆盖率 `87.79%`，Ruff、170 个 Python 文件格式、迁移漂移和差异空白检查均通过。本机没有 Docker CLI，Compose 动态解析由 PR Runner 补证。当前已确认 Ops digest 尚不包含本次未合并校验器；合并后新 Ops digest 必须重复供应链人工门禁，不能用现有公开状态提前宣称现场容器化校验通过。
+- PR #75 代码头 `b18faf8` 的常规 CI 运行 `43177827990` 已完成：API、Web、Android、固定 Xcode 16.4 iOS Simulator 和容器五项全部成功；容器作业实际执行 UAT 校验器并解析 `docker-compose.uat.yml`。容器供应链运行 `43177827931` 的 API、Worker、AI Gateway、Web、Ops 五类构建、SPDX JSON SBOM 和 High/Critical 扫描全部成功，发布与清单任务在 PR 条件下按设计跳过。
 
 - GitHub 保持唯一代码仓库与版本事实来源；不新增公司 remote、不修改当前提交身份、不重写历史。原 `OPS-REG-001` 明确放弃并由 `OPS-REG-002` 替代，公司 GitLab 导入移入稳定版本后的 `SCM-001`，不再是当前依赖。
 - Android 正式分发自动化延期到稳定版本后重新选型；APK 签名、版本递增、上一稳定版本、签名更新清单和保守回滚的通用安全能力继续保留。
