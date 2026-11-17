@@ -13,7 +13,7 @@
 - `data`、`edge`、`egress` 三个网络必须显式使用 OPS-000 批准的固定 CIDR 和网关；Compose 不允许自动分配。
 - Web 只绑定批准的非 80/443 地址和端口，供后续内部 HTTPS 入口转发。普通 HTTP 不能作为 H5 相机正式验收入口。
 - 每个服务都有 CPU、内存、PID 和 `json-file` 日志轮转限制；全部服务 `restart: "no"`，UAT 不随宿主机自动恢复。
-- 服务器不保存源码、不现场构建、不使用可变 tag；五个 SmartScan 镜像来自公开 GHCR，并固定到用户于 2026-11-12 确认接受的 digest。PostgreSQL 镜像 digest 仍需单独审批。
+- 服务器不保存源码、不现场构建、不使用可变 tag；五个 SmartScan 镜像来自公开 GHCR，并固定到用户于 2026-11-17 确认接受的主线 `0961cc3` digest。PostgreSQL 镜像 digest 仍需单独审批。
 - AI Worker 和 AI Gateway 位于显式 `ai` Profile，默认不启动；运行配置默认关闭真实 Provider。
 - 不部署 Node Exporter，不挂载宿主机 `/`、`/proc` 或 `/sys`，不修改共享 Nginx、Docker daemon、防火墙或其他容器。
 
@@ -41,7 +41,7 @@
 
 ## 失败关闭校验
 
-运维先在仓库外保存真实文件。仓库评审阶段从受控工作站的对应提交执行校验；本工作包合并后，包含该校验器的新 Ops 镜像还必须重复 OPS-REG-002 的扫描、内容检查、公开和人工确认，才允许在目标主机以固定 digest 执行。当前已确认的 Ops digest 可用于迁移，但不包含本次尚未合并的 UAT 校验器，不得伪造为已完成容器化现场校验。以下命令仅展示校验接口；不得把展开后的 Compose 或 Secret 输出上传到工单：
+运维先在仓库外保存真实文件。仓库评审阶段从受控工作站的对应提交执行校验；当前用户确认的 Ops digest 已包含本 UAT 校验器，并已从目标服务器完成匿名 manifest 核对，但尚未获准拉取或执行。以下命令仅展示校验接口；不得把展开后的 Compose 或 Secret 输出上传到工单：
 
 ```bash
 python tools/validate_uat_config.py \
@@ -71,7 +71,7 @@ CI 使用合成审批夹具，只证明规则可运行；夹具网段、端口�
 
 1. 核对目标主机、现有负载、磁盘高水位和审批有效期，不符合即停止。
 2. 创建 `/etc/smartscan/uat` 与 `/mnt/data/smartscan/uat` 的批准子目录，设置最小权限、配额和正确容器 UID/GID；不得猜测权限或复用生产目录。
-3. 匿名按 digest 拉取经人工确认的 SmartScan 镜像及批准的 PostgreSQL 镜像，核对拉取后的 RepoDigest。若使用本工作包新增的容器化校验器，必须先确认包含它的新 Ops digest；不得用可变 `main` 标签替代。
+3. 在另行取得部署授权后，匿名按 digest 拉取经人工确认的 SmartScan 镜像及批准的 PostgreSQL 镜像，核对拉取后的 RepoDigest；不得用可变 `main` 标签替代。
 4. 先运行配置校验和 `docker compose config --quiet`，再由一次性 `migrate` 服务执行空库或旧库迁移并记录版本头。
 5. 启动 PostgreSQL、API、CPU Worker 与 Web；AI Profile 只有在 Provider、隐私说明和真实测试变更单另行批准后才启用。
 6. 通过 OPS-002A 的内部 HTTPS 完成上传、处理、预览、导出、停止/重启持久化和回滚检查。
@@ -81,4 +81,4 @@ CI 使用合成审批夹具，只证明规则可运行；夹具网段、端口�
 
 ## 当前外部门禁
 
-截至 2026-11-12，仓库尚未取得目标主机的 24 小时内快照、固定网络/端口、内部 HTTPS、100 GiB 硬限制、8 vCPU/16 GiB 配额和运维账户审批。因此本工作包完成仓库实现后只能进入“等待人工验收”，不得创建真实网络、目录或容器。
+截至 2026-11-17，目标主机的 24 小时内只读快照和 GHCR 匿名 manifest 核对已完成，但固定网络/端口、内部 HTTPS、100 GiB 硬限制、8 vCPU/16 GiB 配额、监控告警链路、异机备份及变更单仍未批准。因此本工作包只能保持“等待人工验收”，不得创建真实网络、目录或容器。

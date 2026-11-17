@@ -50,17 +50,17 @@ GHCR 首次创建的个人 Package 默认可能是私有。首次主线发布后
 4. 由用户在 Package Settings 中将可见性改为 Public。公开操作不可逆，不由工作流自动执行。
 5. 在未登录 GHCR 的环境执行按 digest 拉取，保存成功证据。
 
-上述门禁已于 2026-11-12 完成：五个 Package 的来源、配置和构建历史已检查，匿名按固定 digest 访问成功，用户明确确认接受当前公开状态。`OPS-REG-002` 因此完成；后续新提交产生的新 digest 仍须经过相同门禁，公司服务器也只能在变更审批后人工拉取。
+上述初始门禁已于 2026-11-12 完成。主线提交 `0961cc3` 随后重新生成五个包含 UAT 交付的镜像；用户于 2026-11-17 确认接受这些公开镜像作为新的 UAT 候选基线，目标服务器同日通过匿名 manifest 查询逐一核对 digest。镜像验收不授权部署、拉取或修改可见性；后续新提交产生的新 digest 仍须经过相同门禁，公司服务器也只能在变更审批后人工拉取。
 
 当前确认基线：
 
 | 服务 | 已确认不可变引用 |
 |---|---|
-| API | `ghcr.io/j4meshub/smartscan-api@sha256:56b607f8d283215e8084db00404225ee1af9d6cdd0943e5cc935aed51f3e2713` |
-| Worker | `ghcr.io/j4meshub/smartscan-worker@sha256:887688516a5b137d1a2e7ee8071977e93ce4ac46150b5ab6219401faa650703e` |
-| AI Gateway | `ghcr.io/j4meshub/smartscan-ai-gateway@sha256:dc866a5aa70a30976a8798acc3e38cb8c5d98aa9e001d708315d8b82c8c33b8f` |
-| Web | `ghcr.io/j4meshub/smartscan-web@sha256:af5480ebdf4b3269698e9c617c66e9f6062bda81570e255995baac8682f4ec55` |
-| Ops | `ghcr.io/j4meshub/smartscan-ops@sha256:b1a9e195be17bdb72b785ec325ad08f48e66fe3d5c0c93e95fe30421e9c379fc` |
+| API | `ghcr.io/j4meshub/smartscan-api@sha256:b4f97968a81777c9b46bcae272be5153df796cfd4b2f9221008facc53358300a` |
+| Worker | `ghcr.io/j4meshub/smartscan-worker@sha256:0dc0fe0de3e4518985bd906a08815b70419d86d5530e300a216d25a221ad07f7` |
+| AI Gateway | `ghcr.io/j4meshub/smartscan-ai-gateway@sha256:8e7af7bf3d23687c19ecdd10b85044eee8321a019f831bb7744ce2575fc0518c` |
+| Web | `ghcr.io/j4meshub/smartscan-web@sha256:44a0faf547140844eb065a65034d442b66dd9f971ae5521b8a97400bd50df915` |
+| Ops | `ghcr.io/j4meshub/smartscan-ops@sha256:ef4dd40c7b8a494e92540dc5bb476ab144903402142a0bbb0fdc4fd688138a5b` |
 
 ## 人工部署与回滚
 

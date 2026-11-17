@@ -103,8 +103,6 @@ def collection_runner() -> FakeRunner:
             (
                 "df",
                 "-B1",
-                "-P",
-                "-T",
                 "--output=source,fstype,size,used,avail,pcent,target",
                 "/",
                 "/mnt/data",
@@ -115,8 +113,6 @@ def collection_runner() -> FakeRunner:
             ),
             (
                 "df",
-                "-P",
-                "-i",
                 "--output=itotal,iused,iavail,ipcent,target",
                 "/",
                 "/mnt/data",
@@ -218,6 +214,9 @@ def valid_allocation() -> dict[str, object]:
             "reuse_existing": True,
             "deploy_node_exporter": False,
             "metrics_target_reference": "MONITORING-2026-18",
+            "alerting_mode": "local",
+            "alerting_reference": "ALERTING-2026-18",
+            "host_metrics_reference": "HOST-METRICS-2026-18",
         },
         "backup": {"off_host": True, "endpoint_reference": "BACKUP-2026-09"},
     }
@@ -253,12 +252,18 @@ def test_collector_uses_only_fixed_read_only_commands_and_drops_sensitive_fields
     assert snapshot["monitoring"]["grafana"] is True
     assert snapshot["monitoring"]["alertmanager"] is True
     assert snapshot["network"]["listeners"][0]["port"] == 5432
+    assert snapshot["docker"]["networks"][0]["endpoint_count"] == 1
     assert snapshot["host"]["filesystems"][1]["inode_available"] == 3_000_000
     assert "secret-looking-label" not in rendered
     assert "must-not-be-collected" not in rendered
     assert '"Mounts"' not in rendered
     assert not any(
         "inspect" in call and call[:2] == ("docker", "container") for call in runner.calls
+    )
+    assert not any(
+        any(flag in call for flag in ("-P", "-T", "-i"))
+        and any(argument.startswith("--output=") for argument in call)
+        for call in runner.calls
     )
 
 
@@ -431,6 +436,17 @@ def test_approval_ingress_monitoring_and_backup_fail_closed() -> None:
     allocation["backup"]["off_host"] = False
     with pytest.raises(PreflightError, match="异机"):
         validate(valid_snapshot(), allocation)
+
+
+def test_external_alertmanager_requires_explicit_approved_reference() -> None:
+    snapshot = valid_snapshot()
+    snapshot["monitoring"]["alertmanager"] = False
+    allocation = valid_allocation()
+    allocation["monitoring"]["alerting_mode"] = "external"
+
+    result = validate(snapshot, allocation)
+
+    assert "existing_monitoring_reused" in result.checks
 
 
 def test_evidence_writer_is_0600_and_refuses_overwrite(tmp_path: Path) -> None:

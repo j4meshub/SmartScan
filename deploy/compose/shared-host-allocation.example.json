@@ -54,7 +54,10 @@
   "monitoring": {
     "reuse_existing": true,
     "deploy_node_exporter": false,
-    "metrics_target_reference": "REPLACE_WITH_MONITORING_TICKET"
+    "metrics_target_reference": "REPLACE_WITH_MONITORING_TICKET",
+    "alerting_mode": "REPLACE_WITH_LOCAL_OR_EXTERNAL",
+    "alerting_reference": "REPLACE_WITH_ALERTING_TICKET",
+    "host_metrics_reference": "REPLACE_WITH_HOST_METRICS_TICKET"
   },
   "backup": {
     "off_host": true,
