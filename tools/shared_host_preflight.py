@@ -227,12 +227,14 @@ def _normalize_networks(items: Any) -> list[dict[str, Any]]:
             continue
         ipam = item.get("IPAM") if isinstance(item.get("IPAM"), dict) else {}
         configs = ipam.get("Config") if isinstance(ipam.get("Config"), list) else []
+        endpoints = item.get("Containers")
         networks.append(
             {
                 "id": str(item.get("Id", "")),
                 "name": str(item.get("Name", "")),
                 "driver": str(item.get("Driver", "")),
                 "internal": bool(item.get("Internal", False)),
+                "endpoint_count": len(endpoints) if isinstance(endpoints, dict) else 0,
                 "subnets": [
                     {
                         "subnet": str(config.get("Subnet", "")),
@@ -346,8 +348,6 @@ def build_snapshot(
             (
                 "df",
                 "-B1",
-                "-P",
-                "-T",
                 "--output=source,fstype,size,used,avail,pcent,target",
                 "/",
                 "/mnt/data",
@@ -358,8 +358,6 @@ def build_snapshot(
         runner(
             (
                 "df",
-                "-P",
-                "-i",
                 "--output=itotal,iused,iavail,ipcent,target",
                 "/",
                 "/mnt/data",
@@ -717,20 +715,31 @@ def validate_preflight(
     _require(
         monitoring.get("deploy_node_exporter") is False,
         "monitoring_invalid",
-        "禁止重复部署 Node Exporter",
+        "未经批准禁止部署 Node Exporter",
     )
     _non_placeholder(monitoring.get("metrics_target_reference"), "监控接入引用")
+    _non_placeholder(monitoring.get("alerting_reference"), "告警链路引用")
+    _non_placeholder(monitoring.get("host_metrics_reference"), "主机指标来源引用")
+    alerting_mode = monitoring.get("alerting_mode")
+    _require(
+        alerting_mode in {"local", "external"},
+        "monitoring_invalid",
+        "告警链路模式必须为 local 或 external",
+    )
     detected_monitoring = (
         snapshot.get("monitoring") if isinstance(snapshot.get("monitoring"), dict) else {}
     )
     _require(
-        all(
-            detected_monitoring.get(name) is True
-            for name in ("prometheus", "grafana", "alertmanager")
-        ),
+        all(detected_monitoring.get(name) is True for name in ("prometheus", "grafana")),
         "monitoring_not_detected",
-        "现场未同时检测到现有 Prometheus、Grafana 和 Alertmanager",
+        "现场未同时检测到现有 Prometheus 和 Grafana",
     )
+    if alerting_mode == "local":
+        _require(
+            detected_monitoring.get("alertmanager") is True,
+            "monitoring_not_detected",
+            "本机告警模式未检测到 Alertmanager",
+        )
 
     backup = allocation.get("backup") if isinstance(allocation.get("backup"), dict) else {}
     _require(backup.get("off_host") is True, "backup_invalid", "备份必须位于异机或对象存储")

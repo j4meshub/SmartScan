@@ -41,7 +41,7 @@ python3 shared_host_preflight.py collect \
 - `/mnt/data/smartscan/uat` 至少 100 GiB 硬限制，分配后仍保留数据盘 15% 或 200 GiB 中较高者。
 - UAT 至少 8 vCPU/16 GiB 上限，分配后宿主机仍保留至少 16 个逻辑 CPU 和 32 GiB当前可用内存。
 - 内部 HTTPS 域名且 `public_access=false`。
-- 现有监控接入工单，明确不重复部署 Node Exporter。
+- 现有监控接入工单，分别说明 SmartScan 指标抓取、`local`/`external` 告警链路和主机指标来源；未经批准不部署 Node Exporter。
 - 异机或对象存储备份工单；同一 `/mnt/data` 不能填写为异机端点。
 
 批准文件不得包含密码、Token、私钥、完整备份凭据或 Provider Key。端点字段只填写内部工单/Secret引用，不填写凭据 URL。
@@ -66,7 +66,7 @@ Linux 使用对应绝对路径。校验器执行以下失败关闭检查：
 5. 存储根、100 GiB 硬限制、容量与 inode 安全余量满足要求。
 6. CPU、内存上限、15 分钟主机负载及共享宿主机安全余量满足要求。
 7. 第一阶段仅内部 HTTPS，不允许公网入口。
-8. 现场同时存在 Prometheus、Grafana 和 Alertmanager，复用现有监控且不部署 Node Exporter。
+8. 现场 Prometheus、Grafana 和告警链路均可由审批证据确认；若 Alertmanager 或主机指标代理不在本机，必须提供公司监控工单引用，不能用本机容器名推断已完成接入。未经批准不部署新的 Node Exporter。
 9. 备份目标明确位于异机或对象存储。
 
 退出码 `0` 表示校验通过，退出码 `2` 表示失败。失败输出只有稳定错误代码和不含实际内部地址的中文原因。
@@ -78,7 +78,7 @@ Linux 使用对应绝对路径。校验器执行以下失败关闭检查：
 - Docker 网络分配已经进入公司 IPAM，且路由/VPN负责人认可。
 - 内部 HTTPS 入口的实际转发方式不会覆盖共享 Nginx，也不会占用现有 80/443。
 - 存储硬限制的实现方式与文件系统匹配，而不是只填写应用软配额。
-- 监控系统能到达带令牌的指标目标，且现有 Node Exporter 已覆盖主机指标。
+- 监控系统能到达带令牌的指标目标，并由运维确认现有或外部主机指标来源；若现场没有 Node Exporter，不得由 SmartScan 擅自补装。
 - Restic 端点、保留锁、限速和恢复账户属于异机或对象存储。
 - 执行窗口、回滚负责人和共租户停止阈值已写入变更单。
 
