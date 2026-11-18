@@ -19,6 +19,8 @@ def test_active_governance_uses_shared_server_user_confirmation() -> None:
     assert "`OPS-000` 共享宿主机预检与资源分配 | 完成" in execution
     assert "D-085" in decisions
     assert "服务器共同使用人" in deployment
+    assert "等待 OPS-000 资源/窗口审批" not in execution
+    assert "OPS-003 共租户监控接入后执行" not in execution
     assert "| UAT 存储 | 100 GiB" not in deployment
     assert "| 生产存储 | 500 GiB" not in deployment
 
