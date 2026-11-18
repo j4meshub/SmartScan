@@ -1,12 +1,14 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "environment": "uat",
   "compose_project_name": "smartscan-uat",
   "target_hostname": "REPLACE_WITH_APPROVED_HOSTNAME",
-  "approval": {
-    "approved_by": "REPLACE_WITH_APPROVER",
-    "approved_at": "REPLACE_WITH_ISO8601_TIME",
-    "change_ticket": "REPLACE_WITH_CHANGE_TICKET"
+  "confirmation": {
+    "confirmed_by": "REPLACE_WITH_SHARED_SERVER_USER",
+    "confirmed_at": "REPLACE_WITH_ISO8601_TIME",
+    "change_record": "REPLACE_WITH_CHANGE_RECORD",
+    "validation_record": "REPLACE_WITH_VALIDATION_RECORD",
+    "rollback_record": "REPLACE_WITH_ROLLBACK_RECORD"
   },
   "networks": {
     "data": {
@@ -27,40 +29,43 @@
   ],
   "host_ports": [
     {
-      "purpose": "UAT Web 回环或批准的内网入口",
-      "port": 0,
-      "bind_address": "REPLACE_WITH_APPROVED_BIND_ADDRESS"
-    },
-    {
-      "purpose": "内部指标入口",
-      "port": 0,
-      "bind_address": "REPLACE_WITH_APPROVED_BIND_ADDRESS"
+      "purpose": "UAT Web 回环入口",
+      "port": 18082,
+      "bind_address": "127.0.0.1"
     }
   ],
   "storage": {
     "root": "/mnt/data/smartscan/uat",
-    "quota_bytes": 107374182400,
-    "hard_limit_confirmed": false
+    "quota_bytes": 53687091200,
+    "hard_limit_confirmed": false,
+    "warning_percent": 70,
+    "cleanup_percent": 85,
+    "stop_writes_percent": 95,
+    "disposable_data": true
   },
   "resources": {
     "cpu_limit": 8,
     "memory_limit_bytes": 17179869184
   },
   "ingress": {
-    "internal_https": true,
+    "mode": "http_basic_uat",
     "public_access": false,
-    "hostname": "REPLACE_WITH_INTERNAL_HTTPS_HOSTNAME"
+    "shared_nginx_port": 8077,
+    "base_path": "/smartscan/",
+    "upstream": "127.0.0.1:18082",
+    "https_required_after_basic_uat": true
   },
   "monitoring": {
-    "reuse_existing": true,
+    "mode": "manual",
     "deploy_node_exporter": false,
-    "metrics_target_reference": "REPLACE_WITH_MONITORING_TICKET",
-    "alerting_mode": "REPLACE_WITH_LOCAL_OR_EXTERNAL",
-    "alerting_reference": "REPLACE_WITH_ALERTING_TICKET",
-    "host_metrics_reference": "REPLACE_WITH_HOST_METRICS_TICKET"
+    "deploy_alertmanager": false,
+    "application_metrics_enabled": true,
+    "accepted_capability_gap": true,
+    "record_reference": "REPLACE_WITH_MONITORING_RECORD"
   },
   "backup": {
-    "off_host": true,
-    "endpoint_reference": "REPLACE_WITH_BACKUP_TICKET"
+    "required": false,
+    "disposable_uat_data": true,
+    "single_host_risk_acknowledged": true
   }
 }

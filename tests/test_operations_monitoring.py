@@ -179,6 +179,54 @@ def test_new_upload_fails_closed_for_disk_and_user_quota(
         assert quota_error.value.status_code == 413
 
 
+def test_deployment_storage_quota_reports_thresholds_and_stops_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    payload = storage / "payload.bin"
+    payload.write_bytes(b"x" * 70)
+    monkeypatch.setattr(
+        "services.api.app.capacity.shutil.disk_usage",
+        lambda _: SimpleNamespace(
+            total=10_000_000_000,
+            used=1_000_000_000,
+            free=9_000_000_000,
+        ),
+    )
+    settings = Settings(
+        _env_file=None,
+        storage_root=storage,
+        storage_min_free_bytes=64 * 1024**2,
+        storage_min_free_percent=5,
+        storage_quota_bytes=100,
+        storage_warning_percent=70,
+        storage_cleanup_percent=85,
+        storage_stop_writes_percent=95,
+    )
+    with isolated_session(tmp_path) as db:
+        warning = storage_capacity(db, settings)
+        assert warning.quota_accounted_bytes == 70
+        assert warning.quota_used_percent == 70
+        assert warning.warning is True
+        assert warning.cleanup_recommended is False
+
+        cleanup = storage_capacity(db, settings, additional_bytes=15)
+        assert cleanup.cleanup_recommended is True
+        assert cleanup.protected is False
+
+        protected = storage_capacity(db, settings, additional_bytes=25)
+        assert protected.quota_used_percent == 95
+        assert protected.protected is True
+        with pytest.raises(CapacityError, match="storage_capacity_reached"):
+            ensure_new_upload_capacity(
+                db,
+                settings,
+                owner_user_id="quota-user",
+                size_bytes=25,
+            )
+
+
 def test_queue_high_water_and_per_user_processing_fairness(tmp_path: Path) -> None:
     settings = Settings(
         _env_file=None,
@@ -336,6 +384,9 @@ def test_upload_capacity_error_is_stable_and_metrics_are_private(
         assert "text/plain" in metrics.headers["content-type"]
         assert "smartscan_database_up 1" in metrics.text
         assert "smartscan_storage_protection_active" in metrics.text
+        assert "smartscan_storage_quota_used_percent" in metrics.text
+        assert "smartscan_storage_warning_active" in metrics.text
+        assert "smartscan_storage_cleanup_recommended" in metrics.text
         assert "smartscan_queue_oldest_age_seconds" in metrics.text
         assert "smartscan_workers" in metrics.text
         assert 'route="/v1/projects"' in metrics.text

@@ -223,13 +223,13 @@ Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API �
 
 AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置时执行 `docker compose --profile ai -f deploy/compose/docker-compose.yml up --build ai-gateway`。该操作不会自动启用任何 Provider；容器默认只读、无 Linux capabilities，并启用 `no-new-privileges`。
 
-共享宿主机按需验收使用独立的 [`smartscan-uat` 配置](docs/UAT_DEPLOYMENT.md)：固定网络、资源和日志限制绑定 OPS-000 审批，服务器只人工拉取公开 GHCR 的固定 digest，不保存源码或现场构建。原[隔离 staging 部署基线](docs/STAGING_DEPLOYMENT.md)只保留历史证据，不得用于当前共享服务器。仓库模板与 CI 只证明规则可重建，不代表公司服务器已部署或允许生产发布。
+共享宿主机按需验收使用独立的 [`smartscan-uat` 配置](docs/UAT_DEPLOYMENT.md)：复用8077的 `/smartscan/` 路径、仅发布 `127.0.0.1:18082`、使用50 GiB硬上限和整栈8 vCPU/16 GiB。固定网络、变更、验证和回滚由服务器共同使用人确认；服务器只人工拉取明确接受的GHCR固定digest，不保存源码或现场构建。原[隔离 staging 部署基线](docs/STAGING_DEPLOYMENT.md)只保留历史证据。
 
-主机 TLS 入口、证书/私钥校验、Nginx `internal`/Range 容器链路、BBR 只读基线与精确回滚见[TLS、内部文件发送与 BBR 基线](docs/NETWORK_AND_FILE_DELIVERY.md)。其中独占主机和公网入口步骤已被共享宿主机决策取代；真实内部域名、可信证书、手机网络和入口链路仍需在 UAT 人工验收。
+共享Nginx增量模板、`internal`/Range容器链路和后续TLS门禁见[TLS、内部文件发送与BBR基线](docs/NETWORK_AND_FILE_DELIVERY.md)。HTTP基础UAT只覆盖登录、项目、上传、处理、预览和导出；实时相机、企微及正式移动网络验收继续要求HTTPS。
 
-内部指标、Worker 心跳、队列与用户并发、存储配额、磁盘写入保护和真实告警门禁见[监控、容量配额与磁盘保护](docs/MONITORING_AND_CAPACITY.md)。共享宿主机必须复用现有 Prometheus、Grafana、Alertmanager 与主机监控，不得启动历史 monitoring Profile 或重复部署 Node Exporter；真实接入由 OPS-003 继续实施。
+内部指标、Worker心跳、队列、70/85/95存储配额和磁盘写入保护见[监控、容量配额与磁盘保护](docs/MONITORING_AND_CAPACITY.md)。UAT可复用现有Prometheus/Grafana或使用有记录的人工检查；不新增Alertmanager、Node Exporter、主机敏感挂载或独立19081端口。
 
-每日数据库物理全备、连续 WAL、用户文件的 Restic 加密异机快照，以及按精确快照 ID 执行的月度隔离恢复与一致性检查见[加密异机备份与恢复演练](docs/BACKUP_AND_RECOVERY.md)。CI 回环不能替代真实异机仓库、RPO/RTO 和告警验收。
+生产可选的数据库物理全备、WAL和Restic异机恢复能力见[加密异机备份与恢复演练](docs/BACKUP_AND_RECOVERY.md)。UAT数据允许丢弃和重建，不要求备份；同盘快照不算灾备，生产前必须另行完成异机恢复或明确接受单机数据丢失风险。
 
 ## 测试
 

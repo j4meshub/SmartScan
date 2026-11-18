@@ -27,6 +27,11 @@ class StorageCapacity:
     reserved_upload_bytes: int
     required_free_bytes: int
     free_percent: float
+    quota_bytes: int
+    quota_accounted_bytes: int
+    quota_used_percent: float
+    warning: bool
+    cleanup_recommended: bool
     protected: bool
 
 
@@ -56,6 +61,28 @@ def user_storage_bytes(storage_root: Path, user_id: str) -> int:
 
     total = 0
     pending = [user_root]
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if entry.is_symlink():
+                    raise CapacityError("storage_layout_unsafe", 503)
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(Path(entry.path))
+                elif entry.is_file(follow_symlinks=False):
+                    total += entry.stat(follow_symlinks=False).st_size
+    return total
+
+
+def storage_tree_bytes(storage_root: Path) -> int:
+    root = storage_root.resolve(strict=False)
+    if not root.exists():
+        return 0
+    if root.is_symlink() or not root.is_dir():
+        raise CapacityError("storage_layout_unsafe", 503)
+
+    total = 0
+    pending = [root]
     while pending:
         directory = pending.pop()
         with os.scandir(directory) as entries:
@@ -121,13 +148,35 @@ def storage_capacity(
     reserved = pending_upload_bytes(db)
     required = settings.storage_min_free_bytes + reserved + max(additional_bytes, 0)
     free_percent = (usage.free / usage.total * 100.0) if usage.total else 0.0
+    quota_accounted = 0
+    quota_used_percent = 0.0
+    quota_protected = False
+    warning = False
+    cleanup_recommended = False
+    if settings.storage_quota_bytes:
+        quota_accounted = (
+            storage_tree_bytes(settings.storage_root) + reserved + max(additional_bytes, 0)
+        )
+        quota_used_percent = quota_accounted / settings.storage_quota_bytes * 100.0
+        warning = quota_used_percent >= settings.storage_warning_percent
+        cleanup_recommended = quota_used_percent >= settings.storage_cleanup_percent
+        quota_protected = quota_used_percent >= settings.storage_stop_writes_percent
     return StorageCapacity(
         total_bytes=usage.total,
         free_bytes=usage.free,
         reserved_upload_bytes=reserved,
         required_free_bytes=required,
         free_percent=free_percent,
-        protected=(usage.free < required or free_percent < settings.storage_min_free_percent),
+        quota_bytes=settings.storage_quota_bytes,
+        quota_accounted_bytes=quota_accounted,
+        quota_used_percent=quota_used_percent,
+        warning=warning,
+        cleanup_recommended=cleanup_recommended,
+        protected=(
+            usage.free < required
+            or free_percent < settings.storage_min_free_percent
+            or quota_protected
+        ),
     )
 
 

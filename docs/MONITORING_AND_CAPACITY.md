@@ -1,17 +1,18 @@
 # 监控、容量配额与磁盘保护
 
-> 适用性警告：共享宿主机已有 Prometheus、Grafana、Alertmanager 与主机监控。`OPS-003` 将复用现有体系，只增加 SmartScan 应用抓取、看板和告警；不得按本文旧 Compose 启动第二套 Node Exporter，也不得挂载宿主机 `/`、`/proc` 或 `/sys`。应用容量保护语义继续有效，部署边界见[共享生产服务器部署边界](SHARED_HOST_DEPLOYMENT.md)。
+> 适用性警告：共享宿主机现场只确认到Prometheus和Grafana，未确认本机Alertmanager或Node Exporter。UAT可复用现有组件，也可使用服务器共同使用人确认的人工资源检查；两者都不得启动历史monitoring Profile、新增Alertmanager/Node Exporter、申请19081或挂载宿主机`/`、`/proc`、`/sys`。这是已接受的UAT监控能力缺口，不是任务遗漏。
 
 `OPS-003` 已为原始单机 staging 建立可观测性和失败关闭基线，当前正在改造成共享监控接入。它不把仓库夹具或 GitHub Runner 当作真实主机告警验收；真实服务器、通知接收人、值班流程、抓取路径、磁盘挂载点和负载阈值仍需人工确认。
 
 ## 保护语义
 
-应用使用四层容量边界：
+应用使用五层容量边界：
 
 1. `SMARTSCAN_QUEUE_HIGH_WATER_JOBS` 限制未结束任务总数。上传分片可以完成，但当队列达到高水位时，完成接口返回稳定错误 `queue_capacity_reached`（HTTP `429`），不会创建页面或重复任务。
 2. `SMARTSCAN_MAX_ACTIVE_JOBS_PER_USER` 限制同一用户同时占用的 CPU Worker。PostgreSQL 通过用户级事务 advisory lock 与行锁共同裁决，不会让多个 Worker 各自放行；其他用户仍可被公平领取。
 3. `SMARTSCAN_USER_STORAGE_QUOTA_BYTES` 使用用户目录实际文件字节数加未接收上传预留计算。新会话超过配额时返回 `user_storage_quota_reached`（HTTP `413`）。值为 `0` 只允许开发环境表示不设用户配额；staging 必须设置正值。
-4. 磁盘门禁同时检查固定预留字节、最小可用比例、全部未接收上传预留和当前操作临时副本。空间不足返回 `storage_capacity_reached`（HTTP `507`）。组装整图前额外预留一个完整文件，避免分片与组装副本同时存在时耗尽数据盘。
+4. `SMARTSCAN_STORAGE_QUOTA_BYTES`限制部署级业务文件总量，并把实际文件、未接收上传预留和当前操作临时副本计入。UAT固定为50 GiB；70%产生提示，85%产生受控清理建议，95%返回`storage_capacity_reached`（HTTP `507`）。清理不得自动删除原始扫描件。
+5. 共享数据盘门禁同时检查固定预留字节、最小可用比例、全部未接收上传预留和当前操作临时副本。UAT继续保留200 GiB或15%中的较高者；组装整图前额外预留一个完整文件。
 
 相同幂等键和已确认分片的查询/重放先返回既有结果，不因后来进入保护状态制造冲突。下载、上传取消、项目删除和账号删除不经过新写入高水位，仍可释放空间。Worker 每轮先执行过期上传、项目和账号清理，再检查磁盘；保护状态下不领取新的 CPU 任务，但已经持有租约的任务继续按租约语义完成或失败重入。
 
@@ -25,7 +26,7 @@ Worker 心跳只证明进程最近能访问数据库。处理中的真实性仍�
 
 ## 内部指标端点
 
-`GET /internal/metrics` 不进入公开 OpenAPI，并且仅在 `SMARTSCAN_OPS_METRICS_ENABLED=true` 且 Bearer Token 与 `SMARTSCAN_OPS_METRICS_TOKEN` 定时安全匹配时返回 Prometheus 文本。关闭、缺少或错误令牌统一返回 `404`。公网 Nginx 只代理 `/api/`，不会转发 `/internal/metrics`；Prometheus 只通过 Compose 内部 `data` 网络直连 API。
+`GET /internal/metrics`不进入公开OpenAPI，仅在启用并持有正确Bearer Token时返回Prometheus文本。8077的`/smartscan/api/internal/metrics`固定返回404；UAT不申请19081。若现有Prometheus无法方便到达内部目标，则由服务器共同使用人使用健康检查、应用日志和只读资源命令人工验收。
 
 API 四 Worker 使用 `PROMETHEUS_MULTIPROC_DIR` 合并请求计数和直方图。staging Compose 把该目录放在容器临时文件系统，避免重启后继承陈旧进程文件。指标包括：
 
@@ -33,7 +34,7 @@ API 四 Worker 使用 `PROMETHEUS_MULTIPROC_DIR` 合并请求计数和直方图�
 - 分片有效落盘字节与内容一致的重放次数；
 - 数据库可用性、探测耗时和 PostgreSQL 当前连接数；
 - 各任务状态、最老等待时间、活动任务、过期租约、Worker 心跳；
-- 上传会话、实际磁盘空间、未接收上传预留和保护状态；
+- 上传会话、实际磁盘空间、未接收上传预留、部署级配额使用率、70/85状态和写入保护；
 - 最近五分钟按稳定动作码聚合的拒绝审计，不含操作者、目标用户、IP 或对象 ID；
 - 待复核页面按稳定原因聚合；
 - 最近 24 小时 AI 调用状态、保守费用和熔断器状态，不含媒体、模型原文或凭据。

@@ -21,16 +21,6 @@ services:
     image: ${SMARTSCAN_UAT_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
     pull_policy: always
     restart: "no"
-    command:
-      - postgres
-      - -c
-      - wal_level=replica
-      - -c
-      - archive_mode=on
-      - -c
-      - archive_timeout=900s
-      - -c
-      - archive_command=test ! -f /var/lib/smartscan-wal/%f && cp %p /var/lib/smartscan-wal/%f
     environment:
       POSTGRES_DB: smartscan
       POSTGRES_USER: smartscan
@@ -39,9 +29,6 @@ services:
       - type: bind
         source: ${SMARTSCAN_UAT_POSTGRES_ROOT:?必须设置 UAT PostgreSQL 目录}
         target: /var/lib/postgresql/data
-      - type: bind
-        source: ${SMARTSCAN_UAT_WAL_ROOT:?必须设置 UAT WAL 目录}
-        target: /var/lib/smartscan-wal
       - type: volume
         source: postgres-socket
         target: /var/run/postgresql

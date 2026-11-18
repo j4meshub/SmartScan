@@ -180,14 +180,16 @@ def valid_snapshot() -> dict[str, object]:
 
 def valid_allocation() -> dict[str, object]:
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "environment": "uat",
         "compose_project_name": "smartscan-uat",
         "target_hostname": "ctiecaiserver",
-        "approval": {
-            "approved_by": "公司运维负责人",
-            "approved_at": "2026-11-10T03:00:00Z",
-            "change_ticket": "OPS-2026-11010",
+        "confirmation": {
+            "confirmed_by": "服务器共同使用人",
+            "confirmed_at": "2026-11-10T03:00:00Z",
+            "change_record": "CHANGE-2026-11010",
+            "validation_record": "VALIDATION-2026-11010",
+            "rollback_record": "ROLLBACK-2026-11010",
         },
         "networks": {
             "data": {"subnet": "172.30.0.0/28", "gateway": "172.30.0.1"},
@@ -196,29 +198,39 @@ def valid_allocation() -> dict[str, object]:
         },
         "reserved_cidrs": ["192.168.53.0/24", "192.168.0.0/16"],
         "host_ports": [
-            {"purpose": "UAT Web 回环入口", "port": 18081, "bind_address": "127.0.0.1"},
-            {"purpose": "内部指标入口", "port": 19081, "bind_address": "127.0.0.1"},
+            {"purpose": "UAT Web 回环入口", "port": 18082, "bind_address": "127.0.0.1"},
         ],
         "storage": {
             "root": "/mnt/data/smartscan/uat",
-            "quota_bytes": 100 * GIB,
+            "quota_bytes": 50 * GIB,
             "hard_limit_confirmed": True,
+            "warning_percent": 70,
+            "cleanup_percent": 85,
+            "stop_writes_percent": 95,
+            "disposable_data": True,
         },
         "resources": {"cpu_limit": 8, "memory_limit_bytes": 16 * GIB},
         "ingress": {
-            "internal_https": True,
+            "mode": "http_basic_uat",
             "public_access": False,
-            "hostname": "smartscan-uat.intra.company",
+            "shared_nginx_port": 8077,
+            "base_path": "/smartscan/",
+            "upstream": "127.0.0.1:18082",
+            "https_required_after_basic_uat": True,
         },
         "monitoring": {
-            "reuse_existing": True,
+            "mode": "manual",
             "deploy_node_exporter": False,
-            "metrics_target_reference": "MONITORING-2026-18",
-            "alerting_mode": "local",
-            "alerting_reference": "ALERTING-2026-18",
-            "host_metrics_reference": "HOST-METRICS-2026-18",
+            "deploy_alertmanager": False,
+            "application_metrics_enabled": True,
+            "accepted_capability_gap": True,
+            "record_reference": "MONITORING-2026-18",
         },
-        "backup": {"off_host": True, "endpoint_reference": "BACKUP-2026-09"},
+        "backup": {
+            "required": False,
+            "disposable_uat_data": True,
+            "single_host_risk_acknowledged": True,
+        },
     }
 
 
@@ -393,9 +405,9 @@ def test_resources_leave_host_safety_margin() -> None:
         validate(snapshot, valid_allocation())
 
 
-def test_approval_ingress_monitoring_and_backup_fail_closed() -> None:
+def test_confirmation_ingress_monitoring_and_backup_fail_closed() -> None:
     allocation = valid_allocation()
-    allocation["approval"]["change_ticket"] = "REPLACE-ME"
+    allocation["confirmation"]["change_record"] = "REPLACE-ME"
     with pytest.raises(PreflightError, match="占位值"):
         validate(valid_snapshot(), allocation)
 
@@ -409,44 +421,30 @@ def test_approval_ingress_monitoring_and_backup_fail_closed() -> None:
     with pytest.raises(PreflightError, match="Node Exporter"):
         validate(valid_snapshot(), allocation)
 
-    snapshot = valid_snapshot()
-    snapshot["monitoring"]["alertmanager"] = False
-    with pytest.raises(PreflightError, match="Alertmanager"):
-        validate(snapshot, valid_allocation())
-
-    runner = collection_runner()
-    container_command = ("docker", "ps", "-a", "--no-trunc", "--format", "{{json .}}")
-    runner.responses[container_command] = runner.responses[container_command].replace(
-        '"State": "running", "Ports": "", "Networks": "monitoring"',
-        '"State": "exited", "Ports": "", "Networks": "monitoring"',
-    )
-    snapshot = build_snapshot(
-        runner=runner,
-        now=NOW,
-        hostname="ctiecaiserver",
-        os_release={"id": "ubuntu", "version_id": "24.04"},
-        memory=(503 * GIB, 349 * GIB),
-        logical_cpu_count=128,
-        load_average=(8.0, 10.0, 12.0),
-    )
-    with pytest.raises(PreflightError, match="Alertmanager"):
-        validate(snapshot, valid_allocation())
-
     allocation = valid_allocation()
-    allocation["backup"]["off_host"] = False
-    with pytest.raises(PreflightError, match="异机"):
+    allocation["backup"]["single_host_risk_acknowledged"] = False
+    with pytest.raises(PreflightError, match="单机风险"):
         validate(valid_snapshot(), allocation)
 
 
-def test_external_alertmanager_requires_explicit_approved_reference() -> None:
+def test_existing_monitoring_requires_detected_prometheus_and_grafana() -> None:
+    snapshot = valid_snapshot()
+    snapshot["monitoring"]["prometheus"] = False
+    allocation = valid_allocation()
+    allocation["monitoring"]["mode"] = "existing"
+
+    with pytest.raises(PreflightError, match="Prometheus"):
+        validate(snapshot, allocation)
+
+
+def test_manual_monitoring_accepts_missing_alertmanager_and_node_exporter() -> None:
     snapshot = valid_snapshot()
     snapshot["monitoring"]["alertmanager"] = False
-    allocation = valid_allocation()
-    allocation["monitoring"]["alerting_mode"] = "external"
+    snapshot["monitoring"]["node_exporter"] = False
 
-    result = validate(snapshot, allocation)
+    result = validate(snapshot, valid_allocation())
 
-    assert "existing_monitoring_reused" in result.checks
+    assert "monitoring_mode_confirmed" in result.checks
 
 
 def test_evidence_writer_is_0600_and_refuses_overwrite(tmp_path: Path) -> None:

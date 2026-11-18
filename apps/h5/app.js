@@ -7,8 +7,9 @@ import {copy, editorCopy} from "./i18n.js";
 import {bookSideLabel, canDismissExamSuggestion, canRetakeBookSide, defaultCorners, examSuggestionPrompt, filterPreview, movePage, qualityPrompt, updateCorner} from "./page-editor.js";
 import {downloadBlob, exportQualityLabel, exportStatusLabel, jobKindLabel, jobStatusLabel, projectJobs, shareOrDownload, shouldPollJobs} from "./project-files.js";
 import {uploadResumable} from "./resumable-upload.js";
+import {defaultApiBase} from "./deployment-path.js";
 
-const defaultApi = ["localhost", "127.0.0.1"].includes(location.hostname) ? "http://localhost:8000" : `${location.origin}/api`;
+const defaultApi = defaultApiBase();
 const API = localStorage.getItem("smartscan.api") || defaultApi;
 localStorage.removeItem("smartscan.token");
 let locale = localStorage.getItem("smartscan.locale") || (navigator.language.startsWith("zh") ? "zh-CN" : "en");

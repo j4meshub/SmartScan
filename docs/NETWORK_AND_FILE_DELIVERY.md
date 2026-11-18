@@ -1,10 +1,12 @@
 # TLS、内部文件发送与 BBR 基线
 
-> 适用性警告：当前目标是共享生产宿主机，SmartScan 不得占用现有 80/443、覆盖共享 Nginx 或自行修改 BBR。第一阶段仅通过运维批准的内网/VPN HTTPS 入口接入；本文的证书校验、`internal` 文件发送与 Range 测试仍可复用，但公网入口和主机级调优部分已由 [共享生产服务器部署边界](SHARED_HOST_DEPLOYMENT.md) 限制为平台级人工门禁。
+> 适用性警告：第一阶段复用现有Nginx 8077，在`/smartscan/`下转发到`127.0.0.1:18082`，不占用80/443。基础UAT允许HTTP，但只覆盖登录、项目、上传、处理、预览、导出和Range；实时相机、企业微信和正式移动端验收继续要求HTTPS。BBR和全局Nginx调优不属于SmartScan变更。
 
 ## 状态与边界
 
 OPS-002 的仓库侧交付包括主机 TLS 入口模板、证书与私钥离线校验、Nginx `internal` 文件发送容器集成测试、BBR 只读快照/对照/回滚工具和人工验收清单。它不会连接公司服务器、申请真实证书、开放防火墙、修改内核参数或执行公网压测。
+
+GOV-005新增`deploy/nginx/shared-8077-smartscan-location.conf.template`，它只包含`/smartscan`跳转、内部指标拒绝和`/smartscan/`代理三个location，不含`server`、`listen`、证书或其他服务配置。实际include位置、`nginx -t`、reload和回滚均需单独服务器变更授权。
 
 CI 使用自签名测试证书、隔离容器和小型固定文件，只证明配置语法、入口约束、内部重定向、Range 和失败关闭行为可重复；不能代替真实域名、可信证书、手机网络、大文件吞吐或 BBR 前后对照。因此 OPS-002 在仓库侧合并后仍保持“等待人工验收”。
 
