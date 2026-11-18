@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `GOV-005` 共享主机 UAT 门禁定版 |
-| 工作包状态 | 进行中：共同使用人权限、8077 `/smartscan/`、回环18082、50 GiB、整栈8 vCPU/16 GiB及HTTP基础UAT边界已进入仓库实现；尚未修改服务器或部署UAT |
+| 工作包状态 | 进行中：仓库实现与本地门禁已完成，PR #77 已创建，等待 GitHub Actions 复核；尚未修改服务器或部署UAT |
 | 当前分支 | `codex/gov-005-shared-uat-gates` |
 | 最后验证基线 | `ea1edaa`（PR #76 中文squash合并，OPS-000现场预检进入主线） |
-| 工作包提交 | 待本工作包中文提交 |
-| PR | 待创建；PR只包含仓库代码、模板、测试和脱敏文档，不包含真实CIDR、完整服务器地址或凭据 |
+| 工作包提交 | `f58ee9a`（`ops: 定版共享主机UAT资源与8077入口`） |
+| PR | [#77](https://github.com/j4meshub/SmartScan/pull/77)；只包含仓库代码、模板、测试和脱敏文档，不包含真实CIDR、完整服务器地址或凭据 |
 | 下一工作包 | GOV-005合并后，在用户单独部署授权下执行`OPS-001`部署当天复查与UAT创建；不得自动连接或修改服务器 |
 
 ## 当前工作包进展
@@ -24,6 +24,7 @@
 - UAT不要求Alertmanager、Node Exporter、独立指标端口或异机备份。应用健康和指标继续保留；监控可选现有Prometheus/Grafana或有记录的人工检查。UAT数据允许丢弃和重建，Compose已移除无异机目标的WAL归档。
 - H5新增基路径解析：非本机部署从`document.baseURI`推导同路径`api`，本机一键试用继续使用`http://localhost:8000`。静态资源仍为相对路径，Hash路由不需要API或FastAPI `root_path`改动。
 - 首轮专项测试发现1项失败，原因是测试仍匹配旧“资源审批”错误文案；更新为“资源确认”后重跑通过。最终专项为治理/UAT/预检/容量`56 passed`、H5 Node单元`48 passed`、Chromium E2E`9 passed`；全量Python`512 passed, 7 skipped`、覆盖率87.79%，Ruff、171个Python文件格式、迁移漂移、JavaScript语法和差异空白检查通过。7项跳过仍是既有PostgreSQL/Docker外部环境门禁。本机无Docker CLI，UAT Compose动态解析由PR容器CI补证。
+- GOV-005 首个中文提交为`f58ee9a`，已推送并创建 [PR #77](https://github.com/j4meshub/SmartScan/pull/77)。GitHub Actions 必须以最终代码头全部通过后才能把本工作包标记为完成。
 
 ## 历史证据摘要
 
@@ -956,7 +957,7 @@ git diff --check
 
 ## 下一步
 
-1. 完成GOV-005全量测试、中文提交、PR和CI；本工作包不连接或修改服务器。
+1. 等待GOV-005 PR #77最终代码头CI全部通过；通过后补记CI证据、将GOV-005标记完成并合并。本工作包不连接或修改服务器。
 2. `OPS-REG-002`已完成，主线`0961cc3`五个公开digest仍是唯一已确认候选。由于H5基路径和容量保护发生变化，实际UAT前必须由用户明确接受新的兼容镜像集合；PostgreSQL digest也需单独选择和验证。
 3. 用户另行授权OPS-001后，部署当天重新采集现场状态、确定三张无冲突CIDR、复核8077/18082、实施50 GiB硬配额、生成仓库外Secret和确认记录，再人工创建UAT。基础UAT通过后进入OPS-002A HTTPS；OPS-003/004不阻塞基础UAT，OPS-005/006继续保持门禁。
 4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。
