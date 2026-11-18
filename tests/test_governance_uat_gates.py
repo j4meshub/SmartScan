@@ -28,7 +28,7 @@ def test_active_governance_uses_shared_server_user_confirmation() -> None:
 def test_uat_allocation_template_encodes_current_fixed_boundaries() -> None:
     allocation = json.loads(read("deploy/compose/shared-host-allocation.example.json"))
 
-    assert allocation["schema_version"] == "1.1"
+    assert allocation["schema_version"] == "1.2"
     assert "approval" not in allocation
     assert set(allocation["confirmation"]) == {
         "confirmed_by",
@@ -45,6 +45,13 @@ def test_uat_allocation_template_encodes_current_fixed_boundaries() -> None:
         }
     ]
     assert allocation["storage"]["quota_bytes"] == 50 * 1024**3
+    assert allocation["storage_budgets"] == {
+        "postgres_and_wal_bytes": 12 * 1024**3,
+        "business_data_bytes": 32 * 1024**3,
+        "ocr_models_bytes": 4 * 1024**3,
+        "container_logs_bytes": 1024**3,
+        "reserve_bytes": 1024**3,
+    }
     assert (
         allocation["storage"]["warning_percent"],
         allocation["storage"]["cleanup_percent"],

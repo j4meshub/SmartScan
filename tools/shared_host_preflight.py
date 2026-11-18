@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 SCHEMA_VERSION = "1.0"
-ALLOCATION_SCHEMA_VERSION = "1.1"
+ALLOCATION_SCHEMA_VERSION = "1.2"
 GIB = 1024**3
 DEFAULT_MAX_AGE_HOURS = 24
 REQUIRED_NETWORKS = frozenset({"data", "edge", "egress"})
@@ -690,6 +690,24 @@ def validate_preflight(
         == (70, 85, 95),
         "storage_thresholds_invalid",
         "UAT 存储阈值必须为 70/85/95",
+    )
+    budgets = allocation.get("storage_budgets")
+    expected_budgets = {
+        "postgres_and_wal_bytes": 12 * GIB,
+        "business_data_bytes": 32 * GIB,
+        "ocr_models_bytes": 4 * GIB,
+        "container_logs_bytes": GIB,
+        "reserve_bytes": GIB,
+    }
+    _require(
+        budgets == expected_budgets,
+        "storage_budgets_invalid",
+        "UAT 存储预算必须为 12/32/4/1/1 GiB",
+    )
+    _require(
+        sum(budgets.values()) == quota,
+        "storage_budgets_invalid",
+        "UAT 存储预算总和必须为 50 GiB",
     )
     filesystem = _find_filesystem(snapshot, storage_root)
     total = int(filesystem.get("total_bytes", 0))

@@ -8,6 +8,7 @@ import pytest
 from tools.validate_uat_config import (
     DEFAULT_COMPOSE_FILE,
     UatConfigError,
+    _validate_digest_image,
     validate_uat_config,
 )
 
@@ -142,6 +143,53 @@ def test_allocation_requires_fixed_storage_thresholds(tmp_path: Path) -> None:
 
     with pytest.raises(UatConfigError, match="50 GiB"):
         _validate(tmp_path, allocation=path)
+
+
+def test_allocation_requires_storage_budgets_to_fit_hard_limit(tmp_path: Path) -> None:
+    allocation = json.loads((FIXTURES / "allocation.json").read_text(encoding="utf-8"))
+    allocation["storage_budgets"]["business_data_bytes"] += 1024**3
+    path = tmp_path / "allocation.json"
+    path.write_text(json.dumps(allocation), encoding="utf-8")
+
+    with pytest.raises(UatConfigError, match="12/32/4/1/1 GiB"):
+        _validate(tmp_path, allocation=path)
+
+
+def test_runtime_business_quota_must_match_storage_budget(tmp_path: Path) -> None:
+    runtime = _write_changed(
+        FIXTURES / "runtime.env",
+        tmp_path / "runtime.env",
+        "SMARTSCAN_STORAGE_QUOTA_BYTES=34359738368",
+        "SMARTSCAN_STORAGE_QUOTA_BYTES=53687091200",
+    )
+
+    with pytest.raises(UatConfigError, match="业务文件预算"):
+        _validate(tmp_path, runtime=runtime)
+
+
+@pytest.mark.parametrize(
+    ("key", "repository", "digest"),
+    [
+        (
+            "SMARTSCAN_UAT_WEB_IMAGE",
+            "ghcr.io/j4meshub/smartscan-web",
+            "44a0faf547140844eb065a65034d442b66dd9f971ae5521b8a97400bd50df915",
+        ),
+        (
+            "SMARTSCAN_UAT_OPS_IMAGE",
+            "ghcr.io/j4meshub/smartscan-ops",
+            "ef4dd40c7b8a494e92540dc5bb476ab144903402142a0bbb0fdc4fd688138a5b",
+        ),
+    ],
+)
+def test_known_incompatible_uat_images_fail_closed(key: str, repository: str, digest: str) -> None:
+    with pytest.raises(UatConfigError, match="已知不兼容"):
+        _validate_digest_image(
+            f"{repository}@sha256:{digest}",
+            key,
+            repository=repository,
+            ci_fixture=False,
+        )
 
 
 @pytest.mark.parametrize(
