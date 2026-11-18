@@ -26,6 +26,7 @@
 - 首轮专项测试发现1项失败，原因是测试仍匹配旧“资源审批”错误文案；更新为“资源确认”后重跑通过。最终专项为治理/UAT/预检/容量`56 passed`、H5 Node单元`48 passed`、Chromium E2E`9 passed`；全量Python`512 passed, 7 skipped`、覆盖率87.79%，Ruff、171个Python文件格式、迁移漂移、JavaScript语法和差异空白检查通过。7项跳过仍是既有PostgreSQL/Docker外部环境门禁。本机无Docker CLI，UAT Compose动态解析由PR容器CI补证。
 - GOV-005 首个中文提交为`f58ee9a`，已推送并创建 [PR #77](https://github.com/j4meshub/SmartScan/pull/77)。GitHub Actions 必须以最终代码头全部通过后才能把本工作包标记为完成。
 - PR #77 代码头`7e26283`的push常规CI`44264887308`与PR常规CI`44264897160`均完成API、Web、Android、固定Xcode 16.4 iOS Simulator和容器五项检查；容器作业实际解析开发、UAT、staging、监控及备份Compose，并执行既有容器集成门禁。PR镜像运行`44264897129`的API、Worker、AI Gateway、Web和Ops五项验证全部通过，发布与中文镜像清单步骤按PR规则跳过，没有生成、发布或替换UAT候选镜像。
+- PR #77合并后的最终一致性复核发现`POC-006`仍引用已完成的OPS-000审批和不再阻塞基础UAT的OPS-003完整监控接入；后续最小修复将依赖改为OPS-001基础UAT与OPS-005共租户窗口，并增加活动计划回归断言。该残留是文档依赖错误，不影响已验证的UAT模板、代码或服务器状态。
 
 ## 历史证据摘要
 
