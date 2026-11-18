@@ -238,7 +238,12 @@ def _json_object(value: str, key: str) -> dict[str, str]:
 
 
 def _validate_runtime(
-    runtime: dict[str, str], deploy: dict[str, str], host: str, *, ci_fixture: bool
+    runtime: dict[str, str],
+    deploy: dict[str, str],
+    host: str,
+    *,
+    ci_fixture: bool,
+    expected_cors_origins: list[str] | None = None,
 ) -> None:
     _require_keys(runtime, RUNTIME_KEYS, "运行配置")
     _require(runtime["SMARTSCAN_ENV"] == "production", "staging 必须启用 production 安全校验")
@@ -288,10 +293,8 @@ def _validate_runtime(
         cors_origins = json.loads(runtime["SMARTSCAN_CORS_ORIGINS"])
     except json.JSONDecodeError as exc:
         raise StagingConfigError("CORS 来源必须是 JSON 数组") from exc
-    _require(
-        cors_origins == [f"https://{host}"],
-        "CORS 来源必须是仅包含 staging HTTPS 域名的 JSON 数组",
-    )
+    expected_origins = expected_cors_origins or [f"https://{host}"]
+    _require(cors_origins == expected_origins, "CORS 来源与批准入口不一致")
 
     parsed = urlparse(runtime["SMARTSCAN_DATABASE_URL"])
     _require(parsed.scheme == "postgresql+psycopg", "数据库 URL 必须使用 postgresql+psycopg")

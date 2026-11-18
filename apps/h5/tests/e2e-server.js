@@ -15,7 +15,8 @@ const mimeTypes = {
 createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url, "http://127.0.0.1").pathname);
-    const requested = pathname === "/" ? "/index.html" : pathname;
+    const deploymentPath = pathname === "/smartscan" ? "/" : pathname.replace(/^\/smartscan\//, "/");
+    const requested = deploymentPath === "/" ? "/index.html" : deploymentPath;
     const absolute = path.resolve(root, `.${requested}`);
     if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) throw new Error("path_outside_root");
     if (!(await stat(absolute)).isFile()) throw new Error("not_a_file");

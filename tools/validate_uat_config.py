@@ -12,6 +12,7 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 
@@ -61,7 +62,6 @@ DEPLOY_KEYS = {
     "SMARTSCAN_UAT_EGRESS_SUBNET",
     "SMARTSCAN_UAT_EGRESS_GATEWAY",
     "SMARTSCAN_UAT_POSTGRES_ROOT",
-    "SMARTSCAN_UAT_WAL_ROOT",
     "SMARTSCAN_UAT_DATA_ROOT",
     "SMARTSCAN_UAT_MODEL_ROOT",
     "SMARTSCAN_UAT_POSTGRES_IMAGE",
@@ -70,7 +70,6 @@ DEPLOY_KEYS = {
 }
 PATH_KEYS = {
     "SMARTSCAN_UAT_POSTGRES_ROOT",
-    "SMARTSCAN_UAT_WAL_ROOT",
     "SMARTSCAN_UAT_DATA_ROOT",
     "SMARTSCAN_UAT_MODEL_ROOT",
 }
@@ -157,80 +156,121 @@ def _validate_uat_path(value: str, key: str) -> PurePosixPath:
 
 def _allocation_port(allocation: dict[str, Any]) -> tuple[str, int]:
     ports = allocation.get("host_ports")
-    _require(isinstance(ports, list), "资源审批缺少 host_ports")
+    _require(isinstance(ports, list), "资源确认缺少 host_ports")
+    _require(len(ports) == 1, "UAT 只能申请一个宿主机回环端口")
     matches = [
         item
         for item in ports
         if isinstance(item, dict) and "uat web" in str(item.get("purpose", "")).casefold()
     ]
-    _require(len(matches) == 1, "资源审批必须且只能包含一个 UAT Web 端口")
+    _require(len(matches) == 1, "资源确认必须且只能包含一个 UAT Web 端口")
     bind_address = str(matches[0].get("bind_address", ""))
     try:
         address = ipaddress.ip_address(bind_address)
         port = int(matches[0].get("port", 0))
     except ValueError as exc:
         raise UatConfigError("UAT Web 监听地址或端口无效") from exc
-    _require(not address.is_unspecified and not address.is_multicast, "UAT 禁止监听全部或组播地址")
-    _require(address.is_private or address.is_loopback, "UAT Web 只能绑定回环或批准的私网地址")
-    _require(1 <= port <= 65535 and port not in FORBIDDEN_HOST_PORTS, "UAT Web 端口无效")
+    _require(str(address) == "127.0.0.1", "UAT Web 必须只绑定 127.0.0.1")
+    _require(port == 18082, "UAT Web 必须使用确认的 18082 端口")
     return bind_address, port
 
 
 def _validate_allocation(
     allocation: dict[str, Any], deploy: dict[str, str], *, ci_fixture: bool
-) -> tuple[str, int, str]:
-    _require(allocation.get("schema_version") == "1.0", "资源审批版本无效")
-    _require(allocation.get("environment") == "uat", "资源审批必须属于 UAT")
-    _require(allocation.get("compose_project_name") == "smartscan-uat", "资源审批项目名无效")
-    approval = allocation.get("approval")
-    _require(isinstance(approval, dict), "资源审批缺少 approval")
-    for key in ("approved_by", "approved_at", "change_ticket"):
-        value = str(approval.get(key, ""))
-        _require(bool(value), f"资源审批缺少 {key}")
+) -> tuple[str, int]:
+    _require(allocation.get("schema_version") == "1.1", "资源确认版本无效")
+    _require(allocation.get("environment") == "uat", "资源确认必须属于 UAT")
+    _require(allocation.get("compose_project_name") == "smartscan-uat", "资源确认项目名无效")
+    confirmation = allocation.get("confirmation")
+    _require(isinstance(confirmation, dict), "资源确认缺少 confirmation")
+    for key in (
+        "confirmed_by",
+        "confirmed_at",
+        "change_record",
+        "validation_record",
+        "rollback_record",
+    ):
+        value = str(confirmation.get(key, ""))
+        _require(bool(value), f"资源确认缺少 {key}")
         if not ci_fixture:
-            _require(not _has_placeholder(value), f"资源审批 {key} 仍是占位值")
+            _require(not _has_placeholder(value), f"资源确认 {key} 仍是占位值")
 
     storage = allocation.get("storage")
-    _require(isinstance(storage, dict), "资源审批缺少 storage")
-    _require(storage.get("root") == str(UAT_ROOT), "资源审批的 UAT 存储根目录无效")
-    _require(int(storage.get("quota_bytes", 0)) >= 100 * GIB, "UAT 存储配额小于 100 GiB")
+    _require(isinstance(storage, dict), "资源确认缺少 storage")
+    _require(storage.get("root") == str(UAT_ROOT), "资源确认的 UAT 存储根目录无效")
+    _require(int(storage.get("quota_bytes", 0)) == 50 * GIB, "UAT 存储配额必须为 50 GiB")
     _require(storage.get("hard_limit_confirmed") is True, "UAT 存储硬限制尚未确认")
+    _require(storage.get("disposable_data") is True, "UAT 数据必须明确为可丢弃和重建")
+    _require(
+        tuple(
+            storage.get(key)
+            for key in ("warning_percent", "cleanup_percent", "stop_writes_percent")
+        )
+        == (70, 85, 95),
+        "UAT 存储阈值必须为 70/85/95",
+    )
 
     resources = allocation.get("resources")
-    _require(isinstance(resources, dict), "资源审批缺少 resources")
-    _require(float(resources.get("cpu_limit", 0)) > 0, "资源审批 CPU 上限无效")
-    _require(int(resources.get("memory_limit_bytes", 0)) > 0, "资源审批内存上限无效")
+    _require(isinstance(resources, dict), "资源确认缺少 resources")
+    _require(float(resources.get("cpu_limit", 0)) == 8, "UAT 整栈 CPU 上限必须为 8 vCPU")
+    _require(
+        int(resources.get("memory_limit_bytes", 0)) == 16 * GIB,
+        "UAT 整栈内存上限必须为 16 GiB",
+    )
 
     monitoring = allocation.get("monitoring")
     _require(
-        isinstance(monitoring, dict)
-        and monitoring.get("reuse_existing") is True
-        and monitoring.get("deploy_node_exporter") is False,
-        "UAT 必须复用现有监控且禁止重复 Node Exporter",
+        isinstance(monitoring, dict) and monitoring.get("deploy_node_exporter") is False,
+        "UAT 禁止部署 Node Exporter",
     )
+    _require(monitoring.get("deploy_alertmanager") is False, "UAT 禁止部署 Alertmanager")
+    _require(monitoring.get("application_metrics_enabled") is True, "UAT 必须保留应用指标")
+    _require(monitoring.get("mode") in {"manual", "existing"}, "UAT 监控模式无效")
+    if monitoring.get("mode") == "manual":
+        _require(
+            monitoring.get("accepted_capability_gap") is True,
+            "人工监控模式必须确认能力缺口",
+        )
+    record_reference = str(monitoring.get("record_reference", ""))
+    _require(bool(record_reference), "UAT 监控缺少确认记录")
+    if not ci_fixture:
+        _require(not _has_placeholder(record_reference), "UAT 监控确认记录仍是占位值")
+
     ingress = allocation.get("ingress")
     _require(
         isinstance(ingress, dict)
-        and ingress.get("internal_https") is True
+        and ingress.get("mode") == "http_basic_uat"
         and ingress.get("public_access") is False,
-        "UAT 入口必须是非公网的内部 HTTPS",
+        "UAT 入口必须是非公网的 HTTP 基础验收模式",
     )
-    hostname = str(ingress.get("hostname", ""))
-    _require(bool(hostname), "资源审批缺少内部 HTTPS 域名")
-    if not ci_fixture:
-        _require(not _has_placeholder(hostname), "内部 HTTPS 域名仍是占位值")
+    _require(ingress.get("shared_nginx_port") == 8077, "共享 Nginx 入口端口必须为 8077")
+    _require(ingress.get("base_path") == "/smartscan/", "UAT 基路径必须为 /smartscan/")
+    _require(ingress.get("upstream") == "127.0.0.1:18082", "UAT 上游必须为回环 18082")
+    _require(
+        ingress.get("https_required_after_basic_uat") is True,
+        "基础 UAT 后必须保留 HTTPS 门禁",
+    )
+
+    backup = allocation.get("backup")
+    _require(
+        isinstance(backup, dict)
+        and backup.get("required") is False
+        and backup.get("disposable_uat_data") is True
+        and backup.get("single_host_risk_acknowledged") is True,
+        "UAT 必须明确无备份、数据可重建及单机风险",
+    )
 
     networks = allocation.get("networks")
-    _require(isinstance(networks, dict), "资源审批缺少 networks")
+    _require(isinstance(networks, dict), "资源确认缺少 networks")
     approved_networks: list[ipaddress._BaseNetwork] = []
     for name in ("data", "edge", "egress"):
         item = networks.get(name)
-        _require(isinstance(item, dict), f"资源审批缺少 {name} 网络")
+        _require(isinstance(item, dict), f"资源确认缺少 {name} 网络")
         try:
             network = ipaddress.ip_network(str(item.get("subnet", "")), strict=True)
             gateway = ipaddress.ip_address(str(item.get("gateway", "")))
         except ValueError as exc:
-            raise UatConfigError(f"资源审批的 {name} 网络无效") from exc
+            raise UatConfigError(f"资源确认的 {name} 网络无效") from exc
         _require(gateway in network, f"{name} 网关不在批准网段内")
         _require(
             deploy[f"SMARTSCAN_UAT_{name.upper()}_SUBNET"] == str(network)
@@ -245,9 +285,9 @@ def _validate_allocation(
         )
 
     bind_address, port = _allocation_port(allocation)
-    _require(deploy["SMARTSCAN_UAT_BIND_ADDRESS"] == bind_address, "监听地址与资源审批不一致")
-    _require(int(deploy["SMARTSCAN_UAT_HTTP_PORT"]) == port, "监听端口与资源审批不一致")
-    return bind_address, port, hostname
+    _require(deploy["SMARTSCAN_UAT_BIND_ADDRESS"] == bind_address, "监听地址与资源确认不一致")
+    _require(int(deploy["SMARTSCAN_UAT_HTTP_PORT"]) == port, "监听端口与资源确认不一致")
+    return bind_address, port
 
 
 def _memory_bytes(value: Any) -> int:
@@ -291,6 +331,8 @@ def validate_compose_contract(
     }
     cpu_total = 0.0
     memory_total = 0
+    base_cpu_total = 0.0
+    base_memory_total = 0
     forbidden_mounts = {"/", "/proc", "/sys", "/srv/smartscan/staging"}
     for name, service in services.items():
         _require(isinstance(service, dict), f"服务配置无效：{name}")
@@ -313,6 +355,9 @@ def validate_compose_contract(
         _require(options.get("max-size") and options.get("max-file"), f"{name} 缺少日志轮转限制")
         cpu_total += float(service["cpus"])
         memory_total += _memory_bytes(service["mem_limit"])
+        if not service.get("profiles"):
+            base_cpu_total += float(service["cpus"])
+            base_memory_total += _memory_bytes(service["mem_limit"])
         image = str(service.get("image", "")).casefold()
         _require(
             "node-exporter" not in name.casefold() and "node-exporter" not in image,
@@ -330,8 +375,12 @@ def validate_compose_contract(
             _require("/srv/smartscan/staging" not in source, f"{name} 仍使用旧 staging 目录")
 
     resources = allocation["resources"]
-    _require(cpu_total <= float(resources["cpu_limit"]), "容器 CPU 限制总和超过资源审批")
-    _require(memory_total <= int(resources["memory_limit_bytes"]), "容器内存限制总和超过资源审批")
+    _require(cpu_total <= float(resources["cpu_limit"]), "容器 CPU 限制总和超过资源确认")
+    _require(memory_total <= int(resources["memory_limit_bytes"]), "容器内存限制总和超过资源确认")
+    _require(base_cpu_total == 5.5, "UAT 基础栈 CPU 限制合计必须为 5.5 vCPU")
+    _require(base_memory_total == int(8.75 * GIB), "UAT 基础栈内存限制合计必须为 8.75 GiB")
+    _require(cpu_total == 7.5, "UAT 含 AI 栈 CPU 限制合计必须为 7.5 vCPU")
+    _require(memory_total == int(11.75 * GIB), "UAT 含 AI 栈内存限制合计必须为 11.75 GiB")
     _require(
         "ports" not in services["postgres"] and "ports" not in services["api"],
         "数据库和 API 禁止暴露主机端口",
@@ -382,7 +431,7 @@ def validate_uat_config(
     configured_allocation = PurePosixPath(deploy["SMARTSCAN_UAT_ALLOCATION_FILE"])
     _require(
         configured_allocation.is_absolute() and SECRET_ROOT in configured_allocation.parents,
-        "资源审批文件必须位于 /etc/smartscan/uat 下",
+        "资源确认文件必须位于 /etc/smartscan/uat 下",
     )
     configured_runtime = PurePosixPath(deploy["SMARTSCAN_UAT_RUNTIME_ENV_FILE"])
     _require(
@@ -410,10 +459,39 @@ def validate_uat_config(
         ),
     )
 
-    allocation, allocation_hash = _load_json(allocation_file, "资源审批文件")
-    bind_address, port, hostname = _validate_allocation(allocation, deploy, ci_fixture=ci_fixture)
+    allocation, allocation_hash = _load_json(allocation_file, "资源确认文件")
+    bind_address, port = _validate_allocation(allocation, deploy, ci_fixture=ci_fixture)
     try:
-        _validate_runtime(runtime, deploy, hostname, ci_fixture=ci_fixture)
+        cors_origins = json.loads(runtime["SMARTSCAN_CORS_ORIGINS"])
+    except (KeyError, json.JSONDecodeError) as exc:
+        raise UatConfigError("UAT CORS 来源必须是 JSON 数组") from exc
+    _require(
+        isinstance(cors_origins, list) and len(cors_origins) == 1, "UAT 只能配置一个 CORS 来源"
+    )
+    if not ci_fixture:
+        _require(not _has_placeholder(str(cors_origins[0])), "UAT CORS 来源仍是占位值")
+    try:
+        parsed_origin = urlparse(str(cors_origins[0]))
+        origin_port = parsed_origin.port
+    except ValueError as exc:
+        raise UatConfigError("UAT CORS 来源端口无效") from exc
+    _require(
+        parsed_origin.scheme == "http"
+        and parsed_origin.hostname
+        and origin_port == 8077
+        and parsed_origin.path in {"", "/"}
+        and not parsed_origin.query
+        and not parsed_origin.fragment,
+        "UAT CORS 来源必须是共享 8077 HTTP 入口",
+    )
+    try:
+        _validate_runtime(
+            runtime,
+            deploy,
+            parsed_origin.hostname,
+            ci_fixture=ci_fixture,
+            expected_cors_origins=[str(cors_origins[0])],
+        )
     except StagingConfigError as exc:
         raise UatConfigError(str(exc).replace("staging", "UAT")) from exc
     _require(
@@ -422,6 +500,29 @@ def validate_uat_config(
     )
     _require(
         float(runtime["SMARTSCAN_STORAGE_MIN_FREE_PERCENT"]) >= 15, "UAT 磁盘比例预留必须至少 15%"
+    )
+    for key in (
+        "SMARTSCAN_STORAGE_QUOTA_BYTES",
+        "SMARTSCAN_STORAGE_WARNING_PERCENT",
+        "SMARTSCAN_STORAGE_CLEANUP_PERCENT",
+        "SMARTSCAN_STORAGE_STOP_WRITES_PERCENT",
+    ):
+        _require(key in runtime, f"运行配置缺少变量：{key}")
+    _require(
+        int(runtime["SMARTSCAN_STORAGE_QUOTA_BYTES"]) == int(allocation["storage"]["quota_bytes"]),
+        "运行配置与确认的 UAT 存储配额不一致",
+    )
+    _require(
+        tuple(
+            float(runtime[key])
+            for key in (
+                "SMARTSCAN_STORAGE_WARNING_PERCENT",
+                "SMARTSCAN_STORAGE_CLEANUP_PERCENT",
+                "SMARTSCAN_STORAGE_STOP_WRITES_PERCENT",
+            )
+        )
+        == (70.0, 85.0, 95.0),
+        "运行配置的 UAT 存储阈值必须为 70/85/95",
     )
     validate_compose_contract(allocation, compose_file)
     return ValidatedUatConfig(

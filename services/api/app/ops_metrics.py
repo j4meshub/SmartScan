@@ -268,6 +268,18 @@ def render_operational_metrics(db: Session, settings: Settings) -> bytes:
         )
         lines.extend(_help("smartscan_storage_free_percent", "存储文件系统可用比例。"))
         lines.append(_sample("smartscan_storage_free_percent", capacity.free_percent))
+        lines.extend(_help("smartscan_storage_quota_bytes", "部署级业务数据配额字节数。"))
+        lines.append(_sample("smartscan_storage_quota_bytes", capacity.quota_bytes))
+        lines.extend(_help("smartscan_storage_quota_used_bytes", "部署级业务数据配额计入字节数。"))
+        lines.append(_sample("smartscan_storage_quota_used_bytes", capacity.quota_accounted_bytes))
+        lines.extend(_help("smartscan_storage_quota_used_percent", "部署级业务数据配额使用比例。"))
+        lines.append(_sample("smartscan_storage_quota_used_percent", capacity.quota_used_percent))
+        lines.extend(_help("smartscan_storage_warning_active", "存储配额提示是否已触发。"))
+        lines.append(_sample("smartscan_storage_warning_active", int(capacity.warning)))
+        lines.extend(_help("smartscan_storage_cleanup_recommended", "是否需要执行受控清理。"))
+        lines.append(
+            _sample("smartscan_storage_cleanup_recommended", int(capacity.cleanup_recommended))
+        )
         lines.extend(_help("smartscan_storage_protection_active", "磁盘保护是否已触发。"))
         lines.append(_sample("smartscan_storage_protection_active", int(capacity.protected)))
     except Exception:

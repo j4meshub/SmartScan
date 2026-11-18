@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     max_active_jobs_per_user: int = Field(default=2, ge=1, le=16)
     storage_min_free_bytes: int = Field(default=2 * 1024**3, ge=64 * 1024**2)
     storage_min_free_percent: float = Field(default=5.0, ge=1.0, le=50.0)
+    storage_quota_bytes: int = Field(default=0, ge=0)
+    storage_warning_percent: float = Field(default=70.0, ge=1.0, le=100.0)
+    storage_cleanup_percent: float = Field(default=85.0, ge=1.0, le=100.0)
+    storage_stop_writes_percent: float = Field(default=95.0, ge=1.0, le=100.0)
     user_storage_quota_bytes: int = Field(default=0, ge=0)
     worker_heartbeat_interval_seconds: int = Field(default=10, ge=2, le=60)
     worker_stale_seconds: int = Field(default=45, ge=10, le=600)
@@ -247,6 +251,19 @@ class Settings(BaseSettings):
             ):
                 raise RuntimeError(
                     "SMARTSCAN_USER_STORAGE_QUOTA_BYTES must cover at least one upload"
+                )
+            if self.storage_quota_bytes and self.storage_quota_bytes < self.max_upload_bytes * 2:
+                raise RuntimeError(
+                    "SMARTSCAN_STORAGE_QUOTA_BYTES must reserve at least two uploads"
+                )
+            if not (
+                self.storage_warning_percent
+                < self.storage_cleanup_percent
+                < self.storage_stop_writes_percent
+                <= 100
+            ):
+                raise RuntimeError(
+                    "storage quota thresholds must satisfy warning < cleanup < stop_writes <= 100"
                 )
             if self.worker_stale_seconds <= self.worker_heartbeat_interval_seconds * 2:
                 raise RuntimeError(

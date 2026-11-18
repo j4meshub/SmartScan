@@ -21,6 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 SCHEMA_VERSION = "1.0"
+ALLOCATION_SCHEMA_VERSION = "1.1"
 GIB = 1024**3
 DEFAULT_MAX_AGE_HOURS = 24
 REQUIRED_NETWORKS = frozenset({"data", "edge", "egress"})
@@ -539,9 +540,9 @@ def validate_preflight(
     now = (now or datetime.now(UTC)).astimezone(UTC)
     _require(snapshot.get("schema_version") == SCHEMA_VERSION, "schema_invalid", "快照版本不匹配")
     _require(
-        allocation.get("schema_version") == SCHEMA_VERSION,
+        allocation.get("schema_version") == ALLOCATION_SCHEMA_VERSION,
         "schema_invalid",
-        "资源分配版本不匹配",
+        "资源确认版本不匹配",
     )
     captured = _parse_time(snapshot.get("captured_at"), "captured_at")
     _require(captured <= now + timedelta(minutes=5), "snapshot_future", "现场快照来自未来")
@@ -567,11 +568,19 @@ def validate_preflight(
     expected_hostname = _non_placeholder(allocation.get("target_hostname"), "目标主机")
     _require(snapshot.get("hostname") == expected_hostname, "hostname_mismatch", "目标主机不匹配")
 
-    approval = allocation.get("approval") if isinstance(allocation.get("approval"), dict) else {}
-    _non_placeholder(approval.get("approved_by"), "批准人")
-    _non_placeholder(approval.get("change_ticket"), "变更单")
-    approved_at = _parse_time(approval.get("approved_at"), "approved_at")
-    _require(approved_at <= now + timedelta(minutes=5), "approval_invalid", "批准时间来自未来")
+    confirmation = (
+        allocation.get("confirmation") if isinstance(allocation.get("confirmation"), dict) else {}
+    )
+    _non_placeholder(confirmation.get("confirmed_by"), "服务器共同使用人")
+    _non_placeholder(confirmation.get("change_record"), "变更记录")
+    _non_placeholder(confirmation.get("validation_record"), "验证记录")
+    _non_placeholder(confirmation.get("rollback_record"), "回滚记录")
+    confirmed_at = _parse_time(confirmation.get("confirmed_at"), "confirmed_at")
+    _require(
+        confirmed_at <= now + timedelta(minutes=5),
+        "confirmation_invalid",
+        "确认时间来自未来",
+    )
 
     requested_networks = allocation.get("networks")
     _require(isinstance(requested_networks, dict), "networks_missing", "缺少固定网络分配")
@@ -622,6 +631,7 @@ def validate_preflight(
     }
     ports = allocation.get("host_ports")
     _require(isinstance(ports, list) and ports, "ports_missing", "缺少主机端口分配")
+    _require(len(ports) == 1, "ports_invalid", "UAT 只能分配一个宿主机回环端口")
     seen_ports: set[int] = set()
     for item in ports:
         _require(isinstance(item, dict), "port_invalid", "主机端口配置无效")
@@ -645,7 +655,12 @@ def validate_preflight(
                 "bind_address_missing",
                 "监听地址不属于目标宿主机",
             )
-        _non_placeholder(item.get("purpose"), "端口用途")
+        purpose = _non_placeholder(item.get("purpose"), "端口用途")
+        _require(
+            purpose == "UAT Web 回环入口" and port == 18082 and address == "127.0.0.1",
+            "port_invalid",
+            "UAT 只允许 127.0.0.1:18082 Web 回环入口",
+        )
         seen_ports.add(port)
 
     storage = allocation.get("storage") if isinstance(allocation.get("storage"), dict) else {}
@@ -656,8 +671,26 @@ def validate_preflight(
         "UAT 数据根必须为 /mnt/data/smartscan/uat",
     )
     quota = storage.get("quota_bytes")
-    _require(isinstance(quota, int) and quota >= 100 * GIB, "storage_quota_invalid", "UAT 配额不足")
+    _require(
+        isinstance(quota, int) and quota == 50 * GIB,
+        "storage_quota_invalid",
+        "UAT 配额必须为 50 GiB",
+    )
     _require(storage.get("hard_limit_confirmed") is True, "storage_limit_missing", "未确认硬限制")
+    _require(
+        storage.get("disposable_data") is True,
+        "storage_policy_invalid",
+        "UAT 数据必须明确可丢弃和重建",
+    )
+    _require(
+        tuple(
+            storage.get(key)
+            for key in ("warning_percent", "cleanup_percent", "stop_writes_percent")
+        )
+        == (70, 85, 95),
+        "storage_thresholds_invalid",
+        "UAT 存储阈值必须为 70/85/95",
+    )
     filesystem = _find_filesystem(snapshot, storage_root)
     total = int(filesystem.get("total_bytes", 0))
     available = int(filesystem.get("available_bytes", 0))
@@ -678,11 +711,15 @@ def validate_preflight(
     resources = allocation.get("resources") if isinstance(allocation.get("resources"), dict) else {}
     cpu_limit = resources.get("cpu_limit")
     memory_limit = resources.get("memory_limit_bytes")
-    _require(isinstance(cpu_limit, int) and cpu_limit >= 8, "cpu_limit_invalid", "UAT CPU 上限不足")
     _require(
-        isinstance(memory_limit, int) and memory_limit >= 16 * GIB,
+        isinstance(cpu_limit, int) and cpu_limit == 8,
+        "cpu_limit_invalid",
+        "UAT CPU 上限必须为 8 vCPU",
+    )
+    _require(
+        isinstance(memory_limit, int) and memory_limit == 16 * GIB,
         "memory_limit_invalid",
-        "UAT 内存上限不足",
+        "UAT 内存上限必须为 16 GiB",
     )
     host = snapshot.get("host") if isinstance(snapshot.get("host"), dict) else {}
     _require(
@@ -704,57 +741,81 @@ def validate_preflight(
     )
 
     ingress = allocation.get("ingress") if isinstance(allocation.get("ingress"), dict) else {}
-    _require(ingress.get("internal_https") is True, "ingress_invalid", "必须使用内部 HTTPS")
+    _require(
+        ingress.get("mode") == "http_basic_uat",
+        "ingress_invalid",
+        "第一阶段必须使用 HTTP 基础 UAT 模式",
+    )
     _require(ingress.get("public_access") is False, "ingress_invalid", "第一阶段禁止公网入口")
-    _non_placeholder(ingress.get("hostname"), "内部 HTTPS 域名")
+    _require(ingress.get("shared_nginx_port") == 8077, "ingress_invalid", "共享入口必须使用 8077")
+    _require(ingress.get("base_path") == "/smartscan/", "ingress_invalid", "入口基路径无效")
+    _require(ingress.get("upstream") == "127.0.0.1:18082", "ingress_invalid", "入口上游无效")
+    _require(
+        ingress.get("https_required_after_basic_uat") is True,
+        "ingress_invalid",
+        "基础 UAT 后必须保留 HTTPS 门禁",
+    )
 
     monitoring = (
         allocation.get("monitoring") if isinstance(allocation.get("monitoring"), dict) else {}
     )
-    _require(monitoring.get("reuse_existing") is True, "monitoring_invalid", "必须复用现有监控")
     _require(
         monitoring.get("deploy_node_exporter") is False,
         "monitoring_invalid",
-        "未经批准禁止部署 Node Exporter",
+        "UAT 禁止部署 Node Exporter",
     )
-    _non_placeholder(monitoring.get("metrics_target_reference"), "监控接入引用")
-    _non_placeholder(monitoring.get("alerting_reference"), "告警链路引用")
-    _non_placeholder(monitoring.get("host_metrics_reference"), "主机指标来源引用")
-    alerting_mode = monitoring.get("alerting_mode")
     _require(
-        alerting_mode in {"local", "external"},
+        monitoring.get("deploy_alertmanager") is False,
         "monitoring_invalid",
-        "告警链路模式必须为 local 或 external",
+        "UAT 禁止部署 Alertmanager",
     )
+    _require(
+        monitoring.get("application_metrics_enabled") is True,
+        "monitoring_invalid",
+        "UAT 必须保留应用指标",
+    )
+    monitoring_mode = monitoring.get("mode")
+    _require(
+        monitoring_mode in {"manual", "existing"},
+        "monitoring_invalid",
+        "监控模式必须为 manual 或 existing",
+    )
+    _non_placeholder(monitoring.get("record_reference"), "监控确认记录")
     detected_monitoring = (
         snapshot.get("monitoring") if isinstance(snapshot.get("monitoring"), dict) else {}
     )
-    _require(
-        all(detected_monitoring.get(name) is True for name in ("prometheus", "grafana")),
-        "monitoring_not_detected",
-        "现场未同时检测到现有 Prometheus 和 Grafana",
-    )
-    if alerting_mode == "local":
+    if monitoring_mode == "existing":
         _require(
-            detected_monitoring.get("alertmanager") is True,
+            all(detected_monitoring.get(name) is True for name in ("prometheus", "grafana")),
             "monitoring_not_detected",
-            "本机告警模式未检测到 Alertmanager",
+            "现场未同时检测到可复用的 Prometheus 和 Grafana",
+        )
+    else:
+        _require(
+            monitoring.get("accepted_capability_gap") is True,
+            "monitoring_invalid",
+            "人工监控模式必须确认能力缺口",
         )
 
     backup = allocation.get("backup") if isinstance(allocation.get("backup"), dict) else {}
-    _require(backup.get("off_host") is True, "backup_invalid", "备份必须位于异机或对象存储")
-    _non_placeholder(backup.get("endpoint_reference"), "异机备份端点引用")
+    _require(
+        backup.get("required") is False
+        and backup.get("disposable_uat_data") is True
+        and backup.get("single_host_risk_acknowledged") is True,
+        "backup_invalid",
+        "UAT 必须明确无备份、数据可重建及单机风险",
+    )
 
     checks = (
         "snapshot_fresh_and_read_only",
-        "approval_complete",
+        "shared_server_user_confirmation_complete",
         "fixed_networks_no_overlap",
         "host_ports_available",
         "storage_quota_and_reserve",
         "cpu_memory_headroom",
-        "internal_https_only",
-        "existing_monitoring_reused",
-        "off_host_backup_confirmed",
+        "http_basic_uat_boundary_confirmed",
+        "monitoring_mode_confirmed",
+        "disposable_uat_data_confirmed",
     )
     return PreflightResult(
         environment="uat",

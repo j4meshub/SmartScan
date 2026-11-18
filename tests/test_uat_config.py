@@ -12,6 +12,9 @@ from tools.validate_uat_config import (
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "uat"
+SHARED_NGINX_TEMPLATE = (
+    Path(__file__).parents[1] / "deploy" / "nginx" / "shared-8077-smartscan-location.conf.template"
+)
 
 
 def _write_changed(source: Path, target: Path, old: str, new: str) -> Path:
@@ -42,7 +45,7 @@ def test_valid_fixture_returns_secret_free_summary(tmp_path: Path) -> None:
     summary = result.safe_summary()
     serialized = json.dumps(summary, ensure_ascii=False)
     assert summary["project_name"] == "smartscan-uat"
-    assert summary["http_bind"] == "127.0.0.1:18081"
+    assert summary["http_bind"] == "127.0.0.1:18082"
     assert len(summary["image_digests"]) == 6
     assert summary["secrets_included"] is False
     assert "ci-only-uat-database-password" not in serialized
@@ -58,9 +61,9 @@ def test_valid_fixture_returns_secret_free_summary(tmp_path: Path) -> None:
             "data 网络不一致",
         ),
         (
-            "SMARTSCAN_UAT_HTTP_PORT=18081",
+            "SMARTSCAN_UAT_HTTP_PORT=18082",
             "SMARTSCAN_UAT_HTTP_PORT=443",
-            "监听端口与资源审批不一致",
+            "监听端口与资源确认不一致",
         ),
         (
             "SMARTSCAN_UAT_DATA_ROOT=/mnt/data/smartscan/uat/data",
@@ -105,7 +108,7 @@ def test_allocation_rejects_public_bind_address(tmp_path: Path) -> None:
         "SMARTSCAN_UAT_BIND_ADDRESS=8.8.8.8",
     )
 
-    with pytest.raises(UatConfigError, match="回环或批准的私网地址"):
+    with pytest.raises(UatConfigError, match="127.0.0.1"):
         _validate(tmp_path, deploy=deploy, allocation=path)
 
 
@@ -115,7 +118,29 @@ def test_allocation_rejects_duplicate_node_exporter_plan(tmp_path: Path) -> None
     path = tmp_path / "allocation.json"
     path.write_text(json.dumps(allocation), encoding="utf-8")
 
-    with pytest.raises(UatConfigError, match="禁止重复 Node Exporter"):
+    with pytest.raises(UatConfigError, match="禁止部署 Node Exporter"):
+        _validate(tmp_path, allocation=path)
+
+
+def test_allocation_rejects_second_host_port(tmp_path: Path) -> None:
+    allocation = json.loads((FIXTURES / "allocation.json").read_text(encoding="utf-8"))
+    allocation["host_ports"].append(
+        {"purpose": "内部指标入口", "port": 19081, "bind_address": "127.0.0.1"}
+    )
+    path = tmp_path / "allocation.json"
+    path.write_text(json.dumps(allocation), encoding="utf-8")
+
+    with pytest.raises(UatConfigError, match="只能申请一个"):
+        _validate(tmp_path, allocation=path)
+
+
+def test_allocation_requires_fixed_storage_thresholds(tmp_path: Path) -> None:
+    allocation = json.loads((FIXTURES / "allocation.json").read_text(encoding="utf-8"))
+    allocation["storage"]["quota_bytes"] = 100 * 1024**3
+    path = tmp_path / "allocation.json"
+    path.write_text(json.dumps(allocation), encoding="utf-8")
+
+    with pytest.raises(UatConfigError, match="50 GiB"):
         _validate(tmp_path, allocation=path)
 
 
@@ -173,5 +198,29 @@ def test_resource_totals_cannot_exceed_allocation(tmp_path: Path) -> None:
     path = tmp_path / "allocation.json"
     path.write_text(json.dumps(allocation), encoding="utf-8")
 
-    with pytest.raises(UatConfigError, match="CPU 限制总和超过资源审批"):
+    with pytest.raises(UatConfigError, match="CPU 上限必须为 8"):
         _validate(tmp_path, allocation=path)
+
+
+def test_uat_compose_has_expected_base_and_ai_resource_totals(tmp_path: Path) -> None:
+    _validate(tmp_path)
+    document = DEFAULT_COMPOSE_FILE.read_text(encoding="utf-8")
+
+    assert "SMARTSCAN_UAT_WAL_ROOT" not in document
+    assert "archive_command" not in document
+
+
+def test_shared_nginx_template_is_limited_to_smartscan_path_and_loopback_upstream() -> None:
+    document = SHARED_NGINX_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "location = /smartscan" in document
+    assert "return 308 /smartscan/;" in document
+    assert "location ^~ /smartscan/" in document
+    assert "proxy_pass http://127.0.0.1:18082/;" in document
+    assert "location = /smartscan/api/internal/metrics" in document
+    assert "proxy_request_buffering off;" in document
+    assert "proxy_buffering off;" in document
+    assert "client_max_body_size 26m;" in document
+    assert "listen " not in document
+    assert "server {" not in document
+    assert "19081" not in document
