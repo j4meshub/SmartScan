@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "environment": "uat",
   "compose_project_name": "smartscan-uat",
   "target_hostname": "ci-shared-host",
@@ -31,6 +31,13 @@
     "cleanup_percent": 85,
     "stop_writes_percent": 95,
     "disposable_data": true
+  },
+  "storage_budgets": {
+    "postgres_and_wal_bytes": 12884901888,
+    "business_data_bytes": 34359738368,
+    "ocr_models_bytes": 4294967296,
+    "container_logs_bytes": 1073741824,
+    "reserve_bytes": 1073741824
   },
   "resources": {"cpu_limit": 8, "memory_limit_bytes": 17179869184},
   "ingress": {

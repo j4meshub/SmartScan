@@ -46,6 +46,10 @@ IMAGE_REPOSITORIES = {
     "SMARTSCAN_UAT_WEB_IMAGE": "ghcr.io/j4meshub/smartscan-web",
     "SMARTSCAN_UAT_OPS_IMAGE": "ghcr.io/j4meshub/smartscan-ops",
 }
+BLOCKED_UAT_IMAGE_DIGESTS = {
+    "SMARTSCAN_UAT_WEB_IMAGE": {"44a0faf547140844eb065a65034d442b66dd9f971ae5521b8a97400bd50df915"},
+    "SMARTSCAN_UAT_OPS_IMAGE": {"ef4dd40c7b8a494e92540dc5bb476ab144903402142a0bbb0fdc4fd688138a5b"},
+}
 DEPLOY_KEYS = {
     "SMARTSCAN_DEPLOYMENT_TIER",
     "SMARTSCAN_UAT_ISOLATION_ACK",
@@ -140,6 +144,10 @@ def _validate_digest_image(
     _require(":latest" not in reference.casefold(), f"{key} 禁止使用 latest")
     if repository:
         _require(reference == repository, f"{key} 必须使用批准的 GHCR 仓库 {repository}")
+    _require(
+        digest not in BLOCKED_UAT_IMAGE_DIGESTS.get(key, set()),
+        f"{key} 是已知不兼容 /smartscan/ 或资源确认 1.2 的历史 digest",
+    )
     if not ci_fixture:
         _require(len(set(digest)) >= 8, f"{key} 仍是模板 digest")
         _require(not _has_placeholder(reference), f"{key} 仍是模板仓库")
@@ -178,7 +186,7 @@ def _allocation_port(allocation: dict[str, Any]) -> tuple[str, int]:
 def _validate_allocation(
     allocation: dict[str, Any], deploy: dict[str, str], *, ci_fixture: bool
 ) -> tuple[str, int]:
-    _require(allocation.get("schema_version") == "1.1", "资源确认版本无效")
+    _require(allocation.get("schema_version") == "1.2", "资源确认版本无效")
     _require(allocation.get("environment") == "uat", "资源确认必须属于 UAT")
     _require(allocation.get("compose_project_name") == "smartscan-uat", "资源确认项目名无效")
     confirmation = allocation.get("confirmation")
@@ -209,6 +217,17 @@ def _validate_allocation(
         == (70, 85, 95),
         "UAT 存储阈值必须为 70/85/95",
     )
+    budgets = allocation.get("storage_budgets")
+    _require(isinstance(budgets, dict), "资源确认缺少 storage_budgets")
+    expected_budgets = {
+        "postgres_and_wal_bytes": 12 * GIB,
+        "business_data_bytes": 32 * GIB,
+        "ocr_models_bytes": 4 * GIB,
+        "container_logs_bytes": GIB,
+        "reserve_bytes": GIB,
+    }
+    _require(budgets == expected_budgets, "UAT 存储预算必须为 12/32/4/1/1 GiB")
+    _require(sum(budgets.values()) == int(storage["quota_bytes"]), "UAT 存储预算总和必须为 50 GiB")
 
     resources = allocation.get("resources")
     _require(isinstance(resources, dict), "资源确认缺少 resources")
@@ -509,8 +528,14 @@ def validate_uat_config(
     ):
         _require(key in runtime, f"运行配置缺少变量：{key}")
     _require(
-        int(runtime["SMARTSCAN_STORAGE_QUOTA_BYTES"]) == int(allocation["storage"]["quota_bytes"]),
-        "运行配置与确认的 UAT 存储配额不一致",
+        int(runtime["SMARTSCAN_STORAGE_QUOTA_BYTES"])
+        == int(allocation["storage_budgets"]["business_data_bytes"]),
+        "运行配置与确认的 UAT 业务文件预算不一致",
+    )
+    _require(
+        int(runtime["SMARTSCAN_USER_STORAGE_QUOTA_BYTES"])
+        <= int(allocation["storage_budgets"]["business_data_bytes"]),
+        "单用户配额不得超过 UAT 业务文件预算",
     )
     _require(
         tuple(

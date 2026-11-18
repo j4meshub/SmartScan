@@ -180,7 +180,7 @@ def valid_snapshot() -> dict[str, object]:
 
 def valid_allocation() -> dict[str, object]:
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "environment": "uat",
         "compose_project_name": "smartscan-uat",
         "target_hostname": "ctiecaiserver",
@@ -208,6 +208,13 @@ def valid_allocation() -> dict[str, object]:
             "cleanup_percent": 85,
             "stop_writes_percent": 95,
             "disposable_data": True,
+        },
+        "storage_budgets": {
+            "postgres_and_wal_bytes": 12 * GIB,
+            "business_data_bytes": 32 * GIB,
+            "ocr_models_bytes": 4 * GIB,
+            "container_logs_bytes": GIB,
+            "reserve_bytes": GIB,
         },
         "resources": {"cpu_limit": 8, "memory_limit_bytes": 16 * GIB},
         "ingress": {
