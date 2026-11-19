@@ -630,3 +630,11 @@
 - 可写层：可行的八个服务根文件系统全部只读，并为`/tmp`、PostgreSQL socket、Nginx cache/run及Prometheus多进程目录设置精确tmpfs上限。PostgreSQL socket不再使用named volume，只有数据目录允许持久写入loop。校验器必须拒绝错误大小、稀疏文件、错误文件系统/挂载参数、缺少autoclear、数据预算超过实际可用空间、日志无轮转、无界容器可写层以及systemd缺少父挂载依赖或回滚记录。
 - 制品：主线`f38dd4f`的五个镜像已经核对来源提交、`linux/amd64`、SBOM、漏洞门禁和Web子路径；Ops仅支持资源确认1.2，不支持本决策新增的loop证据和只读/tmpfs契约，因此整套保持未接受和禁止部署。用户接受PostgreSQL 17固定digest`sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`为拟部署候选，但实际拉取后仍须核对RepoDigest、平台、版本和UID/GID。
 - 影响：本轮只修改公开仓库的模板、校验器、测试和脱敏文档，不连接或写入服务器。实际创建后备文件、格式化、安装/启停mount单元、拉取镜像、创建Docker对象和修改Nginx均需用户逐项授权；后备文件或数据清理属于独立破坏性授权，禁止`prune`、通配符删除或影响其他项目。
+
+## D-088：原生OpenSSH配合摘要锁定的loop最小sudo能力
+
+- 状态：已确认，等待用户人工安装
+- 日期：2026-11-19
+- 决策：暂不安装或使用`classfang/ssh-mcp-server`；继续使用本机原生OpenSSH、唯一别名`smartscan-server`、Windows `ssh-agent`和现有可信`known_hosts`。loop阶段不向AI提供sudo密码或通用root shell，而是在`/usr/local/libexec/smartscan/smartscan-uat-loop-storage`安装root拥有、普通用户不可写的受限执行器。执行器只接受无额外参数的`create`、`verify`、`status`、`stop`，所有路径、50 GiB大小、mount单元、目标主机和`SUDO_USER`均固定；sudoers同时按执行器SHA-256及四组精确参数授权。
+- 安全边界：执行器拒绝任意路径、设备名、大小、符号链接、异常对象、额外参数、模板摘要变化和空间不足；创建后验证ext4、label、非稀疏、至少48 GiB可用、挂载参数、autoclear与父挂载依赖。`stop`只停止并禁用固定单元且保留后备文件；没有Docker、Nginx、网络、Secret、数据库、迁移、删除、通用`systemctl`、`sudo bash`或`sudo sh`能力。操作日志只记录固定动作、结果和原因码。
+- 安装与影响：共同使用人必须在自己的SSH终端审核三个文件、复核摘要、人工输入sudo密码并用`visudo`安装；AI不得请求、读取、保存或传递密码。本工作包只解决loop存储阶段的最小权限执行，不构成create授权，也不扩大OPS-001应用部署权限。提交`1b93e23`五个GHCR镜像已获接受，但服务器访问`auth.docker.io`超时，PostgreSQL Registry核验继续独立阻塞完整应用部署。

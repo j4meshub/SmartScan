@@ -1,0 +1,10 @@
+# SmartScan UAT loop存储受限执行器。
+# 仅允许固定用户以root运行固定摘要的执行器及四个精确子命令；不得添加通配符或额外参数。
+Cmnd_Alias SMARTSCAN_UAT_LOOP_STORAGE = \
+    sha256:e0944c15931480858d2b35b8e3ab3fe2f40f904c62388a486f5752487bf29103 /usr/local/libexec/smartscan/smartscan-uat-loop-storage create, \
+    sha256:e0944c15931480858d2b35b8e3ab3fe2f40f904c62388a486f5752487bf29103 /usr/local/libexec/smartscan/smartscan-uat-loop-storage verify, \
+    sha256:e0944c15931480858d2b35b8e3ab3fe2f40f904c62388a486f5752487bf29103 /usr/local/libexec/smartscan/smartscan-uat-loop-storage status, \
+    sha256:e0944c15931480858d2b35b8e3ab3fe2f40f904c62388a486f5752487bf29103 /usr/local/libexec/smartscan/smartscan-uat-loop-storage stop
+
+Defaults!SMARTSCAN_UAT_LOOP_STORAGE env_reset, !set_home, secure_path=/usr/sbin\:/usr/bin\:/sbin\:/bin
+szhzx ALL=(root) NOPASSWD: SMARTSCAN_UAT_LOOP_STORAGE

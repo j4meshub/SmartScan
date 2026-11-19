@@ -1,0 +1,4 @@
+deploy/ops/smartscan-uat-loop-storage text eol=lf
+deploy/sudoers/smartscan-uat-loop-storage text eol=lf
+deploy/systemd/mnt-data-smartscan-uat.mount.template text eol=lf
+tests/fixtures/uat/loop-storage-evidence.json text eol=lf

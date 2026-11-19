@@ -31,6 +31,9 @@
 | `deploy/compose/shared-host-allocation.example.json` | 服务器共同使用人资源确认模板 |
 | `deploy/compose/uat-loop-storage-evidence.example.json` | 创建后loop事实的失败关闭占位模板 |
 | `deploy/systemd/mnt-data-smartscan-uat.mount.template` | 仅供评审的持久loop mount单元 |
+| `deploy/ops/smartscan-uat-loop-storage` | 固定四子命令、固定对象的loop root执行器 |
+| `deploy/sudoers/smartscan-uat-loop-storage` | 按执行器摘要和精确参数授权的sudoers模板 |
+| `docs/OPS001_LOOP_SUDO_EXECUTOR.md` | 用户人工审核、安装、验证和回滚说明 |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template` | 只含 `/smartscan/` 的8077增量location模板 |
 | `tools/shared_host_preflight.py` | 现场只读采集与离线冲突校验 |
 | `tools/validate_uat_config.py` | 部署参数、审批、运行配置和 Compose 契约校验 |
