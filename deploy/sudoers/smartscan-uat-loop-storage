@@ -1,10 +1,11 @@
 # SmartScan UAT loop存储受限执行器。
-# 仅允许固定用户以root运行root拥有且普通用户不可写的执行器及四个精确子命令；不得添加通配符或额外参数。
+# 仅允许固定用户以root运行root拥有且普通用户不可写的执行器及五个精确子命令；不得添加通配符或额外参数。
 Cmnd_Alias SMARTSCAN_UAT_LOOP_STORAGE = \
     /usr/local/libexec/smartscan/smartscan-uat-loop-storage create, \
     /usr/local/libexec/smartscan/smartscan-uat-loop-storage verify, \
     /usr/local/libexec/smartscan/smartscan-uat-loop-storage status, \
-    /usr/local/libexec/smartscan/smartscan-uat-loop-storage stop
+    /usr/local/libexec/smartscan/smartscan-uat-loop-storage stop, \
+    /usr/local/libexec/smartscan/smartscan-uat-loop-storage recreate-empty
 
 Defaults!SMARTSCAN_UAT_LOOP_STORAGE env_reset
 Defaults!SMARTSCAN_UAT_LOOP_STORAGE secure_path="/usr/sbin:/usr/bin:/sbin:/bin"

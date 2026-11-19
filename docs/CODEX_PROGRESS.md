@@ -7,15 +7,23 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001A` UAT loop受限sudo执行器准备 |
-| 工作包状态 | 等待人工验收；仓库实现与PR #81全部GitHub Actions已通过，待合并后由用户人工安装 |
-| 当前分支 | `codex/ops-001a-loop-sudo-executor` |
-| 最后验证基线 | `1b93e23`（PR #80合并；五个新GHCR digest已获用户接受并通过服务器匿名manifest核验） |
-| 工作包提交 | `e840857`（主体实现）、`066b070`（PR证据）、`881842e`（目标sudo兼容）、`bddc55e`（父目录权限修复） |
-| PR | [#81](https://github.com/j4meshub/SmartScan/pull/81)；仅包含仓库资产，未连接或修改服务器 |
-| 下一工作包 | PR合并后由用户在自己的SSH终端人工审核并安装执行器；安装不等于授权`create`。PostgreSQL Registry连通性解决前不进入完整应用部署 |
+| 当前工作包 | `OPS-001B` ext4 loop完整预分配修复 |
+| 工作包状态 | 进行中；本地门禁通过，等待PR的Ubuntu动态状态机、`visudo`和全部GitHub Actions |
+| 当前分支 | `codex/ops-001b-ext4-loop-recreate` |
+| 最后验证基线 | `ced1970`（PR #81合并；OPS-001A执行器已由用户人工安装） |
+| 工作包提交 | `c5de9e7`（lazy初始化修复、空UAT定点重建、安全测试与人工升级说明） |
+| PR | [#82](https://github.com/j4meshub/SmartScan/pull/82)；只包含仓库资产，未执行服务器`stop`、删除或重格式化 |
+| 下一工作包 | OPS-001B合并后由用户人工升级执行器和sudoers；真实`recreate-empty`必须再获单独授权。PostgreSQL Registry连通性仍独立阻塞完整应用部署 |
 
 ## 当前工作包进展
+
+- 2026-11-19现场执行`create`返回成功并曾通过内部验证，稍后独立`verify`以`reason=backing_sparse`失败；逻辑大小仍为50 GiB，ext4、`smartscan-uat` label、`rw,nosuid,nodev,noatime`、autoclear及systemd enabled/active均正常，文件系统可用约48.899 GiB且应用从未启动。现场保持挂载，未执行`stop`、删除、重格式化或其他越界操作。
+- 根因按现场证据定为ext4格式化兼容：原`-E nodiscard`仍保留lazy inode table和lazy journal初始化，首次挂载后的后台初始化会使底层完整预分配文件重新出现空洞。OPS-001B固定增加`lazy_itable_init=0,lazy_journal_init=0`，不降低`backing_sparse`门禁、不允许稀疏文件，也不缩小50 GiB目标。
+- 新增`recreate-empty`设计：只允许固定后备文件确为50 GiB且稀疏、固定挂载/loop/ext4/label/systemd全部正确、权限正确、除空`lost+found`外无任何内容且共享盘余量仍充足时执行；停止固定mount并确认loop释放后，只重建固定空UAT后备文件，再完整验证。任何业务文件或异常立即失败关闭。
+- OPS-001A已由PR #81合并并由用户人工安装；本工作包是现场新证据触发的兼容修复，不是原任务遗漏。本轮不连接服务器，不授权真实重建，也不触碰Docker、网络、Secret、迁移、容器或Nginx。
+- 本地专项为`19 passed, 16 skipped`，其中16项需要Linux Bash/`visudo`，由GitHub Ubuntu Runner补证。全量回归首次仅1项失败，原因是旧文档契约仍要求“待授权、未执行”，与已经发生的loop创建事实冲突；测试改为要求“loop已创建但应用未部署”、`backing_sparse`和`recreate-empty`失败关闭证据，没有恢复失效描述或放宽安全门禁。修复后全量`538 passed, 23 skipped`、覆盖率87.79%，Ruff检查、175个Python文件格式、迁移漂移和差异空白检查通过；23项跳过为既有7项外部门禁及新增16项Linux执行器门禁。
+
+以下保留OPS-001A的完成证据：
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-loop-storage`的root执行器，只接受无额外参数的`create/verify/status/stop`；固定目标主机、`SUDO_USER`、`SUDO_COMMAND`、后备文件、挂载点、50 GiB大小和systemd单元，拒绝任意资源参数及通用命令。
 - sudoers模板只列四个精确命令参数，不授予`sudo bash`、`sudo sh`、通配符、额外参数或通用`systemctl`；安装前人工核对执行器SHA-256，安装后由root拥有且普通用户不可写。执行器运行时继续核对自身安装路径/权限以及mount单元固定摘要。

@@ -2,14 +2,14 @@
 
 ## 状态与用途
 
-本文件是 `OPS-001` 的仓库侧交付，定义按需启停的 `smartscan-uat` 验收栈。`OPS-000` 已完成主机事实采集和资源决策，但不授权部署。部署当天必须重新只读采集网络、路由、VPN、端口和资源状态，由服务器共同使用人确认精确 CIDR、变更、验证和回滚；任何现场冲突立即停止。
+本文件是 `OPS-001` 的仓库侧交付，定义按需启停的 `smartscan-uat` 验收栈。`OPS-000` 已完成主机事实采集和资源决策。首次loop创建后独立验证发现ext4 lazy初始化导致`backing_sparse`，应用尚未部署；OPS-001B仓库修复、人工升级、独立`recreate-empty`授权和连续验证通过前不得继续应用阶段。
 
 旧 `docker-compose.staging.yml`、`/srv/smartscan/staging` 及其监控/备份叠加文件仅保留历史证据，不得与本 UAT 栈混用。UAT 可以使用人工资源检查且不要求备份；生产监控和数据风险由 `OPS-003`、`OPS-004` 继续处理。
 
 ## 固定边界
 
 - Compose项目名固定为`smartscan-uat`，数据根固定为`/mnt/data/smartscan/uat`，Secret和确认文件位于`/etc/smartscan/uat`。
-- UAT使用完整预分配、非稀疏的50 GiB loop后备文件，格式化为reserved block为0的ext4，并由依赖`/mnt/data`的systemd mount单元挂载到`/mnt/data/smartscan/uat`；不使用project quota、`/etc/fstab`或共享数据盘重挂载。
+- UAT使用完整预分配、非稀疏的50 GiB loop后备文件，以`nodiscard,lazy_itable_init=0,lazy_journal_init=0`格式化为reserved block为0的ext4，并由依赖`/mnt/data`的systemd mount单元挂载到`/mnt/data/smartscan/uat`；不使用project quota、`/etc/fstab`或共享数据盘重挂载。
 - 50 GiB分配为数据库/WAL 12 GiB、业务文件32 GiB、OCR模型4 GiB、ext4元数据与运行余量2 GiB。前3项数据预算为48 GiB；创建后实际可用不足48 GiB时必须降低业务预算，不能扩大后备文件。70%提示、85%告警并执行受控清理、95%停止新增写入。
 - PostgreSQL是SmartScan专用容器；只有Web发布`127.0.0.1:18082`，PostgreSQL、API、Worker和AI Gateway均不发布宿主机端口。
 - `data`、`edge`、`egress`三张网络使用部署当天现场无冲突结果确定的固定CIDR和网关；Compose不允许自动分配。
@@ -31,8 +31,8 @@
 | `deploy/compose/shared-host-allocation.example.json` | 服务器共同使用人资源确认模板 |
 | `deploy/compose/uat-loop-storage-evidence.example.json` | 创建后loop事实的失败关闭占位模板 |
 | `deploy/systemd/mnt-data-smartscan-uat.mount.template` | 仅供评审的持久loop mount单元 |
-| `deploy/ops/smartscan-uat-loop-storage` | 固定四子命令、固定对象的loop root执行器 |
-| `deploy/sudoers/smartscan-uat-loop-storage` | 只允许四组精确命令参数的sudoers模板 |
+| `deploy/ops/smartscan-uat-loop-storage` | 固定五子命令、固定对象的loop root执行器；`recreate-empty`只处理稀疏且空的固定UAT |
+| `deploy/sudoers/smartscan-uat-loop-storage` | 只允许五组精确命令参数的sudoers模板 |
 | `docs/OPS001_LOOP_SUDO_EXECUTOR.md` | 用户人工审核、安装、验证和回滚说明 |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template` | 只含 `/smartscan/` 的8077增量location模板 |
 | `tools/shared_host_preflight.py` | 现场只读采集与离线冲突校验 |

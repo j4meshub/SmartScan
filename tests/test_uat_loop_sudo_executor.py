@@ -31,10 +31,12 @@ def test_executor_has_fixed_security_contract() -> None:
     assert 'readonly BACKING_FILE="/mnt/data/smartscan-loop/uat.ext4"' in text
     assert 'readonly MOUNT_POINT="/mnt/data/smartscan/uat"' in text
     assert 'readonly UNIT_PATH="/etc/systemd/system/mnt-data-smartscan-uat.mount"' in text
-    assert "create|verify|status|stop" in text
+    assert "create|verify|status|stop|recreate-empty" in text
     assert 'if [[ "$#" -ne 1 ]]' in text
     assert "docker" not in text.casefold()
     assert "nginx" not in text.casefold()
+    assert 'readonly UNLINK_CMD="/usr/bin/unlink"' in text
+    assert '"$UNLINK_CMD" -- "$BACKING_FILE"' in text
     assert "rm " not in text
     assert "losetup -d" not in text
     assert "$@" in text  # 只用于单次固定参数校验入口。
@@ -45,12 +47,20 @@ def test_executor_pins_reviewed_mount_unit_sha256() -> None:
     assert f'readonly UNIT_SHA256="{_sha256(MOUNT_UNIT)}"' in text
 
 
-def test_sudoers_allows_only_four_exact_commands() -> None:
+def test_manual_upgrade_guide_pins_current_asset_sha256() -> None:
+    guide = (ROOT / "docs" / "OPS001_LOOP_SUDO_EXECUTOR.md").read_text(encoding="utf-8")
+
+    assert _sha256(EXECUTOR) in guide
+    assert _sha256(MOUNT_UNIT) in guide
+    assert _sha256(SUDOERS) in guide
+
+
+def test_sudoers_allows_only_five_exact_commands() -> None:
     text = SUDOERS.read_text(encoding="utf-8")
     command = "/usr/local/libexec/smartscan/smartscan-uat-loop-storage"
 
-    assert text.count(command) == 4
-    for action in ("create", "verify", "status", "stop"):
+    assert text.count(command) == 5
+    for action in ("create", "verify", "status", "stop", "recreate-empty"):
         assert f"{command} {action}" in text
     assert "szhzx ALL=(root) NOPASSWD: SMARTSCAN_UAT_LOOP_STORAGE" in text
     assert "sha256:" not in text
@@ -59,6 +69,13 @@ def test_sudoers_allows_only_four_exact_commands() -> None:
     assert "systemctl" not in text
     assert "*" not in text
     assert "?" not in text
+
+
+def test_mkfs_disables_discard_and_lazy_initialization() -> None:
+    text = EXECUTOR.read_text(encoding="utf-8")
+
+    assert "-E nodiscard,lazy_itable_init=0,lazy_journal_init=0" in text
+    assert "-E nodiscard -L" not in text
 
 
 def test_executor_bash_syntax_on_linux(bash_path: str) -> None:
@@ -158,12 +175,16 @@ elif name == "systemctl":
         raise SystemExit(2)
 elif name == "mkfs.ext4":
     state["filesystem"] = True
+    state["mkfs_args"].append(args)
+    mount_point = Path(os.environ["FAKE_MOUNT_POINT"])
+    mount_point.mkdir(parents=True, exist_ok=True)
+    (mount_point / "lost+found").mkdir(exist_ok=True)
     save()
 elif name == "blkid":
     if not state["filesystem"]:
         raise SystemExit(2)
     field = args[args.index("-s") + 1]
-    print("ext4" if field == "TYPE" else "smartscan-uat")
+    print("ext4" if field == "TYPE" else state["label"])
 elif name == "dumpe2fs":
     if not state["filesystem"]:
         raise SystemExit(2)
@@ -171,7 +192,8 @@ elif name == "dumpe2fs":
 elif name == "losetup":
     if state["mounted"]:
         fields = args[args.index("--output") + 1]
-        print("/dev/loop42 1" if fields == "NAME,AUTOCLEAR" else "/dev/loop42")
+        loop_name = "/dev/loop42" if state["loop_matches"] else "/dev/loop99"
+        print(f"{loop_name} 1" if fields == "NAME,AUTOCLEAR" else loop_name)
 else:
     raise SystemExit(f"unexpected fake command: {name}")
 """,
@@ -284,6 +306,9 @@ def _build_harness(tmp_path: Path, *, low_space: bool = False) -> tuple[Path, di
                 "mounted": False,
                 "enabled": False,
                 "active": False,
+                "label": "smartscan-uat",
+                "loop_matches": True,
+                "mkfs_args": [],
             }
         ),
         encoding="utf-8",
@@ -294,6 +319,7 @@ def _build_harness(tmp_path: Path, *, low_space: bool = False) -> tuple[Path, di
             "SUDO_USER": "tester",
             "FAKE_STATE": str(state_path),
             "FAKE_DATA_MOUNT": str(data_mount),
+            "FAKE_MOUNT_POINT": str(mount_point),
         }
     )
     return executor_path, env
@@ -311,6 +337,19 @@ def _run(
         capture_output=True,
         check=False,
     )
+
+
+def _make_backing_sparse(backing: Path, size: int = 1_048_576) -> None:
+    with backing.open("r+b") as stream:
+        stream.truncate(0)
+        stream.truncate(size)
+
+
+def _update_state(env: dict[str, str], **changes: object) -> None:
+    state_path = Path(env["FAKE_STATE"])
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.update(changes)
+    state_path.write_text(json.dumps(state), encoding="utf-8")
 
 
 def test_create_is_idempotent_and_stop_retains_backing(tmp_path: Path, bash_path: str) -> None:
@@ -368,8 +407,115 @@ def test_executor_rejects_extra_arguments_and_command_injection(
     executor, env = _build_harness(tmp_path)
 
     extra = _run(bash_path, executor, env, "create", ";id")
+    recreate_extra = _run(bash_path, executor, env, "recreate-empty", ";id")
     unknown = _run(bash_path, executor, env, "bash")
 
     assert extra.returncode == 64
+    assert recreate_extra.returncode == 64
     assert unknown.returncode == 64
     assert not (tmp_path / "mnt" / "data" / "smartscan-loop").exists()
+
+
+def test_recreate_empty_repairs_sparse_empty_uat_and_verify_is_repeatable(
+    tmp_path: Path, bash_path: str
+) -> None:
+    executor, env = _build_harness(tmp_path)
+    backing = tmp_path / "mnt" / "data" / "smartscan-loop" / "uat.ext4"
+
+    created = _run(bash_path, executor, env, "create")
+    assert created.returncode == 0, created.stderr
+    _make_backing_sparse(backing)
+
+    recreated = _run(bash_path, executor, env, "recreate-empty")
+    first_verify = _run(bash_path, executor, env, "verify")
+    second_verify = _run(bash_path, executor, env, "verify")
+
+    assert recreated.returncode == 0, recreated.stderr
+    assert "result=recreated" in recreated.stdout
+    assert first_verify.returncode == 0, first_verify.stderr
+    assert second_verify.returncode == 0, second_verify.stderr
+    state = json.loads(Path(env["FAKE_STATE"]).read_text(encoding="utf-8"))
+    assert len(state["mkfs_args"]) == 2
+    for args in state["mkfs_args"]:
+        assert "nodiscard,lazy_itable_init=0,lazy_journal_init=0" in args
+
+
+def test_recreate_empty_rejects_business_content(tmp_path: Path, bash_path: str) -> None:
+    executor, env = _build_harness(tmp_path)
+    backing = tmp_path / "mnt" / "data" / "smartscan-loop" / "uat.ext4"
+    business_file = tmp_path / "mnt" / "data" / "smartscan" / "uat" / "scan.pdf"
+    assert _run(bash_path, executor, env, "create").returncode == 0
+    _make_backing_sparse(backing)
+    business_file.write_bytes(b"must-not-delete")
+
+    result = _run(bash_path, executor, env, "recreate-empty")
+
+    assert result.returncode != 0
+    assert "uat_not_empty" in result.stderr
+    assert business_file.read_bytes() == b"must-not-delete"
+    assert json.loads(Path(env["FAKE_STATE"]).read_text())["mounted"] is True
+
+
+def test_recreate_empty_rejects_non_sparse_backing(tmp_path: Path, bash_path: str) -> None:
+    executor, env = _build_harness(tmp_path)
+    assert _run(bash_path, executor, env, "create").returncode == 0
+
+    result = _run(bash_path, executor, env, "recreate-empty")
+
+    assert result.returncode != 0
+    assert "backing_not_sparse" in result.stderr
+    assert json.loads(Path(env["FAKE_STATE"]).read_text())["mounted"] is True
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_reason"),
+    [
+        ("path", "backing_file_invalid"),
+        ("mount", "mount_missing"),
+        ("loop", "loop_autoclear_invalid"),
+        ("label", "filesystem_label_invalid"),
+        ("permissions", "backing_permissions_invalid"),
+    ],
+)
+def test_recreate_empty_rejects_abnormal_fixed_state(
+    tmp_path: Path, bash_path: str, scenario: str, expected_reason: str
+) -> None:
+    case_root = tmp_path / scenario
+    executor, env = _build_harness(case_root)
+    backing = case_root / "mnt" / "data" / "smartscan-loop" / "uat.ext4"
+    assert _run(bash_path, executor, env, "create").returncode == 0
+    _make_backing_sparse(backing)
+
+    if scenario == "path":
+        backing.unlink()
+        backing.symlink_to(case_root / "unexpected")
+    elif scenario == "mount":
+        _update_state(env, mounted=False)
+    elif scenario == "loop":
+        _update_state(env, loop_matches=False)
+    elif scenario == "label":
+        _update_state(env, label="unexpected")
+    elif scenario == "permissions":
+        backing.chmod(0o644)
+
+    result = _run(bash_path, executor, env, "recreate-empty")
+
+    assert result.returncode != 0
+    assert expected_reason in result.stderr
+
+
+def test_recreate_empty_only_changes_fixed_smartscan_objects(
+    tmp_path: Path, bash_path: str
+) -> None:
+    executor, env = _build_harness(tmp_path)
+    data_mount = tmp_path / "mnt" / "data"
+    backing = data_mount / "smartscan-loop" / "uat.ext4"
+    unrelated = data_mount / "unrelated-service.keep"
+    unrelated.write_bytes(b"untouched")
+    assert _run(bash_path, executor, env, "create").returncode == 0
+    _make_backing_sparse(backing)
+
+    result = _run(bash_path, executor, env, "recreate-empty")
+
+    assert result.returncode == 0, result.stderr
+    assert unrelated.read_bytes() == b"untouched"

@@ -48,12 +48,13 @@ readonly BLKID_CMD="/usr/sbin/blkid"
 readonly DUMPE2FS_CMD="/usr/sbin/dumpe2fs"
 readonly LOSETUP_CMD="/usr/sbin/losetup"
 readonly MKFS_CMD="/usr/sbin/mkfs.ext4"
+readonly UNLINK_CMD="/usr/bin/unlink"
 
 CURRENT_ACTION="unvalidated"
 VERIFIED_USABLE_BYTES=0
 
 usage() {
-    printf '用法：sudo -n %s {create|verify|status|stop}\n' "$EXECUTOR_PATH" >&2
+    printf '用法：sudo -n %s {create|verify|status|stop|recreate-empty}\n' "$EXECUTOR_PATH" >&2
 }
 
 log_event() {
@@ -90,7 +91,7 @@ require_exact_command() {
         exit 64
     fi
     case "$1" in
-        create|verify|status|stop)
+        create|verify|status|stop|recreate-empty)
             CURRENT_ACTION="$1"
             ;;
         *)
@@ -204,6 +205,41 @@ require_complete_allocation() {
         || fail "backing_permissions_invalid" "后备文件必须由root拥有且权限为0600"
 }
 
+require_sparse_backing() {
+    local logical_bytes blocks allocated_bytes mode owner group
+    logical_bytes="$($STAT_CMD -c '%s' "$BACKING_FILE")"
+    blocks="$($STAT_CMD -c '%b' "$BACKING_FILE")"
+    mode="$($STAT_CMD -c '%a' "$BACKING_FILE")"
+    owner="$($STAT_CMD -c '%u' "$BACKING_FILE")"
+    group="$($STAT_CMD -c '%g' "$BACKING_FILE")"
+    allocated_bytes=$((blocks * 512))
+    [[ "$logical_bytes" -eq "$BACKING_BYTES" ]] \
+        || fail "backing_size_invalid" "后备文件不是精确50 GiB"
+    [[ "$mode" == "600" && "$owner" == "$ROOT_UID" && "$group" == "$ROOT_GID" ]] \
+        || fail "backing_permissions_invalid" "后备文件必须由root拥有且权限为0600"
+    (( allocated_bytes < BACKING_BYTES )) \
+        || fail "backing_not_sparse" "recreate-empty只允许修复已确认的稀疏后备文件"
+}
+
+require_empty_uat_filesystem() {
+    local unexpected
+    [[ -d "$MOUNT_POINT/lost+found" && ! -L "$MOUNT_POINT/lost+found" ]] \
+        || fail "lost_found_invalid" "空UAT文件系统必须只包含真实的lost+found目录"
+    unexpected="$($FIND_CMD "$MOUNT_POINT" -mindepth 1 -maxdepth 1 \
+        ! -name 'lost+found' -print -quit)"
+    [[ -z "$unexpected" ]] \
+        || fail "uat_not_empty" "UAT文件系统存在业务文件或额外目录，拒绝重建"
+    unexpected="$($FIND_CMD "$MOUNT_POINT/lost+found" -mindepth 1 -print -quit)"
+    [[ -z "$unexpected" ]] \
+        || fail "lost_found_not_empty" "lost+found中存在内容，拒绝重建"
+}
+
+format_backing_file() {
+    "$MKFS_CMD" -F -m 0 \
+        -E nodiscard,lazy_itable_init=0,lazy_journal_init=0 \
+        -L "$FILESYSTEM_LABEL" "$BACKING_FILE" >/dev/null
+}
+
 require_filesystem_identity() {
     local filesystem label reserved_blocks
     filesystem="$($BLKID_CMD -p -s TYPE -o value "$BACKING_FILE")"
@@ -314,13 +350,61 @@ create_storage() {
     "$CHOWN_CMD" "$ROOT_OWNER:$ROOT_GROUP" "$BACKING_FILE"
     "$CHMOD_CMD" 0600 "$BACKING_FILE"
     require_complete_allocation
-    "$MKFS_CMD" -F -m 0 -E nodiscard -L "$FILESYSTEM_LABEL" "$BACKING_FILE" >/dev/null
+    format_backing_file
     require_filesystem_identity
     "$SYSTEMCTL_CMD" daemon-reload
     "$SYSTEMCTL_CMD" enable --now "$UNIT_NAME"
     verify_storage >/dev/null
     log_event "passed" "created"
     printf 'status=passed\naction=create\nresult=created\n'
+}
+
+recreate_empty_storage() {
+    require_data_mount
+    require_unit_template
+    require_safe_path_types
+    require_directory_permissions
+    [[ -f "$BACKING_FILE" ]] || fail "backing_file_missing" "固定后备文件不存在"
+    [[ -d "$MOUNT_POINT" ]] || fail "mount_point_missing" "固定挂载点不存在"
+    require_sparse_backing
+    require_filesystem_identity
+    require_mounted_state
+    require_empty_uat_filesystem
+    check_host_capacity
+
+    "$SYSTEMCTL_CMD" stop "$UNIT_NAME"
+    [[ -z "$(mount_record)" ]] \
+        || fail "unmount_failed" "固定挂载点停止后仍处于挂载状态"
+    [[ -z "$($LOSETUP_CMD -j "$BACKING_FILE" --noheadings --output NAME 2>/dev/null || true)" ]] \
+        || fail "loop_release_failed" "卸载后loop映射仍存在，拒绝删除后备文件"
+    "$SYSTEMCTL_CMD" disable "$UNIT_NAME" >/dev/null
+    if "$SYSTEMCTL_CMD" is-enabled --quiet "$UNIT_NAME"; then
+        fail "unit_disable_failed" "固定mount单元未能在重建窗口禁用"
+    fi
+
+    require_safe_path_types
+    require_directory_permissions
+    require_sparse_backing
+    require_filesystem_identity
+    "$UNLINK_CMD" -- "$BACKING_FILE"
+    [[ ! -e "$BACKING_FILE" && ! -L "$BACKING_FILE" ]] \
+        || fail "backing_delete_failed" "固定空UAT后备文件未能安全删除"
+
+    ( set -o noclobber; : >"$BACKING_FILE" ) \
+        || fail "backing_create_conflict" "后备文件在重建窗口内出现，拒绝覆盖"
+    "$FALLOCATE_CMD" -l "$BACKING_BYTES" "$BACKING_FILE"
+    "$CHOWN_CMD" "$ROOT_OWNER:$ROOT_GROUP" "$BACKING_FILE"
+    "$CHMOD_CMD" 0600 "$BACKING_FILE"
+    require_complete_allocation
+    format_backing_file
+    require_filesystem_identity
+    "$SYSTEMCTL_CMD" daemon-reload
+    "$SYSTEMCTL_CMD" enable --now "$UNIT_NAME"
+    verify_storage >/dev/null
+    require_complete_allocation
+    log_event "passed" "empty_sparse_filesystem_recreated"
+    printf 'status=passed\naction=recreate-empty\nresult=recreated\nbacking_size_bytes=%s\nfully_preallocated=true\nfilesystem=ext4\nlabel=%s\nmount_active=true\nautoclear=true\nunit_enabled=true\nunit_active=true\n' \
+        "$BACKING_BYTES" "$FILESYSTEM_LABEL"
 }
 
 status_storage() {
@@ -377,4 +461,5 @@ case "$CURRENT_ACTION" in
     verify) verify_storage; log_event "passed" "verified" ;;
     status) status_storage ;;
     stop) stop_storage ;;
+    recreate-empty) recreate_empty_storage ;;
 esac
