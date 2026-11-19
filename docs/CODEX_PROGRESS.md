@@ -11,8 +11,8 @@
 | 工作包状态 | 等待人工验收；loop存储已通过，五个SmartScan候选已完成只读核验，等待用户接受；PostgreSQL供应链仍阻塞应用部署 |
 | 当前分支 | `codex/ops-001c-app-candidate-validation` |
 | 最后验证基线 | `2adbf4f`（PR #82合并；OPS-001B执行器、空UAT重建和两次独立验证已获用户接受） |
-| 工作包提交 | 待本分支中文提交 |
-| PR | 待创建；只记录脱敏验收与公开制品证据，不包含服务器原始响应或内部地址 |
+| 工作包提交 | `a463384`（存储验收、五镜像候选核验及PostgreSQL GHCR供应链计划） |
+| PR | [#83](https://github.com/j4meshub/SmartScan/pull/83)；只记录脱敏验收与公开制品证据，不包含服务器原始响应或内部地址 |
 | 下一工作包 | `OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链；完成服务器匿名核验和用户接受后，再申请OPS-001应用部署授权 |
 
 ## 当前工作包进展
