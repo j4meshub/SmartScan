@@ -37,6 +37,7 @@
   "storage": {
     "root": "/mnt/data/smartscan/uat",
     "quota_bytes": 53687091200,
+    "hard_limit_type": "loop_ext4",
     "hard_limit_confirmed": false,
     "warning_percent": 70,
     "cleanup_percent": 85,
@@ -47,8 +48,30 @@
     "postgres_and_wal_bytes": 12884901888,
     "business_data_bytes": 34359738368,
     "ocr_models_bytes": 4294967296,
-    "container_logs_bytes": 1073741824,
-    "reserve_bytes": 1073741824
+    "filesystem_and_runtime_bytes": 2147483648
+  },
+  "loop_storage": {
+    "backing_file": "/mnt/data/smartscan-loop/uat.ext4",
+    "backing_file_bytes": 53687091200,
+    "fully_preallocated": true,
+    "sparse_file_forbidden": true,
+    "filesystem_type": "ext4",
+    "reserved_blocks_percent": 0,
+    "mount_point": "/mnt/data/smartscan/uat",
+    "mount_options": ["loop", "nodev", "nosuid", "noatime"],
+    "autoclear_required": true,
+    "systemd_unit_name": "mnt-data-smartscan-uat.mount",
+    "systemd_unit_path": "/etc/systemd/system/mnt-data-smartscan-uat.mount",
+    "requires_mounts_for": "/mnt/data",
+    "rollback_documented": true
+  },
+  "docker_logging": {
+    "storage_scope": "shared_docker_root_outside_uat_loop",
+    "driver": "json-file",
+    "max_size": "10m",
+    "max_file": 3,
+    "max_container_count": 8,
+    "maximum_bytes": 251658240
   },
   "resources": {
     "cpu_limit": 8,

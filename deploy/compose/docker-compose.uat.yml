@@ -4,6 +4,7 @@ x-common: &common
   init: true
   pull_policy: always
   restart: "no"
+  read_only: true
   env_file:
     - ${SMARTSCAN_UAT_RUNTIME_ENV_FILE:?必须设置 UAT 运行配置文件}
   labels:
@@ -21,6 +22,7 @@ services:
     image: ${SMARTSCAN_UAT_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
     pull_policy: always
     restart: "no"
+    read_only: true
     environment:
       POSTGRES_DB: smartscan
       POSTGRES_USER: smartscan
@@ -29,9 +31,9 @@ services:
       - type: bind
         source: ${SMARTSCAN_UAT_POSTGRES_ROOT:?必须设置 UAT PostgreSQL 目录}
         target: /var/lib/postgresql/data
-      - type: volume
-        source: postgres-socket
-        target: /var/run/postgresql
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=0777
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
       interval: 10s
@@ -54,10 +56,8 @@ services:
     image: ${SMARTSCAN_UAT_OPS_IMAGE:?必须固定运维镜像 digest}
     entrypoint: ["python"]
     command: ["-m", "services.api.app.migrations", "upgrade"]
-    volumes:
-      - type: bind
-        source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
-        target: /srv/smartscan/data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=10001,gid=10001
     depends_on:
       postgres: {condition: service_healthy}
     cpus: "0.25"
@@ -82,9 +82,10 @@ services:
       SMARTSCAN_AUTO_MIGRATE: "false"
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_INTERNAL_FILE_SEND_PREFIX: /_smartscan_files
-      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+      PROMETHEUS_MULTIPROC_DIR: /run/smartscan-prometheus
     tmpfs:
-      - /tmp/prometheus:rw,noexec,nosuid,nodev,size=32m,mode=0770,uid=10001,gid=10001
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777,uid=10001,gid=10001
+      - /run/smartscan-prometheus:rw,noexec,nosuid,nodev,size=32m,mode=0770,uid=10001,gid=10001
     volumes:
       - type: bind
         source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
@@ -114,6 +115,8 @@ services:
       SMARTSCAN_AUTO_MIGRATE: "false"
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_OCR_MODEL_ROOT: /opt/smartscan/models/ocr
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777,uid=10001,gid=10001
     volumes:
       - type: bind
         source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
@@ -143,6 +146,8 @@ services:
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_AI_GATEWAY_URL: http://ai-gateway:8010
       SMARTSCAN_AI_INTERNAL_MEDIA_URL: http://api:8000/v1/internal/ai-media
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777,uid=10001,gid=10001
     volumes:
       - type: bind
         source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
@@ -161,9 +166,8 @@ services:
     <<: *common
     profiles: ["ai"]
     image: ${SMARTSCAN_UAT_AI_GATEWAY_IMAGE:?必须固定 AI 网关镜像 digest}
-    read_only: true
     cap_drop: ["ALL"]
-    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777,uid=10001,gid=10001"]
     depends_on:
       api: {condition: service_healthy}
       postgres: {condition: service_healthy}
@@ -177,6 +181,7 @@ services:
     image: ${SMARTSCAN_UAT_WEB_IMAGE:?必须固定 Web 镜像 digest}
     pull_policy: always
     restart: "no"
+    read_only: true
     ports:
       - ${SMARTSCAN_UAT_BIND_ADDRESS:?必须设置批准的监听地址}:${SMARTSCAN_UAT_HTTP_PORT:?必须设置批准的 UAT 端口}:80
     volumes:
@@ -184,6 +189,10 @@ services:
         source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
         target: /srv/smartscan/data
         read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=32m,mode=0755
+      - /var/run:rw,noexec,nosuid,nodev,size=4m,mode=0755
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
       interval: 15s
@@ -227,6 +236,3 @@ networks:
       config:
         - subnet: ${SMARTSCAN_UAT_EGRESS_SUBNET:?必须设置批准的 egress CIDR}
           gateway: ${SMARTSCAN_UAT_EGRESS_GATEWAY:?必须设置批准的 egress 网关}
-
-volumes:
-  postgres-socket:

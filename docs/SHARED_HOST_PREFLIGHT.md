@@ -38,7 +38,7 @@ python3 shared_host_preflight.py collect \
 - `data`、`edge`、`egress` 三个互不重叠的私有 IPv4 CIDR 与网关。
 - 当前VPN可见路由和保留网段清单；不能只检查Docker默认地址池，任何冲突立即停止。
 - 唯一宿主机端口`127.0.0.1:18082`，供现有8077 Nginx转发；不申请19081。
-- `/mnt/data/smartscan/uat`精确50 GiB硬限制、70/85/95阈值，分配后仍保留数据盘15%或200 GiB中的较高者。
+- `/mnt/data/smartscan/uat`为完整预分配、非稀疏的50 GiB loop ext4挂载，reserved block为0，systemd单元依赖`/mnt/data`且loop为autoclear；数据预算不超过48 GiB，70/85/95阈值生效，分配后仍保留数据盘15%或200 GiB中的较高者。
 - 整个UAT Compose栈8 vCPU/16 GiB上限，分配后宿主机仍保留至少16个逻辑CPU和32 GiB当前可用内存。
 - `http_basic_uat`入口模式、8077、`/smartscan/`和`127.0.0.1:18082`，并确认基础UAT后仍需HTTPS。
 - 监控选择`manual`或`existing`；两种模式都保留应用指标，禁止新增Alertmanager和Node Exporter。
@@ -63,7 +63,7 @@ Linux 使用对应绝对路径。校验器执行以下失败关闭检查：
 2. 确认人、时间、变更、验证和回滚记录均为实际值。
 3. 三个固定网段彼此不重叠，且不与现有 Docker IPAM、所有非默认主机路由或公司保留网段重叠。
 4. `127.0.0.1:18082`未被`ss`或Docker占用，不存在第二个SmartScan宿主机端口；8077共享入口结构由人工复核。
-5. 存储根、50 GiB硬限制、70/85/95阈值、容量与inode安全余量满足要求。
+5. 存储根、50 GiB非稀疏loop ext4计划、48 GiB数据预算、70/85/95阈值、容量与inode安全余量满足要求；创建后的文件系统事实由OPS-001专用证据校验器复核。
 6. CPU、内存上限、15 分钟主机负载及共享宿主机安全余量满足要求。
 7. 第一阶段为非公网HTTP基础UAT，且明确保留后续HTTPS门禁。
 8. `existing`模式验证Prometheus/Grafana存在；`manual`模式验证共同使用人接受能力缺口。两种模式均禁止新增Alertmanager、Node Exporter和宿主机敏感挂载。
@@ -77,7 +77,7 @@ Linux 使用对应绝对路径。校验器执行以下失败关闭检查：
 
 - 三张网络与部署当时全部Docker IPAM、主机路由、策略路由、VPN和保留网段无冲突。
 - 8077现有include结构未变，`/smartscan/`未被占用，增量location只转发到18082且可精确回滚。
-- 存储硬限制的实现方式与文件系统匹配，而不是只填写应用软配额。
+- 后备文件精确50 GiB且完整分配，ext4 reserved block为0，mount参数、autoclear、systemd父挂载依赖和回滚记录全部匹配；实际可用空间不足数据预算时只下调业务预算。
 - 应用指标和健康检查可用；如不接入现有监控，人工检查步骤和能力缺口已写入记录。
 - UAT数据可丢弃且不存在重要生产数据唯一副本；不把同盘副本记为灾备。
 - 执行窗口、回滚负责人和OOM/共租户影响停止阈值已写入变更记录。

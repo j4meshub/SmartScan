@@ -614,9 +614,19 @@
 
 ## D-086：OPS-001 制品兼容性与 50 GiB 分项预算失败关闭
 
-- 状态：已确认
+- 状态：制品兼容性原则继续有效；存储预算、PostgreSQL接受状态和实施路线已被D-087取代
 - 日期：2026-11-18
 - 决策：主线`0961cc3`的五个固定digest继续作为唯一已接受的历史制品证据，但不得直接用于当前`/smartscan/` UAT。源码复核确认该Web版本默认请求根`/api`，尚不支持`/smartscan/api`；该Ops版本也早于资源确认1.2的分项预算校验。不得以占用共享根`/api`、Nginx内容替换或浏览器本地覆盖绕过。后续流水线制品不得自动替换，只有服务器共同使用人另行接受一整套兼容固定digest后才能解除拉取和启动门禁。
 - 存储：50 GiB硬限制固定拆分为PostgreSQL及内置WAL 12 GiB、业务文件32 GiB、OCR模型4 GiB、容器日志预算1 GiB和运行余量1 GiB。应用部署级业务配额及单用户上限不得超过32 GiB；70/85/95阈值是纵深防御，不替代ext4硬限制。project quota未预先启用时不得在本变更中修改挂载或文件系统全局配置，改由独立LVM/loopback方案另行评审。
 - 制品：PostgreSQL 17候选固定为`postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`，当前仅完成Registry manifest只读核对，未拉取也未获部署接受。实际部署前必须再次核对并由用户单独接受。
 - 影响：OPS-001保持“等待人工验收”。当前不存在兼容的上一组应用digest，首次部署的版本回滚只能撤入口并停止整栈；数据库迁移不承诺自动降级，空UAT可经独立清理授权重建，产生数据后优先向前修复。详细对象、顺序、验收和回滚见`OPS001_UAT_CHANGE_PLAN.md`。
+
+## D-087：UAT使用完整预分配loop ext4并隔离容器可写层
+
+- 状态：已确认
+- 日期：2026-11-19
+- 决策：OPS-001不使用ext4 project quota。UAT使用位于`/mnt/data`下的SmartScan专用、完整预分配且非稀疏的50 GiB后备文件，格式化为reserved block为0的ext4，由独立systemd mount单元以`loop,nodev,nosuid,noatime`挂载到`/mnt/data/smartscan/uat`。单元明确依赖`/mnt/data`，不使用`/etc/fstab`，loop设备必须autoclear；不改变共享数据盘挂载，也不影响现有loop对象。
+- 预算：50 GiB重新定义为PostgreSQL及WAL 12 GiB、业务文件32 GiB、OCR模型4 GiB、ext4元数据和运行余量2 GiB。前3项持久化数据预算为48 GiB；创建后实际可用不足48 GiB时只下调业务预算，不扩大后备文件。Docker固定镜像和共享Docker根目录中的日志不计入loop；八容器日志继续以每容器`10m×3`限制，理论上限约240 MiB。D-086中的“容器日志1 GiB和余量1 GiB”及project quota/LVM优先路线由本决策取代。
+- 可写层：可行的八个服务根文件系统全部只读，并为`/tmp`、PostgreSQL socket、Nginx cache/run及Prometheus多进程目录设置精确tmpfs上限。PostgreSQL socket不再使用named volume，只有数据目录允许持久写入loop。校验器必须拒绝错误大小、稀疏文件、错误文件系统/挂载参数、缺少autoclear、数据预算超过实际可用空间、日志无轮转、无界容器可写层以及systemd缺少父挂载依赖或回滚记录。
+- 制品：主线`f38dd4f`的五个镜像已经核对来源提交、`linux/amd64`、SBOM、漏洞门禁和Web子路径；Ops仅支持资源确认1.2，不支持本决策新增的loop证据和只读/tmpfs契约，因此整套保持未接受和禁止部署。用户接受PostgreSQL 17固定digest`sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`为拟部署候选，但实际拉取后仍须核对RepoDigest、平台、版本和UID/GID。
+- 影响：本轮只修改公开仓库的模板、校验器、测试和脱敏文档，不连接或写入服务器。实际创建后备文件、格式化、安装/启停mount单元、拉取镜像、创建Docker对象和修改Nginx均需用户逐项授权；后备文件或数据清理属于独立破坏性授权，禁止`prune`、通配符删除或影响其他项目。

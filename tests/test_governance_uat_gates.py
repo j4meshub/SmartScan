@@ -18,6 +18,7 @@ def test_active_governance_uses_shared_server_user_confirmation() -> None:
     assert "GOV-005" in execution
     assert "`OPS-000` 共享宿主机预检与资源分配 | 完成" in execution
     assert "D-085" in decisions
+    assert "D-087" in decisions
     assert "服务器共同使用人" in deployment
     assert "等待 OPS-000 资源/窗口审批" not in execution
     assert "OPS-003 共租户监控接入后执行" not in execution
@@ -49,9 +50,16 @@ def test_uat_allocation_template_encodes_current_fixed_boundaries() -> None:
         "postgres_and_wal_bytes": 12 * 1024**3,
         "business_data_bytes": 32 * 1024**3,
         "ocr_models_bytes": 4 * 1024**3,
-        "container_logs_bytes": 1024**3,
-        "reserve_bytes": 1024**3,
+        "filesystem_and_runtime_bytes": 2 * 1024**3,
     }
+    assert allocation["storage"]["hard_limit_type"] == "loop_ext4"
+    assert allocation["loop_storage"]["backing_file_bytes"] == 50 * 1024**3
+    assert allocation["loop_storage"]["mount_options"] == ["loop", "nodev", "nosuid", "noatime"]
+    assert allocation["docker_logging"]["maximum_bytes"] == 240 * 1024**2
+    assert allocation["loop_storage"]["fully_preallocated"] is True
+    assert allocation["loop_storage"]["sparse_file_forbidden"] is True
+    assert allocation["loop_storage"]["reserved_blocks_percent"] == 0
+    assert allocation["loop_storage"]["requires_mounts_for"] == "/mnt/data"
     assert (
         allocation["storage"]["warning_percent"],
         allocation["storage"]["cleanup_percent"],
@@ -75,6 +83,10 @@ def test_active_uat_templates_have_no_wal_archive_or_second_host_port() -> None:
 
     assert "SMARTSCAN_UAT_WAL_ROOT" not in compose
     assert "archive_command" not in compose
+    assert "postgres-socket" not in compose
+    assert compose.count("read_only: true") >= 2
+    assert compose.count('max-size: "10m"') >= 2
+    assert "/var/run/postgresql:rw,noexec,nosuid,nodev,size=16m" in compose
     assert "SMARTSCAN_UAT_HTTP_PORT=18082" in deploy
     assert "19081" not in deploy
     assert "proxy_pass http://127.0.0.1:18082/;" in nginx

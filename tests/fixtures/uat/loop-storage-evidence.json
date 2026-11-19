@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-11-19T00:00:00Z",
+  "backing_file": {
+    "path": "/mnt/data/smartscan-loop/uat.ext4",
+    "size_bytes": 53687091200,
+    "allocated_bytes": 53687091200,
+    "sparse": false,
+    "mode": "0600"
+  },
+  "filesystem": {
+    "type": "ext4",
+    "label": "smartscan-uat",
+    "reserved_blocks_percent": 0,
+    "usable_bytes": 52000000000
+  },
+  "mount": {
+    "active": true,
+    "source": "/dev/loop7",
+    "target": "/mnt/data/smartscan/uat",
+    "type": "ext4",
+    "options": ["loop", "nodev", "nosuid", "noatime", "rw"]
+  },
+  "loop": {
+    "backing_file": "/mnt/data/smartscan-loop/uat.ext4",
+    "autoclear": true
+  },
+  "systemd_unit": {
+    "name": "mnt-data-smartscan-uat.mount",
+    "path": "/etc/systemd/system/mnt-data-smartscan-uat.mount",
+    "mode": "0644",
+    "enabled": true,
+    "active": true,
+    "requires_mounts_for": "/mnt/data",
+    "rollback_record": "CI-FIXTURE-ROLLBACK-LOOP-001"
+  },
+  "contains_sensitive_data": false
+}

@@ -95,7 +95,7 @@ AI 候选系统使用同一份已授权、已脱敏且按来源分组切分的�
 
 扫描业务现已接入项目级授权、版本绑定任务、候选决策、AI 专用租约、安全媒体授权和 Worker→网关内部认证边界。媒体令牌至少 256 位随机、数据库只存摘要，并绑定单一页面结果、源版本和有效期；读取会复核授权、任务状态、文件路径、大小与哈希。独立 AI Worker 已编排分类、方向、标题、书籍页码和公式/复杂版面任务，内部检查点支持租约重试且不会向客户端暴露半成品；所有输出先成为候选，用户接受后才调用确定性旋转、标题建议、页码证据或版本绑定文字层写入。H5、Android 与 iOS 项目工作区已通过各自自动门禁提供显式项目授权、传输说明、任务状态、候选对比、接受/放弃和来源基础版本回看。普通文档不伪造 AI 图像，AI 不可用时基础编辑与导出保持可用。客户端代码不读取或显示部署标识、连接地址、密钥或内部网络信息，公网 Nginx 也不代理 AI 网关。试卷、扫书和真实模型验收仍未完成，因此 M8 仍是进行中。完整断点和任务落点见[可选视觉 AI 业务接入架构](AI_BUSINESS_INTEGRATION.md)，移动端边界见[Android 可选视觉 AI 接入](ANDROID_AI_INTEGRATION.md)与[iOS 可选视觉 AI 接入](IOS_AI_INTEGRATION.md)。
 
-目标服务器是承载大量现有容器、网络、入口、数据库、监控与 GPU 推理服务的共享生产宿主机，不再按可独占主机设计。第一阶段使用按需启停的 `smartscan-uat`，生产使用 `smartscan-prod`；两者分别位于 `/mnt/data/smartscan/uat` 与 `/mnt/data/smartscan/production`，并使用独立 PostgreSQL、固定 CIDR 网络、Secret和digest锁文件。UAT为50 GiB，初期生产为100 GiB，两者整栈均不超过8 vCPU/16 GiB；各容器仍设置CPU、内存、PID和日志轮转限制。服务器共同使用人负责确认参数、变更、验证和回滚；服务器只按人工确认的固定digest运行，不挂载仓库源码、现场构建或接受自动部署。详见[共享生产服务器部署边界](SHARED_HOST_DEPLOYMENT.md)。
+目标服务器是承载大量现有容器、网络、入口、数据库、监控与 GPU 推理服务的共享生产宿主机，不再按可独占主机设计。第一阶段使用按需启停的 `smartscan-uat`，生产使用`smartscan-prod`。UAT以完整预分配的50 GiB loop ext4独立限制`/mnt/data/smartscan/uat`，预算为数据库/WAL 12、业务32、模型4、元数据/运行2 GiB；不改变共享盘挂载或现有loop。初期生产仍为100 GiB待实施方案。两者使用独立PostgreSQL、固定CIDR网络、Secret和digest锁文件，整栈均不超过8 vCPU/16 GiB；UAT容器根文件系统只读、tmpfs有界并设置CPU、内存、PID和日志轮转。服务器共同使用人负责确认参数、变更、验证和回滚；服务器只按人工确认的固定digest运行，不挂载仓库源码、现场构建或接受自动部署。详见[共享生产服务器部署边界](SHARED_HOST_DEPLOYMENT.md)。
 
 第一阶段入口复用现有共享Nginx 8077，在 `/smartscan/` 下转发到唯一回环上游 `127.0.0.1:18082`；外部API为 `/smartscan/api/v1/...`，外层去前缀后继续复用容器内 `/api/`→`/v1/` 契约。SmartScan不占用80/443，不覆盖全局Nginx，PostgreSQL、Worker和AI Gateway不发布宿主机端口。HTTP只用于基础UAT；可信HTTPS在基础链路通过后由OPS-002A实施，实时相机、企微和正式移动验收在此之前保持红色。
 

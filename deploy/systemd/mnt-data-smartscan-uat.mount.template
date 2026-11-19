@@ -1,0 +1,18 @@
+# 仅供评审；安装、enable、start和删除均须由服务器共同使用人逐项授权。
+# 回滚：先停止SmartScan Compose，再stop/disable本单元；确认挂载与loop映射消失后，默认保留后备文件。
+[Unit]
+Description=SmartScan UAT 50 GiB loop ext4 数据盘
+RequiresMountsFor=/mnt/data
+After=mnt-data.mount
+ConditionPathIsReadWrite=/mnt/data
+ConditionPathIsRegular=/mnt/data/smartscan-loop/uat.ext4
+
+[Mount]
+What=/mnt/data/smartscan-loop/uat.ext4
+Where=/mnt/data/smartscan/uat
+Type=ext4
+Options=loop,nodev,nosuid,noatime
+TimeoutSec=120
+
+[Install]
+WantedBy=multi-user.target

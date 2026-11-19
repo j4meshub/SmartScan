@@ -13,6 +13,10 @@ from tools.validate_uat_config import (
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "uat"
+LOOP_EVIDENCE = FIXTURES / "loop-storage-evidence.json"
+MOUNT_UNIT_TEMPLATE = (
+    Path(__file__).parents[1] / "deploy" / "systemd" / "mnt-data-smartscan-uat.mount.template"
+)
 SHARED_NGINX_TEMPLATE = (
     Path(__file__).parents[1] / "deploy" / "nginx" / "shared-8077-smartscan-location.conf.template"
 )
@@ -29,13 +33,17 @@ def _validate(
     deploy: Path | None = None,
     runtime: Path | None = None,
     allocation: Path | None = None,
+    loop_evidence: Path | None = None,
     compose: Path | None = None,
+    mount_unit: Path | None = None,
 ):
     return validate_uat_config(
         deploy or FIXTURES / "deploy.env",
         runtime or FIXTURES / "runtime.env",
         allocation or FIXTURES / "allocation.json",
+        loop_evidence or LOOP_EVIDENCE,
         compose_file=compose or DEFAULT_COMPOSE_FILE,
+        mount_unit_file=mount_unit or MOUNT_UNIT_TEMPLATE,
         ci_fixture=True,
     )
 
@@ -151,7 +159,7 @@ def test_allocation_requires_storage_budgets_to_fit_hard_limit(tmp_path: Path) -
     path = tmp_path / "allocation.json"
     path.write_text(json.dumps(allocation), encoding="utf-8")
 
-    with pytest.raises(UatConfigError, match="12/32/4/1/1 GiB"):
+    with pytest.raises(UatConfigError, match="业务文件预算"):
         _validate(tmp_path, allocation=path)
 
 
@@ -197,7 +205,7 @@ def test_known_incompatible_uat_images_fail_closed(key: str, repository: str, di
     [
         ('restart: "no"', "restart: unless-stopped", "禁止自动重启"),
         ('cpus: "1.50"', 'cpus: "0"', "缺少 CPU 限制"),
-        ('max-size: "10m"', 'max-size: ""', "缺少日志轮转限制"),
+        ('max-size: "10m"', 'max-size: ""', "日志必须精确限制为10m×3"),
         (
             "gateway: ${SMARTSCAN_UAT_DATA_GATEWAY:?必须设置批准的 data 网关}",
             "missing: ${SMARTSCAN_UAT_DATA_GATEWAY:?禁止自动网段}",
@@ -226,6 +234,49 @@ def test_compose_rejects_source_build_and_host_root_mount(tmp_path: Path) -> Non
 
     with pytest.raises(UatConfigError, match="禁止在服务器现场构建"):
         _validate(tmp_path, compose=compose)
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        ("  read_only: true\n", "  read_only: false\n", "根文件系统必须只读"),
+        (
+            "/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777",
+            "/tmp:rw,noexec,nosuid,nodev,mode=1777",
+            "tmpfs边界无效",
+        ),
+        ('options: {max-size: "10m", max-file: "3"}', 'options: {max-size: "10m"}', "10m×3"),
+    ],
+)
+def test_compose_rejects_unbounded_writable_layers(
+    tmp_path: Path, old: str, new: str, message: str
+) -> None:
+    compose = _write_changed(DEFAULT_COMPOSE_FILE, tmp_path / "compose.yml", old, new)
+
+    with pytest.raises(UatConfigError, match=message):
+        _validate(tmp_path, compose=compose)
+
+
+def test_compose_rejects_postgres_socket_named_volume(tmp_path: Path) -> None:
+    source = DEFAULT_COMPOSE_FILE.read_text(encoding="utf-8")
+    source += "\nvolumes:\n  postgres-socket:\n"
+    compose = tmp_path / "compose.yml"
+    compose.write_text(source, encoding="utf-8")
+
+    with pytest.raises(UatConfigError, match="socket named volume"):
+        _validate(tmp_path, compose=compose)
+
+
+def test_loop_evidence_digest_must_match_deploy_record(tmp_path: Path) -> None:
+    deploy = _write_changed(
+        FIXTURES / "deploy.env",
+        tmp_path / "deploy.env",
+        "da0ce50c769c515d25dca9b1b4a3ec5a3bf74a9f28db438f743a652477717ccb",
+        "0" * 64,
+    )
+
+    with pytest.raises(UatConfigError, match="loop存储证据摘要"):
+        _validate(tmp_path, deploy=deploy)
 
 
 def test_runtime_keeps_external_services_disabled(tmp_path: Path) -> None:
