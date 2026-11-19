@@ -24,7 +24,7 @@
 
 | 文件 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uat-loop-storage` | `e0944c15931480858d2b35b8e3ab3fe2f40f904c62388a486f5752487bf29103` |
+| `deploy/ops/smartscan-uat-loop-storage` | `a5cc526cb7a293fed434412199b040f24be1130ec306090326ee8069cd76dc22` |
 | `deploy/systemd/mnt-data-smartscan-uat.mount.template` | `e48feb8db96f5fe42b21249846e12a2165b639504afdf99ded882e28eeedd5a3` |
 
 sudoers模板只列出四条精确命令及参数。目标sudo版本不依赖可选的命令digest扩展；执行器摘要由用户在安装前人工核对，安装后文件由root拥有、普通用户不可写。任何执行器字节变化都必须重新走代码评审、测试、摘要更新和人工安装流程。

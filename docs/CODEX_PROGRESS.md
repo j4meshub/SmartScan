@@ -24,6 +24,7 @@
 - 2026-11-19最终只读预检已经在本工作包之前完成：50 GiB后仍高于共享盘安全线约214.86 GiB，三张候选网络无冲突、18082空闲、8077结构未变；五个`1b93e23` GHCR digest匿名核验成功。服务器访问`auth.docker.io`超时，PostgreSQL manifest未完成服务器侧核验，继续独立阻塞完整应用部署。
 - Windows本地专项最终为`46 passed, 7 skipped`；7项跳过是需要Linux Bash/`visudo`的语法和真实状态机测试，将由GitHub Ubuntu Runner覆盖。首次全量回归出现24项UAT配置失败，根因是Windows `core.autocrlf`让CI夹具的原始字节摘要与仓库LF摘要不一致；没有放宽生产校验，只在`ci_fixture`模式规范CRLF为LF，并为执行器、sudoers、mount模板和loop证据夹具固定LF。修复后全量`536 passed, 14 skipped`、覆盖率87.79%，Ruff检查、175个Python文件格式、迁移漂移和差异空白检查通过；其中14项为既有7项外部门禁加新增7项Linux门禁。PR CI结果待补。
 - PR #81首轮Ubuntu API作业执行了Windows跳过的门禁，发现Runner的sudo构建不支持命令digest语法、`!set_home`选项不可用，且测试路径替换会递归替换临时目录。未跳过或放宽四命令边界：sudoers改为平台支持的四组精确命令，执行器SHA继续用于人工安装核验并依靠root所有权防篡改；测试改为单次路径替换。修复后须重跑全部CI。
+- 第二轮Ubuntu API作业中`visudo`及其余动态门禁通过，仅幂等创建测试发现`umask 077`下由`install -d`隐式创建的SmartScan父目录可能为0700，而执行器契约要求0755。修复为显式先以root/0755创建并校验固定父目录，再创建挂载点；未降低权限或跳过测试。
 
 以下保留PR #80已经完成的loop/只读容器仓库证据；其中“等待Actions”和旧分支描述已由上方当前断点取代：
 

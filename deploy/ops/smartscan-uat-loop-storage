@@ -303,6 +303,7 @@ create_storage() {
     check_host_capacity
 
     "$INSTALL_CMD" -d -o "$ROOT_OWNER" -g "$ROOT_GROUP" -m 0700 "$LOOP_DIRECTORY"
+    "$INSTALL_CMD" -d -o "$ROOT_OWNER" -g "$ROOT_GROUP" -m 0755 "$SMARTSCAN_DIRECTORY"
     "$INSTALL_CMD" -d -o "$ROOT_OWNER" -g "$ROOT_GROUP" -m 0755 "$MOUNT_POINT"
     require_directory_permissions
     ( set -o noclobber; : >"$BACKING_FILE" ) \
