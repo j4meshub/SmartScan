@@ -175,4 +175,4 @@ sudoers不会允许第六个子命令、额外参数、不同路径、`sudo bash
 
 ## 未解除的部署阻塞
 
-该执行器只解决loop存储阶段的最小root操作，不授权Docker网络、镜像拉取、PostgreSQL、迁移、Compose、Secret或Nginx。服务器访问`auth.docker.io`超时导致PostgreSQL Registry manifest尚未核验，完整应用部署继续独立阻塞。
+该执行器只解决loop存储阶段的最小root操作，不授权Docker网络、镜像拉取、PostgreSQL、迁移、Compose、Secret或Nginx。共同使用人已完成OPS-001B人工升级，固定空UAT经一次`recreate-empty`和两次独立`verify`通过，存储门禁完成。服务器IPv4连接`auth.docker.io:443`超时且IPv6不可达，PostgreSQL Registry manifest尚未核验；后续由`OPS-REG-003`准备可追溯的公开GHCR复制产物，完整应用部署继续独立阻塞。

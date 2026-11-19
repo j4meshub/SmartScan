@@ -2,7 +2,7 @@
 
 ## 状态与用途
 
-本文件是 `OPS-001` 的仓库侧交付，定义按需启停的 `smartscan-uat` 验收栈。`OPS-000` 已完成主机事实采集和资源决策。首次loop创建后独立验证发现ext4 lazy初始化导致`backing_sparse`，应用尚未部署；OPS-001B仓库修复、人工升级、独立`recreate-empty`授权和连续验证通过前不得继续应用阶段。
+本文件是 `OPS-001` 的仓库侧交付，定义按需启停的 `smartscan-uat` 验收栈。`OPS-000` 已完成主机事实采集和资源决策；OPS-001B的固定空UAT已完成单次`recreate-empty`和两次独立`verify`，50 GiB完整预分配loop存储门禁正式通过。应用尚未部署，制品、配置、Docker和Nginx仍需独立授权。
 
 旧 `docker-compose.staging.yml`、`/srv/smartscan/staging` 及其监控/备份叠加文件仅保留历史证据，不得与本 UAT 栈混用。UAT 可以使用人工资源检查且不要求备份；生产监控和数据风险由 `OPS-003`、`OPS-004` 继续处理。
 
@@ -16,7 +16,7 @@
 - 现有共享Nginx 8077使用独立include，将`/smartscan/`去前缀转发到18082；不占用80/443，不覆盖其他location。
 - HTTP只验收登录、项目、上传、处理、预览、导出和Range。实时相机、企业微信及正式移动验收继续等待HTTPS。
 - 基础栈合计5.5 vCPU/8.75 GiB，启用AI后7.5 vCPU/11.75 GiB；整栈不得超过8 vCPU/16 GiB。八个服务根文件系统只读，所有tmpfs都有明确上限；每个服务设置CPU、内存、PID和`10m×3`日志轮转，全部`restart: "no"`。Docker日志位于loop之外，八容器理论上限约240 MiB。
-- 服务器不保存源码、不现场构建、不使用可变tag。`0961cc3`只保留为历史制品证据并拒绝部署；`f38dd4f`五镜像虽已通过来源、平台、SBOM、漏洞和Web基路径核验，但Ops缺少本次loop契约，仍未获部署接受。PostgreSQL候选已接受，SmartScan新镜像必须在本次合并后重新生成、核验并由用户接受。
+- 服务器不保存源码、不现场构建、不使用可变tag。`0961cc3`和`f38dd4f`只保留历史制品证据并拒绝部署；`2adbf4f`五镜像已通过来源、平台、SBOM、SLSA、漏洞、Web基路径及Ops loop/只读/tmpfs/资源契约核验，等待用户明确接受。Docker Hub从目标服务器不可达，PostgreSQL必须先由`OPS-REG-003`复制到公开GHCR、核验并接受。
 - AI Worker 和 AI Gateway 位于显式 `ai` Profile，默认不启动；运行配置默认关闭真实 Provider。
 - 保留应用健康和带令牌的应用指标，不申请19081。可以复用现有Prometheus/Grafana或记录人工检查能力缺口；不部署Alertmanager、Node Exporter，不挂载宿主机`/`、`/proc`或`/sys`。
 - UAT数据允许丢弃和重建，不要求备份，也不启用没有异机目标的WAL归档。
@@ -88,8 +88,8 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 1. 重新采集现场网络、路由、VPN、端口、负载和磁盘，确认8077结构未变、18082空闲，任何冲突立即停止。
 2. 形成仓库外精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值记录。
-3. 经单独sudo授权创建50 GiB非稀疏后备文件、ext4和systemd mount；核对实际可用空间与autoclear并生成脱敏证据。不得影响现有loop挂载。
-4. 先通过兼容性门禁；用户接受本工作包合并后产生的新SmartScan五镜像，才可与已接受的PostgreSQL候选一起拉取并核对RepoDigest、平台、版本和UID/GID；不得用`main`或`latest`。
+3. 复核已验收的50 GiB非稀疏loop、ext4、systemd mount、实际可用空间与autoclear仍正常；不得重新格式化、扩大或影响现有loop挂载。
+4. 先通过兼容性门禁；用户接受`2adbf4f`五个SmartScan固定digest，并完成`OPS-REG-003`的PostgreSQL GHCR候选核验与接受后，才可按新的应用部署授权拉取并核对RepoDigest、平台、版本和UID/GID；不得用`main`或`latest`。
 5. 在loop内创建数据子目录，安装配置，创建三张网络，校验配置和Compose，执行一次性迁移，再启动PostgreSQL、API、CPU Worker与Web；AI Profile另行授权。
 6. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
 7. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
@@ -98,4 +98,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-19，OPS-000事实采集和资源决策已完成，loop方案和PostgreSQL候选已定版，但OPS-001仍等待人工验收。实际部署前仍缺部署当天现场复查、精确CIDR、loop创建证据、本次合并后兼容新镜像的核验与接受、服务器Secret和逐项sudo/Docker/Nginx授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)；本文件不授权创建真实资源。
+截至2026-11-19，OPS-000事实采集、资源决策和50 GiB loop存储门禁已完成，但OPS-001仍等待人工验收。实际部署前仍缺部署当天现场复查、精确CIDR、`2adbf4f`五镜像接受、PostgreSQL GHCR供应链与接受、服务器Secret以及逐项Docker/迁移/Compose/Nginx授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)；本文件不授权创建真实资源。

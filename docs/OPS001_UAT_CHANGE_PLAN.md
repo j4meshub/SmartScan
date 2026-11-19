@@ -1,6 +1,6 @@
 # OPS-001 共享宿主机 UAT 变更方案
 
-> 状态：**loop首次创建已执行但独立验证失败，应用部署未执行**。2026-11-19现场出现`backing_sparse`，对象保持挂载且无业务数据；OPS-001B只准备修复，不授权服务器重建。本文不包含真实CIDR、内部地址、凭据或Secret。
+> 状态：**loop存储门禁已通过，应用部署未执行**。2026-11-19已完成OPS-001B执行器升级、固定空UAT的单次`recreate-empty`和两次独立`verify`；50 GiB完整物理预分配及全部挂载门禁获用户接受。本文不包含真实CIDR、loop设备、内部地址、凭据或Secret。
 
 ## 1. 变更对象
 
@@ -69,7 +69,9 @@ ghcr.io/j4meshub/smartscan-ops@sha256:ef4dd40c7b8a494e92540dc5bb476ab14490340214
 
 用户已明确接受提交`1b93e23178b0bfba60a259d77de34574bd7d9db4`产生的API、Worker、AI Gateway、Web和Ops五个固定digest为新UAT候选。2026-11-19目标服务器匿名manifest复核均返回HTTP 200、OCI image index及完全匹配的Registry digest；精确值只写仓库外变更记录，不回填公开UAT模板，也不构成拉取或部署授权。新主线镜像不得自动替换当前候选。
 
-PostgreSQL 17候选为`postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`，已由用户接受，但目标服务器连接`auth.docker.io`超时，未完成服务器侧匿名manifest核验。完整应用部署继续独立阻塞；禁止用`docker pull`绕过只读核验。连通性恢复并获准实际拉取后，仍须核对RepoDigest、`linux/amd64`、实际UID/GID和`postgres --version`为17。
+主线`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`产生的五个最新镜像已经完成候选核验：服务器匿名manifest、Registry digest、`linux/amd64`、完整源提交、SPDX SBOM、SLSA provenance、可修复High/Critical、Web子路径及Ops loop/只读/tmpfs/资源校验契约均通过，精确值见[`2ADBF4F_CONTAINER_VERIFICATION.md`](2ADBF4F_CONTAINER_VERIFICATION.md)。该组尚待用户明确接受，不得自动写入仓库外UAT配置，也不替代已接受的历史候选。
+
+PostgreSQL 17候选为`postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`，已由用户接受，但目标服务器IPv4连接`auth.docker.io:443`超时、IPv6不可达，未进入TLS、匿名token或manifest阶段。完整应用部署继续阻塞；禁止用代理、登录、未知源或`docker pull`绕过。下一工作包`OPS-REG-003`从官方固定digest复制完整多平台manifest到公开GHCR并保留上游来源证据，服务器核验和用户接受后才可更新真实配置。
 
 ## 5. Nginx最小增量
 
@@ -106,9 +108,9 @@ location ^~ /smartscan/ {
 
 1. 新鲜只读预检；任一身份、网络、端口、资源或8077结构异常即停止。
 2. 共同使用人在仓库外记录精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值。
-3. OPS-001A执行器、mount单元和sudoers已由共同使用人安装；首次`create`后独立`verify`发现ext4 lazy初始化导致的`backing_sparse`。共同使用人须按[`OPS001_LOOP_SUDO_EXECUTOR.md`](OPS001_LOOP_SUDO_EXECUTOR.md)人工复核摘要并升级OPS-001B执行器和sudoers；升级不等于授权重建。
-4. 另行取得空UAT重建授权后，只通过`sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage recreate-empty`重建固定对象；命令必须先证明50 GiB后备文件确为稀疏、固定挂载身份正确、除空`lost+found`外无内容且安全余量充分。完成后至少独立运行两次`verify`并保存脱敏证据；任一失败立即停止，不部署应用。
-5. 解决PostgreSQL Registry连通性并再次核对manifest；SmartScan五镜像虽已接受，仍不得在loop授权中拉取。
+3. OPS-001A/OPS-001B执行器、mount单元和sudoers已由共同使用人安装；固定空UAT已通过单次`recreate-empty`和两次独立`verify`，存储阶段完成。后续不得因应用部署重新格式化或重建已验收文件系统。
+4. 用户明确接受`2adbf4f`五个SmartScan固定digest；接受只解除制品选择门禁，不授权拉取。
+5. 完成`OPS-REG-003`并核对PostgreSQL GHCR固定digest；SmartScan五镜像与PostgreSQL在应用部署授权前均不得拉取。
 6. 另行设计并授权应用阶段后，在已挂载loop内按核验UID/GID创建数据子目录，安装仓库外`0600`配置，创建三张网络并拉取固定digest。
 7. 运行预检、loop证据、UAT配置和Compose解析校验；启动PostgreSQL并等健康，再运行一次性migrate，失败即停。
 8. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。

@@ -24,7 +24,7 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 | 可选 AI | 通用文档、复杂 OCR、本机试用、三端接入与主动上传代码完成 | Provider、安全、可靠性、项目授权、版本候选、专用 Worker 与安全媒体已实现；AI 网关默认内部取图并使用 data URL、multipart 或 Files API 主动上传，签名 URL 降为兼容模式。H5、Android、iOS 和默认 Mock 使用同一候选语义；试卷、扫书与公司真实模型验收尚未完成，M8 总体仍为进行中 |
 | Android | M5 无外部 AI 核心与 M8 AI 接入自动化门禁完成；正式分发延期 | 已实现分层 API、登录/Keystore/Room、CameraX、离线续传、编辑分享、账号删除、签名更新，以及 AI 项目授权、任务进度、候选对比/决定和来源基础版本预览；PR #67 代码头 API/Web/Android/iOS/容器五项 CI 通过，客户端不保存部署连接配置。开发期使用本地或 CI 测试 APK；正式渠道、密钥、系统安装器、TalkBack、网络切换和真机升级在稳定版本后验收 |
 | iOS | M6 无外部 AI 核心、REL-002 仓库门禁与 M8 通用 AI 接入自动门禁完成 | 已实现可复现工程、身份/Keychain、AVFoundation、后台续传、编辑导出分享、账号删除、双语元数据与隐私清单；外部 AI 项目授权、双类型任务、候选对比/决定和来源版本预览已通过固定 Xcode 16.4 Simulator 编译与 XCTest。真实 Apple 参数、签名、真机与审核仍未通过 |
-| CI 与部署 | GHCR供应链完成，OPS-000完成，OPS-001B修复进行中 | UAT采用完整预分配50 GiB loop ext4、systemd mount、12/32/4/2 GiB预算和只读容器/有界tmpfs；共享入口为8077 `/smartscan/`→`127.0.0.1:18082`，整栈8 vCPU/16 GiB。首次loop创建后独立验证发现ext4 lazy初始化导致`backing_sparse`，应用从未启动；OPS-001B禁用lazy inode/journal初始化并增加仅能重建固定稀疏空UAT的精确`recreate-empty`。PostgreSQL Registry连通性仍独立阻塞完整应用部署 |
+| CI 与部署 | GHCR供应链完成，OPS-000及OPS-001B存储门禁完成，OPS-001C等待候选接受 | 50 GiB loop ext4已用禁用lazy初始化的参数完成空UAT重建并连续两次验证通过；应用未启动。`2adbf4f`五个SmartScan镜像已通过服务器匿名digest、来源、`linux/amd64`、SBOM、SLSA、可修复High/Critical、Web子路径和Ops契约核验，等待用户接受。目标服务器仍无法连接Docker Hub，PostgreSQL固定digest未完成服务器侧核验，拟由`OPS-REG-003`复制到公开GHCR |
 | 数据库迁移 | 已实现 | Alembic 初始基线、空库升级、旧基线无损接管、版本门禁和 Compose 一次性迁移服务 |
 | API 分层 | 已实现 | 应用装配、认证路由、扫描路由、管理路由、领域服务和存储访问已分离，并由公开契约测试保护 |
 | 测试与 CI 基线 | 已实现 | 测试会话使用临时数据库/存储，保存完整 OpenAPI 快照，GitHub Actions 对应用代码执行 77% 覆盖率门禁 |
@@ -52,7 +52,7 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 - Android 与 iOS 后台队列均已实现，但网络类型切换、进程强杀、锁屏和真实 4G/5G 中断恢复仍待真机与 staging 验收。
 - OCR 真实模型质量与容量验收、模板试卷产品化、书籍双页与页码完整性的真实数据指标，以及生产大文件下载吞吐验收。
 - iOS 正式 Bundle ID、Apple Team、签名、公开隐私/支持地址、真实截图、审核账号、Archive、TestFlight 和 App Store 审核。
-- 共享生产宿主机部署当天的固定CIDR无冲突复查、50 GiB loop ext4创建和证据、兼容`/smartscan/`及loop契约的新镜像接受、Nginx增量配置及16用户共租户容量验收；PostgreSQL候选虽已接受，拉取后平台/版本/UID/GID仍须核对。HTTPS在基础UAT后实施，UAT监控和异机备份缺口已明确接受但不等于生产风险解除。
+- 共享生产宿主机部署当天的固定CIDR无冲突复查、`2adbf4f`五镜像接受、PostgreSQL GHCR固定digest供应链和接受、Nginx增量配置及16用户共租户容量验收；50 GiB loop存储门禁已经通过，不再列为缺口。实际拉取后仍须核对RepoDigest、平台、版本和UID/GID。HTTPS在基础UAT后实施，UAT监控和异机备份缺口已明确接受但不等于生产风险解除。
 - 模型数据集、验收指标、真机矩阵、企业微信验证、Android 签名分发、TestFlight/App Store 材料和审核。
 
 ## 建议的后续里程碑
@@ -60,5 +60,5 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 1. 准备正式参数和目标设备后，用真机、签名和 TestFlight 完成 M6 人工门禁；这些外部条件不阻塞 M7 代码工作。
 2. 执行 M7：在授权固定数据集上产品化试卷与扫书能力，低置信结果始终保留原图并回退复核。
 3. 继续执行 M8：AI-006～AI-009、`H5-AI-001`、`DEVX-002`、Android/iOS 接入与 AI-013 仓库实现已完成；下一阶段是受固定数据集约束的 AI-010/AI-011，以及包含真实公司 Provider 主动上传的 AI-012 门禁。
-4. `OPS-000`和`OPS-001A`已完成；首次loop创建后的独立验证暴露ext4 lazy初始化空洞。当前先完成`OPS-001B`仓库修复、人工升级和独立`recreate-empty`授权，再以连续`verify`证据恢复OPS-001主线；PostgreSQL Registry连通性继续独立阻塞完整应用部署。本次仓库工作不连接或修改服务器资源。
+4. `OPS-001B`存储门禁已通过，`OPS-001C`已完成五个`2adbf4f`应用镜像核验并等待用户接受。下一步执行`OPS-REG-003`解决PostgreSQL Docker Hub不可达，再回到OPS-001应用部署授权；本轮没有启动应用或修改服务器资源。
 

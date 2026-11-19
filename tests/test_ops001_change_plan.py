@@ -5,11 +5,11 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 
 
-def test_ops001_plan_records_partial_loop_and_remains_fail_closed() -> None:
+def test_ops001_plan_records_accepted_loop_and_remains_fail_closed() -> None:
     plan = (ROOT / "docs" / "OPS001_UAT_CHANGE_PLAN.md").read_text(encoding="utf-8")
 
-    assert "loop首次创建已执行但独立验证失败，应用部署未执行" in plan
-    assert "backing_sparse" in plan
+    assert "loop存储门禁已通过，应用部署未执行" in plan
+    assert "两次独立`verify`" in plan
     assert "recreate-empty" in plan
     assert "nodiscard,lazy_itable_init=0,lazy_journal_init=0" in plan
     assert "不得直接部署这组镜像" in plan
@@ -18,6 +18,26 @@ def test_ops001_plan_records_partial_loop_and_remains_fail_closed() -> None:
     assert "`/smartscan/api`" in plan
     assert "新主线镜像不得自动替换" in plan
     assert "192.168." not in plan
+
+
+def test_ops001_candidate_evidence_is_complete_but_not_accepted() -> None:
+    evidence = (ROOT / "docs" / "2ADBF4F_CONTAINER_VERIFICATION.md").read_text(encoding="utf-8")
+    plan = (ROOT / "docs" / "CODEX_EXECUTION_PLAN.md").read_text(encoding="utf-8")
+
+    for digest in (
+        "80aea0a272791ea44d76895dbd825d091620e0f43ad76c32f32fb6ba97c646d0",
+        "f1cb15e434e99fdced69885667e8646346c75bc293e8ecf9f6b0fa24951768a6",
+        "1813ada8bda225530d71e5afa9e1c3fd640d5e23d05000d370fdccad0e5e8b00",
+        "3d701a4bcaf24c03ead231f10abd316ba83ab89a6984894dfe31af404d3c930c",
+        "be6c50fbdbc9404a9d9589a53799dbc6084470a63f2306ec6bee5736adf94cae",
+    ):
+        assert digest in evidence
+    assert "2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697" in evidence
+    assert "可修复High/Critical为0" in evidence
+    assert "在用户明确接受前" in evidence
+    assert "OPS-REG-003" in evidence
+    assert "`OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 未开始" in plan
+    assert "192.168." not in evidence
 
 
 def test_ops001_plan_contains_fixed_artifacts_and_boundaries() -> None:

@@ -633,7 +633,7 @@
 
 ## D-088：原生OpenSSH配合精确命令的loop最小sudo能力
 
-- 状态：已确认，等待用户人工安装
+- 状态：已确认且人工安装完成
 - 日期：2026-11-19
 - 决策：暂不安装或使用`classfang/ssh-mcp-server`；继续使用本机原生OpenSSH、唯一别名`smartscan-server`、Windows `ssh-agent`和现有可信`known_hosts`。loop阶段不向AI提供sudo密码或通用root shell，而是在`/usr/local/libexec/smartscan/smartscan-uat-loop-storage`安装root拥有、普通用户不可写的受限执行器。执行器只接受无额外参数的`create`、`verify`、`status`、`stop`，所有路径、50 GiB大小、mount单元、目标主机和`SUDO_USER`均固定；sudoers只列出四组精确参数。执行器SHA-256在人工安装时核对，不依赖目标sudo构建可选的digest扩展。
 - 安全边界：执行器拒绝任意路径、设备名、大小、符号链接、异常对象、额外参数、模板摘要变化和空间不足；创建后验证ext4、label、非稀疏、至少48 GiB可用、挂载参数、autoclear与父挂载依赖。`stop`只停止并禁用固定单元且保留后备文件；没有Docker、Nginx、网络、Secret、数据库、迁移、删除、通用`systemctl`、`sudo bash`或`sudo sh`能力。操作日志只记录固定动作、结果和原因码。
@@ -641,9 +641,18 @@
 
 ## D-089：禁用ext4 lazy初始化并仅允许空UAT定点重建
 
-- 状态：已确认，等待OPS-001B仓库门禁和人工升级
+- 状态：已确认且现场修复完成
 - 日期：2026-11-19
 - 现场证据：OPS-001首次`create`完整预分配50 GiB并通过当次内部验证；稍后独立`verify`返回`backing_sparse`。逻辑大小、ext4、label、挂载参数、autoclear、systemd和至少48 GiB可用空间均正常，SmartScan应用从未启动，文件系统除`lost+found`外没有业务内容。现场保持挂载，没有执行`stop`、删除、重格式化或其他sudo操作。
 - 决策：将固定格式化参数从`-E nodiscard`改为`-E nodiscard,lazy_itable_init=0,lazy_journal_init=0`，使inode table和journal在格式化阶段同步初始化，避免首次挂载后台lazy初始化让完整预分配后备文件重新出现空洞。50 GiB逻辑与物理完整分配、`backing_sparse`失败关闭和48 GiB可用空间门禁保持不变，不以放宽校验、接受稀疏文件或缩小目标绕过问题。
 - 定点修复：执行器增加无参数`recreate-empty`。它只在固定后备文件恰为50 GiB且已确认稀疏、固定路径/权限/挂载/loop/ext4/label/systemd均正确、共享盘余量充足，并且UAT根目录除空`lost+found`外没有任何内容时，停止固定mount、确认卸载和autoclear释放，只删除并重建固定空UAT后备文件。发现业务文件、非稀疏状态或任何身份异常时必须在删除前拒绝；sudoers只增加这一条精确命令，不授予通用`unlink`、`mkfs`、`fallocate`、`systemctl`或shell。
 - 影响：这是实际创建后出现的ext4实现兼容证据，不是任务遗漏。OPS-001B只提交执行器、sudoers、测试和中文说明；用户须人工复核摘要并升级两个root资产。真实`recreate-empty`仍需独立授权，且不扩大Docker、网络、Secret、数据库、迁移、容器或Nginx权限；PostgreSQL Registry连通性继续独立阻塞完整应用部署。
+
+## D-090：存储门禁通过，PostgreSQL改走可追溯GHCR复制供应链
+
+- 状态：已确认存储事实；PostgreSQL供应链待实现
+- 日期：2026-11-19
+- 现场证据：共同使用人完成OPS-001B执行器人工升级并单独授权空UAT重建；`recreate-empty`一次成功，随后两次独立`verify`和中间`status`均通过。用户接受50 GiB完整物理预分配、ext4、label、reserved block、挂载参数、唯一loop/autoclear、systemd及共享盘安全余量，确认应用未启动且未触碰其他项目。仓库只保存上述脱敏结论，不保存真实loop设备、内部地址或原始服务器响应。
+- 应用候选：主线`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`五个GHCR镜像的服务器匿名manifest、Registry digest、`linux/amd64`、OCI revision、SPDX SBOM、SLSA provenance、可修复High/Critical、Web子路径和Ops部署契约均通过。该组只具备提交用户接受的资格；在用户明确接受前不得写入真实UAT配置，后续自动digest不得替代。
+- PostgreSQL决策：服务器对`auth.docker.io`的IPv4连接超时、IPv6不可达，因而未进入TLS、匿名token或manifest阶段。禁止代理、登录、不明镜像源或以pull绕过。新增`OPS-REG-003`，由GitHub Actions从Docker Official Image固定digest复制完整多平台manifest到公开GHCR，并保存上游仓库/digest、`17` tag对应、平台、SBOM、漏洞及自定义in-toto映射；不得宣称复制产物由SmartScan构建或带有Docker官方签名。
+- 影响：OPS-001B标记完成，OPS-001C进入候选人工接受，OPS-001新增OPS-REG-003依赖。PostgreSQL GHCR产物仍须公开可见性人工确认、目标服务器匿名manifest核验及用户明确接受；镜像拉取、UID/GID检查、迁移、Compose和Nginx继续是独立部署授权。
