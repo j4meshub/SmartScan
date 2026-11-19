@@ -11,8 +11,8 @@
 | 工作包状态 | 进行中；本地门禁通过，等待PR的Ubuntu动态状态机、`visudo`和全部GitHub Actions |
 | 当前分支 | `codex/ops-001b-ext4-loop-recreate` |
 | 最后验证基线 | `ced1970`（PR #81合并；OPS-001A执行器已由用户人工安装） |
-| 工作包提交 | 待提交 |
-| PR | 待创建；本工作包只包含仓库资产，不执行服务器`stop`、删除或重格式化 |
+| 工作包提交 | `c5de9e7`（lazy初始化修复、空UAT定点重建、安全测试与人工升级说明） |
+| PR | [#82](https://github.com/j4meshub/SmartScan/pull/82)；只包含仓库资产，未执行服务器`stop`、删除或重格式化 |
 | 下一工作包 | OPS-001B合并后由用户人工升级执行器和sudoers；真实`recreate-empty`必须再获单独授权。PostgreSQL Registry连通性仍独立阻塞完整应用部署 |
 
 ## 当前工作包进展
