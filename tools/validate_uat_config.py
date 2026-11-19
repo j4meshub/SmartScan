@@ -530,7 +530,12 @@ def validate_uat_config(
     _require(IMAGE_DIGEST.fullmatch(evidence_hash) is not None, "OPS-000 证据摘要无效")
     if not ci_fixture:
         _require(len(set(evidence_hash)) >= 8, "OPS-000 证据摘要仍是占位值")
-    loop_evidence_hash = hashlib.sha256(loop_evidence_file.read_bytes()).hexdigest()
+    loop_evidence_bytes = loop_evidence_file.read_bytes()
+    if ci_fixture:
+        # Git fixture content is canonical LF. Windows core.autocrlf checkouts may expose CRLF
+        # bytes locally; production evidence remains byte-for-byte hashed without normalization.
+        loop_evidence_bytes = loop_evidence_bytes.replace(b"\r\n", b"\n")
+    loop_evidence_hash = hashlib.sha256(loop_evidence_bytes).hexdigest()
     _require(
         deploy["SMARTSCAN_UAT_LOOP_EVIDENCE_SHA256"] == loop_evidence_hash,
         "loop存储证据摘要与实际文件不一致",

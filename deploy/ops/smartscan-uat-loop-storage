@@ -1,0 +1,380 @@
+#!/bin/bash
+set -euo pipefail
+
+umask 077
+IFS=$' \t\n'
+export LC_ALL=C
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+readonly PATH
+
+readonly EXECUTOR_PATH="/usr/local/libexec/smartscan/smartscan-uat-loop-storage"
+readonly EXPECTED_HOSTNAME="ctiecaiserver"
+readonly EXPECTED_SUDO_USER="szhzx"
+readonly ROOT_OWNER="root"
+readonly ROOT_GROUP="root"
+readonly ROOT_UID="0"
+readonly ROOT_GID="0"
+
+readonly DATA_MOUNT="/mnt/data"
+readonly LOOP_DIRECTORY="/mnt/data/smartscan-loop"
+readonly BACKING_FILE="/mnt/data/smartscan-loop/uat.ext4"
+readonly SMARTSCAN_DIRECTORY="/mnt/data/smartscan"
+readonly MOUNT_POINT="/mnt/data/smartscan/uat"
+readonly UNIT_NAME="mnt-data-smartscan-uat.mount"
+readonly UNIT_PATH="/etc/systemd/system/mnt-data-smartscan-uat.mount"
+readonly UNIT_SHA256="e48feb8db96f5fe42b21249846e12a2165b639504afdf99ded882e28eeedd5a3"
+readonly FILESYSTEM_LABEL="smartscan-uat"
+
+readonly GIB=1073741824
+readonly BACKING_BYTES=53687091200
+readonly MINIMUM_USABLE_BYTES=51539607552
+readonly MINIMUM_HOST_RESERVE_BYTES=214748364800
+
+readonly HOSTNAME_CMD="/usr/bin/hostname"
+readonly READLINK_CMD="/usr/bin/readlink"
+readonly STAT_CMD="/usr/bin/stat"
+readonly SHA256SUM_CMD="/usr/bin/sha256sum"
+readonly FINDMNT_CMD="/usr/bin/findmnt"
+readonly DF_CMD="/usr/bin/df"
+readonly AWK_CMD="/usr/bin/awk"
+readonly FIND_CMD="/usr/bin/find"
+readonly INSTALL_CMD="/usr/bin/install"
+readonly FALLOCATE_CMD="/usr/bin/fallocate"
+readonly CHOWN_CMD="/usr/bin/chown"
+readonly CHMOD_CMD="/usr/bin/chmod"
+readonly SYSTEMCTL_CMD="/usr/bin/systemctl"
+readonly LOGGER_CMD="/usr/bin/logger"
+readonly BLKID_CMD="/usr/sbin/blkid"
+readonly DUMPE2FS_CMD="/usr/sbin/dumpe2fs"
+readonly LOSETUP_CMD="/usr/sbin/losetup"
+readonly MKFS_CMD="/usr/sbin/mkfs.ext4"
+
+CURRENT_ACTION="unvalidated"
+VERIFIED_USABLE_BYTES=0
+
+usage() {
+    printf '用法：sudo -n %s {create|verify|status|stop}\n' "$EXECUTOR_PATH" >&2
+}
+
+log_event() {
+    local result="$1"
+    local reason="$2"
+    local exit_code="${3:-0}"
+    "$LOGGER_CMD" -p authpriv.notice -t smartscan-uat-loop-storage -- \
+        "action=${CURRENT_ACTION} result=${result} reason=${reason} exit_code=${exit_code}" \
+        >/dev/null 2>&1 || true
+}
+
+fail() {
+    local reason="$1"
+    local message="$2"
+    local exit_code="${3:-1}"
+    log_event "failed" "$reason" "$exit_code"
+    printf 'status=failed\nreason=%s\nmessage=%s\n' "$reason" "$message" >&2
+    exit "$exit_code"
+}
+
+unexpected_error() {
+    local exit_code="$?"
+    trap - ERR
+    log_event "failed" "unexpected_error" "$exit_code"
+    printf 'status=failed\nreason=unexpected_error\nexit_code=%s\n' "$exit_code" >&2
+    exit "$exit_code"
+}
+
+trap unexpected_error ERR
+
+require_exact_command() {
+    if [[ "$#" -ne 1 ]]; then
+        usage
+        exit 64
+    fi
+    case "$1" in
+        create|verify|status|stop)
+            CURRENT_ACTION="$1"
+            ;;
+        *)
+            usage
+            exit 64
+            ;;
+    esac
+}
+
+require_root_context() {
+    [[ "$EUID" -eq "$ROOT_UID" ]] || fail "root_required" "执行器只能由sudo以root运行"
+    [[ "${SUDO_USER:-}" == "$EXPECTED_SUDO_USER" ]] \
+        || fail "sudo_user_mismatch" "SUDO_USER与固定授权用户不一致"
+    [[ "${SUDO_COMMAND:-}" == "$EXECUTOR_PATH $CURRENT_ACTION" ]] \
+        || fail "sudo_command_mismatch" "SUDO_COMMAND不是固定执行器与单一子命令"
+    [[ "$($HOSTNAME_CMD -s)" == "$EXPECTED_HOSTNAME" ]] \
+        || fail "hostname_mismatch" "当前主机不是固定目标主机"
+    [[ "$($READLINK_CMD -f "${BASH_SOURCE[0]}")" == "$EXECUTOR_PATH" ]] \
+        || fail "executor_path_mismatch" "执行器不是从固定安装路径启动"
+    [[ ! -L "$EXECUTOR_PATH" && -f "$EXECUTOR_PATH" ]] \
+        || fail "executor_type_invalid" "执行器必须是普通文件且不能是符号链接"
+    [[ "$($STAT_CMD -c '%u:%g:%a' "$EXECUTOR_PATH")" == "${ROOT_UID}:${ROOT_GID}:755" ]] \
+        || fail "executor_permissions_invalid" "执行器必须由root拥有且权限为0755"
+}
+
+require_unit_template() {
+    [[ ! -L "$UNIT_PATH" && -f "$UNIT_PATH" ]] \
+        || fail "unit_type_invalid" "固定systemd单元不存在、不是普通文件或是符号链接"
+    [[ "$($STAT_CMD -c '%u:%g:%a' "$UNIT_PATH")" == "${ROOT_UID}:${ROOT_GID}:644" ]] \
+        || fail "unit_permissions_invalid" "systemd单元必须由root拥有且权限为0644"
+    local actual_sha256
+    actual_sha256="$($SHA256SUM_CMD "$UNIT_PATH" | $AWK_CMD '{print $1}')"
+    [[ "$actual_sha256" == "$UNIT_SHA256" ]] \
+        || fail "unit_sha256_mismatch" "systemd单元与已审核仓库模板摘要不一致"
+}
+
+require_data_mount() {
+    local target
+    target="$($FINDMNT_CMD -rn --target "$DATA_MOUNT" -o TARGET)"
+    [[ "$target" == "$DATA_MOUNT" ]] \
+        || fail "data_mount_invalid" "/mnt/data不是独立的当前挂载目标"
+    [[ -d "$DATA_MOUNT" && ! -L "$DATA_MOUNT" ]] \
+        || fail "data_mount_type_invalid" "/mnt/data必须是非符号链接目录"
+}
+
+require_safe_path_types() {
+    if [[ -e "$LOOP_DIRECTORY" || -L "$LOOP_DIRECTORY" ]]; then
+        [[ -d "$LOOP_DIRECTORY" && ! -L "$LOOP_DIRECTORY" ]] \
+            || fail "loop_directory_invalid" "loop目录类型异常"
+    fi
+    if [[ -e "$SMARTSCAN_DIRECTORY" || -L "$SMARTSCAN_DIRECTORY" ]]; then
+        [[ -d "$SMARTSCAN_DIRECTORY" && ! -L "$SMARTSCAN_DIRECTORY" ]] \
+            || fail "smartscan_directory_invalid" "SmartScan数据父目录类型异常"
+    fi
+    if [[ -e "$MOUNT_POINT" || -L "$MOUNT_POINT" ]]; then
+        [[ -d "$MOUNT_POINT" && ! -L "$MOUNT_POINT" ]] \
+            || fail "mount_point_invalid" "固定挂载点类型异常"
+    fi
+    if [[ -e "$BACKING_FILE" || -L "$BACKING_FILE" ]]; then
+        [[ -f "$BACKING_FILE" && ! -L "$BACKING_FILE" ]] \
+            || fail "backing_file_invalid" "后备文件类型异常"
+    fi
+}
+
+require_directory_permissions() {
+    if [[ -d "$LOOP_DIRECTORY" ]]; then
+        [[ "$($STAT_CMD -c '%u:%g:%a' "$LOOP_DIRECTORY")" == "${ROOT_UID}:${ROOT_GID}:700" ]] \
+            || fail "loop_directory_permissions_invalid" "loop目录必须由root拥有且权限为0700"
+    fi
+    if [[ -d "$SMARTSCAN_DIRECTORY" ]]; then
+        [[ "$($STAT_CMD -c '%u:%g:%a' "$SMARTSCAN_DIRECTORY")" == "${ROOT_UID}:${ROOT_GID}:755" ]] \
+            || fail "smartscan_directory_permissions_invalid" "SmartScan数据父目录必须由root拥有且权限为0755"
+    fi
+    if [[ -d "$MOUNT_POINT" ]]; then
+        [[ "$($STAT_CMD -c '%u:%g:%a' "$MOUNT_POINT")" == "${ROOT_UID}:${ROOT_GID}:755" ]] \
+            || fail "mount_point_permissions_invalid" "固定挂载点必须由root拥有且权限为0755"
+    fi
+}
+
+check_host_capacity() {
+    local total_bytes available_bytes reserve_bytes reserve_percent
+    read -r total_bytes available_bytes < <(
+        "$DF_CMD" -B1 --output=size,avail "$DATA_MOUNT" | "$AWK_CMD" 'NR == 2 {print $1, $2}'
+    )
+    [[ "$total_bytes" =~ ^[0-9]+$ && "$available_bytes" =~ ^[0-9]+$ ]] \
+        || fail "capacity_evidence_invalid" "无法取得数据盘容量证据"
+    reserve_percent=$((total_bytes * 15 / 100))
+    reserve_bytes="$MINIMUM_HOST_RESERVE_BYTES"
+    if (( reserve_percent > reserve_bytes )); then
+        reserve_bytes="$reserve_percent"
+    fi
+    (( available_bytes >= BACKING_BYTES )) \
+        || fail "space_insufficient" "当前空间不足以完整预分配50 GiB"
+    (( available_bytes - BACKING_BYTES >= reserve_bytes )) \
+        || fail "host_reserve_insufficient" "预分配后不满足15%或200 GiB安全余量"
+}
+
+require_complete_allocation() {
+    local logical_bytes blocks allocated_bytes mode owner group
+    logical_bytes="$($STAT_CMD -c '%s' "$BACKING_FILE")"
+    blocks="$($STAT_CMD -c '%b' "$BACKING_FILE")"
+    mode="$($STAT_CMD -c '%a' "$BACKING_FILE")"
+    owner="$($STAT_CMD -c '%u' "$BACKING_FILE")"
+    group="$($STAT_CMD -c '%g' "$BACKING_FILE")"
+    allocated_bytes=$((blocks * 512))
+    [[ "$logical_bytes" -eq "$BACKING_BYTES" ]] \
+        || fail "backing_size_invalid" "后备文件不是精确50 GiB"
+    (( allocated_bytes >= BACKING_BYTES )) \
+        || fail "backing_sparse" "后备文件未完整预分配或是稀疏文件"
+    [[ "$mode" == "600" && "$owner" == "$ROOT_UID" && "$group" == "$ROOT_GID" ]] \
+        || fail "backing_permissions_invalid" "后备文件必须由root拥有且权限为0600"
+}
+
+require_filesystem_identity() {
+    local filesystem label reserved_blocks
+    filesystem="$($BLKID_CMD -p -s TYPE -o value "$BACKING_FILE")"
+    label="$($BLKID_CMD -p -s LABEL -o value "$BACKING_FILE")"
+    reserved_blocks="$($DUMPE2FS_CMD -h "$BACKING_FILE" 2>/dev/null \
+        | "$AWK_CMD" -F: '/^Reserved block count:/ {gsub(/[[:space:]]/, "", $2); print $2}')"
+    [[ "$filesystem" == "ext4" ]] \
+        || fail "filesystem_type_invalid" "后备文件系统不是ext4"
+    [[ "$label" == "$FILESYSTEM_LABEL" ]] \
+        || fail "filesystem_label_invalid" "ext4标签不是smartscan-uat"
+    [[ "$reserved_blocks" == "0" ]] \
+        || fail "reserved_blocks_invalid" "ext4 reserved block必须为0"
+}
+
+mount_record() {
+    "$FINDMNT_CMD" -rn --mountpoint "$MOUNT_POINT" -o SOURCE,FSTYPE,OPTIONS 2>/dev/null || true
+}
+
+require_mounted_state() {
+    local record source filesystem options usable_bytes loop_record loop_name autoclear
+    record="$(mount_record)"
+    [[ -n "$record" && "$(printf '%s\n' "$record" | "$AWK_CMD" 'END {print NR}')" -eq 1 ]] \
+        || fail "mount_missing" "固定挂载点没有唯一活动挂载"
+    read -r source filesystem options <<<"$record"
+    [[ "$source" =~ ^/dev/loop[0-9]+$ ]] \
+        || fail "mount_source_invalid" "固定挂载点来源不是loop设备"
+    [[ "$filesystem" == "ext4" ]] \
+        || fail "mount_type_invalid" "活动挂载不是ext4"
+    case ",${options}," in *",nodev,"*) ;; *) fail "mount_options_invalid" "挂载缺少nodev" ;; esac
+    case ",${options}," in *",nosuid,"*) ;; *) fail "mount_options_invalid" "挂载缺少nosuid" ;; esac
+    case ",${options}," in *",noatime,"*) ;; *) fail "mount_options_invalid" "挂载缺少noatime" ;; esac
+
+    usable_bytes="$($DF_CMD -B1 --output=avail "$MOUNT_POINT" | "$AWK_CMD" 'NR == 2 {print $1}')"
+    [[ "$usable_bytes" =~ ^[0-9]+$ && "$usable_bytes" -ge "$MINIMUM_USABLE_BYTES" ]] \
+        || fail "usable_space_insufficient" "ext4实际可用空间不足48 GiB"
+
+    loop_record="$($LOSETUP_CMD -j "$BACKING_FILE" --noheadings --output NAME,AUTOCLEAR)"
+    [[ -n "$loop_record" && "$(printf '%s\n' "$loop_record" | "$AWK_CMD" 'END {print NR}')" -eq 1 ]] \
+        || fail "loop_mapping_invalid" "后备文件没有唯一loop映射"
+    read -r loop_name autoclear <<<"$loop_record"
+    [[ "$loop_name" == "$source" && "$autoclear" == "1" ]] \
+        || fail "loop_autoclear_invalid" "loop映射来源不一致或未启用autoclear"
+    "$SYSTEMCTL_CMD" is-enabled --quiet "$UNIT_NAME" \
+        || fail "unit_not_enabled" "固定mount单元未启用"
+    "$SYSTEMCTL_CMD" is-active --quiet "$UNIT_NAME" \
+        || fail "unit_not_active" "固定mount单元未激活"
+
+    VERIFIED_USABLE_BYTES="$usable_bytes"
+}
+
+verify_storage() {
+    require_data_mount
+    require_unit_template
+    require_safe_path_types
+    require_directory_permissions
+    [[ -f "$BACKING_FILE" ]] || fail "backing_file_missing" "固定后备文件不存在"
+    [[ -d "$MOUNT_POINT" ]] || fail "mount_point_missing" "固定挂载点不存在"
+    require_complete_allocation
+    require_filesystem_identity
+    require_mounted_state
+    printf 'status=passed\naction=verify\nbacking_size_bytes=%s\nfully_preallocated=true\nfilesystem=ext4\nlabel=%s\nusable_bytes=%s\nmount_active=true\nmount_source=loop-redacted\nautoclear=true\nunit_enabled=true\nunit_active=true\n' \
+        "$BACKING_BYTES" "$FILESYSTEM_LABEL" "$VERIFIED_USABLE_BYTES"
+}
+
+create_storage() {
+    require_data_mount
+    require_unit_template
+    require_safe_path_types
+    require_directory_permissions
+
+    if [[ -f "$BACKING_FILE" ]]; then
+        [[ -d "$MOUNT_POINT" ]] \
+            || fail "partial_state" "后备文件存在但固定挂载点不存在，拒绝自动修复"
+        require_complete_allocation
+        require_filesystem_identity
+        if [[ -n "$(mount_record)" ]]; then
+            verify_storage >/dev/null
+            log_event "passed" "already_ready"
+            printf 'status=passed\naction=create\nresult=already_ready\n'
+            return
+        fi
+        if [[ -n "$($FIND_CMD "$MOUNT_POINT" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+            fail "mount_point_not_empty" "未挂载的固定挂载点不是空目录"
+        fi
+        "$SYSTEMCTL_CMD" daemon-reload
+        "$SYSTEMCTL_CMD" enable --now "$UNIT_NAME"
+        verify_storage >/dev/null
+        log_event "passed" "existing_filesystem_remounted"
+        printf 'status=passed\naction=create\nresult=existing_filesystem_remounted\n'
+        return
+    fi
+
+    [[ ! -e "$LOOP_DIRECTORY" && ! -L "$LOOP_DIRECTORY" ]] \
+        || fail "unexpected_existing_object" "首次创建前loop目录必须不存在"
+    [[ ! -e "$MOUNT_POINT" && ! -L "$MOUNT_POINT" ]] \
+        || fail "unexpected_existing_object" "首次创建前挂载点必须不存在"
+    check_host_capacity
+
+    "$INSTALL_CMD" -d -o "$ROOT_OWNER" -g "$ROOT_GROUP" -m 0700 "$LOOP_DIRECTORY"
+    "$INSTALL_CMD" -d -o "$ROOT_OWNER" -g "$ROOT_GROUP" -m 0755 "$SMARTSCAN_DIRECTORY"
+    "$INSTALL_CMD" -d -o "$ROOT_OWNER" -g "$ROOT_GROUP" -m 0755 "$MOUNT_POINT"
+    require_directory_permissions
+    ( set -o noclobber; : >"$BACKING_FILE" ) \
+        || fail "backing_create_conflict" "后备文件在创建窗口内出现，拒绝覆盖"
+    "$STAT_CMD" -c '%F' "$BACKING_FILE" | "$AWK_CMD" '$0 == "regular empty file" {found=1} END {exit !found}' \
+        || fail "backing_file_invalid" "新建后备对象不是普通空文件"
+    "$FALLOCATE_CMD" -l "$BACKING_BYTES" "$BACKING_FILE"
+    "$CHOWN_CMD" "$ROOT_OWNER:$ROOT_GROUP" "$BACKING_FILE"
+    "$CHMOD_CMD" 0600 "$BACKING_FILE"
+    require_complete_allocation
+    "$MKFS_CMD" -F -m 0 -E nodiscard -L "$FILESYSTEM_LABEL" "$BACKING_FILE" >/dev/null
+    require_filesystem_identity
+    "$SYSTEMCTL_CMD" daemon-reload
+    "$SYSTEMCTL_CMD" enable --now "$UNIT_NAME"
+    verify_storage >/dev/null
+    log_event "passed" "created"
+    printf 'status=passed\naction=create\nresult=created\n'
+}
+
+status_storage() {
+    local backing_state="absent" mount_state="inactive" unit_hash="absent"
+    local unit_enabled="false" unit_active="false"
+    if [[ -e "$BACKING_FILE" || -L "$BACKING_FILE" ]]; then
+        if [[ -f "$BACKING_FILE" && ! -L "$BACKING_FILE" ]]; then
+            backing_state="regular"
+        else
+            backing_state="abnormal"
+        fi
+    fi
+    if [[ -n "$(mount_record)" ]]; then
+        mount_state="active"
+    fi
+    if [[ -f "$UNIT_PATH" && ! -L "$UNIT_PATH" ]]; then
+        if [[ "$($SHA256SUM_CMD "$UNIT_PATH" | $AWK_CMD '{print $1}')" == "$UNIT_SHA256" ]]; then
+            unit_hash="valid"
+        else
+            unit_hash="mismatch"
+        fi
+    elif [[ -e "$UNIT_PATH" || -L "$UNIT_PATH" ]]; then
+        unit_hash="abnormal"
+    fi
+    if "$SYSTEMCTL_CMD" is-enabled --quiet "$UNIT_NAME"; then unit_enabled="true"; fi
+    if "$SYSTEMCTL_CMD" is-active --quiet "$UNIT_NAME"; then unit_active="true"; fi
+    log_event "passed" "status_reported"
+    printf 'status=passed\naction=status\nbacking=%s\nmount=%s\nunit_sha256=%s\nunit_enabled=%s\nunit_active=%s\n' \
+        "$backing_state" "$mount_state" "$unit_hash" "$unit_enabled" "$unit_active"
+}
+
+stop_storage() {
+    require_unit_template
+    require_safe_path_types
+    if "$SYSTEMCTL_CMD" is-active --quiet "$UNIT_NAME"; then
+        "$SYSTEMCTL_CMD" stop "$UNIT_NAME"
+    fi
+    [[ -z "$(mount_record)" ]] \
+        || fail "unmount_failed" "固定挂载点停止后仍处于挂载状态"
+    "$SYSTEMCTL_CMD" disable "$UNIT_NAME" >/dev/null
+    if [[ -f "$BACKING_FILE" ]]; then
+        [[ -z "$($LOSETUP_CMD -j "$BACKING_FILE" --noheadings --output NAME 2>/dev/null || true)" ]] \
+            || fail "loop_release_failed" "卸载后loop映射仍存在，拒绝强制分离"
+    fi
+    log_event "passed" "stopped_backing_retained"
+    printf 'status=passed\naction=stop\nmount_active=false\nunit_enabled=false\nbacking_file_retained=true\n'
+}
+
+require_exact_command "$@"
+require_root_context
+
+case "$CURRENT_ACTION" in
+    create) create_storage ;;
+    verify) verify_storage; log_event "passed" "verified" ;;
+    status) status_storage ;;
+    stop) stop_storage ;;
+esac

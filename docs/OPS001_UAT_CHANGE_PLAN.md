@@ -11,6 +11,8 @@
 | loop后备文件 | `/mnt/data/smartscan-loop/uat.ext4` | 完整预分配50 GiB、`0600`、禁止稀疏 |
 | 数据根 | `/mnt/data/smartscan/uat` | loop ext4挂载点，UAT数据可丢弃重建 |
 | systemd单元 | `/etc/systemd/system/mnt-data-smartscan-uat.mount` | `0644`，依赖`/mnt/data`，不使用`/etc/fstab` |
+| loop受限执行器 | `/usr/local/libexec/smartscan/smartscan-uat-loop-storage` | root拥有、`0755`、SHA-256锁定，只允许四个固定子命令 |
+| sudoers | `/etc/sudoers.d/smartscan-uat-loop-storage` | root拥有、`0440`，只允许精确的`create/verify/status/stop`及零额外参数 |
 | 子目录 | `postgres`、`data`、`models/ocr` | UID/GID按拉取后镜像事实设置，不猜测 |
 | 配置文件 | `deploy.env`、`runtime.env`、资源确认、预检和loop证据 | 仓库外生成，不打印完整内容 |
 | Docker网络 | `smartscan-uat_data`、`smartscan-uat_edge`、`smartscan-uat_egress` | 数据、入口、受控出站三种用途，固定CIDR |
@@ -63,11 +65,11 @@ ghcr.io/j4meshub/smartscan-ops@sha256:ef4dd40c7b8a494e92540dc5bb476ab14490340214
 
 **失败关闭：不得直接部署这组镜像。** 源码复核确认`0961cc3` Web默认请求根路径`/api`，不支持`/smartscan/api`；其Ops校验器也早于资源确认1.2。禁止用共享根`/api`、Nginx `sub_filter`或浏览器本地覆盖绕过。
 
-主线`f38dd4f3b6dc43565e70d99e3c0ab93f38d0226c`五个镜像已经核对来源提交、`linux/amd64`、SBOM和漏洞门禁。Web支持`/smartscan/api`，Ops支持资源确认1.2；但Ops早于本次loop证据、只读根文件系统和48 GiB数据预算契约，整套仍未获部署接受。精确digest和证据见[`F38DD4F_CONTAINER_VERIFICATION.md`](F38DD4F_CONTAINER_VERIFICATION.md)，不得自动写入真实UAT配置或拉取。
+主线`f38dd4f3b6dc43565e70d99e3c0ab93f38d0226c`五个镜像只保留历史核验证据。它们虽然通过来源提交、`linux/amd64`、SBOM、漏洞和Web子路径检查，但Ops早于loop证据与只读/tmpfs契约，禁止部署；精确digest见[`F38DD4F_CONTAINER_VERIFICATION.md`](F38DD4F_CONTAINER_VERIFICATION.md)。
 
-新主线镜像不得自动替换任何已记录候选；只有用户明确接受整套兼容固定digest后，才允许写入仓库外真实配置。
+用户已明确接受提交`1b93e23178b0bfba60a259d77de34574bd7d9db4`产生的API、Worker、AI Gateway、Web和Ops五个固定digest为新UAT候选。2026-11-19目标服务器匿名manifest复核均返回HTTP 200、OCI image index及完全匹配的Registry digest；精确值只写仓库外变更记录，不回填公开UAT模板，也不构成拉取或部署授权。新主线镜像不得自动替换当前候选。
 
-PostgreSQL 17候选为`postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`，已由用户于2026-11-19接受为拟部署候选，但本轮未拉取。获准实际拉取后仍须核对RepoDigest、`linux/amd64`、实际UID/GID和`postgres --version`为17，不一致立即停止。SmartScan五镜像需要本工作包合并后的新制品核验和用户另行接受，不能自动替换。
+PostgreSQL 17候选为`postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`，已由用户接受，但目标服务器连接`auth.docker.io`超时，未完成服务器侧匿名manifest核验。完整应用部署继续独立阻塞；禁止用`docker pull`绕过只读核验。连通性恢复并获准实际拉取后，仍须核对RepoDigest、`linux/amd64`、实际UID/GID和`postgres --version`为17。
 
 ## 5. Nginx最小增量
 
@@ -104,44 +106,24 @@ location ^~ /smartscan/ {
 
 1. 新鲜只读预检；任一身份、网络、端口、资源或8077结构异常即停止。
 2. 共同使用人在仓库外记录精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值。
-3. 取得独立授权后创建并验证50 GiB非稀疏后备文件、ext4和systemd mount，生成脱敏loop证据；实际可用不足48 GiB则下调业务预算后重新确认。
-4. 再次核对manifest；只有用户接受兼容当前loop契约的SmartScan五镜像后才允许拉取。PostgreSQL候选虽已接受，仍须在拉取后核对平台、版本和UID/GID。
-5. 在已挂载loop内按核验UID/GID创建数据子目录；仓库外生成并以`0600`安装真实配置，禁止回显或提交。
-6. 创建三张已记录固定网络；运行预检、loop证据校验、UAT配置校验和`docker compose ... config --quiet`，不输出展开Secret。
-7. 只按最新接受的固定digest拉取并核对；不登录无关Registry，不拉可变标签。
-8. 启动专用PostgreSQL并等健康，运行一次性migrate；失败即停，不启动API。
-9. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。
-10. 最后安装Nginx增量、测试、reload，经8077基础UAT并观察共租户。
+3. 共同使用人在自己的SSH终端按[`OPS001_LOOP_SUDO_EXECUTOR.md`](OPS001_LOOP_SUDO_EXECUTOR.md)审核摘要、人工输入sudo密码并安装受限执行器、mount单元和sudoers；安装只建立最小能力，不授权`create`。
+4. 取得独立loop阶段授权后，只通过`sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage create`创建并验证50 GiB非稀疏后备文件、ext4和systemd mount；再运行`verify`并生成脱敏证据。实际可用不足48 GiB则停止并下调业务预算。
+5. 解决PostgreSQL Registry连通性并再次核对manifest；SmartScan五镜像虽已接受，仍不得在loop授权中拉取。
+6. 另行设计并授权应用阶段后，在已挂载loop内按核验UID/GID创建数据子目录，安装仓库外`0600`配置，创建三张网络并拉取固定digest。
+7. 运行预检、loop证据、UAT配置和Compose解析校验；启动PostgreSQL并等健康，再运行一次性migrate，失败即停。
+8. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。
+9. 最后单独授权Nginx增量安装、测试和reload，经8077基础UAT并观察共租户。
 
-将来需要sudo的精确类别只有：创建专用目录和50 GiB后备文件、格式化专用文件、安装及启停SmartScan mount单元、创建/授权loop内目录、安装0600配置、安装/回滚Nginx include、`nginx -t`和受控reload。Docker是否需要sudo以现场权限为准，不修改Docker组或daemon。
-
-经逐项授权后使用的命令形态如下；`<...>`必须来自同一次仓库外确认，不得在Shell中使用未解析变量、通配符或命令替换：
+OPS-001A只解决loop存储阶段。共同使用人一次性人工安装执行器、mount单元和sudoers后，AI仍只能运行以下四条命令：
 
 ```bash
-sudo install -d -o root -g root -m 0750 /etc/smartscan/uat
-sudo install -d -o root -g root -m 0700 /mnt/data/smartscan-loop
-sudo install -d -o root -g root -m 0755 /mnt/data/smartscan/uat
-sudo sh -c 'umask 077; set -C; : > /mnt/data/smartscan-loop/uat.ext4'
-sudo fallocate -l 50GiB /mnt/data/smartscan-loop/uat.ext4
-sudo chmod 0600 /mnt/data/smartscan-loop/uat.ext4
-sudo mkfs.ext4 -F -m 0 -E nodiscard -L smartscan-uat /mnt/data/smartscan-loop/uat.ext4
-sudo install -o root -g root -m 0644 <REVIEWED_MOUNT_UNIT> /etc/systemd/system/mnt-data-smartscan-uat.mount
-sudo systemctl daemon-reload
-sudo systemctl enable --now mnt-data-smartscan-uat.mount
-sudo install -d -o <POSTGRES_UID> -g <POSTGRES_GID> -m 0700 /mnt/data/smartscan/uat/postgres
-sudo install -d -o 10001 -g 10001 -m 0750 /mnt/data/smartscan/uat/data
-sudo install -d -o 10001 -g 10001 -m 0750 /mnt/data/smartscan/uat/models/ocr
-sudo install -o root -g root -m 0600 <PRIVATE_DEPLOY_ENV> /etc/smartscan/uat/deploy.env
-sudo install -o root -g root -m 0600 <PRIVATE_RUNTIME_ENV> /etc/smartscan/uat/runtime.env
-sudo install -o root -g root -m 0600 <PRIVATE_ALLOCATION> /etc/smartscan/uat/shared-host-allocation.json
-sudo install -o root -g root -m 0600 <PRIVATE_PREFLIGHT_SUMMARY> /etc/smartscan/uat/preflight-summary.json
-sudo install -o root -g root -m 0600 <PRIVATE_LOOP_EVIDENCE> /etc/smartscan/uat/loop-storage-evidence.json
-sudo install -o root -g root -m 0644 <REVIEWED_SMARTSCAN_INCLUDE> /etc/nginx/snippets/smartscan-uat-8077.locations.conf
-sudo nginx -t
-sudo nginx -s reload
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage status
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage create
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage verify
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage stop
 ```
 
-创建前必须证明后备文件和挂载点未被使用。`fallocate`后及`mkfs.ext4`后均核对`stat`的逻辑大小与已分配块，拒绝稀疏文件。创建后用`dumpe2fs -h`核对ext4、label和reserved block，用`findmnt`核对挂载点、类型和参数，用`df -B1`核对实际可用空间，用`losetup --list --output NAME,BACK-FILE,AUTOCLEAR`核对autoclear，再将脱敏事实交给`tools/validate_uat_loop_storage.py`。以上命令本轮均未执行。
+sudoers以目标平台支持的语法分别列出四条精确命令，不允许额外参数、`sudo bash`、`sudo sh`或通用`systemctl`；执行器SHA-256在人工安装时核对，安装后由root拥有且普通用户不可写。执行器内部使用`fallocate`、`mkfs.ext4`和固定systemd单元，但不接受路径、大小、设备或命令参数；不操作Docker、Nginx、网络、Secret或其他服务。安装命令、固定摘要、失败和安装层回滚见专项说明。本轮未安装或运行执行器。
 
 任何`sudo`写入前先运行创建前计划校验，不传`--evidence`：
 
@@ -153,19 +135,14 @@ python tools/validate_uat_loop_storage.py \
 
 占位确认、未确认硬限制、错误预算、错误路径/参数或缺少回滚说明都会失败关闭。创建完成后再增加`--evidence <PRIVATE_LOOP_EVIDENCE>`验证实际事实。
 
-创建后的只读验证命令草案为：
+安装后且获得对应授权时，创建和验证命令为：
 
 ```bash
-stat --format='%n %s %b %B %a' /mnt/data/smartscan-loop/uat.ext4
-sudo dumpe2fs -h /mnt/data/smartscan-loop/uat.ext4
-findmnt -no SOURCE,FSTYPE,OPTIONS,TARGET /mnt/data/smartscan/uat
-df -B1 --output=size,avail,target /mnt/data/smartscan/uat
-sudo losetup --list --output NAME,BACK-FILE,AUTOCLEAR
-systemctl is-enabled mnt-data-smartscan-uat.mount
-systemctl is-active mnt-data-smartscan-uat.mount
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage create
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage verify
 ```
 
-`stat`中的逻辑字节必须精确为50 GiB，`blocks × block-size`不得小于逻辑字节；证据文件只保存脱敏后的计算结果，不保存其他项目路径或完整主机快照。
+执行器验证逻辑字节精确50 GiB、`blocks × 512`不小于逻辑字节、ext4/label/reserved block、实际可用至少48 GiB、挂载参数、唯一loop映射、autoclear和systemd状态；输出不包含真实loop设备名。证据文件只保存脱敏计算结果。
 
 现有8077配置的单文件备份、增加include行与回滚必须使用仓库外记录的精确`<8077_SERVER_CONFIG>`和`<BACKUP_FILE>`，先逐行审阅再授权；方案刻意不生成可能误改共享配置的通用`sed`命令。网络创建、镜像拉取、Compose迁移和启动命令由最终接受的CIDR及digest生成，在当前制品兼容门禁解除前不得生成可直接执行的部署脚本。
 
@@ -173,13 +150,10 @@ systemctl is-active mnt-data-smartscan-uat.mount
 
 ```bash
 docker compose -p smartscan-uat --env-file <PRIVATE_DEPLOY_ENV> -f <REVIEWED_COMPOSE> stop
-sudo systemctl stop mnt-data-smartscan-uat.mount
-findmnt --target /mnt/data/smartscan/uat
-sudo losetup --list --output NAME,BACK-FILE,AUTOCLEAR
-sudo systemctl disable mnt-data-smartscan-uat.mount
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage stop
 ```
 
-`findmnt`应证明挂载已解除，`losetup`应证明对应loop映射因autoclear消失。否则停止回滚并调查，不得强制detach仍在使用的设备。
+Compose停止属于尚未授权的应用阶段操作；受限执行器不执行Docker命令。`stop`会证明挂载解除、autoclear释放loop并禁用固定单元，后备文件始终保留；异常时停止并调查，不强制detach。
 
 ## 7. 验收
 
@@ -199,7 +173,7 @@ HTTP IP入口不能通过`getUserMedia`实时相机、企业微信、Android/iOS
 1. 先移除本次唯一Nginx include行或恢复精确备份，`nginx -t`后reload，退出外部流量。
 2. 对精确项目执行`docker compose -p smartscan-uat ... stop`，默认保留对象取证。
 3. 仅在确认三张网络没有非SmartScan端点且获得清理授权后执行精确项目`down`，不带`-v`；有未知端点立即停止。
-4. 停止`mnt-data-smartscan-uat.mount`，确认挂载解除且autoclear已释放loop设备，再禁用该单元。默认保留后备文件、配置和网络取证。
+4. 在应用容器确认停止后，单独授权受限执行器`stop`；它停止并禁用`mnt-data-smartscan-uat.mount`、确认autoclear释放loop设备并保留后备文件。不得向AI授予通用`systemctl`或`losetup`。
 5. 删除systemd单元、后备文件、数据目录或网络是另一个破坏性授权，须列出每个绝对路径并核对挂载、端点、项目和所有权。
 6. 当前迁移入口不提供自动降级。首次空库失败可经独立授权重建；产生数据后保留并向前修复。UAT无备份，不承诺数据回滚。
 7. 只能回到用户已接受且兼容当前数据库、`/smartscan/`和loop契约的上一组digest。没有上一组时只能撤入口并停止整栈。
@@ -208,6 +182,6 @@ HTTP IP入口不能通过`getUserMedia`实时相机、企业微信、Android/iOS
 
 ## 9. 最终授权点
 
-实际部署必须分别取得：部署窗口只读复查；精确三网/18082/停止阈值确认；sudo创建专用目录、后备文件、ext4和mount单元授权；mount启停授权；兼容五镜像digest接受；PostgreSQL候选拉取及核验授权；loop内目录和Secret安装授权；Docker网络/拉取授权；PostgreSQL/迁移/应用启动授权；Nginx安装测试reload授权；停止重启、回滚及最终保留或清理授权。
+实际部署必须分别取得：部署窗口只读复查；精确三网/18082/停止阈值确认；共同使用人手工安装受限执行器/mount单元/sudoers授权；安装后的独立`create`授权；`verify`证据确认；PostgreSQL Registry恢复及候选拉取核验授权；loop内应用目录和Secret安装授权；Docker网络/镜像拉取授权；PostgreSQL/迁移/应用启动授权；Nginx安装测试reload授权；受限`stop`、应用回滚及最终保留或清理授权。SmartScan五镜像已经接受，但不替代其他阶段授权。
 
 未获相应授权前，不得创建目录、后备文件、文件系统、挂载、Secret、网络或容器，不得拉取镜像、迁移或修改/reload Nginx。

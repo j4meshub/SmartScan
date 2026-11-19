@@ -7,15 +7,27 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001` 共享主机验收栈（未执行变更方案） |
-| 工作包状态 | loop存储与只读容器契约已提交PR，等待GitHub Actions；本轮只修改仓库，未连接或修改服务器 |
-| 当前分支 | `codex/ops-001-loop-storage` |
-| 最后验证基线 | `f38dd4f`（PR #79合并后的主线；五镜像已只读核验但未获部署接受） |
-| 工作包提交 | `df5bdf6`（loop存储、只读容器、模板、校验器和测试） |
-| PR | [#80](https://github.com/j4meshub/SmartScan/pull/80)；只包含仓库代码、模板、测试和脱敏文档，未执行服务器变更 |
-| 下一工作包 | 完成测试和PR后等待新主线镜像供应链；用户接受兼容loop契约的五镜像并逐项授权后才可实际部署 |
+| 当前工作包 | `OPS-001A` UAT loop受限sudo执行器准备 |
+| 工作包状态 | 等待人工验收；仓库实现与PR #81全部GitHub Actions已通过，待合并后由用户人工安装 |
+| 当前分支 | `codex/ops-001a-loop-sudo-executor` |
+| 最后验证基线 | `1b93e23`（PR #80合并；五个新GHCR digest已获用户接受并通过服务器匿名manifest核验） |
+| 工作包提交 | `e840857`（主体实现）、`066b070`（PR证据）、`881842e`（目标sudo兼容）、`bddc55e`（父目录权限修复） |
+| PR | [#81](https://github.com/j4meshub/SmartScan/pull/81)；仅包含仓库资产，未连接或修改服务器 |
+| 下一工作包 | PR合并后由用户在自己的SSH终端人工审核并安装执行器；安装不等于授权`create`。PostgreSQL Registry连通性解决前不进入完整应用部署 |
 
 ## 当前工作包进展
+
+- 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-loop-storage`的root执行器，只接受无额外参数的`create/verify/status/stop`；固定目标主机、`SUDO_USER`、`SUDO_COMMAND`、后备文件、挂载点、50 GiB大小和systemd单元，拒绝任意资源参数及通用命令。
+- sudoers模板只列四个精确命令参数，不授予`sudo bash`、`sudo sh`、通配符、额外参数或通用`systemctl`；安装前人工核对执行器SHA-256，安装后由root拥有且普通用户不可写。执行器运行时继续核对自身安装路径/权限以及mount单元固定摘要。
+- `create`只允许全新状态或已经完整验证的SmartScan文件系统；预分配前重新计算15%/200 GiB共享盘余量。`verify`检查50 GiB非稀疏、ext4、label、reserved block、至少48 GiB可用、挂载参数、唯一loop映射和autoclear；`stop`保留后备文件；`status`只输出脱敏状态。
+- 新增一次性人工安装说明：共同使用人在自己的SSH终端审核文件、摘要和sudoers后输入密码安装，AI不得请求、读取、保存或传递sudo密码。本工作包不连接服务器，也不授权loop创建、Docker、Nginx、网络、Secret、数据库、迁移或应用部署。
+- 2026-11-19最终只读预检已经在本工作包之前完成：50 GiB后仍高于共享盘安全线约214.86 GiB，三张候选网络无冲突、18082空闲、8077结构未变；五个`1b93e23` GHCR digest匿名核验成功。服务器访问`auth.docker.io`超时，PostgreSQL manifest未完成服务器侧核验，继续独立阻塞完整应用部署。
+- Windows本地专项最终为`46 passed, 7 skipped`；7项跳过是需要Linux Bash/`visudo`的语法和真实状态机测试，已由GitHub Ubuntu Runner覆盖。首次全量回归出现24项UAT配置失败，根因是Windows `core.autocrlf`让CI夹具的原始字节摘要与仓库LF摘要不一致；没有放宽生产校验，只在`ci_fixture`模式规范CRLF为LF，并为执行器、sudoers、mount模板和loop证据夹具固定LF。修复后全量`536 passed, 14 skipped`、覆盖率87.79%，Ruff检查、175个Python文件格式、迁移漂移和差异空白检查通过；其中14项为既有7项外部门禁加新增7项Linux门禁。
+- PR #81首轮Ubuntu API作业执行了Windows跳过的门禁，发现Runner的sudo构建不支持命令digest语法、`!set_home`选项不可用，且测试路径替换会递归替换临时目录。未跳过或放宽四命令边界：sudoers改为平台支持的四组精确命令，执行器SHA继续用于人工安装核验并依靠root所有权防篡改；测试改为单次路径替换。
+- 第二轮Ubuntu API作业中`visudo`及其余动态门禁通过，仅幂等创建测试发现`umask 077`下由`install -d`隐式创建的SmartScan父目录可能为0700，而执行器契约要求0755。修复为显式先以root/0755创建并校验固定父目录，再创建挂载点；未降低权限或跳过测试。
+- 最终头提交`bddc55e`的PR CI运行`44473946418`与分支CI运行`44473939617`中API、Web、Android、iOS和容器作业全部成功；容器供应链运行`44473946447`的五个镜像验证全部成功，PR场景的发布与清单汇总按设计跳过。Ubuntu API作业实际执行并通过Bash语法、`visudo`、幂等、异常对象、空间不足、模板摘要不符、停止保留数据和参数注入测试。
+
+以下保留PR #80已经完成的loop/只读容器仓库证据；其中“等待Actions”和旧分支描述已由上方当前断点取代：
 
 - UAT不再使用project quota，改为完整预分配、非稀疏的50 GiB专用后备文件，ext4 reserved block为0，由依赖`/mnt/data`的systemd mount单元以`loop,nodev,nosuid,noatime`挂载；不改`/etc/fstab`、共享盘挂载或现有loop对象。
 - 50 GiB纠正为数据库/WAL 12 GiB、业务文件32 GiB、OCR模型4 GiB、ext4元数据与运行余量2 GiB。前3项数据预算为48 GiB；实际可用不足时只下调业务预算。Docker镜像和位于共享Docker根目录的`10m×3`日志不计入loop，八容器日志理论上限约240 MiB。

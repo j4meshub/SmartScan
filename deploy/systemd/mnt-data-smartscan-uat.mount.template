@@ -1,4 +1,5 @@
 # 仅供评审；安装、enable、start和删除均须由服务器共同使用人逐项授权。
+# 安全摘要按仓库固定的LF行尾计算，安装前不得转换行尾或改写内容。
 # 回滚：先停止SmartScan Compose，再stop/disable本单元；确认挂载与loop映射消失后，默认保留后备文件。
 [Unit]
 Description=SmartScan UAT 50 GiB loop ext4 数据盘
