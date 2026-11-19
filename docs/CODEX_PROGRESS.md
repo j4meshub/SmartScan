@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001A` UAT loop受限sudo执行器准备 |
-| 工作包状态 | 进行中；只修改仓库，未连接或修改服务器，等待Linux动态测试和PR CI |
+| 工作包状态 | 进行中；本地门禁通过，等待PR #81的Linux动态测试和全部GitHub Actions |
 | 当前分支 | `codex/ops-001a-loop-sudo-executor` |
 | 最后验证基线 | `1b93e23`（PR #80合并；五个新GHCR digest已获用户接受并通过服务器匿名manifest核验） |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `e840857`（受限执行器、摘要锁定sudoers、人工安装说明和测试） |
+| PR | [#81](https://github.com/j4meshub/SmartScan/pull/81)；仅包含仓库资产，未连接或修改服务器 |
 | 下一工作包 | PR合并后由用户在自己的SSH终端人工审核并安装执行器；安装不等于授权`create`。PostgreSQL Registry连通性解决前不进入完整应用部署 |
 
 ## 当前工作包进展
