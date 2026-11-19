@@ -7,15 +7,25 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001B` ext4 loop完整预分配修复 |
-| 工作包状态 | 进行中；本地门禁通过，等待PR的Ubuntu动态状态机、`visudo`和全部GitHub Actions |
-| 当前分支 | `codex/ops-001b-ext4-loop-recreate` |
-| 最后验证基线 | `ced1970`（PR #81合并；OPS-001A执行器已由用户人工安装） |
-| 工作包提交 | `c5de9e7`（lazy初始化修复、空UAT定点重建、安全测试与人工升级说明） |
-| PR | [#82](https://github.com/j4meshub/SmartScan/pull/82)；只包含仓库资产，未执行服务器`stop`、删除或重格式化 |
-| 下一工作包 | OPS-001B合并后由用户人工升级执行器和sudoers；真实`recreate-empty`必须再获单独授权。PostgreSQL Registry连通性仍独立阻塞完整应用部署 |
+| 当前工作包 | `OPS-001C` 应用部署候选核验 |
+| 工作包状态 | 等待人工验收；loop存储已通过，五个SmartScan候选已完成只读核验，等待用户接受；PostgreSQL供应链仍阻塞应用部署 |
+| 当前分支 | `codex/ops-001c-app-candidate-validation` |
+| 最后验证基线 | `2adbf4f`（PR #82合并；OPS-001B执行器、空UAT重建和两次独立验证已获用户接受） |
+| 工作包提交 | 待本分支中文提交 |
+| PR | 待创建；只记录脱敏验收与公开制品证据，不包含服务器原始响应或内部地址 |
+| 下一工作包 | `OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链；完成服务器匿名核验和用户接受后，再申请OPS-001应用部署授权 |
 
 ## 当前工作包进展
+
+- 用户已接受OPS-001B存储验收：`recreate-empty`一次成功，两次独立`verify`通过；50 GiB后备文件完整物理预分配且不再稀疏，ext4、label、reserved block、`rw,nosuid,nodev,noatime`、唯一loop、autoclear、systemd和共享盘安全余量全部通过。SmartScan应用从未启动，没有触碰其他服务或项目；原始服务器输出和真实loop设备名不进入仓库。
+- 目标服务器仅通过`smartscan-server`进行无sudo只读复核。`auth.docker.io` DNS同时返回IPv4/IPv6，但IPv4连接443端口超时、IPv6立即不可达；因此TLS握手、匿名token和`library/postgres` manifest均未发生。PostgreSQL固定digest尚未完成服务器侧核验，不得拉取或部署。
+- 主线提交`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`的容器供应链运行`44488695512`成功。五个公开GHCR OCI index从目标服务器匿名查询均返回HTTP 200、digest完全一致并包含`linux/amd64`；服务器未登录或拉取镜像。
+- 五个镜像的OCI配置revision均为完整`2adbf4f`，SPDX 2.3 SBOM和SLSA provenance逐一存在且主体digest/源提交一致。Trivy以`ignore-unfixed: true`扫描High/Critical并成功，日志显示被扫描目标为Clean，因此可修复High/Critical为0；不把不可修复项误记为已证明不存在。
+- Web的`/smartscan/`与`/smartscan/api`实现、单元测试和Chromium E2E通过；Ops来源提交包含loop计划/证据、只读根文件系统、有界tmpfs、50/48 GiB预算、8 vCPU/16 GiB整栈和UAT Compose校验。五个精确候选见`2ADBF4F_CONTAINER_VERIFICATION.md`，在用户接受前不得自动替换现有仓库外配置。
+- Docker Hub阻塞改由独立`OPS-REG-003`处理：GitHub Actions按Docker Official Image固定digest复制完整多平台manifest到公开GHCR，并保留上游digest、`17` tag对应、平台、SBOM、漏洞和自定义in-toto映射；不得伪造为SmartScan构建或Docker官方签名。
+- 仓库专项最终为`49 passed, 16 skipped`，全量Python为`539 passed, 23 skipped`、覆盖率87.79%；Ruff检查、175个Python文件格式、迁移漂移和差异空白检查通过。23项跳过为既有7项外部门禁及16项Linux执行器动态测试；后者已由PR #82 Ubuntu门禁补证。本工作包没有业务API、数据库或客户端协议变更。
+
+以下保留OPS-001B的完成证据：
 
 - 2026-11-19现场执行`create`返回成功并曾通过内部验证，稍后独立`verify`以`reason=backing_sparse`失败；逻辑大小仍为50 GiB，ext4、`smartscan-uat` label、`rw,nosuid,nodev,noatime`、autoclear及systemd enabled/active均正常，文件系统可用约48.899 GiB且应用从未启动。现场保持挂载，未执行`stop`、删除、重格式化或其他越界操作。
 - 根因按现场证据定为ext4格式化兼容：原`-E nodiscard`仍保留lazy inode table和lazy journal初始化，首次挂载后的后台初始化会使底层完整预分配文件重新出现空洞。OPS-001B固定增加`lazy_itable_init=0,lazy_journal_init=0`，不降低`backing_sparse`门禁、不允许稀疏文件，也不缩小50 GiB目标。
@@ -987,7 +997,7 @@ git diff --check
 
 ## 下一步
 
-1. 先完成并评审OPS-001未执行变更方案；不能因方案完成而自动连接、拉取或创建UAT资源。
-2. `OPS-REG-002`已完成；`0961cc3`保持拒绝，`f38dd4f`虽通过镜像和Web核验但Ops缺loop契约。合并本分支后等待新的主线制品，再由用户明确接受整套固定digest。PostgreSQL候选已经接受，但实际拉取后仍需核对RepoDigest、平台、17版本和UID/GID。
-3. 用户逐项授权OPS-001后，部署当天重新采集现场状态、确定三张无冲突CIDR、复核8077/18082，创建并验证50 GiB非稀疏loop ext4，生成仓库外Secret和证据，再人工创建UAT。基础UAT通过后进入OPS-002A HTTPS；OPS-003/004不阻塞基础UAT，OPS-005/006继续保持门禁。
+1. 请用户审阅并明确接受`2adbf4f`五个固定GHCR候选；接受不等于拉取或部署授权，新digest不得自动替换。
+2. 执行`OPS-REG-003`，把Docker Official Image的PostgreSQL 17固定digest按原始多平台manifest复制到公开GHCR，完成上游来源、SBOM、漏洞、服务器匿名manifest和用户接受门禁。
+3. 存储和全部制品门禁满足后，再单独申请OPS-001应用部署：部署当天重新采集网络/端口/资源，确认三张CIDR、8077/18082，生成仓库外Secret，按镜像实际UID/GID准备子目录，并逐项授权Docker网络、镜像拉取、迁移、Compose和Nginx。
 4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。
