@@ -5,10 +5,13 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 
 
-def test_ops001_plan_is_non_executing_and_fail_closed() -> None:
+def test_ops001_plan_records_partial_loop_and_remains_fail_closed() -> None:
     plan = (ROOT / "docs" / "OPS001_UAT_CHANGE_PLAN.md").read_text(encoding="utf-8")
 
-    assert "待授权、未执行" in plan
+    assert "loop首次创建已执行但独立验证失败，应用部署未执行" in plan
+    assert "backing_sparse" in plan
+    assert "recreate-empty" in plan
+    assert "nodiscard,lazy_itable_init=0,lazy_journal_init=0" in plan
     assert "不得直接部署这组镜像" in plan
     assert "0961cc3" in plan
     assert "`/api`" in plan

@@ -87,7 +87,7 @@ OPS-000已完成历史现场事实和资源策略确认。部署当天由OPS-001
 - GitHub 是唯一代码仓库、PR、评审、合并、Tag 和版本事实来源；GitHub Actions 构建并发布公开 GHCR 镜像。
 - API、Web、CPU Worker、AI Worker、AI Gateway 和运维工具均发布固定 digest，同时生成漏洞扫描、SBOM 和版本锁文件。
 - 主线`0961cc3`和`f38dd4f`五镜像只保留历史证据并拒绝部署。用户已在仓库外接受提交`1b93e23`产生的五个兼容digest，目标服务器匿名manifest核验成功，但不自动回填公开模板或授权拉取。服务器访问`auth.docker.io`超时，PostgreSQL候选尚未完成服务器侧manifest核验，完整应用部署继续阻塞。
-- loop阶段使用[`OPS001_LOOP_SUDO_EXECUTOR.md`](OPS001_LOOP_SUDO_EXECUTOR.md)中的固定执行器。用户人工核对摘要并以root所有权安装后，sudoers只允许四组精确命令；AI仍只能在另行授权下运行，且没有Docker、网络、Secret、迁移、Compose或Nginx权限。
+- loop阶段使用[`OPS001_LOOP_SUDO_EXECUTOR.md`](OPS001_LOOP_SUDO_EXECUTOR.md)中的固定执行器。OPS-001B针对首次挂载后的ext4 lazy初始化空洞增加禁用lazy初始化的格式化参数，以及只可重建固定稀疏空UAT的`recreate-empty`；sudoers只允许五组精确命令。用户必须人工升级，真实重建仍需另行授权，且AI没有Docker、网络、Secret、迁移、Compose或Nginx权限。
 - UAT使用专用完整预分配50 GiB后备文件、reserved block为0的ext4和依赖`/mnt/data`的systemd mount；不修改共享盘挂载或`/etc/fstab`。八个服务根文件系统只读，所有tmpfs有界；Docker日志在loop外按每容器`10m×3`轮转。
 - 服务器不检出源码、不安装项目虚拟环境、不现场构建，也不接受GitHub自动SSH部署；每次变更由服务器共同使用人确认后人工执行。
 - UAT不新增Alertmanager、Node Exporter或主机代理，也不挂载宿主机`/`、`/proc`、`/sys`；现有Prometheus/Grafana接入不是基础UAT前置条件。

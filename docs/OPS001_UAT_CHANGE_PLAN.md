@@ -1,6 +1,6 @@
 # OPS-001 共享宿主机 UAT 变更方案
 
-> 状态：**待授权、未执行**。本方案不授权服务器写入，不包含真实 CIDR、内部地址、凭据或 Secret。命令均为将来取得逐项授权后的草案。
+> 状态：**loop首次创建已执行但独立验证失败，应用部署未执行**。2026-11-19现场出现`backing_sparse`，对象保持挂载且无业务数据；OPS-001B只准备修复，不授权服务器重建。本文不包含真实CIDR、内部地址、凭据或Secret。
 
 ## 1. 变更对象
 
@@ -11,8 +11,8 @@
 | loop后备文件 | `/mnt/data/smartscan-loop/uat.ext4` | 完整预分配50 GiB、`0600`、禁止稀疏 |
 | 数据根 | `/mnt/data/smartscan/uat` | loop ext4挂载点，UAT数据可丢弃重建 |
 | systemd单元 | `/etc/systemd/system/mnt-data-smartscan-uat.mount` | `0644`，依赖`/mnt/data`，不使用`/etc/fstab` |
-| loop受限执行器 | `/usr/local/libexec/smartscan/smartscan-uat-loop-storage` | root拥有、`0755`、SHA-256锁定，只允许四个固定子命令 |
-| sudoers | `/etc/sudoers.d/smartscan-uat-loop-storage` | root拥有、`0440`，只允许精确的`create/verify/status/stop`及零额外参数 |
+| loop受限执行器 | `/usr/local/libexec/smartscan/smartscan-uat-loop-storage` | root拥有、`0755`、SHA-256锁定，只允许五个固定子命令 |
+| sudoers | `/etc/sudoers.d/smartscan-uat-loop-storage` | root拥有、`0440`，只允许精确的`create/verify/status/stop/recreate-empty`及零额外参数 |
 | 子目录 | `postgres`、`data`、`models/ocr` | UID/GID按拉取后镜像事实设置，不猜测 |
 | 配置文件 | `deploy.env`、`runtime.env`、资源确认、预检和loop证据 | 仓库外生成，不打印完整内容 |
 | Docker网络 | `smartscan-uat_data`、`smartscan-uat_edge`、`smartscan-uat_egress` | 数据、入口、受控出站三种用途，固定CIDR |
@@ -46,7 +46,7 @@
 
 - 70%提示并检查增长；85%告警并执行经确认的受控清理，禁止自动删除原图；95%停止新增写入和上传，保留只读访问。
 - 使用专用后备文件`/mnt/data/smartscan-loop/uat.ext4`，必须以`fallocate`完整预分配50 GiB并证明不是稀疏文件，权限`0600`。
-- 格式化为ext4，reserved block比例为0；挂载到`/mnt/data/smartscan/uat`，参数固定为`loop,nodev,nosuid,noatime`。
+- 格式化为ext4，reserved block比例为0，固定使用`-E nodiscard,lazy_itable_init=0,lazy_journal_init=0`同步完成inode table和journal初始化；挂载到`/mnt/data/smartscan/uat`，参数固定为`loop,nodev,nosuid,noatime`。
 - 通过[`mnt-data-smartscan-uat.mount.template`](../deploy/systemd/mnt-data-smartscan-uat.mount.template)持久挂载，单元权限`0644`、明确依赖`/mnt/data`；loop设备必须为autoclear。
 - 不使用ext4 project quota、`/etc/fstab`或共享数据盘重挂载，不触碰现有loop挂载。应用配额和70/85/95只是纵深防御，不能替代50 GiB文件系统硬限制。
 - 全部服务根文件系统只读。tmpfs上限：PostgreSQL 64+16 MiB；migrate 32 MiB；API 128+32 MiB；两个CPU Worker各512 MiB；AI Worker 128 MiB；AI Gateway 16 MiB；Web 64+32+4 MiB。PostgreSQL只有数据目录允许持久写入loop。
@@ -106,24 +106,25 @@ location ^~ /smartscan/ {
 
 1. 新鲜只读预检；任一身份、网络、端口、资源或8077结构异常即停止。
 2. 共同使用人在仓库外记录精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值。
-3. 共同使用人在自己的SSH终端按[`OPS001_LOOP_SUDO_EXECUTOR.md`](OPS001_LOOP_SUDO_EXECUTOR.md)审核摘要、人工输入sudo密码并安装受限执行器、mount单元和sudoers；安装只建立最小能力，不授权`create`。
-4. 取得独立loop阶段授权后，只通过`sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage create`创建并验证50 GiB非稀疏后备文件、ext4和systemd mount；再运行`verify`并生成脱敏证据。实际可用不足48 GiB则停止并下调业务预算。
+3. OPS-001A执行器、mount单元和sudoers已由共同使用人安装；首次`create`后独立`verify`发现ext4 lazy初始化导致的`backing_sparse`。共同使用人须按[`OPS001_LOOP_SUDO_EXECUTOR.md`](OPS001_LOOP_SUDO_EXECUTOR.md)人工复核摘要并升级OPS-001B执行器和sudoers；升级不等于授权重建。
+4. 另行取得空UAT重建授权后，只通过`sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage recreate-empty`重建固定对象；命令必须先证明50 GiB后备文件确为稀疏、固定挂载身份正确、除空`lost+found`外无内容且安全余量充分。完成后至少独立运行两次`verify`并保存脱敏证据；任一失败立即停止，不部署应用。
 5. 解决PostgreSQL Registry连通性并再次核对manifest；SmartScan五镜像虽已接受，仍不得在loop授权中拉取。
 6. 另行设计并授权应用阶段后，在已挂载loop内按核验UID/GID创建数据子目录，安装仓库外`0600`配置，创建三张网络并拉取固定digest。
 7. 运行预检、loop证据、UAT配置和Compose解析校验；启动PostgreSQL并等健康，再运行一次性migrate，失败即停。
 8. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。
 9. 最后单独授权Nginx增量安装、测试和reload，经8077基础UAT并观察共租户。
 
-OPS-001A只解决loop存储阶段。共同使用人一次性人工安装执行器、mount单元和sudoers后，AI仍只能运行以下四条命令：
+OPS-001A/OPS-001B只解决loop存储阶段。共同使用人人工升级执行器和sudoers后，AI仍只能运行以下五条命令：
 
 ```bash
 sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage status
 sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage create
 sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage verify
 sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage stop
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage recreate-empty
 ```
 
-sudoers以目标平台支持的语法分别列出四条精确命令，不允许额外参数、`sudo bash`、`sudo sh`或通用`systemctl`；执行器SHA-256在人工安装时核对，安装后由root拥有且普通用户不可写。执行器内部使用`fallocate`、`mkfs.ext4`和固定systemd单元，但不接受路径、大小、设备或命令参数；不操作Docker、Nginx、网络、Secret或其他服务。安装命令、固定摘要、失败和安装层回滚见专项说明。本轮未安装或运行执行器。
+sudoers以目标平台支持的语法分别列出五条精确命令，不允许额外参数、`sudo bash`、`sudo sh`或通用`systemctl`；执行器SHA-256在人工升级时核对，安装后由root拥有且普通用户不可写。`recreate-empty`内部可以停止固定mount、删除并重建唯一固定的空UAT后备文件，但不授予通用`unlink`、`fallocate`、`mkfs`或`systemctl`。它不接受路径、大小、设备或命令参数，也不操作Docker、Nginx、网络、Secret或其他服务。本轮只修改仓库，不升级或运行服务器执行器。
 
 任何`sudo`写入前先运行创建前计划校验，不传`--evidence`：
 
@@ -182,6 +183,6 @@ HTTP IP入口不能通过`getUserMedia`实时相机、企业微信、Android/iOS
 
 ## 9. 最终授权点
 
-实际部署必须分别取得：部署窗口只读复查；精确三网/18082/停止阈值确认；共同使用人手工安装受限执行器/mount单元/sudoers授权；安装后的独立`create`授权；`verify`证据确认；PostgreSQL Registry恢复及候选拉取核验授权；loop内应用目录和Secret安装授权；Docker网络/镜像拉取授权；PostgreSQL/迁移/应用启动授权；Nginx安装测试reload授权；受限`stop`、应用回滚及最终保留或清理授权。SmartScan五镜像已经接受，但不替代其他阶段授权。
+实际部署必须分别取得：部署窗口只读复查；精确三网/18082/停止阈值确认；共同使用人手工升级受限执行器/sudoers授权；升级后独立`recreate-empty`授权；连续`verify`证据确认；PostgreSQL Registry恢复及候选拉取核验授权；loop内应用目录和Secret安装授权；Docker网络/镜像拉取授权；PostgreSQL/迁移/应用启动授权；Nginx安装测试reload授权；受限`stop`、应用回滚及最终保留或清理授权。SmartScan五镜像已经接受，但不替代其他阶段授权。
 
 未获相应授权前，不得创建目录、后备文件、文件系统、挂载、Secret、网络或容器，不得拉取镜像、迁移或修改/reload Nginx。
