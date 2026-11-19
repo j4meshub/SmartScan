@@ -27,7 +27,7 @@
 | `deploy/ops/smartscan-uat-loop-storage` | `e0944c15931480858d2b35b8e3ab3fe2f40f904c62388a486f5752487bf29103` |
 | `deploy/systemd/mnt-data-smartscan-uat.mount.template` | `e48feb8db96f5fe42b21249846e12a2165b639504afdf99ded882e28eeedd5a3` |
 
-sudoers模板同时使用上述执行器摘要锁定四条命令。任何执行器字节变化都会使sudo拒绝执行，必须重新走代码评审、测试、摘要更新和人工安装流程。
+sudoers模板只列出四条精确命令及参数。目标sudo版本不依赖可选的命令digest扩展；执行器摘要由用户在安装前人工核对，安装后文件由root拥有、普通用户不可写。任何执行器字节变化都必须重新走代码评审、测试、摘要更新和人工安装流程。
 
 ## 一次性人工引导安装
 
@@ -95,7 +95,7 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage verify
 sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage stop
 ```
 
-sudoers不会允许第五个子命令、额外参数、不同路径、不同摘要、`sudo bash`、`sudo sh`或通用`systemctl`。脚本还会核对主机名、`SUDO_USER`、`SUDO_COMMAND`、自身安装路径和root所有权。
+sudoers不会允许第五个子命令、额外参数、不同路径、`sudo bash`、`sudo sh`或通用`systemctl`。脚本还会核对主机名、`SUDO_USER`、`SUDO_COMMAND`、自身安装路径和root所有权；安装摘要由用户另行核对。
 
 ## 子命令行为
 

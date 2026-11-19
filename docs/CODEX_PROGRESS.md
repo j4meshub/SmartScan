@@ -11,18 +11,19 @@
 | 工作包状态 | 进行中；本地门禁通过，等待PR #81的Linux动态测试和全部GitHub Actions |
 | 当前分支 | `codex/ops-001a-loop-sudo-executor` |
 | 最后验证基线 | `1b93e23`（PR #80合并；五个新GHCR digest已获用户接受并通过服务器匿名manifest核验） |
-| 工作包提交 | `e840857`（受限执行器、摘要锁定sudoers、人工安装说明和测试） |
+| 工作包提交 | `e840857`（受限执行器、精确命令sudoers、人工安装说明和测试） |
 | PR | [#81](https://github.com/j4meshub/SmartScan/pull/81)；仅包含仓库资产，未连接或修改服务器 |
 | 下一工作包 | PR合并后由用户在自己的SSH终端人工审核并安装执行器；安装不等于授权`create`。PostgreSQL Registry连通性解决前不进入完整应用部署 |
 
 ## 当前工作包进展
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-loop-storage`的root执行器，只接受无额外参数的`create/verify/status/stop`；固定目标主机、`SUDO_USER`、`SUDO_COMMAND`、后备文件、挂载点、50 GiB大小和systemd单元，拒绝任意资源参数及通用命令。
-- sudoers模板按执行器SHA-256分别列出四个精确命令，不授予`sudo bash`、`sudo sh`、通配符、额外参数或通用`systemctl`。执行器与mount单元还会核对root所有权、权限和仓库模板摘要。
+- sudoers模板只列四个精确命令参数，不授予`sudo bash`、`sudo sh`、通配符、额外参数或通用`systemctl`；安装前人工核对执行器SHA-256，安装后由root拥有且普通用户不可写。执行器运行时继续核对自身安装路径/权限以及mount单元固定摘要。
 - `create`只允许全新状态或已经完整验证的SmartScan文件系统；预分配前重新计算15%/200 GiB共享盘余量。`verify`检查50 GiB非稀疏、ext4、label、reserved block、至少48 GiB可用、挂载参数、唯一loop映射和autoclear；`stop`保留后备文件；`status`只输出脱敏状态。
 - 新增一次性人工安装说明：共同使用人在自己的SSH终端审核文件、摘要和sudoers后输入密码安装，AI不得请求、读取、保存或传递sudo密码。本工作包不连接服务器，也不授权loop创建、Docker、Nginx、网络、Secret、数据库、迁移或应用部署。
 - 2026-11-19最终只读预检已经在本工作包之前完成：50 GiB后仍高于共享盘安全线约214.86 GiB，三张候选网络无冲突、18082空闲、8077结构未变；五个`1b93e23` GHCR digest匿名核验成功。服务器访问`auth.docker.io`超时，PostgreSQL manifest未完成服务器侧核验，继续独立阻塞完整应用部署。
 - Windows本地专项最终为`46 passed, 7 skipped`；7项跳过是需要Linux Bash/`visudo`的语法和真实状态机测试，将由GitHub Ubuntu Runner覆盖。首次全量回归出现24项UAT配置失败，根因是Windows `core.autocrlf`让CI夹具的原始字节摘要与仓库LF摘要不一致；没有放宽生产校验，只在`ci_fixture`模式规范CRLF为LF，并为执行器、sudoers、mount模板和loop证据夹具固定LF。修复后全量`536 passed, 14 skipped`、覆盖率87.79%，Ruff检查、175个Python文件格式、迁移漂移和差异空白检查通过；其中14项为既有7项外部门禁加新增7项Linux门禁。PR CI结果待补。
+- PR #81首轮Ubuntu API作业执行了Windows跳过的门禁，发现Runner的sudo构建不支持命令digest语法、`!set_home`选项不可用，且测试路径替换会递归替换临时目录。未跳过或放宽四命令边界：sudoers改为平台支持的四组精确命令，执行器SHA继续用于人工安装核验并依靠root所有权防篡改；测试改为单次路径替换。修复后须重跑全部CI。
 
 以下保留PR #80已经完成的loop/只读容器仓库证据；其中“等待Actions”和旧分支描述已由上方当前断点取代：
 

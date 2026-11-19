@@ -12,7 +12,7 @@
 | 数据根 | `/mnt/data/smartscan/uat` | loop ext4挂载点，UAT数据可丢弃重建 |
 | systemd单元 | `/etc/systemd/system/mnt-data-smartscan-uat.mount` | `0644`，依赖`/mnt/data`，不使用`/etc/fstab` |
 | loop受限执行器 | `/usr/local/libexec/smartscan/smartscan-uat-loop-storage` | root拥有、`0755`、SHA-256锁定，只允许四个固定子命令 |
-| sudoers | `/etc/sudoers.d/smartscan-uat-loop-storage` | root拥有、`0440`，只允许摘要锁定的`create/verify/status/stop` |
+| sudoers | `/etc/sudoers.d/smartscan-uat-loop-storage` | root拥有、`0440`，只允许精确的`create/verify/status/stop`及零额外参数 |
 | 子目录 | `postgres`、`data`、`models/ocr` | UID/GID按拉取后镜像事实设置，不猜测 |
 | 配置文件 | `deploy.env`、`runtime.env`、资源确认、预检和loop证据 | 仓库外生成，不打印完整内容 |
 | Docker网络 | `smartscan-uat_data`、`smartscan-uat_edge`、`smartscan-uat_egress` | 数据、入口、受控出站三种用途，固定CIDR |
@@ -123,7 +123,7 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage verify
 sudo -n /usr/local/libexec/smartscan/smartscan-uat-loop-storage stop
 ```
 
-sudoers按执行器SHA-256和精确参数分别列出四条命令，不允许额外参数、`sudo bash`、`sudo sh`或通用`systemctl`。执行器内部使用`fallocate`、`mkfs.ext4`和固定systemd单元，但不接受路径、大小、设备或命令参数；不操作Docker、Nginx、网络、Secret或其他服务。安装命令、固定摘要、失败和安装层回滚见专项说明。本轮未安装或运行执行器。
+sudoers以目标平台支持的语法分别列出四条精确命令，不允许额外参数、`sudo bash`、`sudo sh`或通用`systemctl`；执行器SHA-256在人工安装时核对，安装后由root拥有且普通用户不可写。执行器内部使用`fallocate`、`mkfs.ext4`和固定systemd单元，但不接受路径、大小、设备或命令参数；不操作Docker、Nginx、网络、Secret或其他服务。安装命令、固定摘要、失败和安装层回滚见专项说明。本轮未安装或运行执行器。
 
 任何`sudo`写入前先运行创建前计划校验，不传`--evidence`：
 

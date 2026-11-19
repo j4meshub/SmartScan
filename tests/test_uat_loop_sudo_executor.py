@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -44,15 +45,15 @@ def test_executor_pins_reviewed_mount_unit_sha256() -> None:
     assert f'readonly UNIT_SHA256="{_sha256(MOUNT_UNIT)}"' in text
 
 
-def test_sudoers_allows_only_four_exact_digest_pinned_commands() -> None:
+def test_sudoers_allows_only_four_exact_commands() -> None:
     text = SUDOERS.read_text(encoding="utf-8")
-    executor_sha = _sha256(EXECUTOR)
     command = "/usr/local/libexec/smartscan/smartscan-uat-loop-storage"
 
-    assert text.count(f"sha256:{executor_sha} {command}") == 4
+    assert text.count(command) == 4
     for action in ("create", "verify", "status", "stop"):
-        assert f"sha256:{executor_sha} {command} {action}" in text
+        assert f"{command} {action}" in text
     assert "szhzx ALL=(root) NOPASSWD: SMARTSCAN_UAT_LOOP_STORAGE" in text
+    assert "sha256:" not in text
     assert "sudo bash" not in text
     assert "sudo sh" not in text
     assert "systemctl" not in text
@@ -92,9 +93,10 @@ def bash_path() -> str:
 
 
 def _replace_paths(text: str, replacements: dict[str, str]) -> str:
-    for source in sorted(replacements, key=len, reverse=True):
-        text = text.replace(source, replacements[source])
-    return text
+    pattern = re.compile(
+        "|".join(re.escape(source) for source in sorted(replacements, key=len, reverse=True))
+    )
+    return pattern.sub(lambda match: replacements[match.group(0)], text)
 
 
 def _write_fake_dispatcher(fake_dir: Path) -> Path:
