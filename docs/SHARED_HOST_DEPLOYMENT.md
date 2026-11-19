@@ -23,7 +23,7 @@ smartscan-uat Web ── API ── 专用 PostgreSQL
                          └── AI Gateway ── HTTPS 出站 ── 公司 AI
 ```
 
-- UAT Compose 项目固定为 `smartscan-uat`，数据根为 `/mnt/data/smartscan/uat`。
+- UAT Compose项目固定为`smartscan-uat`；数据根`/mnt/data/smartscan/uat`是50 GiB专用loop ext4挂载，不是共享盘普通目录或project quota。
 - 生产 Compose 项目固定为 `smartscan-prod`，数据根为 `/mnt/data/smartscan/production`。
 - 两个环境使用不同数据库、网络、目录、Secret、端口和镜像锁文件，禁止复制 UAT 数据目录充当生产数据。
 - Secret 位于 `/etc/smartscan/{uat,production}`，文件权限为 `0600`，不写入镜像、Compose、日志或证据。
@@ -51,7 +51,7 @@ OPS-000已完成历史现场事实和资源策略确认。部署当天由OPS-001
 
 | 资源 | 初始申请 | 约束 |
 |---|---:|---|
-| UAT 存储 | 50 GiB | 硬限制；70%提示、85%告警与受控清理、95%停止新增写入 |
+| UAT 存储 | 50 GiB | 非稀疏loop ext4硬限制；12/32/4/2 GiB预算；70/85/95保护 |
 | 生产存储 | 100 GiB | 初期硬限制；不得从UAT目录转换 |
 | UAT 计算 | 8 vCPU / 16 GiB | 整个Compose栈总上限，不是每个容器分别分配 |
 | 生产计算 | 8 vCPU / 16 GiB | 初期整栈上限，以16用户真实容量结果复核 |
@@ -86,7 +86,8 @@ OPS-000已完成历史现场事实和资源策略确认。部署当天由OPS-001
 
 - GitHub 是唯一代码仓库、PR、评审、合并、Tag 和版本事实来源；GitHub Actions 构建并发布公开 GHCR 镜像。
 - API、Web、CPU Worker、AI Worker、AI Gateway 和运维工具均发布固定 digest，同时生成漏洞扫描、SBOM 和版本锁文件。
-- 主线`0961cc3`五个镜像已检查和接受，目标服务器只读核对digest且未拉取；但后续复核确认其Web/运维契约不兼容当前`/smartscan/`和资源确认1.2，故只作为制品证据保留，禁止直接部署。后续兼容版本仍须重复内容、漏洞、来源和人工接受检查，不得自动替换。
+- 主线`0961cc3`五镜像只保留历史证据并拒绝部署。`f38dd4f`五镜像已通过来源提交、`linux/amd64`、SBOM、漏洞门禁和Web基路径核验，但Ops缺本次loop证据和只读/tmpfs契约，仍未获部署接受。后续兼容版本须重复内容、漏洞、来源和人工接受检查，不得自动替换。
+- UAT使用专用完整预分配50 GiB后备文件、reserved block为0的ext4和依赖`/mnt/data`的systemd mount；不修改共享盘挂载或`/etc/fstab`。八个服务根文件系统只读，所有tmpfs有界；Docker日志在loop外按每容器`10m×3`轮转。
 - 服务器不检出源码、不安装项目虚拟环境、不现场构建，也不接受GitHub自动SSH部署；每次变更由服务器共同使用人确认后人工执行。
 - UAT不新增Alertmanager、Node Exporter或主机代理，也不挂载宿主机`/`、`/proc`、`/sys`；现有Prometheus/Grafana接入不是基础UAT前置条件。
 - UAT不启用没有异机目标的WAL归档或备份。生产备份能力保留，但必须有真实异机恢复证据；否则明确记录单机数据丢失风险接受。

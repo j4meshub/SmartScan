@@ -17,6 +17,17 @@ from urllib.parse import urlparse
 import yaml
 
 try:
+    from tools.validate_uat_loop_storage import (
+        LoopStorageError,
+        validate_loop_storage_evidence,
+    )
+except ModuleNotFoundError:  # 直接执行 python tools/validate_uat_config.py
+    from validate_uat_loop_storage import (  # type: ignore[no-redef]
+        LoopStorageError,
+        validate_loop_storage_evidence,
+    )
+
+try:
     from tools.validate_staging_config import (
         StagingConfigError,
         _validate_runtime,
@@ -31,6 +42,9 @@ except ModuleNotFoundError:  # 直接执行 python tools/validate_uat_config.py
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_COMPOSE_FILE = PROJECT_ROOT / "deploy" / "compose" / "docker-compose.uat.yml"
+DEFAULT_MOUNT_UNIT_FILE = (
+    PROJECT_ROOT / "deploy" / "systemd" / "mnt-data-smartscan-uat.mount.template"
+)
 UAT_ROOT = PurePosixPath("/mnt/data/smartscan/uat")
 SECRET_ROOT = PurePosixPath("/etc/smartscan/uat")
 ISOLATION_ACK = "uat-only-no-production-data"
@@ -57,6 +71,8 @@ DEPLOY_KEYS = {
     "SMARTSCAN_UAT_RUNTIME_ENV_FILE",
     "SMARTSCAN_UAT_ALLOCATION_FILE",
     "SMARTSCAN_UAT_PREFLIGHT_EVIDENCE_SHA256",
+    "SMARTSCAN_UAT_LOOP_EVIDENCE_FILE",
+    "SMARTSCAN_UAT_LOOP_EVIDENCE_SHA256",
     "SMARTSCAN_UAT_BIND_ADDRESS",
     "SMARTSCAN_UAT_HTTP_PORT",
     "SMARTSCAN_UAT_DATA_SUBNET",
@@ -92,6 +108,7 @@ class ValidatedUatConfig:
     image_digests: tuple[str, ...]
     allocation_sha256: str
     preflight_evidence_sha256: str
+    loop_evidence_sha256: str
     ci_fixture: bool
 
     def safe_summary(self) -> dict[str, Any]:
@@ -103,6 +120,7 @@ class ValidatedUatConfig:
             "image_digests": list(self.image_digests),
             "allocation_sha256": self.allocation_sha256,
             "preflight_evidence_sha256": self.preflight_evidence_sha256,
+            "loop_evidence_sha256": self.loop_evidence_sha256,
             "ci_fixture": self.ci_fixture,
             "secrets_included": False,
         }
@@ -219,15 +237,23 @@ def _validate_allocation(
     )
     budgets = allocation.get("storage_budgets")
     _require(isinstance(budgets, dict), "资源确认缺少 storage_budgets")
-    expected_budgets = {
-        "postgres_and_wal_bytes": 12 * GIB,
-        "business_data_bytes": 32 * GIB,
-        "ocr_models_bytes": 4 * GIB,
-        "container_logs_bytes": GIB,
-        "reserve_bytes": GIB,
-    }
-    _require(budgets == expected_budgets, "UAT 存储预算必须为 12/32/4/1/1 GiB")
-    _require(sum(budgets.values()) == int(storage["quota_bytes"]), "UAT 存储预算总和必须为 50 GiB")
+    _require(budgets.get("postgres_and_wal_bytes") == 12 * GIB, "数据库与WAL预算必须为12 GiB")
+    _require(budgets.get("ocr_models_bytes") == 4 * GIB, "OCR模型预算必须为4 GiB")
+    business_bytes = int(budgets.get("business_data_bytes", 0))
+    _require(0 < business_bytes <= 32 * GIB, "业务文件预算必须大于0且不超过32 GiB")
+    _require(
+        12 * GIB + business_bytes + 4 * GIB <= 48 * GIB,
+        "持久化数据预算不得超过48 GiB",
+    )
+    _require(
+        int(budgets.get("filesystem_and_runtime_bytes", 0))
+        == 50 * GIB - 12 * GIB - business_bytes - 4 * GIB,
+        "文件系统与运行余量必须补足50 GiB且至少为2 GiB",
+    )
+    _require(
+        int(budgets["filesystem_and_runtime_bytes"]) >= 2 * GIB,
+        "文件系统与运行余量不得低于2 GiB",
+    )
 
     resources = allocation.get("resources")
     _require(isinstance(resources, dict), "资源确认缺少 resources")
@@ -353,6 +379,26 @@ def validate_compose_contract(
     base_cpu_total = 0.0
     base_memory_total = 0
     forbidden_mounts = {"/", "/proc", "/sys", "/srv/smartscan/staging"}
+    expected_tmpfs = {
+        "postgres": {
+            "/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777",
+            "/var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=0777",
+        },
+        "migrate": {"/tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=10001,gid=10001"},
+        "api": {
+            "/tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777,uid=10001,gid=10001",
+            "/run/smartscan-prometheus:rw,noexec,nosuid,nodev,size=32m,mode=0770,uid=10001,gid=10001",
+        },
+        "worker-cpu-1": {"/tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777,uid=10001,gid=10001"},
+        "worker-cpu-2": {"/tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777,uid=10001,gid=10001"},
+        "worker-ai": {"/tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777,uid=10001,gid=10001"},
+        "ai-gateway": {"/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777,uid=10001,gid=10001"},
+        "nginx": {
+            "/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777",
+            "/var/cache/nginx:rw,noexec,nosuid,nodev,size=32m,mode=0755",
+            "/var/run:rw,noexec,nosuid,nodev,size=4m,mode=0755",
+        },
+    }
     for name, service in services.items():
         _require(isinstance(service, dict), f"服务配置无效：{name}")
         _require("build" not in service, f"UAT 禁止在服务器现场构建镜像：{name}")
@@ -362,6 +408,8 @@ def validate_compose_contract(
         _require(
             str(service.get("restart", "")).casefold() in {"no", "false"}, f"{name} 禁止自动重启"
         )
+        _require(service.get("read_only") is True, f"{name} 根文件系统必须只读")
+        _require(set(service.get("tmpfs", [])) == expected_tmpfs[name], f"{name} tmpfs边界无效")
         _require(float(service.get("cpus", 0)) > 0, f"{name} 缺少 CPU 限制")
         _require(_memory_bytes(service.get("mem_limit", 0)) > 0, f"{name} 缺少内存限制")
         _require(int(service.get("pids_limit", 0)) > 0, f"{name} 缺少 PID 限制")
@@ -371,7 +419,10 @@ def validate_compose_contract(
             f"{name} 日志驱动无效",
         )
         options = logging.get("options", {})
-        _require(options.get("max-size") and options.get("max-file"), f"{name} 缺少日志轮转限制")
+        _require(
+            options == {"max-size": "10m", "max-file": "3"},
+            f"{name} 日志必须精确限制为10m×3",
+        )
         cpu_total += float(service["cpus"])
         memory_total += _memory_bytes(service["mem_limit"])
         if not service.get("profiles"):
@@ -408,6 +459,15 @@ def validate_compose_contract(
     _require(services["postgres"].get("networks") == ["data"], "PostgreSQL 只能连接数据网络")
     _require(services["ai-gateway"].get("profiles") == ["ai"], "AI 网关必须显式启用")
     _require(services["worker-ai"].get("profiles") == ["ai"], "AI Worker 必须显式启用")
+    _require("volumes" not in document, "UAT禁止使用PostgreSQL socket named volume")
+    postgres_mounts = services["postgres"].get("volumes", [])
+    _require(
+        len(postgres_mounts) == 1
+        and postgres_mounts[0].get("type") == "bind"
+        and postgres_mounts[0].get("target") == "/var/lib/postgresql/data"
+        and postgres_mounts[0].get("read_only") is not True,
+        "PostgreSQL只允许数据目录持久写入loop挂载",
+    )
 
     networks = document.get("networks")
     _require(
@@ -429,8 +489,10 @@ def validate_uat_config(
     deploy_env: Path,
     runtime_env: Path,
     allocation_file: Path,
+    loop_evidence_file: Path,
     *,
     compose_file: Path = DEFAULT_COMPOSE_FILE,
+    mount_unit_file: Path = DEFAULT_MOUNT_UNIT_FILE,
     ci_fixture: bool = False,
 ) -> ValidatedUatConfig:
     try:
@@ -443,6 +505,7 @@ def validate_uat_config(
     _validate_file_permissions(deploy_env, ci_fixture=ci_fixture)
     _validate_file_permissions(runtime_env, ci_fixture=ci_fixture)
     _validate_file_permissions(allocation_file, ci_fixture=ci_fixture)
+    _validate_file_permissions(loop_evidence_file, ci_fixture=ci_fixture)
     _require(deploy["SMARTSCAN_DEPLOYMENT_TIER"] == "uat", "部署层级必须为 uat")
     _require(deploy["SMARTSCAN_UAT_ISOLATION_ACK"] == ISOLATION_ACK, "缺少 UAT 隔离确认")
     _require(deploy["COMPOSE_PROJECT_NAME"] == "smartscan-uat", "Compose 项目必须为 smartscan-uat")
@@ -457,11 +520,21 @@ def validate_uat_config(
         configured_runtime.is_absolute() and SECRET_ROOT in configured_runtime.parents,
         "运行配置必须位于 /etc/smartscan/uat 下",
     )
+    configured_loop_evidence = PurePosixPath(deploy["SMARTSCAN_UAT_LOOP_EVIDENCE_FILE"])
+    _require(
+        configured_loop_evidence.is_absolute() and SECRET_ROOT in configured_loop_evidence.parents,
+        "loop存储证据必须位于 /etc/smartscan/uat 下",
+    )
 
     evidence_hash = deploy["SMARTSCAN_UAT_PREFLIGHT_EVIDENCE_SHA256"]
     _require(IMAGE_DIGEST.fullmatch(evidence_hash) is not None, "OPS-000 证据摘要无效")
     if not ci_fixture:
         _require(len(set(evidence_hash)) >= 8, "OPS-000 证据摘要仍是占位值")
+    loop_evidence_hash = hashlib.sha256(loop_evidence_file.read_bytes()).hexdigest()
+    _require(
+        deploy["SMARTSCAN_UAT_LOOP_EVIDENCE_SHA256"] == loop_evidence_hash,
+        "loop存储证据摘要与实际文件不一致",
+    )
 
     storage_roots = tuple(str(_validate_uat_path(deploy[key], key)) for key in sorted(PATH_KEYS))
     _require(len(set(storage_roots)) == len(storage_roots), "UAT 存储目录不得复用")
@@ -480,6 +553,15 @@ def validate_uat_config(
 
     allocation, allocation_hash = _load_json(allocation_file, "资源确认文件")
     bind_address, port = _validate_allocation(allocation, deploy, ci_fixture=ci_fixture)
+    try:
+        validate_loop_storage_evidence(
+            allocation_file,
+            mount_unit_file,
+            loop_evidence_file,
+            ci_fixture=ci_fixture,
+        )
+    except LoopStorageError as exc:
+        raise UatConfigError(str(exc)) from exc
     try:
         cors_origins = json.loads(runtime["SMARTSCAN_CORS_ORIGINS"])
     except (KeyError, json.JSONDecodeError) as exc:
@@ -558,6 +640,7 @@ def validate_uat_config(
         image_digests=tuple(image_digests),
         allocation_sha256=allocation_hash,
         preflight_evidence_sha256=evidence_hash,
+        loop_evidence_sha256=loop_evidence_hash,
         ci_fixture=ci_fixture,
     )
 
@@ -567,7 +650,9 @@ def main() -> int:
     parser.add_argument("--deploy-env", type=Path, required=True)
     parser.add_argument("--runtime-env", type=Path, required=True)
     parser.add_argument("--allocation", type=Path, required=True)
+    parser.add_argument("--loop-evidence", type=Path, required=True)
     parser.add_argument("--compose-file", type=Path, default=DEFAULT_COMPOSE_FILE)
+    parser.add_argument("--mount-unit", type=Path, default=DEFAULT_MOUNT_UNIT_FILE)
     parser.add_argument("--ci-fixture", action="store_true")
     arguments = parser.parse_args()
     try:
@@ -575,7 +660,9 @@ def main() -> int:
             arguments.deploy_env,
             arguments.runtime_env,
             arguments.allocation,
+            arguments.loop_evidence,
             compose_file=arguments.compose_file,
+            mount_unit_file=arguments.mount_unit,
             ci_fixture=arguments.ci_fixture,
         )
     except UatConfigError as exc:

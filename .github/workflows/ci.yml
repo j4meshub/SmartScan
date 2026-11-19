@@ -113,6 +113,8 @@ jobs:
           --deploy-env tests/fixtures/uat/deploy.env
           --runtime-env tests/fixtures/uat/runtime.env
           --allocation tests/fixtures/uat/allocation.json
+          --loop-evidence tests/fixtures/uat/loop-storage-evidence.json
+          --mount-unit deploy/systemd/mnt-data-smartscan-uat.mount.template
           --ci-fixture
       - name: 解析共享宿主机 UAT Compose
         run: >-

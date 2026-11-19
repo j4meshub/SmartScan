@@ -676,6 +676,11 @@ def validate_preflight(
         "storage_quota_invalid",
         "UAT 配额必须为 50 GiB",
     )
+    _require(
+        storage.get("hard_limit_type") == "loop_ext4",
+        "storage_limit_type_invalid",
+        "UAT 硬限制必须使用loop ext4",
+    )
     _require(storage.get("hard_limit_confirmed") is True, "storage_limit_missing", "未确认硬限制")
     _require(
         storage.get("disposable_data") is True,
@@ -692,22 +697,58 @@ def validate_preflight(
         "UAT 存储阈值必须为 70/85/95",
     )
     budgets = allocation.get("storage_budgets")
+    business_bytes = int(budgets.get("business_data_bytes", 0)) if isinstance(budgets, dict) else 0
     expected_budgets = {
         "postgres_and_wal_bytes": 12 * GIB,
-        "business_data_bytes": 32 * GIB,
+        "business_data_bytes": business_bytes,
         "ocr_models_bytes": 4 * GIB,
-        "container_logs_bytes": GIB,
-        "reserve_bytes": GIB,
+        "filesystem_and_runtime_bytes": 50 * GIB - 12 * GIB - business_bytes - 4 * GIB,
     }
     _require(
         budgets == expected_budgets,
         "storage_budgets_invalid",
-        "UAT 存储预算必须为 12/32/4/1/1 GiB",
+        "UAT 存储预算字段无效",
     )
     _require(
-        sum(budgets.values()) == quota,
+        0 < business_bytes <= 32 * GIB
+        and 12 * GIB + business_bytes + 4 * GIB <= 48 * GIB
+        and int(budgets["filesystem_and_runtime_bytes"]) >= 2 * GIB,
         "storage_budgets_invalid",
-        "UAT 存储预算总和必须为 50 GiB",
+        "UAT 数据预算不得超过48 GiB且运行余量不得低于2 GiB",
+    )
+    loop_storage = allocation.get("loop_storage")
+    _require(
+        loop_storage
+        == {
+            "backing_file": "/mnt/data/smartscan-loop/uat.ext4",
+            "backing_file_bytes": 50 * GIB,
+            "fully_preallocated": True,
+            "sparse_file_forbidden": True,
+            "filesystem_type": "ext4",
+            "reserved_blocks_percent": 0,
+            "mount_point": "/mnt/data/smartscan/uat",
+            "mount_options": ["loop", "nodev", "nosuid", "noatime"],
+            "autoclear_required": True,
+            "systemd_unit_name": "mnt-data-smartscan-uat.mount",
+            "systemd_unit_path": "/etc/systemd/system/mnt-data-smartscan-uat.mount",
+            "requires_mounts_for": "/mnt/data",
+            "rollback_documented": True,
+        },
+        "loop_storage_invalid",
+        "loop ext4计划与固定边界不一致",
+    )
+    _require(
+        allocation.get("docker_logging")
+        == {
+            "storage_scope": "shared_docker_root_outside_uat_loop",
+            "driver": "json-file",
+            "max_size": "10m",
+            "max_file": 3,
+            "max_container_count": 8,
+            "maximum_bytes": 240 * 1024**2,
+        },
+        "docker_logging_invalid",
+        "Docker日志边界必须为8个容器、每个10m×3且位于loop之外",
     )
     filesystem = _find_filesystem(snapshot, storage_root)
     total = int(filesystem.get("total_bytes", 0))

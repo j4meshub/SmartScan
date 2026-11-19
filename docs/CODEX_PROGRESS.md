@@ -1,6 +1,6 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-18
+更新时间：2026-11-19
 
 ## 当前断点
 
@@ -8,21 +8,22 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001` 共享主机验收栈（未执行变更方案） |
-| 工作包状态 | 仓库方案完成、实际部署等待人工验收：本地门禁与PR #79代码头CI通过；未连接或修改服务器，仍等待兼容制品、现场复查和逐项授权 |
-| 当前分支 | `codex/ops-001-uat-change-plan` |
-| 最后验证基线 | `e0cd761`（PR #79代码头，两套常规CI与五项镜像验证通过） |
-| 工作包提交 | `a8e708e`（方案实现）、`e0cd761`（PR证据） |
-| PR | [#79](https://github.com/j4meshub/SmartScan/pull/79)；只包含仓库代码、模板、测试和脱敏文档，未执行服务器变更 |
-| 下一工作包 | 用户先评审OPS-001方案；接受兼容镜像和PostgreSQL digest并逐项授权后，才可执行部署窗口只读复查与实际创建 |
+| 工作包状态 | loop存储与只读容器契约已提交PR，等待GitHub Actions；本轮只修改仓库，未连接或修改服务器 |
+| 当前分支 | `codex/ops-001-loop-storage` |
+| 最后验证基线 | `f38dd4f`（PR #79合并后的主线；五镜像已只读核验但未获部署接受） |
+| 工作包提交 | `df5bdf6`（loop存储、只读容器、模板、校验器和测试） |
+| PR | [#80](https://github.com/j4meshub/SmartScan/pull/80)；只包含仓库代码、模板、测试和脱敏文档，未执行服务器变更 |
+| 下一工作包 | 完成测试和PR后等待新主线镜像供应链；用户接受兼容loop契约的五镜像并逐项授权后才可实际部署 |
 
 ## 当前工作包进展
 
-- 新增`OPS001_UAT_CHANGE_PLAN.md`，列出将创建的目录、Secret、网络、容器、唯一回环端口、Nginx增量、未来sudo动作、验收、回滚和十项最终授权；本轮不连接服务器、不拉取镜像、不创建或修改任何服务器对象。
-- 50 GiB硬限制改为数据库/WAL 12 GiB、业务文件32 GiB、OCR模型4 GiB、容器日志预算1 GiB和运行余量1 GiB；资源确认升级到1.2，运行配置和校验器不再错误地给业务文件独占全部50 GiB。
-- 复核发现`0961cc3` Web固定使用根`/api`且Ops镜像早于分项预算契约，不能满足当前`/smartscan/`部署。五个digest保留为唯一已接受制品证据，但在拉取/启动前失败关闭；不以Nginx或客户端临时绕过，也不自动接受新流水线镜像。
-- PostgreSQL 17候选digest仅完成Registry manifest只读核对，没有拉取或接受；实际部署前仍需用户单独确认。
-- 本地专项测试`49 passed`；全量Python`519 passed, 7 skipped`、覆盖率87.79%，Ruff与172个Python文件格式、迁移漂移、H5语法、Node单元`48 passed`、Chromium子路径E2E`9 passed`及差异空白检查均通过。7项跳过是既有PostgreSQL/Docker外部环境门禁。本机没有Docker CLI，Compose动态解析由PR容器CI补证；专项校验器已经解析同一UAT YAML并验证整栈资源契约。
-- 首个中文提交为`a8e708e`，已推送并创建[PR #79](https://github.com/j4meshub/SmartScan/pull/79)。代码头`e0cd761`的PR常规CI`44312797810`、push常规CI`44312785739`和镜像验证`44312798196`最终全部成功；PR按规则跳过发布镜像及中文清单，没有产生或替换UAT制品。push iOS首轮被并发取消后只重跑该项并成功，不涉及代码变更。仓库方案完成不代表实际部署授权。
+- UAT不再使用project quota，改为完整预分配、非稀疏的50 GiB专用后备文件，ext4 reserved block为0，由依赖`/mnt/data`的systemd mount单元以`loop,nodev,nosuid,noatime`挂载；不改`/etc/fstab`、共享盘挂载或现有loop对象。
+- 50 GiB纠正为数据库/WAL 12 GiB、业务文件32 GiB、OCR模型4 GiB、ext4元数据与运行余量2 GiB。前3项数据预算为48 GiB；实际可用不足时只下调业务预算。Docker镜像和位于共享Docker根目录的`10m×3`日志不计入loop，八容器日志理论上限约240 MiB。
+- Compose八个服务根文件系统只读，所有tmpfs精确限额；PostgreSQL socket从named volume改为16 MiB tmpfs，只有数据目录持久写入loop。校验器拒绝稀疏/错误大小、挂载或autoclear错误、数据预算超限、日志无轮转、无界可写层和缺少systemd依赖/回滚。
+- `f38dd4f`五个GHCR镜像均核对来源提交、`linux/amd64`、SBOM和漏洞门禁；Web支持`/smartscan/api`，Ops支持资源确认1.2，但缺本次loop证据和只读/tmpfs契约，故保持未接受、禁止部署。精确digest见`F38DD4F_CONTAINER_VERIFICATION.md`。
+- PostgreSQL固定digest已由用户接受为拟部署候选；本轮未拉取，部署窗口仍须核对RepoDigest、平台、17版本和实际UID/GID。
+- 已增加仅供评审的systemd单元、loop创建后证据schema、计划/证据校验器、精确创建/验证/停止/回滚草案和授权清单；本轮未连接服务器、未使用sudo，也未创建任何服务器对象。
+- 当前本地门禁：OPS-001/loop专项`63 passed`；全量Python`533 passed, 7 skipped`、覆盖率87.79%；Ruff检查和174个Python文件格式、迁移漂移、H5语法、Node单元`48 passed`、Chromium子路径E2E`9 passed`及差异空白检查通过。首次全量回归仅1项失败，原因是文档测试要求保留“新主线镜像不得自动替换”原文；补回明确门禁后全量通过，没有放宽行为。7项跳过仍是既有PostgreSQL/Docker外部环境门禁。本机无Docker CLI，Compose真实解析留给PR容器CI补证。
 
 - 公司没有专职运维；用户作为共享服务器共同使用人，有权确认SmartScan网络、端口、目录和资源。仓库已将外部运维审批替换为共同使用人确认，同时保留现场冲突检查、参数记录、验证和回滚。
 - OPS-000完成条件重新定版：2026-11-17现场预检、2026-11-18的8077/18082只读复核、共同使用人资源决策、失败关闭确认模板和自动测试全部完成后即为完成；部署当天状态变化由OPS-001重新采集，不再反向阻塞OPS-000。
@@ -967,6 +968,6 @@ git diff --check
 ## 下一步
 
 1. 先完成并评审OPS-001未执行变更方案；不能因方案完成而自动连接、拉取或创建UAT资源。
-2. `OPS-REG-002`已完成，`0961cc3`五个公开digest仅保留为唯一已接受制品证据，已确认不兼容当前子路径和分项预算契约。实际UAT前必须由用户接受新的兼容镜像集合；PostgreSQL候选也需单独确认。
-3. 用户逐项授权OPS-001后，部署当天重新采集现场状态、确定三张无冲突CIDR、复核8077/18082、实施50 GiB硬配额、生成仓库外Secret和确认记录，再人工创建UAT。基础UAT通过后进入OPS-002A HTTPS；OPS-003/004不阻塞基础UAT，OPS-005/006继续保持门禁。
+2. `OPS-REG-002`已完成；`0961cc3`保持拒绝，`f38dd4f`虽通过镜像和Web核验但Ops缺loop契约。合并本分支后等待新的主线制品，再由用户明确接受整套固定digest。PostgreSQL候选已经接受，但实际拉取后仍需核对RepoDigest、平台、17版本和UID/GID。
+3. 用户逐项授权OPS-001后，部署当天重新采集现场状态、确定三张无冲突CIDR、复核8077/18082，创建并验证50 GiB非稀疏loop ext4，生成仓库外Secret和证据，再人工创建UAT。基础UAT通过后进入OPS-002A HTTPS；OPS-003/004不阻塞基础UAT，OPS-005/006继续保持门禁。
 4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。

@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "REPLACE_WITH_ISO8601_TIME",
+  "backing_file": {
+    "path": "/mnt/data/smartscan-loop/uat.ext4",
+    "size_bytes": 0,
+    "allocated_bytes": 0,
+    "sparse": true,
+    "mode": "REPLACE_WITH_MODE"
+  },
+  "filesystem": {
+    "type": "REPLACE_WITH_FILESYSTEM_TYPE",
+    "label": "REPLACE_WITH_LABEL",
+    "reserved_blocks_percent": -1,
+    "usable_bytes": 0
+  },
+  "mount": {
+    "active": false,
+    "source": "REPLACE_WITH_SOURCE",
+    "target": "/mnt/data/smartscan/uat",
+    "type": "REPLACE_WITH_FILESYSTEM_TYPE",
+    "options": []
+  },
+  "loop": {
+    "backing_file": "REPLACE_WITH_BACKING_FILE",
+    "autoclear": false
+  },
+  "systemd_unit": {
+    "name": "mnt-data-smartscan-uat.mount",
+    "path": "/etc/systemd/system/mnt-data-smartscan-uat.mount",
+    "mode": "REPLACE_WITH_MODE",
+    "enabled": false,
+    "active": false,
+    "requires_mounts_for": "REPLACE_WITH_REQUIRED_MOUNT",
+    "rollback_record": "REPLACE_WITH_ROLLBACK_RECORD"
+  },
+  "contains_sensitive_data": false
+}
