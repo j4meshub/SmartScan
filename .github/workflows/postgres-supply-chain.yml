@@ -60,13 +60,11 @@ jobs:
             printf "postgres_uid=%s\n" "$(id -u postgres)"
             printf "postgres_gid=%s\n" "$(id -g postgres)"
             printf "pgdata=%s\n" "$PGDATA"
-            printf "entrypoint=%s\n" "$(command -v docker-entrypoint.sh)"
-            printf "pg_isready=%s\n" "$(command -v pg_isready)"
-            printf "initdb=%s\n" "$(command -v initdb)"
-            printf "pg_dump=%s\n" "$(command -v pg_dump)"
-            printf "pg_restore=%s\n" "$(command -v pg_restore)"
-            printf "pg_basebackup=%s\n" "$(command -v pg_basebackup)"
-            printf "pg_verifybackup=%s\n" "$(command -v pg_verifybackup)"
+            for tool in docker-entrypoint.sh pg_isready initdb pg_dump pg_restore pg_basebackup pg_verifybackup; do
+              tool_path="$(command -v "$tool")"
+              test -n "$tool_path"
+              printf "%s=%s\n" "$tool" "$tool_path"
+            done
             printf "postgres_version=%s\n" "$(postgres --version)"
             printf "initdb_directory=%s\n" "$(test -d /docker-entrypoint-initdb.d && echo present)"
             printf "utc_timezone=%s\n" "$(test -e /usr/share/zoneinfo/UTC && echo present || echo absent)"

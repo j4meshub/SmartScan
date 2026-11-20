@@ -134,6 +134,7 @@ def test_candidate_matrix_uses_only_frozen_digests_and_does_not_publish() -> Non
         "$PGDATA",
     ):
         assert contract in text
+    assert 'test -n "$tool_path"' in text
 
 
 def test_candidate_snapshot_records_discovery_time_and_fixed_digests() -> None:
