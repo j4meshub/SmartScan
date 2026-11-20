@@ -15,7 +15,7 @@
 | sudoers | `/etc/sudoers.d/smartscan-uat-loop-storage` | root拥有、`0440`，只允许精确的`create/verify/status/stop/recreate-empty`及零额外参数 |
 | 子目录 | `postgres`、`data`、`models/ocr` | UID/GID按拉取后镜像事实设置，不猜测 |
 | 配置文件 | `deploy.env`、`runtime.env`、资源确认、预检和loop证据 | 仓库外生成，不打印完整内容 |
-| Docker网络 | `smartscan-uat_data`、`smartscan-uat_edge`、`smartscan-uat_egress` | 数据、入口、受控出站三种用途，固定CIDR |
+| Docker网络 | `smartscan-uat-data`、`smartscan-uat-edge`、`smartscan-uat-egress` | 与Compose显式`name`一致；数据、入口、受控出站三种用途，固定CIDR |
 | 回环入口 | `127.0.0.1:18082` | 唯一发布的宿主机端口 |
 | Nginx增量 | `/etc/nginx/snippets/smartscan-uat-8077.locations.conf` | 只含SmartScan location |
 

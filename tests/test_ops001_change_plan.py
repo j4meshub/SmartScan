@@ -63,6 +63,11 @@ def test_ops001_plan_contains_fixed_artifacts_and_boundaries() -> None:
     assert "/smartscan/api/v1/" in plan
     assert "50 GiB" in plan
     assert "8 vCPU/16 GiB" in plan
+    for network_name in ("smartscan-uat-data", "smartscan-uat-edge", "smartscan-uat-egress"):
+        assert network_name in plan
+        assert f"name: ${{COMPOSE_PROJECT_NAME}}-{network_name.removeprefix('smartscan-uat-')}" in (
+            ROOT / "deploy" / "compose" / "docker-compose.uat.yml"
+        ).read_text(encoding="utf-8")
 
 
 def test_ops001_final_preflight_is_sanitized_and_does_not_grant_deployment() -> None:
