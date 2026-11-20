@@ -59,6 +59,9 @@ def test_workflow_pins_actions_and_never_publishes_pull_requests() -> None:
     assert ":latest" not in text.casefold()
     assert "docker login" not in text.casefold()
     assert "ssh " not in text.casefold()
+    assert "set -euo pipefail" in text
+    assert "test -s postgres-audit/runtime-verification.txt" in text
+    assert "grep -Fx 'result=passed'" in text
 
 
 def test_runtime_contract_covers_database_lifecycle_and_tools() -> None:
@@ -75,6 +78,8 @@ def test_runtime_contract_covers_database_lifecycle_and_tools() -> None:
         "pg_restore",
         "pg_basebackup",
         "pg_verifybackup",
+        "sudo chmod 0700",
+        "sudo rm -rf",
     ):
         assert evidence in text
 
@@ -121,7 +126,9 @@ def test_analyze_gosu_requires_identical_fixed_release_and_records_symbols(
     )
 
     assert result["gosu"]["byte_identical_to_upstream_release"] is True
-    assert result["govulncheck"]["finding_count"] == 1
+    assert result["govulncheck"]["target_finding_count"] == 1
+    assert result["govulncheck"]["symbol_finding_count"] == 1
+    assert result["govulncheck"]["module_only_finding_count"] == 0
     assert result["binary_symbols"]["affected_symbols_linked"] is True
     assert output.is_file()
 

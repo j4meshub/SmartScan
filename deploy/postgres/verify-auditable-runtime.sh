@@ -13,13 +13,21 @@ dump_file="${work_root}/smartscan.dump"
 cleanup() {
   docker rm -f "${container}" >/dev/null 2>&1 || true
   docker network rm "${network}" >/dev/null 2>&1 || true
-  rm -rf -- "${work_root}"
+  case "${work_root}" in
+    "${RUNNER_TEMP:-/tmp}"/smartscan-postgres-runtime.*)
+      sudo rm -rf -- "${work_root}"
+      ;;
+    *)
+      printf '%s\n' '拒绝清理非预期临时目录' >&2
+      return 1
+      ;;
+  esac
 }
 trap cleanup EXIT
 
 mkdir -p "${data_root}"
 sudo chown 70:70 "${data_root}"
-chmod 0700 "${data_root}"
+sudo chmod 0700 "${data_root}"
 cat > "${init_sql}" <<'SQL'
 CREATE TABLE public.smartscan_utf8_probe (
     id integer PRIMARY KEY,

@@ -23,6 +23,7 @@
 - 本轮不连接或修改服务器，不拉取服务器镜像，不创建网络、Secret、迁移、容器或Nginx配置；PR验证通过前不发布GHCR镜像。
 - 本地专项`46 passed`；全量Python`548 passed, 23 skipped`、覆盖率`87.79%`，Ruff检查、177个Python文件格式、迁移漂移、工作流YAML和差异空白检查通过。23项跳过仍是既有PostgreSQL/Docker及Linux执行器外部门禁；本机没有Docker/Bash，真实镜像构建、二进制审计、Compose解析和数据库生命周期测试由PR的Ubuntu Runner补证。
 - PR #85首轮可审计PostgreSQL运行`44666113997`在gosu摘要与上游字节一致后失败：`govulncheck -json`输出是多个可缩进JSON对象连续组成的流，解析器错误地假设每行一个完整对象。现改用`JSONDecoder.raw_decode`逐对象解析并增加回归测试；未忽略任何发现、退出状态或符号证据，也未降低漏洞门禁。
+- 第二轮`44666698352`的扫描门禁得到High/Critical为0，gosu二进制与上游1.20摘要一致；govulncheck只报告目标Go标准库模块版本，没有目标`crypto/tls`符号，`go tool nm`也未发现受影响符号。但数据库生命周期脚本在`chown 70:70`后由普通Runner执行`chmod`失败，而缺少`pipefail`的`tee`管道错误地让作业显示成功且证据文件为空。该绿灯按失败处理：改为受控Runner sudo设置/清理临时目录，显式`set -euo pipefail`，并要求非空证据和`result=passed`；未把假阳性计入验收。
 
 - 用户已接受OPS-001B存储验收：`recreate-empty`一次成功，两次独立`verify`通过；50 GiB后备文件完整物理预分配且不再稀疏，ext4、label、reserved block、`rw,nosuid,nodev,noatime`、唯一loop、autoclear、systemd和共享盘安全余量全部通过。SmartScan应用从未启动，没有触碰其他服务或项目；原始服务器输出和真实loop设备名不进入仓库。
 - 目标服务器仅通过`smartscan-server`进行无sudo只读复核。`auth.docker.io` DNS同时返回IPv4/IPv6，但IPv4连接443端口超时、IPv6立即不可达；因此TLS握手、匿名token和`library/postgres` manifest均未发生。PostgreSQL固定digest尚未完成服务器侧核验，不得拉取或部署。

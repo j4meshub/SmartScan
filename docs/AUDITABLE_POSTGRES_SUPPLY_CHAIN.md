@@ -39,6 +39,8 @@ PR验证必须在临时Docker环境中完成：
 - 只读根文件系统、64 MiB `/tmp`和16 MiB PostgreSQL socket tmpfs；
 - 当前UAT Compose固定用户、数据目录和初始化参数契约。
 
+测试脚本只在GitHub托管Runner上使用预装的无交互`sudo`为唯一临时目录设置`70:70`所有权并在结束时清理该目录；路径由`mktemp`创建并再次匹配固定前缀。该权限不安装到共享服务器，也不授予或调用SmartScan服务器sudo执行器。
+
 ## 发布与人工门禁
 
 PR只构建、扫描和上传审计证据，不发布镜像。只有CI全部通过并合并`main`后，工作流才把同一份已验证镜像发布到`ghcr.io/j4meshub/smartscan-postgres`，生成SPDX SBOM、GitHub SLSA构建来源证明、Trivy报告、精确OpenVEX和中文来源映射。

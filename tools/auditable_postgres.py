@@ -131,6 +131,13 @@ def analyze_gosu(
             if isinstance(frame, dict) and frame.get("function")
         }
     )
+    symbol_findings = [
+        finding
+        for finding in findings
+        if any(
+            isinstance(frame, dict) and frame.get("function") for frame in finding.get("trace", [])
+        )
+    ]
     try:
         status = int(govuln_status.read_text(encoding="utf-8").strip())
     except (OSError, ValueError) as exc:
@@ -164,7 +171,9 @@ def analyze_gosu(
         "govulncheck": {
             "mode": "binary",
             "exit_status": status,
-            "finding_count": len(findings),
+            "target_finding_count": len(findings),
+            "symbol_finding_count": len(symbol_findings),
+            "module_only_finding_count": len(findings) - len(symbol_findings),
             "reported_symbols": reported_symbols,
         },
         "binary_symbols": {

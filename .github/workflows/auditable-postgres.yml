@@ -137,10 +137,16 @@ jobs:
       - name: 构建迁移工具镜像
         run: docker build --file deploy/ops/Dockerfile --tag local/smartscan-ops-audit:${{ github.sha }} .
       - name: 验证非root、中文UTF-8、迁移、持久化与备份恢复
+        shell: bash
         env:
           SMARTSCAN_POSTGRES_IMAGE: ${{ env.POSTGRES_LOCAL }}
           SMARTSCAN_OPS_IMAGE: local/smartscan-ops-audit:${{ github.sha }}
-        run: bash deploy/postgres/verify-auditable-runtime.sh | tee postgres-audit/runtime-verification.txt
+        run: |
+          set -euo pipefail
+          bash deploy/postgres/verify-auditable-runtime.sh \
+            | tee postgres-audit/runtime-verification.txt
+          test -s postgres-audit/runtime-verification.txt
+          grep -Fx 'result=passed' postgres-audit/runtime-verification.txt
       - name: 保存可审计证据
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
