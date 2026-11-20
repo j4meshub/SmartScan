@@ -667,9 +667,9 @@
 
 ## D-092：PostgreSQL安全门禁采用扫描、二进制可达性与精确VEX组合
 
-- 状态：实施中
+- 状态：已确认并实现
 - 日期：2026-11-20
 - 决策：`OPS-REG-003B`固定以`postgres:17-alpine@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32`为构建起点，升级Alpine可修复系统包，删除只在root入口使用的`gosu`，并固定最终`USER 70:70`。上游gosu必须与1.20发布制品摘要和字节一致，独立执行二进制govulncheck与符号分析；最终SBOM和文件系统必须不存在gosu。
 - VEX边界：仅在证据充分时，为`CVE-2025-68121`/`GO-2026-4337`生成绑定精确组件、最终镜像digest、源提交、证据摘要、复核日期、90天有效期和明确失效条件的OpenVEX；理由只能是`component_not_present`，禁止通配符或豁免其他CVE。任何仍存在的Critical、可修复High/Critical或关键兼容性失败均阻止发布。
 - 兼容性：PR必须验证UID/GID 70、数据所有权、UTF-8中文、initdb、迁移、健康、持久化重启、dump/restore、basebackup/verifybackup、只读根与有界tmpfs。UAT Compose固定`user: 70:70`和`--encoding=UTF8 --locale=C`；真实UAT配置只允许`ghcr.io/j4meshub/smartscan-postgres@sha256:...`。
-- 影响：PR阶段不发布；合并main后才发布SBOM、SLSA、漏洞、VEX和中文来源映射齐备的GHCR制品。Package公开、目标服务器匿名manifest核验、用户接受固定digest以及任何实际部署动作继续是互相独立的人工门禁。
+- 影响：PR #85合并后，主线已发布SBOM、SLSA、漏洞、VEX和中文来源映射齐备的`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`；匿名manifest核验表明Package当前公开，仓库没有修改其可见性。目标服务器核验、用户接受固定digest以及任何实际部署动作继续是互相独立的人工门禁。

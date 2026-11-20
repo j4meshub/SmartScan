@@ -180,11 +180,11 @@ M8 门禁：所有 Provider 关闭或故障时不影响扫描、净化、扫书�
 | `OPS-REG-002` GitHub Actions 与公开 GHCR 镜像供应链 | 完成 | GOV-004 | PR #74 已合并；主线 `0961cc3` 重新发布包含 UAT 交付的五个镜像，用户于 2026-11-17 接受为当前公开 UAT 候选，目标服务器匿名 manifest 查询逐一核对成功。UAT/生产仍只允许人工审批后按 digest 拉取，不建立服务器自动部署连接 |
 | `OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 放弃 | OPS-REG-002, OPS-001C | PR #84的原样复制候选在严格Critical扫描中失败，保留失败证据但不合并；由`OPS-REG-003B`替代，验证成功后关闭PR #84 |
 | `OPS-REG-003A` PostgreSQL 17上游候选更新 | 完成 | OPS-REG-003 | 已比较bookworm、trixie、当前17与Alpine固定候选；官方原样候选均未通过严格门禁，未降低规则、未发布镜像，结果转入`OPS-REG-003B`的可审计衍生运行镜像路线 |
-| `OPS-REG-003B` 可审计PostgreSQL 17运行镜像 | 进行中 | OPS-REG-003A | 固定以PostgreSQL 17 Alpine digest为基础，升级可修复系统包、删除gosu并固定`USER 70:70`；以严格扫描、二进制govulncheck、符号证据、精确VEX、SBOM、SLSA和完整数据库生命周期测试组合门禁。PR不发布，主线通过后才发布，Package公开、服务器匿名核验和用户接受均保持人工门禁 |
+| `OPS-REG-003B` 可审计PostgreSQL 17运行镜像 | 完成 | OPS-REG-003A | PR #85合并为`264520c`；主线运行`44673210889`完成严格扫描、gosu二进制可达性、精确VEX、SBOM、SLSA和数据库生命周期测试，并发布`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`。Package匿名manifest查询已返回200，但目标服务器核验、用户接受及写入UAT配置仍是独立人工门禁 |
 | `OPS-001A` UAT loop受限sudo执行器准备 | 完成 | GOV-005, OPS-000, PR #80 | PR #81已合并，服务器共同使用人已人工审核并安装固定路径执行器、mount单元和精确sudoers。首次`create`创建了50 GiB ext4且内部验证通过，但稍后独立`verify`暴露ext4 lazy初始化后的`backing_sparse`现场兼容问题；该新证据由`OPS-001B`处理，不回写为本工作包遗漏 |
 | `OPS-001B` ext4 loop完整预分配修复 | 完成 | OPS-001A、现场空UAT证据 | PR #82已合并，用户人工升级执行器后单独授权`recreate-empty`；固定空UAT已用禁用lazy初始化的参数重建，两次独立`verify`均通过。50 GiB完整物理预分配、ext4/label/reserved block、挂载参数、唯一loop/autoclear、systemd及共享盘安全余量均获用户接受，应用从未启动且未触碰其他项目 |
 | `OPS-001C` 应用部署候选核验 | 完成 | OPS-001B, OPS-REG-002 | 用户已接受主线`2adbf4f`五个固定GHCR digest作为UAT候选；该接受只允许进入候选配置，不授权拉取、网络、Secret、迁移、容器、Nginx或启动，后续digest不得自动替换 |
-| `OPS-001` 共享主机验收栈 | 等待人工验收 | GOV-005, OPS-000, OPS-001A, OPS-001B, OPS-001C, OPS-REG-003B, M3 | loop存储和五个SmartScan应用镜像门禁已通过，应用尚未启动。必须先完成`OPS-REG-003B`，人工公开并完成服务器匿名核验及用户接受PostgreSQL固定digest；之后仍需部署当天复查、仓库外配置/Secret及Docker、迁移、Compose和Nginx逐项授权 |
+| `OPS-001` 共享主机验收栈 | 等待人工验收 | GOV-005, OPS-000, OPS-001A, OPS-001B, OPS-001C, OPS-REG-003B, M3 | loop存储、五个SmartScan应用镜像及PostgreSQL供应链门禁已通过，应用尚未启动。下一步只读完成目标服务器对PostgreSQL固定digest的匿名manifest与`linux/amd64`核验并取得用户明确接受；之后仍需部署当天复查、仓库外配置/Secret及Docker、迁移、Compose和Nginx逐项授权 |
 | `OPS-002A` 内网/VPN HTTPS 入口 | 未开始 | OPS-001 基础 UAT 通过 | 基础 HTTP UAT 通过后再配置内部域名和可信 HTTPS；用于 `getUserMedia` 实时相机、企业微信和正式移动端安全验收。不占用主机80/443，不覆盖共享 Nginx 全局配置 |
 | `OPS-002B` 公网或零信任入口 | 阻塞 | OPS-002A、公司公网访问决策 | 后续非 VPN 移动使用独立立项；即使开放产品入口，也不重新暴露 AI 媒体下载路由 |
 | `OPS-003` 共享监控接入 | 进行中 | OPS-001 | 保留应用健康检查和带令牌的应用指标；能方便接入时复用现有 Prometheus/Grafana，否则 UAT 使用人工资源检查并记录共同使用人接受的能力缺口。不新增 Alertmanager、Node Exporter或独立19081端口，不挂载宿主机 `/`、`/proc`、`/sys`；不阻塞基础 UAT |

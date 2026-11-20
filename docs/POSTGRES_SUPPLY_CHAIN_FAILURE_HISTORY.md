@@ -2,7 +2,7 @@
 
 ## OPS-REG-003与003A
 
-PR #84保留了官方PostgreSQL固定digest原样复制方案及候选更新矩阵。该PR不得合并，只有`OPS-REG-003B`验证成功后才关闭。
+PR #84保留了官方PostgreSQL固定digest原样复制方案及候选更新矩阵。`OPS-REG-003B`验证并发布成功后，已在PR中留下中文替代说明并关闭；该PR确认未合并，关闭不表示原方案曾经通过。
 
 - 原候选`sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`在严格Critical扫描中失败。
 - `postgres:17-bookworm`固定候选为`sha256:837bed...`，除gosu所带Go标准库发现外还存在Debian系统包问题。
