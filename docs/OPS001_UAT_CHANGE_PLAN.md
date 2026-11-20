@@ -71,7 +71,9 @@ ghcr.io/j4meshub/smartscan-ops@sha256:ef4dd40c7b8a494e92540dc5bb476ab14490340214
 
 主线`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`产生的五个镜像已经完成候选核验并获用户明确接受，精确值见[`2ADBF4F_CONTAINER_VERIFICATION.md`](2ADBF4F_CONTAINER_VERIFICATION.md)。该接受只允许进入候选配置，不授权拉取或部署，后续镜像不得自动替换。
 
-原PostgreSQL候选及PR #84的官方原样复制路线均因严格Critical门禁失败，失败证据继续保留。`OPS-REG-003B`固定以Alpine候选`sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32`为构建起点：升级系统包、删除gosu、固定`70:70`，并以扫描、govulncheck、精确VEX和数据库生命周期测试验收。合并发布后仍须人工公开、服务器匿名核验及用户接受最终GHCR固定digest，才能更新真实配置。
+原PostgreSQL候选及PR #84的官方原样复制路线均因严格Critical门禁失败，失败证据继续保留。`OPS-REG-003B`以Alpine固定候选`sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32`为构建起点，完成系统包升级、gosu删除、`70:70`非root运行、扫描、govulncheck、精确VEX和数据库生命周期测试。用户已接受最终`sha256:94758173...dae6d0`作为UAT候选，目标服务器匿名manifest与配置元数据复核证明摘要一致、`linux/amd64`、`USER 70:70`和PostgreSQL 17.12；文档提交产生的`sha256:e54319a0...04b`明确拒绝且不得替换。精确完整值与原始响应保存在仓库外记录，本结论不授权拉取或部署。
+
+2026-11-20的`OPS-001D`最终只读预检同时确认：loop `status/verify`保持通过；8077结构未发现SmartScan路径，18082空闲且不使用19081；仓库外三张固定候选网络与现场Docker IPAM、主机/策略/VPN可见路由和接口无重叠；共享盘、inode、CPU、内存、Swap、负载及现有容器健康状态未触发停止门禁。脱敏报告见[`OPS001_FINAL_READONLY_PREFLIGHT_20261120.md`](OPS001_FINAL_READONLY_PREFLIGHT_20261120.md)。
 
 ## 5. Nginx最小增量
 
@@ -110,7 +112,7 @@ location ^~ /smartscan/ {
 2. 共同使用人在仓库外记录精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值。
 3. OPS-001A/OPS-001B执行器、mount单元和sudoers已由共同使用人安装；固定空UAT已通过单次`recreate-empty`和两次独立`verify`，存储阶段完成。后续不得因应用部署重新格式化或重建已验收文件系统。
 4. 用户明确接受`2adbf4f`五个SmartScan固定digest；接受只解除制品选择门禁，不授权拉取。
-5. 完成`OPS-REG-003B`，人工公开并核对PostgreSQL GHCR固定digest，取得用户接受；六个镜像在应用部署授权前均不得拉取。
+5. `OPS-REG-003B`、PostgreSQL用户接受和`OPS-001D`服务器匿名核验已完成；六个镜像在新的应用部署授权前仍不得拉取。
 6. 另行设计并授权应用阶段后，在已挂载loop内按核验UID/GID创建数据子目录，安装仓库外`0600`配置，创建三张网络并拉取固定digest。
 7. 运行预检、loop证据、UAT配置和Compose解析校验；启动PostgreSQL并等健康，再运行一次性migrate，失败即停。
 8. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。

@@ -673,3 +673,12 @@
 - VEX边界：仅在证据充分时，为`CVE-2025-68121`/`GO-2026-4337`生成绑定精确组件、最终镜像digest、源提交、证据摘要、复核日期、90天有效期和明确失效条件的OpenVEX；理由只能是`component_not_present`，禁止通配符或豁免其他CVE。任何仍存在的Critical、可修复High/Critical或关键兼容性失败均阻止发布。
 - 兼容性：PR必须验证UID/GID 70、数据所有权、UTF-8中文、initdb、迁移、健康、持久化重启、dump/restore、basebackup/verifybackup、只读根与有界tmpfs。UAT Compose固定`user: 70:70`和`--encoding=UTF8 --locale=C`；真实UAT配置只允许`ghcr.io/j4meshub/smartscan-postgres@sha256:...`。
 - 影响：PR #85合并后，主线已发布SBOM、SLSA、漏洞、VEX和中文来源映射齐备的`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`；匿名manifest核验表明Package当前公开，仓库没有修改其可见性。目标服务器核验、用户接受固定digest以及任何实际部署动作继续是互相独立的人工门禁。
+
+## D-093：接受可审计PostgreSQL候选并完成应用部署前最终只读门禁
+
+- 状态：已确认并完成只读验收
+- 日期：2026-11-20
+- 决策：用户接受`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`作为基础UAT数据库候选；后续文档提交产生的`sha256:e54319a0ae69c22731599fb942500e942e5ba03d34c32406a3d747bffcefd04b`明确不接受，不得自动替换。该接受只允许记录候选和服务器只读核验，不授权拉取、容器、迁移、网络、Secret、Nginx或启动。
+- 现场证据：仅通过批准的SSH别名核对可信主机身份；六个固定digest的匿名manifest均成功且Registry摘要逐字一致。PostgreSQL为OCI image manifest，配置元数据证明`linux/amd64`、`USER 70:70`和17.12。loop受限执行器`status/verify`、8077结构、18082空闲、三张仓库外候选网络冲突检查、共享盘/inode及CPU/内存/Swap/负载/容器健康门禁全部通过。
+- 边界：仓库只保存脱敏结论，不保存精确候选CIDR、原始路由/IPAM、内部地址、真实loop设备或服务器快照。本轮未下载镜像层、未执行Docker登录/拉取、未连接数据库，也未修改服务器文件、网络、Nginx或仓库外配置。
+- 影响：`OPS-001D`完成，`OPS-001`可以进入应用部署准备与分阶段授权，但预检通过不构成写入许可。目录/Secret、三张网络、六镜像拉取、PostgreSQL与迁移、应用Compose、Nginx增量和回滚仍须分别取得用户明确授权。

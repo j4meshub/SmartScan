@@ -16,7 +16,7 @@
 - 现有共享Nginx 8077使用独立include，将`/smartscan/`去前缀转发到18082；不占用80/443，不覆盖其他location。
 - HTTP只验收登录、项目、上传、处理、预览、导出和Range。实时相机、企业微信及正式移动验收继续等待HTTPS。
 - 基础栈合计5.5 vCPU/8.75 GiB，启用AI后7.5 vCPU/11.75 GiB；整栈不得超过8 vCPU/16 GiB。八个服务根文件系统只读，所有tmpfs都有明确上限；每个服务设置CPU、内存、PID和`10m×3`日志轮转，全部`restart: "no"`。Docker日志位于loop之外，八容器理论上限约240 MiB。
-- 服务器不保存源码、不现场构建、不使用可变tag。用户已接受`2adbf4f`五个应用镜像为固定UAT候选，但不授权拉取。官方PostgreSQL原样候选未通过严格门禁；必须先由`OPS-REG-003B`发布可审计GHCR运行镜像，完成人工公开、服务器匿名核验和用户接受。
+- 服务器不保存源码、不现场构建、不使用可变tag。用户已接受`2adbf4f`五个应用镜像及`OPS-REG-003B`可审计PostgreSQL镜像为固定UAT候选，六个digest均完成目标服务器匿名核验，但仍不授权拉取。后续自动构建不得替换已接受候选。
 - AI Worker 和 AI Gateway 位于显式 `ai` Profile，默认不启动；运行配置默认关闭真实 Provider。
 - 保留应用健康和带令牌的应用指标，不申请19081。可以复用现有Prometheus/Grafana或记录人工检查能力缺口；不部署Alertmanager、Node Exporter，不挂载宿主机`/`、`/proc`或`/sys`。
 - UAT数据允许丢弃和重建，不要求备份，也不启用没有异机目标的WAL归档。
@@ -89,7 +89,7 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 1. 重新采集现场网络、路由、VPN、端口、负载和磁盘，确认8077结构未变、18082空闲，任何冲突立即停止。
 2. 形成仓库外精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值记录。
 3. 复核已验收的50 GiB非稀疏loop、ext4、systemd mount、实际可用空间与autoclear仍正常；不得重新格式化、扩大或影响现有loop挂载。
-4. 五个`2adbf4f` SmartScan固定digest已获接受；完成`OPS-REG-003B`的PostgreSQL GHCR发布、人工公开、服务器匿名核验与接受后，才可按新的应用部署授权拉取并核对RepoDigest、平台、版本和UID/GID；不得用`main`或`latest`。
+4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验；只有取得新的应用部署授权后才可拉取并核对RepoDigest、平台、版本和UID/GID，且不得使用`main`或`latest`。
 5. 在loop内创建数据子目录，安装配置，创建三张网络，校验配置和Compose，执行一次性迁移，再启动PostgreSQL、API、CPU Worker与Web；AI Profile另行授权。
 6. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
 7. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
@@ -98,4 +98,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-19，OPS-000事实采集、资源决策和50 GiB loop存储门禁已完成，但OPS-001仍等待人工验收。实际部署前仍缺部署当天现场复查、精确CIDR、`2adbf4f`五镜像接受、PostgreSQL GHCR供应链与接受、服务器Secret以及逐项Docker/迁移/Compose/Nginx授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)；本文件不授权创建真实资源。
+截至2026-11-20，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过，但OPS-001仍等待应用部署的分阶段人工授权。实际部署仍缺仓库外精确配置与Secret，以及目录、Docker网络、镜像拉取、PostgreSQL/迁移、Compose应用和Nginx增量的逐项授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)；本文件不授权创建或修改任何真实资源。
