@@ -20,7 +20,7 @@ def test_ops001_plan_records_accepted_loop_and_remains_fail_closed() -> None:
     assert "192.168." not in plan
 
 
-def test_ops001_candidate_evidence_is_complete_but_not_accepted() -> None:
+def test_ops001_candidate_evidence_is_complete_and_acceptance_is_recorded() -> None:
     evidence = (ROOT / "docs" / "2ADBF4F_CONTAINER_VERIFICATION.md").read_text(encoding="utf-8")
     plan = (ROOT / "docs" / "CODEX_EXECUTION_PLAN.md").read_text(encoding="utf-8")
 
@@ -34,25 +34,27 @@ def test_ops001_candidate_evidence_is_complete_but_not_accepted() -> None:
         assert digest in evidence
     assert "2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697" in evidence
     assert "可修复High/Critical为0" in evidence
-    assert "在用户明确接受前" in evidence
-    assert "OPS-REG-003" in evidence
-    assert "`OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 未开始" in plan
+    assert "用户已接受本文件中的五个固定digest" in evidence
+    assert "接受不授权拉取或部署" in evidence
+    assert "OPS-REG-003B" in evidence
+    assert "`OPS-REG-003B` 可审计PostgreSQL 17运行镜像 | 进行中" in plan
     assert "192.168." not in evidence
 
 
 def test_ops001_plan_contains_fixed_artifacts_and_boundaries() -> None:
     plan = (ROOT / "docs" / "OPS001_UAT_CHANGE_PLAN.md").read_text(encoding="utf-8")
+    candidate_config = (ROOT / "deploy" / "compose" / "uat.env.example").read_text(encoding="utf-8")
     accepted_digests = (
-        "b4f97968a81777c9b46bcae272be5153df796cfd4b2f9221008facc53358300a",
-        "0dc0fe0de3e4518985bd906a08815b70419d86d5530e300a216d25a221ad07f7",
-        "8e7af7bf3d23687c19ecdd10b85044eee8321a019f831bb7744ce2575fc0518c",
-        "44a0faf547140844eb065a65034d442b66dd9f971ae5521b8a97400bd50df915",
-        "ef4dd40c7b8a494e92540dc5bb476ab144903402142a0bbb0fdc4fd688138a5b",
+        "80aea0a272791ea44d76895dbd825d091620e0f43ad76c32f32fb6ba97c646d0",
+        "f1cb15e434e99fdced69885667e8646346c75bc293e8ecf9f6b0fa24951768a6",
+        "1813ada8bda225530d71e5afa9e1c3fd640d5e23d05000d370fdccad0e5e8b00",
+        "3d701a4bcaf24c03ead231f10abd316ba83ab89a6984894dfe31af404d3c930c",
+        "be6c50fbdbc9404a9d9589a53799dbc6084470a63f2306ec6bee5736adf94cae",
     )
 
     for digest in accepted_digests:
-        assert digest in plan
-    assert "0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac" in plan
+        assert digest in candidate_config
+    assert "526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32" in plan
     assert "/etc/nginx/snippets/smartscan-uat-8077.locations.conf" in plan
     assert "127.0.0.1:18082" in plan
     assert "/smartscan/api/v1/" in plan

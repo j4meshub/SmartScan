@@ -656,3 +656,20 @@
 - 应用候选：主线`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`五个GHCR镜像的服务器匿名manifest、Registry digest、`linux/amd64`、OCI revision、SPDX SBOM、SLSA provenance、可修复High/Critical、Web子路径和Ops部署契约均通过。该组只具备提交用户接受的资格；在用户明确接受前不得写入真实UAT配置，后续自动digest不得替代。
 - PostgreSQL决策：服务器对`auth.docker.io`的IPv4连接超时、IPv6不可达，因而未进入TLS、匿名token或manifest阶段。禁止代理、登录、不明镜像源或以pull绕过。新增`OPS-REG-003`，由GitHub Actions从Docker Official Image固定digest复制完整多平台manifest到公开GHCR，并保存上游仓库/digest、`17` tag对应、平台、SBOM、漏洞及自定义in-toto映射；不得宣称复制产物由SmartScan构建或带有Docker官方签名。
 - 影响：OPS-001B标记完成，OPS-001C进入候选人工接受，OPS-001新增OPS-REG-003依赖。PostgreSQL GHCR产物仍须公开可见性人工确认、目标服务器匿名manifest核验及用户明确接受；镜像拉取、UID/GID检查、迁移、Compose和Nginx继续是独立部署授权。
+
+## D-091：接受五个应用候选并保留PostgreSQL原样供应链失败证据
+
+- 状态：已确认
+- 日期：2026-11-20
+- 决策：用户接受提交`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`对应的API、Worker、AI Gateway、Web和Ops五个固定digest为UAT候选，允许写入候选模板；该决定不授权服务器拉取、网络、Secret、迁移、容器、Nginx或启动，后续构建不得自动替换。PR #84的`OPS-REG-003/003A`官方PostgreSQL原样复制方案因严格Critical门禁失败而不得合并，候选矩阵和扫描日志保留为真实失败证据。
+- 原因：应用镜像已经完成来源、架构、SBOM、SLSA、漏洞和运行契约核验；PostgreSQL阻塞则属于第三方通用运行镜像的组件适用性和目标服务器Registry路径问题，不应伪装成SmartScan业务故障，也不能用忽略规则绕过。
+- 影响：`OPS-001C`标记完成；`OPS-REG-003`放弃、`OPS-REG-003A`完成候选评估，均由`OPS-REG-003B`替代。只有新方案验证成功后才关闭PR #84，绝不合并失败实现。
+
+## D-092：PostgreSQL安全门禁采用扫描、二进制可达性与精确VEX组合
+
+- 状态：实施中
+- 日期：2026-11-20
+- 决策：`OPS-REG-003B`固定以`postgres:17-alpine@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32`为构建起点，升级Alpine可修复系统包，删除只在root入口使用的`gosu`，并固定最终`USER 70:70`。上游gosu必须与1.20发布制品摘要和字节一致，独立执行二进制govulncheck与符号分析；最终SBOM和文件系统必须不存在gosu。
+- VEX边界：仅在证据充分时，为`CVE-2025-68121`/`GO-2026-4337`生成绑定精确组件、最终镜像digest、源提交、证据摘要、复核日期、90天有效期和明确失效条件的OpenVEX；理由只能是`component_not_present`，禁止通配符或豁免其他CVE。任何仍存在的Critical、可修复High/Critical或关键兼容性失败均阻止发布。
+- 兼容性：PR必须验证UID/GID 70、数据所有权、UTF-8中文、initdb、迁移、健康、持久化重启、dump/restore、basebackup/verifybackup、只读根与有界tmpfs。UAT Compose固定`user: 70:70`和`--encoding=UTF8 --locale=C`；真实UAT配置只允许`ghcr.io/j4meshub/smartscan-postgres@sha256:...`。
+- 影响：PR阶段不发布；合并main后才发布SBOM、SLSA、漏洞、VEX和中文来源映射齐备的GHCR制品。Package公开、目标服务器匿名manifest核验、用户接受固定digest以及任何实际部署动作继续是互相独立的人工门禁。

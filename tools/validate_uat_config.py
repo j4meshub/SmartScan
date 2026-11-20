@@ -60,6 +60,7 @@ IMAGE_REPOSITORIES = {
     "SMARTSCAN_UAT_WEB_IMAGE": "ghcr.io/j4meshub/smartscan-web",
     "SMARTSCAN_UAT_OPS_IMAGE": "ghcr.io/j4meshub/smartscan-ops",
 }
+POSTGRES_REPOSITORY = "ghcr.io/j4meshub/smartscan-postgres"
 BLOCKED_UAT_IMAGE_DIGESTS = {
     "SMARTSCAN_UAT_WEB_IMAGE": {"44a0faf547140844eb065a65034d442b66dd9f971ae5521b8a97400bd50df915"},
     "SMARTSCAN_UAT_OPS_IMAGE": {"ef4dd40c7b8a494e92540dc5bb476ab144903402142a0bbb0fdc4fd688138a5b"},
@@ -382,7 +383,7 @@ def validate_compose_contract(
     expected_tmpfs = {
         "postgres": {
             "/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777",
-            "/var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=0777",
+            "/var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3775,uid=70,gid=70",
         },
         "migrate": {"/tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=10001,gid=10001"},
         "api": {
@@ -457,6 +458,15 @@ def validate_compose_contract(
     )
     _require(services["nginx"].get("networks") == ["edge"], "Nginx 只能连接入口网络")
     _require(services["postgres"].get("networks") == ["data"], "PostgreSQL 只能连接数据网络")
+    _require(
+        services["postgres"].get("user") == "70:70", "PostgreSQL 必须固定以 UID/GID 70:70 运行"
+    )
+    postgres_environment = services["postgres"].get("environment", {})
+    _require(
+        isinstance(postgres_environment, dict)
+        and postgres_environment.get("POSTGRES_INITDB_ARGS") == "--encoding=UTF8 --locale=C",
+        "PostgreSQL 必须固定 UTF-8 初始化参数",
+    )
     _require(services["ai-gateway"].get("profiles") == ["ai"], "AI 网关必须显式启用")
     _require(services["worker-ai"].get("profiles") == ["ai"], "AI Worker 必须显式启用")
     _require("volumes" not in document, "UAT禁止使用PostgreSQL socket named volume")
@@ -552,6 +562,7 @@ def validate_uat_config(
         _validate_digest_image(
             deploy["SMARTSCAN_UAT_POSTGRES_IMAGE"],
             "SMARTSCAN_UAT_POSTGRES_IMAGE",
+            repository=POSTGRES_REPOSITORY,
             ci_fixture=ci_fixture,
         ),
     )

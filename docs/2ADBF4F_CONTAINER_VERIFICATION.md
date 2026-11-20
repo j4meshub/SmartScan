@@ -37,3 +37,7 @@
 - 本记录只证明候选制品可供人工接受，不构成接受、拉取或部署授权。
 - `main`、`latest`及以后自动产生的新digest不得替代本组候选。
 - PostgreSQL GHCR供应链、真实部署配置、Secret、Docker网络、迁移、容器和Nginx仍需独立工作包和单独授权。
+
+## 2026-11-20后续状态
+
+用户已接受本文件中的五个固定digest为UAT候选，因此“等待用户接受”的原始结论只保留为2026-11-19当时事实。接受不授权拉取或部署，后续digest不得自动替换。原`OPS-REG-003/003A` PostgreSQL原样复制方案在严格Critical扫描中失败，由`OPS-REG-003B`可审计运行镜像替代；失败证据见`POSTGRES_SUPPLY_CHAIN_FAILURE_HISTORY.md`。

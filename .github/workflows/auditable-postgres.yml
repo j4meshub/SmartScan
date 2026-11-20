@@ -1,0 +1,255 @@
+name: 可审计 PostgreSQL 17 运行镜像
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: auditable-postgres-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  POSTGRES_BASE: docker.io/library/postgres@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32
+  POSTGRES_LOCAL: local/smartscan-postgres-auditable:${{ github.sha }}
+  POSTGRES_DESTINATION: ghcr.io/j4meshub/smartscan-postgres
+  GOSU_RELEASE_SHA256: b1892636c281590f34bc63c1118f058cd9de66c4ea463772e3909672d8b302ac
+
+jobs:
+  verify-auditable-postgres:
+    name: 核验可审计 PostgreSQL 运行镜像
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 检出审计实现
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 准备 Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 提取并核对上游 gosu 发布制品
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p postgres-audit
+          docker run --rm --entrypoint cat "${POSTGRES_BASE}" /usr/local/bin/gosu \
+            > postgres-audit/gosu-image-amd64
+          curl --fail --silent --show-error --location \
+            https://github.com/tianon/gosu/releases/download/1.20/gosu-amd64 \
+            --output postgres-audit/gosu-release-amd64
+          printf '%s  %s\n' "${GOSU_RELEASE_SHA256}" postgres-audit/gosu-image-amd64 \
+            | sha256sum --check
+          printf '%s  %s\n' "${GOSU_RELEASE_SHA256}" postgres-audit/gosu-release-amd64 \
+            | sha256sum --check
+          cmp postgres-audit/gosu-image-amd64 postgres-audit/gosu-release-amd64
+      - name: 独立执行二进制 govulncheck 与符号分析
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOBIN="${RUNNER_TEMP}/smartscan-gobin"
+          mkdir -p "${GOBIN}"
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          "${GOBIN}/govulncheck" -version > postgres-audit/govulncheck-version.txt
+          set +e
+          "${GOBIN}/govulncheck" -mode=binary -json postgres-audit/gosu-image-amd64 \
+            > postgres-audit/govulncheck.json
+          status=$?
+          set -e
+          printf '%s\n' "${status}" > postgres-audit/govulncheck-status.txt
+          go tool nm postgres-audit/gosu-image-amd64 > postgres-audit/gosu-nm.txt
+          go version -m postgres-audit/gosu-image-amd64 > postgres-audit/gosu-go-version.txt
+          python tools/auditable_postgres.py analyze-gosu \
+            --image-binary postgres-audit/gosu-image-amd64 \
+            --release-binary postgres-audit/gosu-release-amd64 \
+            --govuln-json postgres-audit/govulncheck.json \
+            --govuln-status postgres-audit/govulncheck-status.txt \
+            --nm-evidence postgres-audit/gosu-nm.txt \
+            --go-version-evidence postgres-audit/gosu-go-version.txt \
+            --output postgres-audit/gosu-analysis.json
+      - name: 构建单一 linux/amd64 待检镜像
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: deploy/postgres/Dockerfile.auditable
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ env.POSTGRES_LOCAL }}
+          build-args: POSTGRES_BASE_IMAGE=${{ env.POSTGRES_BASE }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.base.digest=sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32
+      - name: 核验最终用户、入口、组件删除与APK清单
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          config_digest="$(docker image inspect --format '{{.Id}}' "${POSTGRES_LOCAL}")"
+          test "$(docker image inspect --format '{{.Config.User}}' "${POSTGRES_LOCAL}")" = '70:70'
+          test "$(docker image inspect --format '{{json .Config.Entrypoint}}' "${POSTGRES_LOCAL}")" = '["docker-entrypoint.sh"]'
+          docker run --rm --entrypoint sh "${POSTGRES_LOCAL}" -ec '
+            test "$(id -u)" = 70
+            test "$(id -g)" = 70
+            test ! -e /usr/local/bin/gosu
+            command -v postgres pg_isready initdb pg_dump pg_restore pg_basebackup pg_verifybackup >/dev/null
+          '
+          docker run --rm --entrypoint sh "${POSTGRES_LOCAL}" -ec '
+            printf "%s\n" "=== repositories ==="
+            cat /etc/apk/repositories
+            printf "%s\n" "=== packages ==="
+            apk info -v
+          ' > postgres-audit/apk-packages.txt
+          printf '%s\n' "${config_digest}" > postgres-audit/local-image-digest.txt
+          printf 'config_digest=%s\n' "${config_digest}" >> "${GITHUB_OUTPUT}"
+      - name: 生成最终镜像 SPDX JSON SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: ${{ env.POSTGRES_LOCAL }}
+          format: spdx-json
+          output-file: postgres-audit/postgres-auditable.spdx.json
+          upload-artifact: false
+      - name: 生成精确VEX
+        run: >-
+          python tools/auditable_postgres.py generate-vex
+          --analysis postgres-audit/gosu-analysis.json
+          --sbom postgres-audit/postgres-auditable.spdx.json
+          --image-digest "${{ steps.image.outputs.config_digest }}"
+          --source-commit "${{ github.sha }}"
+          --output postgres-audit/postgres-auditable.openvex.json
+      - name: 扫描全部 High 与 Critical
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.POSTGRES_LOCAL }}
+          format: json
+          output: postgres-audit/postgres-auditable-trivy.json
+          exit-code: "0"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: 执行扫描、可达性与VEX组合门禁
+        run: >-
+          python tools/auditable_postgres.py evaluate
+          --report postgres-audit/postgres-auditable-trivy.json
+          --vex postgres-audit/postgres-auditable.openvex.json
+          --image-digest "${{ steps.image.outputs.config_digest }}"
+          --output postgres-audit/security-gate.json
+      - name: 构建迁移工具镜像
+        run: docker build --file deploy/ops/Dockerfile --tag local/smartscan-ops-audit:${{ github.sha }} .
+      - name: 验证非root、中文UTF-8、迁移、持久化与备份恢复
+        shell: bash
+        env:
+          SMARTSCAN_POSTGRES_IMAGE: ${{ env.POSTGRES_LOCAL }}
+          SMARTSCAN_OPS_IMAGE: local/smartscan-ops-audit:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          bash deploy/postgres/verify-auditable-runtime.sh \
+            | tee postgres-audit/runtime-verification.txt
+          test -s postgres-audit/runtime-verification.txt
+          grep -Fx 'result=passed' postgres-audit/runtime-verification.txt
+      - name: 保存可审计证据
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: auditable-postgres-evidence-${{ github.sha }}
+          path: postgres-audit
+          if-no-files-found: error
+          retention-days: 90
+      - name: 导出已验证镜像供主线发布
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker save --output verified-postgres-image.tar "${POSTGRES_LOCAL}"
+      - name: 保存已验证镜像
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-auditable-postgres-${{ github.sha }}
+          path: verified-postgres-image.tar
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-auditable-postgres:
+    name: 发布已验证 PostgreSQL 固定镜像
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify-auditable-postgres
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: 检出证据生成器
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 下载已验证镜像
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: verified-auditable-postgres-${{ github.sha }}
+      - name: 下载审计证据
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: auditable-postgres-evidence-${{ github.sha }}
+          path: postgres-audit
+      - name: 载入并复核同一镜像
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker load --input verified-postgres-image.tar
+          expected="$(cat postgres-audit/local-image-digest.txt)"
+          actual="$(docker image inspect --format '{{.Id}}' "${POSTGRES_LOCAL}")"
+          test "${actual}" = "${expected}"
+      - name: 登录 GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 推送仅含源提交标签的已验证镜像
+        id: push
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${POSTGRES_DESTINATION}:sha-${GITHUB_SHA}"
+          docker tag "${POSTGRES_LOCAL}" "${target}"
+          docker push "${target}" | tee postgres-audit/push.txt
+          digest="$(awk '/digest: sha256:/ {print $3}' postgres-audit/push.txt | tail -n 1)"
+          test -n "${digest}"
+          printf 'digest=%s\n' "${digest}" >> "${GITHUB_OUTPUT}"
+      - name: 生成绑定GHCR固定digest的VEX与中文来源映射
+        env:
+          SMARTSCAN_WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/auditable_postgres.py generate-vex \
+            --analysis postgres-audit/gosu-analysis.json \
+            --sbom postgres-audit/postgres-auditable.spdx.json \
+            --image-digest "${{ steps.push.outputs.digest }}" \
+            --source-commit "${GITHUB_SHA}" \
+            --output postgres-audit/postgres-auditable.release.openvex.json
+          python tools/auditable_postgres.py finalize \
+            --image-digest "${{ steps.push.outputs.digest }}" \
+            --source-commit "${GITHUB_SHA}" \
+            --workflow-run-url "${SMARTSCAN_WORKFLOW_RUN_URL}" \
+            --vex postgres-audit/postgres-auditable.release.openvex.json \
+            --output-dir postgres-release
+      - name: 生成SLSA来源证明
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-name: ${{ env.POSTGRES_DESTINATION }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: 保存发布证据
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: auditable-postgres-release-${{ github.sha }}
+          path: |
+            postgres-release
+            postgres-audit/gosu-analysis.json
+            postgres-audit/postgres-auditable.spdx.json
+            postgres-audit/postgres-auditable-trivy.json
+            postgres-audit/postgres-auditable.release.openvex.json
+            postgres-audit/runtime-verification.txt
+            postgres-audit/apk-packages.txt
+            postgres-audit/push.txt
+          if-no-files-found: error
+          retention-days: 90

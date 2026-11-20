@@ -20,6 +20,7 @@ x-common: &common
 services:
   postgres:
     image: ${SMARTSCAN_UAT_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
+    user: "70:70"
     pull_policy: always
     restart: "no"
     read_only: true
@@ -27,13 +28,14 @@ services:
       POSTGRES_DB: smartscan
       POSTGRES_USER: smartscan
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?必须设置 UAT 数据库密码}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
     volumes:
       - type: bind
         source: ${SMARTSCAN_UAT_POSTGRES_ROOT:?必须设置 UAT PostgreSQL 目录}
         target: /var/lib/postgresql/data
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
-      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=0777
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3775,uid=70,gid=70
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U smartscan -d smartscan"]
       interval: 10s
