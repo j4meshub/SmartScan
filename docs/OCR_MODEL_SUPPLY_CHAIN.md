@@ -53,6 +53,19 @@ PaddleOCR `v3.7.0`项目许可证和两个PaddlePaddle官方模型仓库的模�
 模型制品。只有模型来源/封装、安装器、Worker适配器、固定运行时、真实验收或工作流自身
 变化才触发；即使触发并生成新digest，也仍为未接受候选，不能自动替换UAT配置。
 
+## 当前候选证据
+
+main提交`9be7b7c366f568d82a19341e072a3144ddd025a2`的工作流`44722932514`完成全部来源、
+真实CPU、双Worker、SPDX、漏洞、in-toto和SLSA门禁，发布未接受候选：
+
+`ghcr.io/j4meshub/smartscan-ocr-models@sha256:0fc7f95eb14f18996c6f22d71b4873b28e79ea0afde8a66ddea6b6c095740c13`
+
+匿名请求返回200且Registry摘要完全一致。OCI index包含`linux/amd64`运行manifest
+`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`和独立证明
+manifest；运行配置的来源仓库与提交标签均与上述main提交一致。Package已可匿名读取，
+不需要修改可见性。该digest仍为`accepted=false`，只有用户明确接受后才能进入服务器拉取
+和安装授权。此前`77d67e…3441`候选从未接受或部署，只保留为历史制品证据。
+
 ## 服务器离线提取边界
 
 后续Docker阶段只负责拉取已接受的固定digest，并把`/models/ocr`复制到固定暂存目录

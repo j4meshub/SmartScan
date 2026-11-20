@@ -8,12 +8,12 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OCR-002` UAT离线模型制品 |
-| 工作包状态 | 等待人工验收；PR #90代码头真实CPU、OCI、SBOM、漏洞及全仓门禁已通过，等待合并后的GHCR候选和用户接受 |
-| 当前分支 | `codex/ocr-002-uat-offline-model-artifact` |
-| 最后验证基线 | `5f7c0e7`：常规CI `44694859302`、容器供应链 `44694859282`、可审计PostgreSQL `44694859373`全部成功 |
-| 工作包提交 | `540a6c7`（主体实现）、`5f7c0e7`（Linux CI身份解析修复） |
-| PR | [#89](https://github.com/j4meshub/SmartScan/pull/89)；最终合并记录以GitHub为准 |
-| 下一工作包 | OCR模型PR通过并合并后核验新GHCR模型digest；由用户决定Package公开和接受，再分别授权服务器拉取、固定暂存、受限安装与`verify-config` |
+| 工作包状态 | 等待人工验收；真实CPU、OCI、SBOM、漏洞、来源证明及全仓门禁已通过，最终GHCR候选已匿名核验，等待用户接受与服务器安装 |
+| 当前分支 | `codex/ocr-002-final-candidate-evidence` |
+| 最后验证基线 | `9be7b7c`：PR #91共21项检查无失败；main OCR供应链`44722932514`成功发布并核验最终未接受候选 |
+| 工作包提交 | `06569aa`（PR #90主体合并）、`9be7b7c`（PR #91 LF完整性与触发范围修复） |
+| PR | [#90](https://github.com/j4meshub/SmartScan/pull/90)、[#91](https://github.com/j4meshub/SmartScan/pull/91)均已合并 |
+| 下一工作包 | 用户明确接受最终模型digest；之后分别人工安装受限执行器，并单独授权服务器拉取、固定暂存、受限安装、模型核验与`verify-config` |
 
 ## 当前工作包进展
 
@@ -27,8 +27,9 @@
 - PR #90首轮OCR专用作业在安装运行时阶段失败：2026-11-20的`ubuntu-latest`默认Python已变为3.14，而PaddlePaddle 3.3.1没有该版本wheel。模型归档组装和样本摘要此前均已通过；修复为使用固定完整SHA的官方`actions/setup-python`显式选择3.11，不放宽依赖版本、真实推理或制品门禁。
 - 第二轮已完成Python 3.11依赖安装和三张真实样本，但Linux双Worker阶段长时间无进展；定位为Paddle线程池初始化后使用Linux默认`fork`的不安全进程模型。并发验收显式改为`spawn`两个独立进程，与本机Windows成功路径一致；没有减少Worker数量、样本或验证范围。
 - PR #90最终代码头`f4f7039`的OCR模型供应链运行`44713910091`成功：官方归档、清单、许可证和样本摘要均通过；Linux真实CPU结果为简体中文1行3.90秒、英文146行32.33秒、中英混排37行8.03秒，单进程峰值约970,956 KiB。两个spawn Worker并发结果均为1行，分别2.68秒和2.64秒，单进程峰值同量级；低于每个CPU Worker 2 GiB上限。scratch OCI构建、SPDX、High/Critical扫描、in-toto映射和证据Artifact均成功，PR发布作业按规则跳过。其余常规CI、五应用镜像、可审计PostgreSQL、Android及固定Xcode iOS Simulator全部成功，无失败；本轮仍未发布模型Package或修改服务器。
-- PR #90合并后main运行`44716740224`成功发布候选`ghcr.io/j4meshub/smartscan-ocr-models@sha256:77d67ee84526c46bdbee7143cb0b9cbc959159c5afc7a86eaf8ccb2bdfbf3441`，来源提交为`06569aa0bbd84d250f903086aca171d4c4039f6a`。匿名manifest返回200、摘要一致，OCI index包含`linux/amd64`运行descriptor和attestation descriptor；当前Package已可匿名读取，不需要修改可见性。该digest仍为`accepted=false`，不得自动写入UAT配置或部署。
-- main在Windows重新检出后暴露新安装资产未受`.gitattributes`强制LF的问题，`core.autocrlf`会改变人工SHA-256和执行器内固定摘要。后续小型修复分支为三份root资产固定LF并更新摘要；这是跨平台制品完整性修复，不连接服务器，也不改变已发布模型内容或候选接受状态。
+- PR #90合并后main运行`44716740224`曾发布候选`ghcr.io/j4meshub/smartscan-ocr-models@sha256:77d67ee84526c46bdbee7143cb0b9cbc959159c5afc7a86eaf8ccb2bdfbf3441`。该候选从未接受或部署；它保留为历史证据，不得自动替换UAT配置。
+- main在Windows重新检出后暴露新安装资产未受`.gitattributes`强制LF的问题，`core.autocrlf`会改变人工SHA-256和执行器内固定摘要。PR #91为三份root资产固定LF、刷新规范化摘要，并为模型工作流增加精确路径过滤；21项检查无失败，合并提交为`9be7b7c366f568d82a19341e072a3144ddd025a2`。这是跨平台制品完整性修复，未连接服务器。
+- 合并后的main运行`44722932514`全部成功，发布最终未接受候选`ghcr.io/j4meshub/smartscan-ocr-models@sha256:0fc7f95eb14f18996c6f22d71b4873b28e79ea0afde8a66ddea6b6c095740c13`。匿名manifest请求返回200且`Docker-Content-Digest`逐字一致；媒体类型为OCI image index，包含`linux/amd64`运行manifest`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`和独立证明manifest。运行配置标签的来源提交为`9be7b7c366f568d82a19341e072a3144ddd025a2`。Package已可匿名读取，无需修改可见性；候选仍为`accepted=false`，等待用户明确接受。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。
