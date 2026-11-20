@@ -1,21 +1,27 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-19
+更新时间：2026-11-20
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001C` 应用部署候选核验 |
-| 工作包状态 | 等待人工验收；loop存储已通过，五个SmartScan候选已完成只读核验，等待用户接受；PostgreSQL供应链仍阻塞应用部署 |
-| 当前分支 | `codex/ops-001c-app-candidate-validation` |
-| 最后验证基线 | `2adbf4f`（PR #82合并；OPS-001B执行器、空UAT重建和两次独立验证已获用户接受） |
-| 工作包提交 | `a463384`（存储验收、五镜像候选核验及PostgreSQL GHCR供应链计划） |
-| PR | [#83](https://github.com/j4meshub/SmartScan/pull/83)；只记录脱敏验收与公开制品证据，不包含服务器原始响应或内部地址 |
-| 下一工作包 | `OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链；完成服务器匿名核验和用户接受后，再申请OPS-001应用部署授权 |
+| 当前工作包 | `OPS-REG-003B` 可审计PostgreSQL 17运行镜像 |
+| 工作包状态 | 进行中；PR阶段只验证不发布，等待严格扫描、govulncheck、VEX和数据库生命周期CI证据 |
+| 当前分支 | `codex/ops-reg-003b-auditable-postgres` |
+| 最后验证基线 | `main`（OPS-001B存储验收已通过；五个`2adbf4f` SmartScan固定digest已获用户接受） |
+| 工作包提交 | 待提交 |
+| PR | 待创建；PR #84保留失败证据且不得合并，003B成功后关闭 |
+| 下一工作包 | 003B合并后人工公开PostgreSQL Package、目标服务器匿名核验并由用户接受固定digest；之后才申请OPS-001应用部署授权 |
 
 ## 当前工作包进展
+
+- 用户已明确接受`2adbf4f`对应API、Worker、AI Gateway、Web和Ops五个固定digest为UAT候选，`OPS-001C`转为完成；接受不授权拉取或部署，后续digest不得自动替换。
+- PR #84的`OPS-REG-003/003A`保留严格扫描失败证据且不合并：bookworm、trixie、当前17和Alpine官方原样候选均未通过。`OPS-REG-003B`固定以Alpine候选为构建起点，升级系统包、删除gosu并以`70:70`运行。
+- 新门禁组合Trivy全量High/Critical、上游gosu发布制品逐字节核验、二进制govulncheck/符号证据、最终SBOM、精确VEX和数据库生命周期兼容性。VEX只允许声明`CVE-2025-68121`因最终组件不存在而不受影响，不能豁免其他发现。
+- 本轮不连接或修改服务器，不拉取服务器镜像，不创建网络、Secret、迁移、容器或Nginx配置；PR验证通过前不发布GHCR镜像。
+- 本地专项`46 passed`；全量Python`548 passed, 23 skipped`、覆盖率`87.79%`，Ruff检查、177个Python文件格式、迁移漂移、工作流YAML和差异空白检查通过。23项跳过仍是既有PostgreSQL/Docker及Linux执行器外部门禁；本机没有Docker/Bash，真实镜像构建、二进制审计、Compose解析和数据库生命周期测试由PR的Ubuntu Runner补证。
 
 - 用户已接受OPS-001B存储验收：`recreate-empty`一次成功，两次独立`verify`通过；50 GiB后备文件完整物理预分配且不再稀疏，ext4、label、reserved block、`rw,nosuid,nodev,noatime`、唯一loop、autoclear、systemd和共享盘安全余量全部通过。SmartScan应用从未启动，没有触碰其他服务或项目；原始服务器输出和真实loop设备名不进入仓库。
 - 目标服务器仅通过`smartscan-server`进行无sudo只读复核。`auth.docker.io` DNS同时返回IPv4/IPv6，但IPv4连接443端口超时、IPv6立即不可达；因此TLS握手、匿名token和`library/postgres` manifest均未发生。PostgreSQL固定digest尚未完成服务器侧核验，不得拉取或部署。
@@ -997,7 +1003,7 @@ git diff --check
 
 ## 下一步
 
-1. 请用户审阅并明确接受`2adbf4f`五个固定GHCR候选；接受不等于拉取或部署授权，新digest不得自动替换。
-2. 执行`OPS-REG-003`，把Docker Official Image的PostgreSQL 17固定digest按原始多平台manifest复制到公开GHCR，完成上游来源、SBOM、漏洞、服务器匿名manifest和用户接受门禁。
+1. 完成`OPS-REG-003B` PR的扫描、govulncheck、精确VEX和数据库生命周期门禁；成功后合并main并发布GHCR固定digest，失败则保留阻塞证据。
+2. 首次发布后由用户人工设置Package公开，再执行目标服务器匿名manifest/平台核验并取得用户对PostgreSQL固定digest的明确接受。
 3. 存储和全部制品门禁满足后，再单独申请OPS-001应用部署：部署当天重新采集网络/端口/资源，确认三张CIDR、8077/18082，生成仓库外Secret，按镜像实际UID/GID准备子目录，并逐项授权Docker网络、镜像拉取、迁移、Compose和Nginx。
 4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。

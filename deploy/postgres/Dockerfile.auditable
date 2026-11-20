@@ -1,0 +1,14 @@
+ARG POSTGRES_BASE_IMAGE=docker.io/library/postgres@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32
+FROM ${POSTGRES_BASE_IMAGE}
+
+USER root
+
+# 上游固定制品只作为构建起点。升级可修复系统包后移除仅供root降权的gosu，
+# 最终容器固定以官方Alpine postgres用户70:70运行，不再进入entrypoint的root分支。
+RUN set -eux; \
+    apk upgrade --no-cache; \
+    rm -f /usr/local/bin/gosu; \
+    test ! -e /usr/local/bin/gosu; \
+    rm -rf /var/cache/apk/*
+
+USER 70:70

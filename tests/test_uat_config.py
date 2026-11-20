@@ -95,6 +95,18 @@ def test_deploy_configuration_must_match_approved_boundaries(
         _validate(tmp_path, deploy=deploy)
 
 
+def test_postgres_image_must_use_smartscan_ghcr_repository(tmp_path: Path) -> None:
+    deploy = _write_changed(
+        FIXTURES / "deploy.env",
+        tmp_path / "deploy.env",
+        "ghcr.io/j4meshub/smartscan-postgres@sha256:",
+        "docker.io/library/postgres@sha256:",
+    )
+
+    with pytest.raises(UatConfigError, match="批准的 GHCR 仓库"):
+        _validate(tmp_path, deploy=deploy)
+
+
 def test_allocation_requires_hard_storage_limit(tmp_path: Path) -> None:
     allocation = json.loads((FIXTURES / "allocation.json").read_text(encoding="utf-8"))
     allocation["storage"]["hard_limit_confirmed"] = False
@@ -264,6 +276,30 @@ def test_compose_rejects_postgres_socket_named_volume(tmp_path: Path) -> None:
     compose.write_text(source, encoding="utf-8")
 
     with pytest.raises(UatConfigError, match="socket named volume"):
+        _validate(tmp_path, compose=compose)
+
+
+def test_compose_rejects_postgres_root_runtime(tmp_path: Path) -> None:
+    compose = _write_changed(
+        DEFAULT_COMPOSE_FILE,
+        tmp_path / "compose.yml",
+        '    user: "70:70"',
+        '    user: "0:0"',
+    )
+
+    with pytest.raises(UatConfigError, match="UID/GID 70:70"):
+        _validate(tmp_path, compose=compose)
+
+
+def test_compose_rejects_postgres_locale_drift(tmp_path: Path) -> None:
+    compose = _write_changed(
+        DEFAULT_COMPOSE_FILE,
+        tmp_path / "compose.yml",
+        "POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C",
+        "POSTGRES_INITDB_ARGS: --encoding=SQL_ASCII --locale=C",
+    )
+
+    with pytest.raises(UatConfigError, match="UTF-8 初始化参数"):
         _validate(tmp_path, compose=compose)
 
 

@@ -20,6 +20,7 @@ x-common: &common
 services:
   postgres:
     image: ${SMARTSCAN_UAT_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
+    user: "70:70"
     pull_policy: always
     restart: "no"
     read_only: true
@@ -27,6 +28,7 @@ services:
       POSTGRES_DB: smartscan
       POSTGRES_USER: smartscan
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?必须设置 UAT 数据库密码}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
     volumes:
       - type: bind
         source: ${SMARTSCAN_UAT_POSTGRES_ROOT:?必须设置 UAT PostgreSQL 目录}
