@@ -4,7 +4,9 @@
 
 2026-11-19对主线提交`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`产生的五个公开GHCR镜像执行了只读Registry manifest、OCI配置标签、GitHub Actions日志、SPDX SBOM和SLSA来源证明核验。目标服务器仅通过唯一SSH别名执行DNS、TLS、匿名token及manifest查询；没有执行`docker pull`、`docker login`、sudo或服务器写入。
 
-五个镜像的Registry digest、`linux/amd64`、完整源提交、SPDX 2.3 SBOM、SLSA provenance及可修复High/Critical漏洞门禁均通过。Web支持`/smartscan/`和`/smartscan/api`，Ops来源提交包含最新loop、只读根文件系统、有界tmpfs、整栈资源和部署校验契约。因此本组可以提交服务器共同使用人接受，但在用户明确接受前仍不得写入真实UAT配置或拉取部署。
+五个镜像的Registry digest、`linux/amd64`、完整源提交、SPDX 2.3 SBOM、SLSA provenance及可修复High/Critical漏洞门禁均通过。Web支持`/smartscan/`和`/smartscan/api`，Ops来源提交包含最新loop、只读根文件系统、有界tmpfs、整栈资源和部署校验契约。因此本组可以提交服务器共同使用人接受；当时在用户明确接受前仍不得写入真实UAT配置或拉取部署。
+
+2026-11-20后续状态：用户已经明确接受下列五个固定digest作为UAT候选，`OPS-001C`完成。接受只允许写入后续UAT候选配置，不授权服务器拉取、网络、容器、Secret、迁移、Nginx或启动；以后生成的新digest不得自动替换。
 
 ## 精确digest
 
@@ -34,6 +36,6 @@
 
 ## 当前边界
 
-- 本记录只证明候选制品可供人工接受，不构成接受、拉取或部署授权。
+- 本记录及后续用户决定证明候选制品已经获接受，但不构成拉取或部署授权。
 - `main`、`latest`及以后自动产生的新digest不得替代本组候选。
 - PostgreSQL GHCR供应链、真实部署配置、Secret、Docker网络、迁移、容器和Nginx仍需独立工作包和单独授权。

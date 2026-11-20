@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "work_package": "OPS-REG-003A",
+  "queried_at": "2026-11-20T09:37:32.7775099+08:00",
+  "repository": "docker.io/library/postgres",
+  "description_zh": "可变标签仅用于发现候选；核验、扫描和后续复制必须使用这里记录的固定digest。",
+  "candidates": [
+    {
+      "name": "bookworm",
+      "discovery_tag": "17-bookworm",
+      "fixed_digest": "sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b",
+      "expected_base_family": "debian-bookworm",
+      "selection_role": "首选Debian兼容候选"
+    },
+    {
+      "name": "trixie",
+      "discovery_tag": "17-trixie",
+      "fixed_digest": "sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c",
+      "expected_base_family": "debian-trixie",
+      "selection_role": "Debian升级候选"
+    },
+    {
+      "name": "current-17",
+      "discovery_tag": "17",
+      "fixed_digest": "sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c",
+      "expected_base_family": "debian-trixie",
+      "selection_role": "当前主标签关系证据"
+    },
+    {
+      "name": "alpine",
+      "discovery_tag": "17-alpine",
+      "fixed_digest": "sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32",
+      "expected_base_family": "alpine",
+      "selection_role": "仅作兼容性评估，不因漏洞较少自动选择"
+    }
+  ]
+}

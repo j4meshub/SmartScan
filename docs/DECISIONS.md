@@ -673,3 +673,12 @@
 - 证据：PR #84运行`44652361383`中，固定PostgreSQL候选的全部Critical和可修复High/Critical两类Trivy门禁均失败；Artifact ID及原始JSON只留在GitHub Actions，不进入公开仓库。
 - 决策：拒绝`sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`。其中`libxml2`的`CVE-2026-6653`为当前无修复版本的Critical，`gosu`内Go标准库`CVE-2025-68121`为可修复Critical；另有可修复High。业务可达性较低不能覆盖“所有Critical为0”的硬门禁，也不允许通过忽略不可修复项或在服务器现场升级绕过。
 - 替代：PR #84保持不合并，main发布作业不执行，`smartscan-postgres` Package未创建。新增`OPS-REG-003A`作为待用户授权项，从Docker Official Image当前PostgreSQL 17谱系选择新的固定digest并重跑同一门禁；不得自动采用可变`17`标签。五个`2adbf4f` SmartScan固定镜像在同一运行中的严格Critical扫描全部通过，但仍等待用户最终接受。
+
+## D-093：接受五个应用镜像并以固定候选矩阵修正PostgreSQL供应链
+
+- 状态：已确认；PostgreSQL候选评估进行中
+- 日期：2026-11-20
+- 应用镜像：用户明确接受主线`2adbf4f`的API、Worker、AI Gateway、Web和Ops五个已核验固定digest作为UAT候选，`OPS-001C`完成。该接受只允许写入后续UAT候选配置，不授权服务器拉取、Docker网络或容器、Secret、迁移、Nginx或启动，也不允许任何新构建自动替换。
+- PostgreSQL候选：在同一分支和PR #84执行`OPS-REG-003A`，保留D-092旧候选拒绝证据。2026-11-20查询时将`17-bookworm`、`17-trixie`、当前`17`及`17-alpine`立即解析为固定digest；标签只保留发现与关系证据，扫描、选择、复制和部署引用不得使用可变标签。
+- 选择规则：每个候选必须核验官方来源、OCI索引、完整平台、`linux/amd64`配置、PG精确版本、基础系统、UID/GID、入口、健康工具、初始化脚本、locale/时区、数据目录及备份恢复工具，并生成SBOM。所有Critical必须为0、可修复High必须为0，不可修复High逐项记录；Alpine只作兼容性评估，优先按运行兼容性、安全门禁、官方维护状态、体积和启动性能排序。
+- 发布边界：PR候选矩阵只核验不发布。只有选定固定digest通过全部硬门禁且PR合并到`main`，才能把完整多平台上游制品复制到GHCR；首次Package可见性、目标服务器匿名核验和PostgreSQL digest接受仍是独立人工门禁，不能继续实际部署。

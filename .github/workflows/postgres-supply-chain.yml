@@ -17,6 +17,107 @@ env:
   POSTGRES_MIRROR_TAG: upstream-sha256-0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
 
 jobs:
+  evaluate-postgres-candidates:
+    name: 评估 PostgreSQL 17 候选 / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: bookworm
+            tag: 17-bookworm
+            digest: sha256:837bed18782820fe967067cb5328b02b0d9992c1be9a37ee0c9c492cfc03af3b
+          - name: trixie
+            tag: 17-trixie
+            digest: sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
+          - name: current-17
+            tag: "17"
+            digest: sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c
+          - name: alpine
+            tag: 17-alpine
+            digest: sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32
+    steps:
+      - name: 检出候选核验工具
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 核验候选固定digest、官方来源、平台和版本
+        run: >-
+          python tools/postgres_supply_chain.py inspect-upstream
+          --digest "${{ matrix.digest }}"
+          --tag "${{ matrix.tag }}"
+          --output-dir "candidate-${{ matrix.name }}"
+      - name: 核验运行契约与基础系统
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="candidate-${{ matrix.name }}/runtime-contract.txt"
+          image="docker.io/library/postgres@${{ matrix.digest }}"
+          docker run --rm --entrypoint sh "$image" -ec '
+            . /etc/os-release
+            printf "os_id=%s\n" "$ID"
+            printf "os_version_id=%s\n" "$VERSION_ID"
+            printf "postgres_uid=%s\n" "$(id -u postgres)"
+            printf "postgres_gid=%s\n" "$(id -g postgres)"
+            printf "pgdata=%s\n" "$PGDATA"
+            printf "entrypoint=%s\n" "$(command -v docker-entrypoint.sh)"
+            printf "pg_isready=%s\n" "$(command -v pg_isready)"
+            printf "initdb=%s\n" "$(command -v initdb)"
+            printf "pg_dump=%s\n" "$(command -v pg_dump)"
+            printf "pg_restore=%s\n" "$(command -v pg_restore)"
+            printf "postgres_version=%s\n" "$(postgres --version)"
+            printf "initdb_directory=%s\n" "$(test -d /docker-entrypoint-initdb.d && echo present)"
+            printf "utc_timezone=%s\n" "$(test -e /usr/share/zoneinfo/UTC && echo present || echo absent)"
+            printf "locale_list_begin\n"
+            locale -a 2>/dev/null || true
+            printf "locale_list_end\n"
+          ' > "$output"
+      - name: 生成候选 linux/amd64 SPDX JSON SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: docker.io/library/postgres@${{ matrix.digest }}
+          format: spdx-json
+          output-file: candidate-${{ matrix.name }}/postgres-linux-amd64.spdx.json
+          upload-artifact: false
+      - name: 记录全部 Critical 漏洞
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: docker.io/library/postgres@${{ matrix.digest }}
+          format: json
+          output: candidate-${{ matrix.name }}/postgres-critical-all.json
+          exit-code: "0"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: CRITICAL
+      - name: 记录可修复 High 与 Critical 漏洞
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: docker.io/library/postgres@${{ matrix.digest }}
+          format: json
+          output: candidate-${{ matrix.name }}/postgres-high-critical-fixable.json
+          exit-code: "0"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: 记录全部 High 漏洞供风险复核
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: docker.io/library/postgres@${{ matrix.digest }}
+          format: json
+          output: candidate-${{ matrix.name }}/postgres-high-all.json
+          exit-code: "0"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: HIGH
+      - name: 保存候选比较证据
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: postgres-candidate-${{ matrix.name }}
+          path: candidate-${{ matrix.name }}
+          if-no-files-found: error
+          retention-days: 90
+
   verify-postgres-upstream:
     name: 核验 PostgreSQL 官方固定制品
     runs-on: ubuntu-latest

@@ -4,13 +4,15 @@
 
 `OPS-REG-003` 解决目标服务器无法连接 `auth.docker.io:443` 的外部条件：GitHub Actions 从 Docker Official Image 的固定 PostgreSQL 17 制品复制完整多平台索引到 `ghcr.io/j4meshub/smartscan-postgres`。这是固定上游制品复制，不是源码重建，也不表示 SmartScan 构建了 PostgreSQL 或 Docker 官方在 GHCR 发布了该镜像。
 
-固定上游为：
+原固定上游为：
 
 ```text
 docker.io/library/postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
 ```
 
 工作流不使用 Dockerfile，不修改镜像层，不发布 `latest` 或 `main`，不自动修改 UAT 配置，也不连接目标服务器。PR 只核验；只有合并到 `main` 后才使用仓库内置 `GITHUB_TOKEN` 写入 GHCR。
+
+原候选已经被严格漏洞门禁拒绝，继续保留为历史拒绝证据。`OPS-REG-003A`在同一PR #84中对2026-11-20发现后立即冻结的`17-bookworm`、`17-trixie`、当前`17`和仅作兼容评估的`17-alpine`候选执行比较；精确发现时间与digest见`deploy/postgres/postgres-17-candidates-20261120.json`。候选矩阵只核验不发布，选择完成前本节旧digest仍是失败关闭的发布占位，不代表会被复制。
 
 ## 上游核验
 
@@ -66,7 +68,7 @@ PostgreSQL 固定制品必须同时通过：
 
 PR #84运行`44652361383`证明指定固定候选没有通过漏洞门禁：`libxml2`存在当前无修复版本的Critical `CVE-2026-6653`，`gosu`内Go标准库存在可修复Critical `CVE-2025-68121`，可修复High/Critical门禁同样失败。因此PR不合并、main复制不执行、GHCR Package未创建。详细风险见[PostgreSQL固定digest漏洞门禁报告](POSTGRES_FIXED_DIGEST_VULNERABILITY_REPORT.md)。
 
-在用户明确授权新的固定候选前，不得把当前可变`17`标签或任何其他digest写入工作流。新候选必须重跑本文件的全部门禁。
+用户已授权`OPS-REG-003A`比较四个已冻结候选，但尚未接受任何新PostgreSQL digest。新候选必须重跑本文件的全部门禁；可变标签仅用于记录发现关系，不得作为最终供应链、部署或UAT引用。
 
 ## 本地验证
 

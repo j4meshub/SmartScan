@@ -88,7 +88,7 @@ def _registry_get(token: str, kind: str, reference: str) -> tuple[dict[str, Any]
     return payload, content_digest, content_type
 
 
-def _parse_official_metadata(text: str) -> dict[str, str]:
+def _parse_official_metadata(text: str, expected_tag: str = "17") -> dict[str, str]:
     global_git_repository = ""
     for paragraph in re.split(r"\n\s*\n", text.strip()):
         fields: dict[str, str] = {}
@@ -104,7 +104,7 @@ def _parse_official_metadata(text: str) -> dict[str, str]:
         if fields.get("GitRepo"):
             global_git_repository = fields["GitRepo"]
         tags = {tag.strip() for tag in fields.get("Tags", "").split(",")}
-        if "17" in tags:
+        if expected_tag in tags:
             git_repository = fields.get("GitRepo", global_git_repository)
             _require(
                 git_repository == "https://github.com/docker-library/postgres.git",
@@ -119,7 +119,7 @@ def _parse_official_metadata(text: str) -> dict[str, str]:
                 "directory": fields.get("Directory", ""),
                 "tags": fields.get("Tags", ""),
             }
-    raise SupplyChainError("Docker Official Images元数据中没有找到精确17标签")
+    raise SupplyChainError(f"Docker Official Images元数据中没有找到精确{expected_tag}标签")
 
 
 def _platforms(index: dict[str, Any]) -> list[dict[str, Any]]:
@@ -153,8 +153,11 @@ def build_upstream_evidence(
     amd64_manifest: dict[str, Any],
     amd64_descriptor_digest: str,
     amd64_config: dict[str, Any],
+    fixed_digest: str = UPSTREAM_DIGEST,
+    observed_tag: str = "17",
 ) -> dict[str, Any]:
-    _require(registry_digest == UPSTREAM_DIGEST, "固定digest的Registry响应不一致")
+    _require(DIGEST.fullmatch(fixed_digest) is not None, "候选固定digest无效")
+    _require(registry_digest == fixed_digest, "固定digest的Registry响应不一致")
     _require(registry_content_type in INDEX_MEDIA_TYPES, "固定制品不是OCI/Docker多平台索引")
     _require(index.get("mediaType") in INDEX_MEDIA_TYPES, "索引mediaType不受支持")
     platforms = _platforms(index)
@@ -180,7 +183,7 @@ def build_upstream_evidence(
         env.get("PG_VERSION", "").startswith("17."), "linux/amd64配置缺少PostgreSQL 17版本证据"
     )
     _require(DIGEST.fullmatch(tag_17_digest) is not None, "当前17标签digest无效")
-    tag_matches = tag_17_digest == UPSTREAM_DIGEST
+    tag_matches = tag_17_digest == fixed_digest
     return {
         "schema_version": 1,
         "artifact_kind": "docker_official_image_fixed_digest_verification",
@@ -189,9 +192,10 @@ def build_upstream_evidence(
         "upstream": {
             "repository": UPSTREAM_REPOSITORY,
             "registry_namespace": "library/postgres",
-            "fixed_digest": UPSTREAM_DIGEST,
+            "fixed_digest": fixed_digest,
             "media_type": registry_content_type,
             "tag_17": {
+                "observed_tag": observed_tag,
                 "observed_digest": tag_17_digest,
                 "matches_fixed_digest": tag_matches,
                 "relation_zh": (
@@ -213,10 +217,15 @@ def build_upstream_evidence(
     }
 
 
-def inspect_upstream(output_dir: Path) -> dict[str, Any]:
+def inspect_upstream(
+    output_dir: Path,
+    *,
+    fixed_digest: str = UPSTREAM_DIGEST,
+    observed_tag: str = "17",
+) -> dict[str, Any]:
     token = _docker_token()
-    index, digest, content_type = _registry_get(token, "manifests", UPSTREAM_DIGEST)
-    _, tag_17_digest, _ = _registry_get(token, "manifests", "17")
+    index, digest, content_type = _registry_get(token, "manifests", fixed_digest)
+    _, tag_17_digest, _ = _registry_get(token, "manifests", observed_tag)
     platforms = _platforms(index)
     amd64_descriptor = next(
         item for item in platforms if item["os"] == "linux" and item["architecture"] == "amd64"
@@ -229,7 +238,7 @@ def inspect_upstream(output_dir: Path) -> dict[str, Any]:
     if config_response_digest:
         _require(config_response_digest == config_digest, "linux/amd64 config响应digest不一致")
     official_text = _request_text(OFFICIAL_IMAGES_METADATA)
-    official = _parse_official_metadata(official_text)
+    official = _parse_official_metadata(official_text, observed_tag)
     official["metadata_url"] = OFFICIAL_IMAGES_METADATA
     official["metadata_sha256"] = hashlib.sha256(official_text.encode()).hexdigest()
     evidence = build_upstream_evidence(
@@ -241,15 +250,18 @@ def inspect_upstream(output_dir: Path) -> dict[str, Any]:
         amd64_manifest=amd64_manifest,
         amd64_descriptor_digest=amd64_descriptor["digest"],
         amd64_config=amd64_config,
+        fixed_digest=fixed_digest,
+        observed_tag=observed_tag,
     )
     _write_json(output_dir / "upstream-verification.json", evidence)
     print(
         json.dumps(
             {
                 "result": "passed",
-                "upstream_digest": UPSTREAM_DIGEST,
+                "upstream_digest": fixed_digest,
+                "observed_tag": observed_tag,
                 "tag_17_digest": tag_17_digest,
-                "tag_17_matches": tag_17_digest == UPSTREAM_DIGEST,
+                "tag_17_matches": tag_17_digest == fixed_digest,
                 "platform_count": len(evidence["platforms"]),
                 "linux_amd64": True,
                 "pg_version": evidence["linux_amd64"]["pg_version"],
@@ -408,6 +420,8 @@ def main() -> int:
         "inspect-upstream", help="只读核验Docker Official Image固定制品"
     )
     inspect.add_argument("--output-dir", type=Path, required=True)
+    inspect.add_argument("--digest", default=UPSTREAM_DIGEST)
+    inspect.add_argument("--tag", default="17")
 
     extract = subparsers.add_parser("extract-destination", help="从Buildx元数据读取GHCR固定digest")
     extract.add_argument("--metadata", type=Path, required=True)
@@ -423,7 +437,7 @@ def main() -> int:
 
     args = parser.parse_args()
     if args.command == "inspect-upstream":
-        inspect_upstream(args.output_dir)
+        inspect_upstream(args.output_dir, fixed_digest=args.digest, observed_tag=args.tag)
     elif args.command == "extract-destination":
         extract_destination(args.metadata, args.github_output)
     else:

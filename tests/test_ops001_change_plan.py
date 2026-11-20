@@ -20,7 +20,7 @@ def test_ops001_plan_records_accepted_loop_and_remains_fail_closed() -> None:
     assert "192.168." not in plan
 
 
-def test_ops001_candidate_evidence_is_complete_but_not_accepted() -> None:
+def test_ops001_candidate_evidence_is_complete_and_accepted_without_deploy_auth() -> None:
     evidence = (ROOT / "docs" / "2ADBF4F_CONTAINER_VERIFICATION.md").read_text(encoding="utf-8")
     plan = (ROOT / "docs" / "CODEX_EXECUTION_PLAN.md").read_text(encoding="utf-8")
 
@@ -34,9 +34,10 @@ def test_ops001_candidate_evidence_is_complete_but_not_accepted() -> None:
         assert digest in evidence
     assert "2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697" in evidence
     assert "可修复High/Critical为0" in evidence
-    assert "在用户明确接受前" in evidence
+    assert "用户已经明确接受" in evidence
+    assert "不授权服务器拉取" in evidence
     assert "OPS-REG-003" in evidence
-    assert "`OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 阻塞" in plan
+    assert "`OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 进行中" in plan
     assert "192.168." not in evidence
 
 

@@ -7,6 +7,7 @@ import yaml
 
 from tools.postgres_supply_chain import (
     DESTINATION_REPOSITORY,
+    DIGEST,
     UPSTREAM_DIGEST,
     SupplyChainError,
     _parse_official_metadata,
@@ -73,6 +74,7 @@ def test_workflow_is_pinned_read_only_on_pr_and_main_only_publish() -> None:
     workflow = yaml.safe_load(text)
     jobs = workflow["jobs"]
     assert set(jobs) == {
+        "evaluate-postgres-candidates",
         "verify-postgres-upstream",
         "verify-smartscan-critical",
         "publish-postgres-mirror",
@@ -102,7 +104,51 @@ def test_workflow_enforces_both_postgres_scans_and_fixed_candidate_critical() ->
     for service, digest in FIXED_SMARTSCAN_DIGESTS.items():
         assert f"service: {service}" in text
         assert digest in text
-    assert text.count("ignore-unfixed: false") == 4
+    assert text.count("ignore-unfixed: false") == 6
+
+
+def test_candidate_matrix_uses_only_frozen_digests_and_does_not_publish() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(text)
+    candidates = workflow["jobs"]["evaluate-postgres-candidates"]
+    rows = candidates["strategy"]["matrix"]["include"]
+    assert {row["tag"] for row in rows} == {"17", "17-bookworm", "17-trixie", "17-alpine"}
+    assert all(re.fullmatch(r"sha256:[a-f0-9]{64}", row["digest"]) for row in rows)
+    assert all(row["digest"] in text for row in rows)
+    candidate_text = yaml.safe_dump(candidates, allow_unicode=True)
+    assert "packages: write" not in candidate_text
+    assert "docker buildx imagetools create" not in candidate_text
+    assert "docker login" not in candidate_text.lower()
+    for contract in (
+        "id -u postgres",
+        "id -g postgres",
+        "docker-entrypoint.sh",
+        "pg_isready",
+        "initdb",
+        "pg_dump",
+        "pg_restore",
+        "locale -a",
+        "/usr/share/zoneinfo/UTC",
+        "$PGDATA",
+    ):
+        assert contract in text
+
+
+def test_candidate_snapshot_records_discovery_time_and_fixed_digests() -> None:
+    snapshot = json.loads(
+        (ROOT / "deploy" / "postgres" / "postgres-17-candidates-20261120.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert snapshot["work_package"] == "OPS-REG-003A"
+    assert snapshot["queried_at"].startswith("2026-11-20T09:37:32")
+    assert {item["discovery_tag"] for item in snapshot["candidates"]} == {
+        "17",
+        "17-bookworm",
+        "17-trixie",
+        "17-alpine",
+    }
+    assert all(DIGEST.fullmatch(item["fixed_digest"]) for item in snapshot["candidates"])
 
 
 def test_build_upstream_evidence_accepts_mutable_tag_drift_but_proves_version() -> None:
