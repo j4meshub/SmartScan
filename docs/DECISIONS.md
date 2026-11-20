@@ -659,9 +659,17 @@
 
 ## D-091：PostgreSQL按固定上游制品复制并分离两类漏洞门禁
 
-- 状态：仓库实现进行中；等待Actions制品、首次公开、服务器匿名核验和用户接受
+- 状态：指定候选漏洞门禁失败并阻塞；未发布GHCR制品
 - 日期：2026-11-20
 - 决策：固定`docker.io/library/postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`作为唯一上游候选。GitHub Actions在PR只核验，在`main`使用`docker buildx imagetools create`把完整多平台索引内容寻址复制到`ghcr.io/j4meshub/smartscan-postgres`；不使用Dockerfile、不修改层、不发布`latest/main`，也不自动替换UAT配置。中文映射和自定义in-toto声明明确这是固定上游制品复制，不是SmartScan源码重建，也不声称Docker官方在GHCR发布。
 - 来源证据：核验Docker Hub官方命名空间、Docker Official Images公开元数据、固定digest媒体类型、完整平台列表、`linux/amd64` descriptor及其配置中的`PG_MAJOR=17`和`PG_VERSION=17.x`。2026-11-20实测固定候选仍存在且配置版本为`17.12-1.pgdg13+1`；可变`17`标签已移动到`sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c`。该差异必须保留，固定候选继续由不可变digest和PG 17配置追溯，不能把标签移动误记为固定候选失效或仍相等。
 - 漏洞：PostgreSQL必须同时通过“全部Critical，`ignore-unfixed=false`”与“可修复High/Critical，`ignore-unfixed=true`”；`2adbf4f`五个SmartScan固定候选补做前一类严格扫描，未来五镜像构建也固定执行两类门禁。任何Critical不得自动豁免；不可修复High必须形成风险记录。
 - 影响：首次Package可能为私有，工作流不得自动公开。只有用户人工公开后，才允许目标服务器通过匿名DNS/TLS/HEAD/manifest核验；不允许登录、pull、代理或其他镜像站。六个digest仍需用户明确接受，接受不授权应用部署；UID/GID、迁移、Compose、Nginx和启动继续独立授权。
+
+## D-092：存在不可修复Critical时拒绝PostgreSQL固定候选
+
+- 状态：已确认阻塞
+- 日期：2026-11-20
+- 证据：PR #84运行`44652361383`中，固定PostgreSQL候选的全部Critical和可修复High/Critical两类Trivy门禁均失败；Artifact ID及原始JSON只留在GitHub Actions，不进入公开仓库。
+- 决策：拒绝`sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`。其中`libxml2`的`CVE-2026-6653`为当前无修复版本的Critical，`gosu`内Go标准库`CVE-2025-68121`为可修复Critical；另有可修复High。业务可达性较低不能覆盖“所有Critical为0”的硬门禁，也不允许通过忽略不可修复项或在服务器现场升级绕过。
+- 替代：PR #84保持不合并，main发布作业不执行，`smartscan-postgres` Package未创建。新增`OPS-REG-003A`作为待用户授权项，从Docker Official Image当前PostgreSQL 17谱系选择新的固定digest并重跑同一门禁；不得自动采用可变`17`标签。五个`2adbf4f` SmartScan固定镜像在同一运行中的严格Critical扫描全部通过，但仍等待用户最终接受。

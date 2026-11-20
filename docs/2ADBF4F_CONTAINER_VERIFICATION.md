@@ -22,7 +22,7 @@
 - 中文发布清单和五个OCI配置标签均绑定完整源提交`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`，来源仓库为GitHub SmartScan，清单声明不包含Secret。
 - 目标服务器对五个OCI index的匿名`HEAD`和manifest查询返回HTTP 200；Registry digest逐一匹配，五个index均包含`linux/amd64`。未记录真实loop设备、内部地址或原始响应。
 - 五份SBOM均为SPDX 2.3；五个固定digest均有`application/vnd.in-toto+json`的SLSA provenance，证明主体digest逐一匹配，`resolvedDependencies`绑定完整源提交。
-- 原工作流以Trivy扫描`os,library`，设置`ignore-unfixed: true`、`severity: HIGH,CRITICAL`及失败退出码；五项日志均显示被扫描目标为Clean。因此“可修复High/Critical为0”门禁通过。`OPS-REG-003`已增加五个固定digest的`ignore-unfixed=false`、`severity=CRITICAL`严格补扫；在对应Actions结果通过前，本记录仍不宣称不可修复Critical为0。
+- 原工作流以Trivy扫描`os,library`，设置`ignore-unfixed: true`、`severity: HIGH,CRITICAL`及失败退出码；五项日志均显示被扫描目标为Clean，因此“可修复High/Critical为0”门禁通过。PR #84供应链运行`44652361383`又对五个固定digest执行`ignore-unfixed=false`、`severity=CRITICAL`严格补扫，API、Worker、AI Gateway、Web、Ops五项全部成功，因此五镜像全部Critical为0。
 - H5部署路径单元测试和Chromium E2E覆盖`/smartscan/`及`/smartscan/api`；主线Web作业成功。
 - Ops镜像从同一提交复制`tools/`，包含loop计划/证据、UAT Compose、只读根文件系统、有界tmpfs、50 GiB/48 GiB预算及8 vCPU/16 GiB整栈限制的校验逻辑；主线API与容器作业已执行相应测试和Compose解析。
 

@@ -36,7 +36,7 @@ def test_ops001_candidate_evidence_is_complete_but_not_accepted() -> None:
     assert "可修复High/Critical为0" in evidence
     assert "在用户明确接受前" in evidence
     assert "OPS-REG-003" in evidence
-    assert "`OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 进行中" in plan
+    assert "`OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 阻塞" in plan
     assert "192.168." not in evidence
 
 

@@ -71,7 +71,7 @@ ghcr.io/j4meshub/smartscan-ops@sha256:ef4dd40c7b8a494e92540dc5bb476ab14490340214
 
 主线`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`产生的五个最新镜像已经完成候选基础核验：服务器匿名manifest、Registry digest、`linux/amd64`、完整源提交、SPDX SBOM、SLSA provenance、可修复High/Critical、Web子路径及Ops loop/只读/tmpfs/资源校验契约均通过；`OPS-REG-003`正补做包含不可修复项的严格Critical扫描。精确值见[`2ADBF4F_CONTAINER_VERIFICATION.md`](2ADBF4F_CONTAINER_VERIFICATION.md)。严格扫描和用户接受前不得自动写入仓库外UAT配置，也不替代已接受的历史候选。
 
-PostgreSQL 17上游候选为`docker.io/library/postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`。目标服务器IPv4连接`auth.docker.io:443`超时、IPv6不可达，未进入TLS、匿名token或manifest阶段。完整应用部署继续阻塞；禁止用代理、登录、未知源或`docker pull`绕过。`OPS-REG-003`正在从该固定digest复制完整多平台manifest到GHCR并保留上游来源、SBOM、漏洞和in-toto证据；首次公开、服务器匿名核验及用户接受后才可更新真实配置。可变`17`标签当前已移动，不得作为部署引用。
+PostgreSQL 17上游候选`docker.io/library/postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`已被严格漏洞门禁拒绝：存在1项不可修复Critical、1项可修复Critical及多项可修复High。目标服务器Docker Hub不可达的问题仍存在，但在选择安全的新固定候选前不再进入GHCR复制。禁止用代理、登录、未知源、`docker pull`、现场打补丁或可变`17`标签绕过。新候选需要用户明确授权并重跑全部门禁。
 
 ## 5. Nginx最小增量
 

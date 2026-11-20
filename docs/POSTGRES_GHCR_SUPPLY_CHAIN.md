@@ -62,6 +62,12 @@ PostgreSQL 固定制品必须同时通过：
 
 如果匿名访问失败，停止并报告，不配置服务器 Registry 令牌，不使用代理或其他镜像站绕过。
 
+## 当前阻塞
+
+PR #84运行`44652361383`证明指定固定候选没有通过漏洞门禁：`libxml2`存在当前无修复版本的Critical `CVE-2026-6653`，`gosu`内Go标准库存在可修复Critical `CVE-2025-68121`，可修复High/Critical门禁同样失败。因此PR不合并、main复制不执行、GHCR Package未创建。详细风险见[PostgreSQL固定digest漏洞门禁报告](POSTGRES_FIXED_DIGEST_VULNERABILITY_REPORT.md)。
+
+在用户明确授权新的固定候选前，不得把当前可变`17`标签或任何其他digest写入工作流。新候选必须重跑本文件的全部门禁。
+
 ## 本地验证
 
 ```text
