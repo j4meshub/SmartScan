@@ -518,8 +518,11 @@ def verify(
 ) -> dict[str, Any]:
     if deploy_uid is None:
         _require(pwd is not None, "目标系统缺少POSIX用户数据库")
-        deploy_uid = pwd.getpwnam(DEPLOY_USER).pw_uid
-    deploy_gid = pwd.getpwnam(DEPLOY_USER).pw_gid if pwd is not None else deploy_uid
+        deploy_record = pwd.getpwnam(DEPLOY_USER)
+        deploy_uid, deploy_gid = deploy_record.pw_uid, deploy_record.pw_gid
+    else:
+        # 测试夹具显式注入当前进程身份；不得再查询只存在于目标主机的固定用户。
+        deploy_gid = deploy_uid
     for path in (paths.deploy_env, paths.runtime_env, paths.bootstrap_password):
         _require(path.is_file() and not path.is_symlink(), f"配置文件缺失或类型异常：{path}")
         info = path.stat()

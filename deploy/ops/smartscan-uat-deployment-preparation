@@ -9,7 +9,7 @@ readonly PATH
 
 readonly EXECUTOR_PATH="/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation"
 readonly HELPER_PATH="/usr/local/libexec/smartscan/smartscan-uat-config"
-readonly HELPER_SHA256="0fcfd58fa5d7f76fa953e69885b26de567f039e13c856ae101397e930610e729"
+readonly HELPER_SHA256="58e750bd3217bf1c3fae6ac30c5d6cc50829b72d563016c580e2ad9d229787ab"
 readonly EXPECTED_HOSTNAME="ctiecaiserver"
 readonly EXPECTED_SUDO_USER="szhzx"
 readonly ROOT_UID="0"

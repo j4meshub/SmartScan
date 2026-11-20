@@ -131,8 +131,8 @@ CPU Worker的`main()`在进入心跳和领取任务循环前调用`get_ocr_engin
 
 | 仓库文件 | 安装路径 | SHA-256 |
 |---|---|---|
-| `deploy/ops/smartscan-uat-deployment-preparation` | `/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation` | `b6ad682e35fecad0d5c5958f6cb43a2b38dd9f13be5c5c36880003ac8079c0a8` |
-| `deploy/ops/smartscan_uat_config.py` | `/usr/local/libexec/smartscan/smartscan-uat-config` | `0fcfd58fa5d7f76fa953e69885b26de567f039e13c856ae101397e930610e729` |
+| `deploy/ops/smartscan-uat-deployment-preparation` | `/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation` | `56d77fa85fb5128a7d070dda8e5abbe824fb630abb94090492ca6e4759bf42d9` |
+| `deploy/ops/smartscan_uat_config.py` | `/usr/local/libexec/smartscan/smartscan-uat-config` | `58e750bd3217bf1c3fae6ac30c5d6cc50829b72d563016c580e2ad9d229787ab` |
 | `deploy/sudoers/smartscan-uat-deployment-preparation` | `/etc/sudoers.d/smartscan-uat-deployment-preparation` | `3f2ef203358b12990d00bd4f0d53e769635536b0f8ca7f23db52d174a2f28aa6` |
 
 人工安装的等价命令如下；`<审核后的临时文件>`必须是共同使用人亲自上传或在受信任终端准备的固定仓库资产，不得由AI替换内容：
