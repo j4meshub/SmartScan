@@ -1,0 +1,2 @@
+Cmnd_Alias SMARTSCAN_UAT_OCR_MODEL = /usr/local/libexec/smartscan/smartscan-uat-ocr-model install, /usr/local/libexec/smartscan/smartscan-uat-ocr-model verify, /usr/local/libexec/smartscan/smartscan-uat-ocr-model status
+szhzx ALL=(root) NOPASSWD: SMARTSCAN_UAT_OCR_MODEL

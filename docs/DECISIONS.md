@@ -685,11 +685,21 @@
 
 ## D-094：应用部署准备采用五命令受限执行器并保留OCR模型硬门禁
 
-- 状态：已确认并完成仓库门禁，等待人工安装
+- 状态：已确认；人工安装与目录准备已完成
 - 日期：2026-11-20
 - 决策：扩展`OPS-001C`范围，在不连接服务器的前提下准备固定目录、仓库外配置、主机本地Secret生成、镜像身份记录及受限sudo执行器。执行器只接受`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`五个无参数子命令；不包含Docker、Nginx、网络、数据库、迁移、通用shell、`systemctl`或删除能力。配置工具逐字固定用户接受的六个digest，后续构建和未接受PostgreSQL制品不能自动替换。
 - 账号与Secret：基础UAT生产模式关闭短信和企业微信，普通注册不能绕过短信挑战；首次账号由API固定引导为`admin`超级管理员并强制改密。数据库、应用、手机号保护、引导管理员和指标Secret只在目标主机随机生成，写入0600固定文件，工具不打印值；人工交付不得由AI读取或通过Git、聊天、命令参数、日志和普通终端回显传递。
 - OCR门禁：CPU Worker在进入任务循环前初始化PaddleOCR并验证`manifest.json`、版本、目录和全部SHA-256。仓库当前没有已接受的真实模型权重、来源/许可快照和完整清单，因此空目录、Mock或联网下载不得通过；真实模型制品继续阻塞`verify-config`和两个CPU Worker启动。这是已知外部制品门禁，不是业务代码遗漏。
 - 所有权与顺序：PostgreSQL保持70:70；API/Worker/Web/Ops的源码用户意图不等于接受digest的运行证据。必须先创建空目录，再单独授权拉取和核验六镜像，记录实际RepoDigest、平台、OCI用户及数字UID/GID，最后才允许固定执行器对三个SmartScan目录应用所有权。PostgreSQL目录非空时拒绝改变所有权。
 - 容量纠偏：宿主机预分配50 GiB后的15%或200 GiB安全余量继续由loop执行器和现场预检保证；应用只看到50 GiB loop，`SMARTSCAN_STORAGE_MIN_FREE_BYTES`改为loop内2 GiB，另保留15%比例、32 GiB业务配额和70/85/95阈值。旧模板把宿主机200 GiB写入容器运行配置会永久阻止上传，现被本决策取代，但宿主机余量门禁没有降低。
-- 影响：仓库工具合并后仍不构成安装或部署授权。共同使用人须人工审核三个root资产和摘要；安装后第一项可单独授权的服务器写操作仅为`prepare-directories`。仓库外输入/证据、配置生成、OCR模型、三网、镜像拉取、所有权、PostgreSQL、迁移、应用、Nginx和任何清理继续分别授权。
+- 影响：共同使用人已审核并安装三个root资产，随后单独授权`prepare-directories`并验证成功；这不构成其他部署授权。仓库外输入/证据、配置生成、OCR模型、三网、镜像拉取、所有权、PostgreSQL、迁移、应用、Nginx和任何清理继续分别授权。
+
+## D-095：OCR模型采用官方未转换权重、独立OCI制品和固定对象安装器
+
+- 状态：已确认供应链设计，等待PR真实CPU和main发布证据
+- 日期：2026-11-20
+- 现场事实：OPS-001C三个固定资产已由共同使用人人工安装，`prepare-directories`已单独授权并成功。`postgres`、`data`、`models`、`models/ocr`和配置根目录已按固定权限创建；配置、Secret、引导密码和镜像身份文件仍不存在，Docker、数据库与Nginx未修改。
+- 模型决策：固定PaddleOCR `v3.7.0`完整提交中的`PP-OCRv6_small_det`和`PP-OCRv6_small_rec`，运行时为PaddleOCR 3.7.0、PaddlePaddle 3.3.1和`paddle_static` CPU。官方BCE归档与PaddlePaddle官方模型仓库固定提交的六个推理文件逐字节一致，只规范化目录名，不转换模型。现有Worker关闭方向分类、文档方向和去弯曲，因此不增加分类模型或其他权重。
+- 许可与分发：PaddleOCR固定版本和两个官方模型仓库均提供Apache-2.0证据，制品保留完整许可证、第三方声明、归档/文件摘要和来源提交；证据支持对这些固定字节进行公开再分发。制品使用独立`scratch` OCI包`ghcr.io/j4meshub/smartscan-ocr-models`，与六个应用/数据库镜像分离，不包含运行包、Secret、用户数据或联网脚本。PR只验证，main才发布；Package公开、digest接受和服务器匿名核验互相独立，后续构建不得自动替换。
+- 安装边界：新增独立root执行器，只允许无参数`install/verify/status`，固定暂存目录、目标目录、版本和清单；拒绝链接、异常对象、缺失/额外/篡改文件、非空目标和超过4 GiB。安装后文件为`root:root`且不可组/全局写，Worker只读挂载。执行器不授予Docker、联网、删除、替换、通用shell、Secret、数据库、网络或Nginx权限；部分失败保留证据，清理或替换必须新授权。
+- 影响：OCR-002从“外部来源未固定阻塞”转为“供应链实现进行中”。只有PR真实CPU简体中文/英文/中英混排、双Worker读取、SBOM、来源证明和漏洞门禁通过，main发布候选并经用户接受、服务器核验与受限安装后，才能解除`verify-config`和CPU Worker启动门禁。Mock、空目录或运行时联网下载仍不得替代真实验收。

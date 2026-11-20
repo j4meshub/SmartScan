@@ -1,0 +1,185 @@
+name: OCR离线模型制品供应链
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ocr-model-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/j4meshub/smartscan-ocr-models
+  DET_URL: https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv6_small_det_infer.tar
+  REC_URL: https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv6_small_rec_infer.tar
+
+jobs:
+  verify:
+    name: 验证来源、制品与真实CPU推理
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 固定Paddle支持的Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 下载固定上游模型归档
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/smartscan-ocr deploy/ocr-models/package
+          rmdir deploy/ocr-models/package
+          curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/smartscan-ocr/det.tar "$DET_URL"
+          curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/smartscan-ocr/rec.tar "$REC_URL"
+      - name: 组装并验证不可变模型包
+        run: >-
+          python tools/ocr_model_artifact.py assemble
+          --lock deploy/ocr-models/source-lock.json
+          --detection-archive /tmp/smartscan-ocr/det.tar
+          --recognition-archive /tmp/smartscan-ocr/rec.tar
+          --output deploy/ocr-models/package
+      - name: 下载固定真实样本
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/smartscan-ocr/samples
+          python - <<'PY'
+          import hashlib,json,pathlib,urllib.request
+          manifest=json.loads(pathlib.Path('deploy/ocr-models/real-cpu-samples.json').read_text())
+          root=pathlib.Path('/tmp/smartscan-ocr/samples')
+          for sample in manifest['samples']:
+              path=root/f"{sample['id']}{pathlib.Path(sample['url']).suffix}"
+              with urllib.request.urlopen(sample['url'], timeout=60) as response:
+                  data=response.read()
+              assert len(data)==sample['size'] and hashlib.sha256(data).hexdigest()==sample['sha256']
+              path.write_bytes(data)
+          PY
+      - name: 安装固定OCR运行时
+        run: python -m pip install --disable-pip-version-check '.[vision,ocr]'
+      - name: 执行真实离线CPU样本与双Worker读取
+        run: >-
+          python tools/ocr_real_cpu_smoke.py
+          --model-root deploy/ocr-models/package
+          --samples-root /tmp/smartscan-ocr/samples
+          --sample-manifest deploy/ocr-models/real-cpu-samples.json
+          --output real-cpu-evidence.json
+      - name: 准备Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 构建最小本地模型制品
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: deploy/ocr-models
+          file: deploy/ocr-models/Dockerfile
+          push: false
+          load: true
+          tags: local/smartscan-ocr-models:${{ github.sha }}
+          build-args: |
+            SOURCE_REPOSITORY=${{ github.server_url }}/${{ github.repository }}
+            SOURCE_COMMIT=${{ github.sha }}
+      - name: 生成SPDX JSON组件清单
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: local/smartscan-ocr-models:${{ github.sha }}
+          format: spdx-json
+          output-file: ocr-models.spdx.json
+          upload-artifact: false
+      - name: 扫描模型制品
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: local/smartscan-ocr-models:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: 生成固定上游in-toto来源映射
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          lock=json.loads(pathlib.Path('deploy/ocr-models/source-lock.json').read_text())
+          statement={
+            '_type':'https://in-toto.io/Statement/v1',
+            'subject':[{'name':'smartscan-ocr-models','digest':{'source-lock-sha256':__import__('hashlib').sha256(pathlib.Path('deploy/ocr-models/source-lock.json').read_bytes()).hexdigest()}}],
+            'predicateType':'https://smartscan.example/attestation/fixed-upstream-model-copy/v1',
+            'predicate':{'sourceCommit':lock['upstream']['commit'],'archives':{k:v['archive_sha256'] for k,v in lock['models'].items()},'conversionPerformed':False}
+          }
+          pathlib.Path('ocr-models-source.intoto.json').write_text(json.dumps(statement,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
+          PY
+      - name: 保存验证证据
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ocr-model-verification-${{ github.sha }}
+          path: |
+            deploy/ocr-models/package/manifest.json
+            deploy/ocr-models/source-lock.json
+            real-cpu-evidence.json
+            ocr-models.spdx.json
+            ocr-models-source.intoto.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish:
+    name: 发布固定OCR模型制品
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 重新下载并组装固定模型包
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/smartscan-ocr
+          curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/smartscan-ocr/det.tar "$DET_URL"
+          curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/smartscan-ocr/rec.tar "$REC_URL"
+          python tools/ocr_model_artifact.py assemble --lock deploy/ocr-models/source-lock.json --detection-archive /tmp/smartscan-ocr/det.tar --recognition-archive /tmp/smartscan-ocr/rec.tar --output deploy/ocr-models/package
+      - name: 准备Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 登录GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 发布内容寻址模型制品
+        id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: deploy/ocr-models
+          file: deploy/ocr-models/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:PP-OCRv6-small-v1-${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:main
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            SOURCE_REPOSITORY=${{ github.server_url }}/${{ github.repository }}
+            SOURCE_COMMIT=${{ github.sha }}
+      - name: 生成GitHub来源证明
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: 保存候选digest（不自动接受）
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          printf 'image=%s@%s\nsource_commit=%s\naccepted=false\n' "$IMAGE_NAME" "$DIGEST" "$GITHUB_SHA" > ocr-model-candidate.txt
+      - name: 保存发布候选
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ocr-model-candidate-${{ github.sha }}
+          path: ocr-model-candidate.txt
+          if-no-files-found: error
+          retention-days: 90

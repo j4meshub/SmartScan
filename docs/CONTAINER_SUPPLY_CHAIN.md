@@ -13,6 +13,11 @@
 | AI Gateway | `ghcr.io/j4meshub/smartscan-ai-gateway` |
 | H5/管理后台/Nginx | `ghcr.io/j4meshub/smartscan-web` |
 | 迁移与配置校验工具 | `ghcr.io/j4meshub/smartscan-ops` |
+| 独立OCR模型制品 | `ghcr.io/j4meshub/smartscan-ocr-models` |
+
+OCR模型制品不是应用镜像，也不计入六个应用/数据库候选。其固定上游、许可证、真实CPU
+验证和受限安装规则见[OCR-002离线模型制品供应链](OCR_MODEL_SUPPLY_CHAIN.md)。模型Package
+首次公开、digest接受和服务器匿名核验均须单独完成，不能被应用镜像清单自动替换。
 
 ## 触发和权限
 

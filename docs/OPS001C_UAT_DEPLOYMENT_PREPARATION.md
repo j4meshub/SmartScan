@@ -1,6 +1,8 @@
 # OPS-001C UAT应用部署受限执行器与配置准备
 
-> 状态：仓库实现完成，尚未安装或执行。本文只定义后续分阶段授权的固定对象与失败关闭行为；本工作包没有连接或修改共享服务器，没有创建目录、Secret、Docker对象、数据库或Nginx配置。
+> 状态：仓库实现已通过PR #89；共同使用人已人工安装三个固定资产，`prepare-directories`已单独授权并成功。原OPS-001C工作包没有连接或修改共享服务器；后续目录操作来自用户另行授权。配置、Secret、引导密码和镜像身份仍未生成，Docker、数据库和Nginx仍未修改。
+
+本工作包没有连接或修改共享服务器；这一历史边界保持不变。服务器目录由用户在合并后另行授权创建，不能倒写成仓库工作包曾经执行部署。
 
 ## 能力边界
 
@@ -26,7 +28,7 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation status
 
 ## 固定目录和配置文件
 
-`prepare-directories`未来只会创建以下固定目录：
+`prepare-directories`已经创建并验证以下固定目录；另有`root:root 0755`的固定父目录`models`：
 
 | 路径 | 初始所有者/权限 | 用途 |
 |---|---|---|
@@ -151,7 +153,7 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation status
 
 安装资产不包含Secret。`deployment-input.json`、两份脱敏证据和以后产生的`image-identities.json`必须分别审核后以`root:root 0600`安装；它们不属于sudoers授权，也不得通过命令参数传值。
 
-安装完成后，第一项可以单独授权的服务器写操作是且仅是`prepare-directories`。它不生成Secret、不调用Docker、不安装Nginx，也不改变现有loop挂载。目录复核通过后，再分别授权仓库外输入/证据安装和`generate-config`，不得一次授权扩展到网络或应用部署。
+人工安装和`prepare-directories`均已完成。该步骤没有生成Secret、调用Docker、安装Nginx或改变现有loop挂载。下一步仍须分别授权仓库外输入/证据安装和`generate-config`，不得一次授权扩展到网络或应用部署。
 
 ## 分阶段回滚
 

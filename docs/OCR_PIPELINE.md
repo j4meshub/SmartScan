@@ -9,7 +9,15 @@
 - [PaddleOCR 通用 OCR Python 集成](https://www.paddleocr.ai/main/en/version3.x/pipeline_usage/OCR.html)
 - [PaddleOCR 安装说明](https://www.paddleocr.ai/main/en/version3.x/installation.html)
 
-仓库不提交模型权重。模型是发布资产，必须在受控构建或 staging 准备，并挂载为只读目录。
+适配器必须同时传入small模型的显式名称和本地目录；PaddleOCR 3.7.0默认名称是medium，
+只传目录会在配置解析时拒绝small权重。当前CPU契约显式关闭oneDNN/MKLDNN，避免固定
+Paddle 3.3.1在不同CPU/平台对PIR属性产生不兼容执行路径；真实性能和内存以Linux容器
+门禁为准，不能用Windows单机结果替代UAT容量验收。
+
+仓库不提交模型权重。`OCR-002`已把官方来源、归档和逐文件摘要固定在
+`deploy/ocr-models/source-lock.json`，并使用独立的最小OCI制品分发；模型必须在受控
+供应链中组装并以只读目录挂载。完整来源、许可证和发布门禁见
+[OCR-002离线模型制品供应链](OCR_MODEL_SUPPLY_CHAIN.md)。
 
 ## 离线模型包
 
@@ -19,21 +27,23 @@
 models/ocr/
 ├── PP-OCRv6_small_det/
 ├── PP-OCRv6_small_rec/
+├── LICENSE
+├── THIRD_PARTY_NOTICES.md
+├── source-lock.json
 └── manifest.json
 ```
 
-从官方来源取得模型并完成许可证、安全和来源复核后，生成固定清单：
+旧的通用清单工具仍用于开发兼容性测试；UAT不得用它替代受审制品。UAT模型包必须由
+`tools/ocr_model_artifact.py`根据固定来源锁组装和验证：
 
 ```bash
-python tools/build_ocr_manifest.py models/ocr \
-  --detection-dir PP-OCRv6_small_det \
-  --recognition-dir PP-OCRv6_small_rec \
-  --model-version PP-OCRv6-small-v1 \
-  --source '<固定官方来源或内部制品记录>' \
-  --license '<已审核的许可证名称和版本>'
+python tools/ocr_model_artifact.py verify --root models/ocr
 ```
 
-清单记录 PaddleOCR、PaddlePaddle、模型包版本和模型目录内每个文件的 SHA-256。Worker 初始化时逐项校验，拒绝绝对路径、目录逃逸、缺失文件、版本偏差和哈希偏差。更新模型时必须使用新的 `SMARTSCAN_OCR_MODEL_VERSION`，重新生成清单并通过固定数据集，不可静默替换同版本内容。
+清单记录PaddleOCR、PaddlePaddle、Paddle静态后端、模型包版本、来源提交、许可证、
+未转换声明、逐文件大小与SHA-256。Worker初始化时逐项校验，拒绝绝对路径、目录逃逸、
+符号链接、缺失文件、版本偏差和哈希偏差。更新模型时必须使用新的
+`SMARTSCAN_OCR_MODEL_VERSION`，重新生成清单并通过固定数据集，不可静默替换同版本内容。
 
 本地需要真实 OCR 时安装：
 

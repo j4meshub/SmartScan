@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+readonly EXPECTED_HOSTNAME="ctiecaiserver"
+readonly EXPECTED_SUDO_USER="szhzx"
+readonly INSTALL_PATH="/usr/local/libexec/smartscan/smartscan-uat-ocr-model"
+readonly HELPER_PATH="/usr/local/libexec/smartscan/smartscan_uat_ocr_model.py"
+readonly HELPER_SHA256="f4c4cc8bb6023901845a880ec2eaa82ade3da5eba25bb20caea2a790ae63761b"
+readonly PYTHON_BIN="/usr/bin/python3"
+
+fail() {
+    printf 'status=failed reason=%s\n' "$1" >&2
+    exit 1
+}
+
+[[ $# -eq 1 ]] || fail "invalid_arguments"
+case "$1" in
+    install|verify|status) ;;
+    *) fail "invalid_command" ;;
+esac
+[[ "$(hostname)" == "$EXPECTED_HOSTNAME" ]] || fail "hostname_mismatch"
+[[ "${SUDO_USER:-}" == "$EXPECTED_SUDO_USER" ]] || fail "sudo_user_mismatch"
+[[ "$(id -u)" == "0" ]] || fail "root_required"
+[[ "$0" == "$INSTALL_PATH" ]] || fail "install_path_mismatch"
+[[ -f "$HELPER_PATH" && ! -L "$HELPER_PATH" ]] || fail "helper_invalid"
+[[ "$(stat -c '%U:%G:%a' "$INSTALL_PATH")" == "root:root:755" ]] || fail "executor_permissions"
+[[ "$(stat -c '%U:%G:%a' "$HELPER_PATH")" == "root:root:644" ]] || fail "helper_permissions"
+printf '%s  %s\n' "$HELPER_SHA256" "$HELPER_PATH" | sha256sum --check --status \
+    || fail "helper_checksum"
+
+case "$1" in
+    install)
+        "$PYTHON_BIN" -c 'import json,sys; sys.path.insert(0,"/usr/local/libexec/smartscan"); from smartscan_uat_ocr_model import install_fixed; print(json.dumps(install_fixed(),ensure_ascii=False,sort_keys=True))'
+        ;;
+    verify)
+        "$PYTHON_BIN" -c 'import json,sys; sys.path.insert(0,"/usr/local/libexec/smartscan"); from smartscan_uat_ocr_model import verify_tree,TARGET_ROOT; print(json.dumps(verify_tree(TARGET_ROOT,installed=True),ensure_ascii=False,sort_keys=True))'
+        ;;
+    status)
+        "$PYTHON_BIN" -c 'import json,sys; sys.path.insert(0,"/usr/local/libexec/smartscan"); from smartscan_uat_ocr_model import status_fixed; print(json.dumps(status_fixed(),ensure_ascii=False,sort_keys=True))'
+        ;;
+esac
