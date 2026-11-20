@@ -45,4 +45,12 @@ PR验证必须在临时Docker环境中完成：
 
 PR只构建、扫描和上传审计证据，不发布镜像。只有CI全部通过并合并`main`后，工作流才把同一份已验证镜像发布到`ghcr.io/j4meshub/smartscan-postgres`，生成SPDX SBOM、GitHub SLSA构建来源证明、Trivy报告、精确OpenVEX和中文来源映射。
 
-首次Package默认可见性不得由工作流修改。用户人工公开后，还需在目标服务器只做匿名manifest/digest/`linux/amd64`核验，并明确接受固定digest，才可写入真实UAT配置。发布、公开、服务器核验和用户接受均不构成拉取、迁移或启动授权。
+首次Package默认可见性不得由工作流修改；若发布后仍为私有，只能由用户人工决定是否公开。无论当前是否已公开，都还需在目标服务器只做匿名manifest/digest/`linux/amd64`核验，并明确接受固定digest，才可写入真实UAT配置。发布、公开、服务器核验和用户接受均不构成拉取、迁移或启动授权。
+
+## 首次发布结果
+
+- PR #85已以中文squash提交`264520cc451f144166e2e77e8dee79eef8b142d5`合并。
+- 主线运行`44673210889`完成复核并发布固定引用`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`。
+- 发布证据确认最终SBOM不含gosu、High/Critical为0、精确VEX与自定义in-toto映射均绑定上述digest，且GitHub保存了1条SLSA来源证明。
+- 匿名token和manifest HEAD返回HTTP 200且响应digest一致，说明Package当前可公开读取；本工作包未调用可见性修改接口。
+- 该digest仍须在目标服务器只读核验`linux/amd64`并由用户明确接受，才能进入仓库外UAT候选配置；不得因本节记录而自动部署。

@@ -37,7 +37,8 @@ def test_ops001_candidate_evidence_is_complete_and_acceptance_is_recorded() -> N
     assert "用户已接受本文件中的五个固定digest" in evidence
     assert "接受不授权拉取或部署" in evidence
     assert "OPS-REG-003B" in evidence
-    assert "`OPS-REG-003B` 可审计PostgreSQL 17运行镜像 | 进行中" in plan
+    assert "`OPS-REG-003B` 可审计PostgreSQL 17运行镜像 | 完成" in plan
+    assert "`OPS-001` 共享主机验收栈 | 等待人工验收" in plan
     assert "192.168." not in evidence
 
 

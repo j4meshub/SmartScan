@@ -8,12 +8,12 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-REG-003B` 可审计PostgreSQL 17运行镜像 |
-| 工作包状态 | 进行中；PR阶段全部技术门禁已通过，等待PR完整CI、合并后主线发布及发布证据核验 |
-| 当前分支 | `codex/ops-reg-003b-auditable-postgres` |
-| 最后验证基线 | PR #85头提交（可审计镜像运行`44670537202`已通过；OPS-001B存储与五个应用digest已获用户接受） |
-| 工作包提交 | PR #85提交序列；合并后记录主线squash提交 |
-| PR | [#85](https://github.com/j4meshub/SmartScan/pull/85)；PR #84保留失败证据且不得合并，003B主线发布成功后关闭 |
-| 下一工作包 | 003B合并后人工公开PostgreSQL Package、目标服务器匿名核验并由用户接受固定digest；之后才申请OPS-001应用部署授权 |
+| 工作包状态 | 完成；主线已发布并核验固定GHCR digest，未自动写入UAT配置或视为用户接受 |
+| 当前分支 | `codex/ops-reg-003b-release-evidence` |
+| 最后验证基线 | `264520c`及主线运行`44673210889`（可审计PostgreSQL发布证据已核验） |
+| 工作包提交 | `264520cc451f144166e2e77e8dee79eef8b142d5` |
+| PR | [#85](https://github.com/j4meshub/SmartScan/pull/85)已合并；PR #84已留替代说明并关闭，确认未合并 |
+| 下一工作包 | 只读完成目标服务器对PostgreSQL固定digest的匿名manifest/`linux/amd64`核验并取得用户明确接受；之后才申请OPS-001应用部署授权 |
 
 ## 当前工作包进展
 
@@ -30,6 +30,9 @@
 - 第六轮`44669532896`已通过最终进程健康检查，随后在`run_smartscan_migrations`被SmartScan生产配置门禁拒绝：临时迁移容器未提供强密钥、手机号保护、超级管理员和OCR配置。验证脚本现于受控临时目录随机生成权限`0600`的迁移env文件，启用生产模式、禁用Mock并满足全部生产安全校验；文件随CI临时目录清理，固定秘密不会进入仓库、命令行或日志。迁移仍使用真实生产配置门禁，不降级到development。
 - 第七轮`44670089211`已越过生产配置校验，但initdb夹具预先创建的UTF-8探针表触发了SmartScan对未知旧数据库基线的拒绝保护。initdb脚本改为执行无持久对象的UTF-8往返断言；空库完成真实迁移后才创建中文数据探针，随后继续验证重启、`pg_dump/pg_restore`和基础备份。旧库保护未被跳过或放宽。
 - 第八轮可审计PostgreSQL运行`44670537202`成功：上游gosu与1.20发布制品逐字节一致，二进制govulncheck对`CVE-2025-68121`只有模块级命中且受影响`crypto/tls`符号为0；最终SBOM含47个组件且不含gosu，Trivy High/Critical、Critical和可修复High/Critical均为0。精确VEX绑定单一CVE、最终本地镜像摘要、源提交、证据摘要、复核日期、90天有效期及失效条件。UID/GID 70、UTF-8中文、initdb、生产配置空库迁移、最终健康、重启持久化、dump/restore、basebackup/verifybackup及只读根/tmpfs全部通过。PR不发布镜像，合并main后的GHCR固定digest仍须独立核验且未经用户接受。
+- PR #85最终头`a561dde`的19项检查为16项成功、3项按PR规则跳过发布，失败和待运行均为0；中文squash合并提交为`264520c`。主线运行`44673210889`成功发布`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`，同提交的CI与容器供应链运行也全部成功。
+- 发布证据再次确认：来源提交为完整`264520cc451f144166e2e77e8dee79eef8b142d5`，上游固定digest为`526f86...d84f32`，最终SBOM含47个组件且不含gosu，Trivy High/Critical为0，发布VEX精确绑定最终GHCR digest，SLSA attestation为1条，全部数据库生命周期标记为`passed`。匿名GHCR token与该digest的manifest HEAD返回HTTP 200且摘要一致；没有修改Package可见性。该digest尚未经用户接受，也未写入UAT配置或在服务器拉取。
+- PR #84已留下中文替代说明并关闭，`merged=false`；其官方原样镜像扫描失败证据继续保留，关闭不表示曾经通过。
 
 - 用户已接受OPS-001B存储验收：`recreate-empty`一次成功，两次独立`verify`通过；50 GiB后备文件完整物理预分配且不再稀疏，ext4、label、reserved block、`rw,nosuid,nodev,noatime`、唯一loop、autoclear、systemd和共享盘安全余量全部通过。SmartScan应用从未启动，没有触碰其他服务或项目；原始服务器输出和真实loop设备名不进入仓库。
 - 目标服务器仅通过`smartscan-server`进行无sudo只读复核。`auth.docker.io` DNS同时返回IPv4/IPv6，但IPv4连接443端口超时、IPv6立即不可达；因此TLS握手、匿名token和`library/postgres` manifest均未发生。PostgreSQL固定digest尚未完成服务器侧核验，不得拉取或部署。
@@ -1011,7 +1014,6 @@ git diff --check
 
 ## 下一步
 
-1. 完成`OPS-REG-003B` PR的扫描、govulncheck、精确VEX和数据库生命周期门禁；成功后合并main并发布GHCR固定digest，失败则保留阻塞证据。
-2. 首次发布后由用户人工设置Package公开，再执行目标服务器匿名manifest/平台核验并取得用户对PostgreSQL固定digest的明确接受。
-3. 存储和全部制品门禁满足后，再单独申请OPS-001应用部署：部署当天重新采集网络/端口/资源，确认三张CIDR、8077/18082，生成仓库外Secret，按镜像实际UID/GID准备子目录，并逐项授权Docker网络、镜像拉取、迁移、Compose和Nginx。
-4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。
+1. 仅经用户授权后，通过唯一SSH别名对PostgreSQL固定digest执行DNS、TLS、匿名HEAD/manifest及`linux/amd64`只读核验，不登录或拉取；核验后由用户明确决定是否接受该digest。
+2. 固定digest获接受且写入仓库外候选配置后，再单独申请OPS-001应用部署：部署当天重新采集网络/端口/资源，确认三张CIDR、8077/18082，生成仓库外Secret，按镜像UID/GID 70:70准备子目录，并逐项授权Docker网络、镜像拉取、迁移、Compose和Nginx。
+3. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。
