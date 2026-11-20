@@ -91,7 +91,7 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 2. 形成仓库外精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值记录。
 3. 复核已验收的50 GiB非稀疏loop、ext4、systemd mount、实际可用空间与autoclear仍正常；不得重新格式化、扩大或影响现有loop挂载。
 4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验；只有取得新的应用部署授权后才可拉取并核对RepoDigest、平台、版本和UID/GID，且不得使用`main`或`latest`。
-5. 共同使用人人工审核并安装OPS-001C受限执行器、固定配置工具和精确sudoers；第一项写操作只授权`prepare-directories`。随后分别安装root拥有的仓库外输入/脱敏证据，并单独授权`generate-config`和`verify-config`。
+5. OPS-001C受限执行器、固定配置工具和sudoers已人工安装，`prepare-directories`已单独授权并成功；固定目录存在且为空。随后分别安装root拥有的仓库外输入/脱敏证据，并单独授权`generate-config`和`verify-config`。
 6. 固定真实OCR模型包的官方来源、许可证、版本、完整文件清单和SHA-256，并只读安装到模型目录；空目录、Mock模型或启动时联网下载不能通过。创建三张网络、拉取六个固定digest并核对RepoDigest、平台、版本和实际UID/GID后，安装固定镜像身份记录，再单独授权`apply-ownership`。
 7. 校验配置和Compose，启动PostgreSQL并执行一次性迁移，再启动API、两个CPU Worker与Web；AI Profile另行授权。
 8. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
@@ -101,4 +101,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-20，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过；OPS-001C正在仓库准备目录/配置/Secret和镜像身份的受限工具，但尚未安装或执行。实际部署仍缺真实OCR模型包、仓库外输入与Secret，以及目录、Docker网络、镜像拉取/身份、PostgreSQL/迁移、Compose应用和Nginx增量的逐项授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)和[OPS-001C受限执行器说明](OPS001C_UAT_DEPLOYMENT_PREPARATION.md)；本文件不授权创建或修改任何真实资源。
+截至2026-11-20，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过；OPS-001C工具已人工安装，目录准备成功，配置/Secret/镜像身份尚不存在。OCR-002正在建立真实离线模型制品，完成后仍需用户接受digest和单独安装授权。实际部署还缺仓库外输入与Secret、Docker网络、镜像拉取/身份、模型安装、PostgreSQL/迁移、Compose应用和Nginx增量的逐项授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)、[OPS-001C受限执行器说明](OPS001C_UAT_DEPLOYMENT_PREPARATION.md)和[OCR模型供应链](OCR_MODEL_SUPPLY_CHAIN.md)；本文件不授权进一步服务器写入。

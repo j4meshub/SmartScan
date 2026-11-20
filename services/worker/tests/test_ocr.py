@@ -197,13 +197,16 @@ def test_paddle_adapter_uses_local_cpu_models_and_parses_structured_result(
     lines = engine.recognize(Image.new("RGB", (120, 80), "white"))
 
     assert captured["init"] == {
+        "text_detection_model_name": "PP-OCRv6_small_det",
         "text_detection_model_dir": str(tmp_path / "det"),
+        "text_recognition_model_name": "PP-OCRv6_small_rec",
         "text_recognition_model_dir": str(tmp_path / "rec"),
         "use_doc_orientation_classify": False,
         "use_doc_unwarping": False,
         "use_textline_orientation": False,
         "device": "cpu",
         "engine": "paddle_static",
+        "enable_mkldnn": False,
         "cpu_threads": 2,
         "text_rec_score_thresh": 0.55,
     }

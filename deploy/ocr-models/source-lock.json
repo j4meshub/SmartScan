@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "artifact_version": "PP-OCRv6-small-v1",
+  "retrieved_at": "2026-11-20T00:00:00Z",
+  "runtime": {
+    "backend": "paddle_static",
+    "paddleocr_version": "3.7.0",
+    "paddlepaddle_version": "3.3.1"
+  },
+  "upstream": {
+    "project": "PaddlePaddle/PaddleOCR",
+    "tag": "v3.7.0",
+    "commit": "b03f46425e8ff4442b268ce449e3eef758146cd4",
+    "license": "Apache-2.0",
+    "license_url": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/v3.7.0/LICENSE"
+  },
+  "models": {
+    "detection": {
+      "name": "PP-OCRv6_small_det",
+      "archive_root": "PP-OCRv6_small_det_infer",
+      "url": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv6_small_det_infer.tar",
+      "archive_sha256": "bfb7c1e59f0faa6b540ebdca93aea3f4b1f2477805b389fbee117820d68fe9f5",
+      "archive_size": 10055680,
+      "huggingface_repo": "PaddlePaddle/PP-OCRv6_small_det",
+      "huggingface_commit": "106c97591b235f607453300d9fc8c1cad1b25488",
+      "files": {
+        "inference.json": {"sha256": "89240f689a4a77aad75ef55a8df0a15c8e1d4980a327d17e58f24bbadde5aeab", "size": 229307},
+        "inference.pdiparams": {"sha256": "5043d4ccc8d63402ccea8feefcee4db57077431a873e78d2191836a178a492da", "size": 9817888},
+        "inference.yml": {"sha256": "193f435274bf9f0b5f71a929bbfbcf148282df7e633b34e7c373e8f44741b516", "size": 885}
+      }
+    },
+    "recognition": {
+      "name": "PP-OCRv6_small_rec",
+      "archive_root": "PP-OCRv6_small_rec_infer",
+      "url": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv6_small_rec_infer.tar",
+      "archive_sha256": "da460f968ce9f88325ac3a34fa302077d6e9b0dcefb16ba3137cd7796f879d06",
+      "archive_size": 21442560,
+      "huggingface_repo": "PaddlePaddle/PP-OCRv6_small_rec",
+      "huggingface_commit": "bd619643acac4b9650c040234da8d944476ee3f1",
+      "files": {
+        "inference.json": {"sha256": "f0bf53c853937a917affdd74467472167727f8ab0f0f7bded01c4a16c27e46e6", "size": 208004},
+        "inference.pdiparams": {"sha256": "406e1e689c9a7fbb04178007a3fe10cf852afe7bf8bb3bc6dbb9d532b13bd907", "size": 21074618},
+        "inference.yml": {"sha256": "ab078671bb49f06228eadccd34f1bb501e157f7a047095ffb943ba81512c77d1", "size": 150579}
+      }
+    }
+  }
+}

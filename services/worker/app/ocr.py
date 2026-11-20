@@ -82,7 +82,7 @@ def validate_model_pack(settings: Settings) -> tuple[Path, Path]:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise OcrConfigurationError("ocr_manifest_invalid") from exc
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+    if not isinstance(manifest, dict) or manifest.get("schema_version") not in {1, 2}:
         raise OcrConfigurationError("ocr_manifest_invalid")
     expected = {
         "paddleocr_version": settings.ocr_package_version,
@@ -106,12 +106,16 @@ def validate_model_pack(settings: Settings) -> tuple[Path, Path]:
     }
     if actual_files != set(files):
         raise OcrConfigurationError("ocr_manifest_files_incomplete")
-    for relative, expected_sha256 in files.items():
+    for relative, metadata in files.items():
+        expected_sha256 = metadata.get("sha256") if isinstance(metadata, dict) else metadata
+        expected_size = metadata.get("size") if isinstance(metadata, dict) else None
         if not isinstance(relative, str) or not re.fullmatch(r"[a-f0-9]{64}", str(expected_sha256)):
             raise OcrConfigurationError("ocr_manifest_files_invalid")
         model_file = _safe_model_path(root, relative)
-        if not model_file.is_file():
+        if not model_file.is_file() or model_file.is_symlink():
             raise OcrConfigurationError("ocr_model_file_missing")
+        if expected_size is not None and model_file.stat().st_size != expected_size:
+            raise OcrConfigurationError("ocr_model_checksum_mismatch")
         digest = hashlib.sha256()
         with model_file.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -119,6 +123,17 @@ def validate_model_pack(settings: Settings) -> tuple[Path, Path]:
         actual = digest.hexdigest()
         if actual != expected_sha256:
             raise OcrConfigurationError("ocr_model_checksum_mismatch")
+    if manifest.get("schema_version") == 2:
+        required = {
+            "artifact_kind": "smartscan-offline-ocr-models",
+            "artifact_version": settings.ocr_model_version,
+            "backend": "paddle_static",
+            "license": "Apache-2.0",
+        }
+        if any(manifest.get(key) != value for key, value in required.items()):
+            raise OcrConfigurationError("ocr_manifest_version_mismatch")
+        if manifest.get("conversion", {}).get("performed") is not False:
+            raise OcrConfigurationError("ocr_manifest_invalid")
     return detection_dir, recognition_dir
 
 
@@ -142,13 +157,16 @@ class PaddleOcrEngine:
 
         self.model_version = settings.ocr_model_version
         self._pipeline = PaddleOCR(
+            text_detection_model_name="PP-OCRv6_small_det",
             text_detection_model_dir=str(detection_dir),
+            text_recognition_model_name="PP-OCRv6_small_rec",
             text_recognition_model_dir=str(recognition_dir),
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
             device="cpu",
             engine="paddle_static",
+            enable_mkldnn=False,
             cpu_threads=settings.ocr_cpu_threads,
             text_rec_score_thresh=settings.ocr_min_confidence,
         )

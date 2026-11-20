@@ -41,6 +41,7 @@ reports/ai-evaluation/
 reports/load/
 load-tests/accounts.local.json
 models/ocr/
+deploy/ocr-models/package/
 smartscan.db
 .DS_Store
 

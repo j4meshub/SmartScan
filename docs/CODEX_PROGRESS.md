@@ -7,15 +7,23 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001C` UAT应用部署受限执行器与配置准备 |
-| 工作包状态 | 完成（仓库侧）；PR #89代码头门禁全部通过，服务器未修改，执行器仍待共同使用人人工安装 |
-| 当前分支 | `codex/ops-001c-uat-deployment-preparation` |
+| 当前工作包 | `OCR-002` UAT离线模型制品 |
+| 工作包状态 | 进行中；官方来源、制品和受限安装器已实现，等待PR真实CPU与供应链门禁 |
+| 当前分支 | `codex/ocr-002-uat-offline-model-artifact` |
 | 最后验证基线 | `5f7c0e7`：常规CI `44694859302`、容器供应链 `44694859282`、可审计PostgreSQL `44694859373`全部成功 |
 | 工作包提交 | `540a6c7`（主体实现）、`5f7c0e7`（Linux CI身份解析修复） |
 | PR | [#89](https://github.com/j4meshub/SmartScan/pull/89)；最终合并记录以GitHub为准 |
-| 下一工作包 | 共同使用人人工审核并安装固定执行器/配置工具/sudoers；安装后第一项可单独授权的写操作仅为`prepare-directories`。真实OCR模型包选型与安装仍是CPU Worker启动前置门禁 |
+| 下一工作包 | OCR模型PR通过并合并后核验新GHCR模型digest；由用户决定Package公开和接受，再分别授权服务器拉取、固定暂存、受限安装与`verify-config` |
 
 ## 当前工作包进展
+
+- 用户已人工安装OPS-001C执行器、配置工具和sudoers，并单独授权完成`prepare-directories`。固定`postgres`、`data`、`models`、`models/ocr`和`/etc/smartscan/uat`目录已按预期所有者/权限创建并通过执行器验证；配置、Secret、引导密码和镜像身份文件仍不存在，Docker、数据库和Nginx未修改。
+- OCR-002确认真实后端为PaddleOCR 3.7.0、PaddlePaddle 3.3.1的`paddle_static` CPU推理，只使用`PP-OCRv6_small_det/rec`，不需要方向分类模型。官方BCE归档与PaddlePaddle官方模型仓库固定提交的六个推理文件逐字节一致，不需要格式转换。
+- 来源锁固定PaddleOCR `v3.7.0`完整提交、两个官方归档URL/大小/SHA-256、官方模型仓库提交和六个文件摘要。上游项目及两份官方模型卡均为Apache-2.0；制品保留完整许可证和第三方来源声明，来源或摘要变化时许可结论失效。
+- 新增独立`scratch` OCI制品`ghcr.io/j4meshub/smartscan-ocr-models`，PR只组装、验证、真实CPU测试、SBOM和扫描而不发布，main才发布。发布digest不会自动获接受或写入UAT配置；首次可见性仍由用户人工决定。
+- 新增固定对象模型安装执行器，只允许`install/verify/status`，不含Docker、联网、删除、替换、Secret、数据库或Nginx。安装只接受固定暂存目录和空目标目录；失败保留证据，任何清理/替换需新授权。本轮未连接或修改服务器。
+- 本机真实CPU首轮在初始化阶段发现PaddleOCR默认期望`PP-OCRv6_medium_det`，证明仅传本地small目录并不足够；Worker现显式传入small检测/识别模型名。第二轮在Windows oneDNN执行器遇到PIR属性不支持，现显式`enable_mkldnn=False`，没有更换权重或回退Mock。修复后简体中文、英文和中英混排三样本均通过，单进程含初始化耗时分别约6.23秒、25.08秒和7.54秒，两个独立CPU进程并发读取同一模型各约6.35秒且结果非空；Windows不提供`ru_maxrss`，峰值内存由PR Ubuntu证据补齐。模型字节31,481,281，含许可/来源证据的包约31,498,107字节。
+- 本地最终专项`19 passed, 1 skipped`，跳过项仅为Windows符号链接权限；全量Python`576 passed, 29 skipped`、覆盖率87.74%，Ruff检查和184个Python文件格式、迁移漂移、差异空白检查全部通过。29项跳过仍是既有PostgreSQL/Docker/Linux执行器门禁；新安装器的Linux身份、Bash/sudoers、真实Ubuntu CPU峰值内存、OCI、SBOM和漏洞扫描由PR Runner补证。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。
