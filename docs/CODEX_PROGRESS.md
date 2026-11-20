@@ -25,6 +25,7 @@
 - 本机真实CPU首轮在初始化阶段发现PaddleOCR默认期望`PP-OCRv6_medium_det`，证明仅传本地small目录并不足够；Worker现显式传入small检测/识别模型名。第二轮在Windows oneDNN执行器遇到PIR属性不支持，现显式`enable_mkldnn=False`，没有更换权重或回退Mock。修复后简体中文、英文和中英混排三样本均通过，单进程含初始化耗时分别约6.23秒、25.08秒和7.54秒，两个独立CPU进程并发读取同一模型各约6.35秒且结果非空；Windows不提供`ru_maxrss`，峰值内存由PR Ubuntu证据补齐。模型字节31,481,281，含许可/来源证据的包约31,498,107字节。
 - 本地最终专项`19 passed, 1 skipped`，跳过项仅为Windows符号链接权限；全量Python`576 passed, 29 skipped`、覆盖率87.74%，Ruff检查和184个Python文件格式、迁移漂移、差异空白检查全部通过。29项跳过仍是既有PostgreSQL/Docker/Linux执行器门禁；新安装器的Linux身份、Bash/sudoers、真实Ubuntu CPU峰值内存、OCI、SBOM和漏洞扫描由PR Runner补证。
 - PR #90首轮OCR专用作业在安装运行时阶段失败：2026-11-20的`ubuntu-latest`默认Python已变为3.14，而PaddlePaddle 3.3.1没有该版本wheel。模型归档组装和样本摘要此前均已通过；修复为使用固定完整SHA的官方`actions/setup-python`显式选择3.11，不放宽依赖版本、真实推理或制品门禁。
+- 第二轮已完成Python 3.11依赖安装和三张真实样本，但Linux双Worker阶段长时间无进展；定位为Paddle线程池初始化后使用Linux默认`fork`的不安全进程模型。并发验收显式改为`spawn`两个独立进程，与本机Windows成功路径一致；没有减少Worker数量、样本或验证范围。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import multiprocessing
 import socket
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -84,7 +85,9 @@ def run(model_root: Path, samples_root: Path, sample_manifest: Path) -> dict[str
             raise RuntimeError(f"real_sample_expectation_failed:{sample['id']}")
         results.append({"id": sample["id"], **result})
     concurrency_sample = samples_root / "zh-cn.png"
-    with ProcessPoolExecutor(max_workers=2) as executor:
+    with ProcessPoolExecutor(
+        max_workers=2, mp_context=multiprocessing.get_context("spawn")
+    ) as executor:
         concurrent = list(
             executor.map(
                 run_one,
