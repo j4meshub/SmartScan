@@ -11,7 +11,7 @@
 | 工作包状态 | 阻塞；旧候选和四个新官方17谱系固定候选都未通过Critical/可修复High硬门禁，PR #84保持未合并，未选择、未接受、未发布PostgreSQL镜像 |
 | 当前分支 | `codex/ops-reg-003-postgres-ghcr` |
 | 最后验证基线 | `64585b5`（PR #83合并；OPS-001B存储门禁通过，OPS-001C五镜像候选核验完成） |
-| 工作包提交 | `5667b6c`（PostgreSQL固定上游复制、严格漏洞门禁和中文证据契约） |
+| 工作包提交 | `5667b6c`（供应链基线）、`fed005e`（候选矩阵）、`4ba498e`（拒绝报告）、`3b0de2c`（运行工具失败关闭） |
 | PR | [#84](https://github.com/j4meshub/SmartScan/pull/84)；PR只核验，不发布PostgreSQL镜像 |
 | 下一工作包 | 默认等待Docker Official Image修复后重新发现固定候选；若用户不接受等待，需另行授权可审计最小PostgreSQL 17镜像工作包。两条路线都不得自动进入部署 |
 
@@ -19,8 +19,8 @@
 
 - 2026-11-20用户明确接受主线`2adbf4f`的API、Worker、AI Gateway、Web和Ops五个固定digest作为UAT候选，`OPS-001C`完成。该接受只允许后续写入UAT候选配置，不授权服务器拉取、Docker对象、Secret、迁移、Nginx或启动，也不允许新构建自动替换。
 - 用户已授权`OPS-REG-003A`在同一分支和PR #84修正。查询时固定候选为：`17-bookworm@sha256:837bed...`、`17-trixie@sha256:b60e90...`、当前`17@sha256:b60e90...`及`17-alpine@sha256:526f86...`；可变标签只用于发现和关系证据，扫描、选择与复制均绑定完整digest。
-- PR候选矩阵同时采集Docker Official Images来源、OCI索引和完整平台、`linux/amd64`配置、精确PostgreSQL版本、基础系统、UID/GID、入口、`pg_isready/initdb/pg_dump/pg_restore`、数据目录、locale/时区、SBOM及三类漏洞报告。Alpine只作兼容性评估，不因漏洞数较少自动选择。
-- PR #84运行`44656028361`确认四个候选均失败：Bookworm有4项Critical，Trixie/当前`17`有2项，Alpine有1项；所有候选都含`gosu` Go标准库`v1.24.6`的可修复Critical `CVE-2025-68121`，并有26至27项可修复High。没有候选可推荐，详情见`POSTGRES_17_CANDIDATE_MATRIX.md`。
+- PR候选矩阵同时采集Docker Official Images来源、OCI索引和完整平台、`linux/amd64`配置、精确PostgreSQL版本、基础系统、UID/GID、入口、`pg_isready/initdb/pg_dump/pg_restore/pg_basebackup/pg_verifybackup`、数据目录、locale/时区、SBOM及三类漏洞报告。工具路径必须非空，否则运行契约失败关闭；Alpine只作兼容性评估，不因漏洞数较少自动选择。
+- PR #84运行`44656028361`确认四个候选均失败；最终运行工具复核`44657713836`中四个运行契约与证据上传步骤成功、Critical和可修复High/Critical门禁按预期失败，发布作业跳过。Bookworm有4项Critical，Trixie/当前`17`有2项，Alpine有1项；所有候选都含`gosu` Go标准库`v1.24.6`的可修复Critical `CVE-2025-68121`，并有26至27项可修复High。没有候选可推荐，详情见`POSTGRES_17_CANDIDATE_MATRIX.md`。
 - Debian候选UID/GID为`999/999`、Alpine为`70/70`；四者均具备入口、健康、初始化、数据目录和备份恢复工具，但Alpine locale列表为空，不能视为Debian无差异替换。安全门禁已先行否决全部候选，因此没有更新工作流的最终上游digest。
 - 用户再次确认OPS-001 loop保持enabled/active且不执行`stop`；存储门禁正式通过，OPS-001整体仍等待应用部署。
 - 新增独立PostgreSQL供应链：PR仅核验，只有`main`合并后才能用`GITHUB_TOKEN`将`docker.io/library/postgres@sha256:0d938e...`完整多平台制品内容寻址复制到`ghcr.io/j4meshub/smartscan-postgres`。不使用Dockerfile、不改层、不发布`latest/main`，也不自动替换UAT配置。

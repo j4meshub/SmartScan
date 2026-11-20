@@ -687,7 +687,7 @@
 
 - 状态：已确认阻塞
 - 日期：2026-11-20
-- 证据：PR #84运行`44656028361`对`17-bookworm`、`17-trixie`、当前`17`和`17-alpine`的固定digest完成官方来源、平台、运行契约、SBOM和三类Trivy报告。`17-trixie`与当前`17`为同一固定制品；四个候选的Artifact只保留在GitHub，仓库保存必要的脱敏比较结论。
+- 证据：PR #84初始运行`44656028361`及运行工具失败关闭复核运行`44657713836`对`17-bookworm`、`17-trixie`、当前`17`和`17-alpine`的固定digest完成官方来源、平台、运行契约、SBOM和三类Trivy报告。复核运行中四个运行契约与证据上传成功，两类漏洞硬门禁失败，发布作业跳过。`17-trixie`与当前`17`为同一固定制品；四个候选的Artifact只保留在GitHub，仓库保存必要的脱敏比较结论。
 - 决策：四个候选全部拒绝。共同阻塞是`gosu`内Go标准库`v1.24.6`的可修复Critical `CVE-2025-68121`和至少26项可修复High；Bookworm另有3项不可修复Critical，Trixie另有1项不可修复Critical。Alpine虽没有不可修复High，但UID/GID为`70/70`且locale列表为空，并且同样未通过Critical/可修复High门禁，不能因漏洞总数较少而选用。
 - 兼容性：Bookworm/Trixie保持当前Debian入口、UID/GID `999/999`、`PGDATA`、locale和健康/初始化/备份恢复命令；Alpine入口和工具存在，但目录所有权与locale需要额外验证。迁移通过数据库网络执行，不依赖数据库镜像内Python。上述兼容性证据不能覆盖安全门禁失败。
 - 后续：PR #84保持未合并，旧发布占位digest不更新，GHCR Package不创建。默认等待Docker Official Image修复后重新发现固定候选；如用户不接受等待，应另立可审计最小镜像工作包并承担自建来源、更新、回归和漏洞响应责任。本决策不授权第三方镜像、服务器修改或实际部署。
