@@ -26,6 +26,7 @@
 - 第二轮`44666698352`的扫描门禁得到High/Critical为0，gosu二进制与上游1.20摘要一致；govulncheck只报告目标Go标准库模块版本，没有目标`crypto/tls`符号，`go tool nm`也未发现受影响符号。但数据库生命周期脚本在`chown 70:70`后由普通Runner执行`chmod`失败，而缺少`pipefail`的`tee`管道错误地让作业显示成功且证据文件为空。该绿灯按失败处理：改为受控Runner sudo设置/清理临时目录，显式`set -euo pipefail`，并要求非空证据和`result=passed`；未把假阳性计入验收。
 - 第三轮`44667604147`证明假阳性已被阻断，但生命周期脚本在约2秒内无输出退出，现有日志不足以判断具体失败检查。新增不读取环境变量和容器inspect的阶段标识；失败时只输出阶段、行号、退出码和临时PostgreSQL容器末尾100行日志，继续失败关闭并避免记录密码。
 - 第四轮`44668166767`由脱敏阶段证据定位到`run_smartscan_migrations`：Ops镜像已有`ENTRYPOINT ["python"]`，测试又重复传入`python`，实际形成`python python -m ...`。修正为只传`-m ... upgrade`；同时把PostgreSQL socket tmpfs固定为`uid/gid 70`和`mode=3775`，避免非root entrypoint对root拥有的socket目录产生权限警告。该修复不跳过迁移或放宽只读/tmpfs门禁。
+- 第五轮`44668876577`在`wait_for_health`失败：测试只用`pg_isready`会误认Docker Official Image执行初始化脚本时的临时PostgreSQL进程，随后该临时进程按设计关闭，导致最终检查竞态失败。临时容器现增加与Compose一致的Docker healthcheck，并同时要求PID 1已经切换为最终`postgres`进程、健康状态为`healthy`且`pg_isready`成功；重启后复用同一严格检查，不以端口短暂可用代替最终服务健康。
 
 - 用户已接受OPS-001B存储验收：`recreate-empty`一次成功，两次独立`verify`通过；50 GiB后备文件完整物理预分配且不再稀疏，ext4、label、reserved block、`rw,nosuid,nodev,noatime`、唯一loop、autoclear、systemd和共享盘安全余量全部通过。SmartScan应用从未启动，没有触碰其他服务或项目；原始服务器输出和真实loop设备名不进入仓库。
 - 目标服务器仅通过`smartscan-server`进行无sudo只读复核。`auth.docker.io` DNS同时返回IPv4/IPv6，但IPv4连接443端口超时、IPv6立即不可达；因此TLS握手、匿名token和`library/postgres` manifest均未发生。PostgreSQL固定digest尚未完成服务器侧核验，不得拉取或部署。

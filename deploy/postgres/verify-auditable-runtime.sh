@@ -11,6 +11,18 @@ init_sql="${work_root}/10-utf8.sql"
 dump_file="${work_root}/smartscan.dump"
 stage="prepare"
 
+wait_for_final_health() {
+  for _ in $(seq 1 60); do
+    if test "$(docker exec "${container}" cat /proc/1/comm 2>/dev/null)" = "postgres" \
+      && test "$(docker inspect --format '{{.State.Health.Status}}' "${container}")" = "healthy" \
+      && docker exec "${container}" pg_isready -U smartscan -d smartscan >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 on_error() {
   exit_code=$?
   line_number=$1
@@ -58,6 +70,11 @@ docker run -d \
   --network-alias postgres \
   --user 70:70 \
   --read-only \
+  --health-cmd 'pg_isready -U smartscan -d smartscan' \
+  --health-interval 1s \
+  --health-timeout 5s \
+  --health-retries 60 \
+  --health-start-period 1s \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777 \
   --tmpfs /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3775,uid=70,gid=70 \
   --mount "type=bind,src=${data_root},dst=/var/lib/postgresql/data" \
@@ -69,13 +86,7 @@ docker run -d \
   "${image}" >/dev/null
 
 stage="wait_for_health"
-for _ in $(seq 1 60); do
-  if docker exec "${container}" pg_isready -U smartscan -d smartscan >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
-docker exec "${container}" pg_isready -U smartscan -d smartscan >/dev/null
+wait_for_final_health
 
 stage="verify_identity_and_utf8"
 test "$(docker inspect --format '{{.Config.User}}' "${container}")" = "70:70"
@@ -97,12 +108,7 @@ test -n "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELEC
 
 stage="restart_and_verify_persistence"
 docker restart "${container}" >/dev/null
-for _ in $(seq 1 60); do
-  if docker exec "${container}" pg_isready -U smartscan -d smartscan >/dev/null 2>&1; then
-    break
-  fi
-  sleep 1
-done
+wait_for_final_health
 test "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT content FROM public.smartscan_utf8_probe WHERE id=1')" = "智能扫描验证"
 
 stage="dump_and_restore"
