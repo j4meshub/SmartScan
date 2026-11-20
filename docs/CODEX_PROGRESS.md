@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001C` UAT应用部署受限执行器与配置准备 |
-| 工作包状态 | 进行中；仓库工具和测试已实现，等待全量验证、PR CI与合并；服务器未修改 |
+| 工作包状态 | 完成（仓库侧）；PR #89代码头门禁全部通过，服务器未修改，执行器仍待共同使用人人工安装 |
 | 当前分支 | `codex/ops-001c-uat-deployment-preparation` |
-| 最后验证基线 | `main@6bfa4b1`及已接受的OPS-001D脱敏只读证据 |
-| 工作包提交 | 待本工作包中文提交 |
-| PR | 待创建；本工作包不得连接或修改服务器 |
+| 最后验证基线 | `5f7c0e7`：常规CI `44694859302`、容器供应链 `44694859282`、可审计PostgreSQL `44694859373`全部成功 |
+| 工作包提交 | `540a6c7`（主体实现）、`5f7c0e7`（Linux CI身份解析修复） |
+| PR | [#89](https://github.com/j4meshub/SmartScan/pull/89)；最终合并记录以GitHub为准 |
 | 下一工作包 | 共同使用人人工审核并安装固定执行器/配置工具/sudoers；安装后第一项可单独授权的写操作仅为`prepare-directories`。真实OCR模型包选型与安装仍是CPU Worker启动前置门禁 |
 
 ## 当前工作包进展
@@ -24,7 +24,9 @@
 - CPU Worker会在进入任务循环前校验真实OCR模型包。仓库当前没有已接受的权重、来源/许可快照和完整SHA-256清单；空目录、Mock或联网下载不得通过。因此模型制品独立阻塞`verify-config`和CPU Worker启动，但不把仓库工具实现误记为失败。
 - 修正既有UAT容量配置冲突：宿主机预分配后15%/200 GiB余量继续由loop执行器和现场预检保证；应用实际看到50 GiB loop，内部配置改为2 GiB绝对余量、15%比例及32 GiB业务配额，避免错误的200 GiB门禁让所有上传永久失败。
 - 本轮没有连接`smartscan-server`，没有安装执行器、创建目录或Secret，也没有调用sudo、Docker、数据库、网络、Nginx或迁移。
-- 本地专项最终`48 passed, 4 skipped`，4项仅需Linux Bash/`visudo`/POSIX权限并由PR Ubuntu Runner补证；全量Python`562 passed, 26 skipped`、覆盖率87.79%。Ruff检查和180个Python文件格式、迁移漂移、H5 JavaScript语法、Node单元`48 passed`、Chromium子路径E2E`9 passed`及差异空白检查均通过。本机未安装Docker CLI，Compose真实解析与Linux执行器/sudoers门禁等待PR CI；现有Python UAT解析器已覆盖固定digest、资源总量、只读根、tmpfs、日志和网络契约。
+- 本地专项最终`48 passed, 4 skipped`，4项仅需Linux Bash/`visudo`/POSIX权限并由PR Ubuntu Runner补证；全量Python`562 passed, 26 skipped`、覆盖率87.79%。Ruff检查和180个Python文件格式、迁移漂移、H5 JavaScript语法、Node单元`48 passed`、Chromium子路径E2E`9 passed`及差异空白检查均通过。本机未安装Docker CLI；Compose真实解析与Linux执行器/sudoers门禁已由PR CI补证并通过，现有Python UAT解析器覆盖固定digest、资源总量、只读根、tmpfs、日志和网络契约。
+- PR #89首轮API作业发现3项Linux失败：测试显式注入Runner UID时，`verify()`仍查询只存在于目标服务器的固定用户，触发`getpwnam`失败。修复后测试注入身份不再查询目标主机用户，真实执行路径仍按固定用户名解析UID/GID；配置工具及执行器固定摘要同步更新，没有放宽主机、身份或权限门禁。
+- 修复代码头`5f7c0e7`的常规CI `44694859302`中API、Web、Android、固定Xcode 16.4 iOS Simulator和容器五项全部成功；容器供应链`44694859282`五镜像验证成功，可审计PostgreSQL运行`44694859373`成功。PR场景没有发布或替换任何UAT镜像，服务器仍未连接或修改。
 
 - 用户明确接受`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`作为基础UAT候选；文档提交产生的`sha256:e54319a0ae69c22731599fb942500e942e5ba03d34c32406a3d747bffcefd04b`明确不接受，不能自动替换。
 - 仅通过SSH别名`smartscan-server`核对可信主机身份后，目标服务器对PostgreSQL和五个SmartScan固定digest的匿名manifest请求均返回成功且摘要逐字一致。PostgreSQL为OCI image manifest，配置元数据证明`linux/amd64`、`USER 70:70`和PostgreSQL 17.12；未下载镜像层、未登录Registry或改变镜像缓存。
