@@ -11,8 +11,8 @@
 | 工作包状态 | 进行中；仓库实现与本机上游只读核验已完成，等待PR CI、main发布、Package人工公开、目标服务器匿名核验和用户接受 |
 | 当前分支 | `codex/ops-reg-003-postgres-ghcr` |
 | 最后验证基线 | `64585b5`（PR #83合并；OPS-001B存储门禁通过，OPS-001C五镜像候选核验完成） |
-| 工作包提交 | 待提交 |
-| PR | 待创建；不得在PR事件发布PostgreSQL镜像 |
+| 工作包提交 | `5667b6c`（PostgreSQL固定上游复制、严格漏洞门禁和中文证据契约） |
+| PR | [#84](https://github.com/j4meshub/SmartScan/pull/84)；PR只核验，不发布PostgreSQL镜像 |
 | 下一工作包 | 完成OPS-REG-003外部门禁后回到OPS-001，申请应用部署阶段的精确授权 |
 
 ## 当前工作包进展
