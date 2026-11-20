@@ -7,9 +7,9 @@
 
 | 仓库文件 | 安装位置 | 所有者/权限 | SHA-256 |
 |---|---|---|---|
-| `deploy/ops/smartscan-uat-ocr-model` | `/usr/local/libexec/smartscan/smartscan-uat-ocr-model` | `root:root 0755` | `8d425b4679b394e1c4e6b0e7a86a811292293a98f48ffce902150dddcee86865` |
-| `deploy/ops/smartscan_uat_ocr_model.py` | `/usr/local/libexec/smartscan/smartscan_uat_ocr_model.py` | `root:root 0644` | `f4c4cc8bb6023901845a880ec2eaa82ade3da5eba25bb20caea2a790ae63761b` |
-| `deploy/ops/smartscan-uat-ocr-model.sudoers` | `/etc/sudoers.d/smartscan-uat-ocr-model` | `root:root 0440` | `d3bd45297e2b65f75139738ffbfe9a8988cd2c74dc56c374baa7cda127ddce2b` |
+| `deploy/ops/smartscan-uat-ocr-model` | `/usr/local/libexec/smartscan/smartscan-uat-ocr-model` | `root:root 0755` | `8623dfe1bdee24f143e1cc7ee2eee5b12ed17ee16873c374c887a4e2d3e914e2` |
+| `deploy/ops/smartscan_uat_ocr_model.py` | `/usr/local/libexec/smartscan/smartscan_uat_ocr_model.py` | `root:root 0644` | `654dd06634c64ef15f95523ba227cbb7ec866c6eae162db3b33911afc82cadac` |
+| `deploy/ops/smartscan-uat-ocr-model.sudoers` | `/etc/sudoers.d/smartscan-uat-ocr-model` | `root:root 0440` | `e9604f687f6eb5fc336e369036ad010e2fa28a2a5f7d906bc6d52d2c70e3d282` |
 
 共同使用人应在自己的SSH终端中，从已审核提交检出文件，先在本机核对上述摘要，再用
 `sudo install`逐一安装，并执行`sudo visudo -cf /etc/sudoers`。密码只能由共同使用人在

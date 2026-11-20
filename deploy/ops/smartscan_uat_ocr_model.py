@@ -7,6 +7,8 @@ import shutil
 import stat
 from pathlib import Path
 
+# 本文件作为root安装资产，仓库强制LF以保证人工SHA-256复核跨平台一致。
+
 try:
     import pwd
 except ImportError:  # pragma: no cover - 生产安装器仅运行于Linux

@@ -27,6 +27,8 @@
 - PR #90首轮OCR专用作业在安装运行时阶段失败：2026-11-20的`ubuntu-latest`默认Python已变为3.14，而PaddlePaddle 3.3.1没有该版本wheel。模型归档组装和样本摘要此前均已通过；修复为使用固定完整SHA的官方`actions/setup-python`显式选择3.11，不放宽依赖版本、真实推理或制品门禁。
 - 第二轮已完成Python 3.11依赖安装和三张真实样本，但Linux双Worker阶段长时间无进展；定位为Paddle线程池初始化后使用Linux默认`fork`的不安全进程模型。并发验收显式改为`spawn`两个独立进程，与本机Windows成功路径一致；没有减少Worker数量、样本或验证范围。
 - PR #90最终代码头`f4f7039`的OCR模型供应链运行`44713910091`成功：官方归档、清单、许可证和样本摘要均通过；Linux真实CPU结果为简体中文1行3.90秒、英文146行32.33秒、中英混排37行8.03秒，单进程峰值约970,956 KiB。两个spawn Worker并发结果均为1行，分别2.68秒和2.64秒，单进程峰值同量级；低于每个CPU Worker 2 GiB上限。scratch OCI构建、SPDX、High/Critical扫描、in-toto映射和证据Artifact均成功，PR发布作业按规则跳过。其余常规CI、五应用镜像、可审计PostgreSQL、Android及固定Xcode iOS Simulator全部成功，无失败；本轮仍未发布模型Package或修改服务器。
+- PR #90合并后main运行`44716740224`成功发布候选`ghcr.io/j4meshub/smartscan-ocr-models@sha256:77d67ee84526c46bdbee7143cb0b9cbc959159c5afc7a86eaf8ccb2bdfbf3441`，来源提交为`06569aa0bbd84d250f903086aca171d4c4039f6a`。匿名manifest返回200、摘要一致，OCI index包含`linux/amd64`运行descriptor和attestation descriptor；当前Package已可匿名读取，不需要修改可见性。该digest仍为`accepted=false`，不得自动写入UAT配置或部署。
+- main在Windows重新检出后暴露新安装资产未受`.gitattributes`强制LF的问题，`core.autocrlf`会改变人工SHA-256和执行器内固定摘要。后续小型修复分支为三份root资产固定LF并更新摘要；这是跨平台制品完整性修复，不连接服务器，也不改变已发布模型内容或候选接受状态。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。

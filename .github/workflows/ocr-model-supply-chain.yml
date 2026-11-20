@@ -2,8 +2,32 @@ name: OCR离线模型制品供应链
 
 on:
   pull_request:
+    paths:
+      - ".github/workflows/ocr-model-supply-chain.yml"
+      - ".gitattributes"
+      - "deploy/ocr-models/**"
+      - "deploy/ops/smartscan-uat-ocr-model*"
+      - "pyproject.toml"
+      - "services/worker/app/ocr.py"
+      - "services/worker/tests/test_ocr.py"
+      - "tests/test_ocr_model_*.py"
+      - "tests/test_uat_ocr_model_installer.py"
+      - "tools/ocr_model_artifact.py"
+      - "tools/ocr_real_cpu_smoke.py"
   push:
     branches: [main]
+    paths:
+      - ".github/workflows/ocr-model-supply-chain.yml"
+      - ".gitattributes"
+      - "deploy/ocr-models/**"
+      - "deploy/ops/smartscan-uat-ocr-model*"
+      - "pyproject.toml"
+      - "services/worker/app/ocr.py"
+      - "services/worker/tests/test_ocr.py"
+      - "tests/test_ocr_model_*.py"
+      - "tests/test_uat_ocr_model_installer.py"
+      - "tools/ocr_model_artifact.py"
+      - "tools/ocr_real_cpu_smoke.py"
   workflow_dispatch:
 
 concurrency:
