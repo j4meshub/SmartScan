@@ -71,16 +71,21 @@ def _sha256(path: Path) -> str:
 def _read_json_stream(path: Path) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        content = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise AuditError(f"无法读取govulncheck证据：{path.name}") from exc
-    for number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
+
+    decoder = json.JSONDecoder()
+    offset = 0
+    while offset < len(content):
+        while offset < len(content) and content[offset].isspace():
+            offset += 1
+        if offset >= len(content):
+            break
         try:
-            value = json.loads(line)
+            value, offset = decoder.raw_decode(content, offset)
         except json.JSONDecodeError as exc:
-            raise AuditError(f"govulncheck第{number}行不是有效JSON") from exc
+            raise AuditError(f"govulncheck在字符{exc.pos}处不是有效JSON流") from exc
         _require(isinstance(value, dict), "govulncheck消息必须是JSON对象")
         messages.append(value)
     _require(messages, "govulncheck没有产生JSON证据")

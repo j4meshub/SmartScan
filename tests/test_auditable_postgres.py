@@ -126,6 +126,23 @@ def test_analyze_gosu_requires_identical_fixed_release_and_records_symbols(
     assert output.is_file()
 
 
+def test_govulncheck_reader_accepts_pretty_concatenated_json(tmp_path: Path) -> None:
+    path = tmp_path / "govuln.json"
+    path.write_text(
+        json.dumps({"config": {"scan_mode": "binary"}}, indent=2)
+        + "\n"
+        + json.dumps({"finding": {"osv": audit.GO_VULN_ID}}, indent=2),
+        encoding="utf-8",
+    )
+
+    messages = audit._read_json_stream(path)
+
+    assert messages == [
+        {"config": {"scan_mode": "binary"}},
+        {"finding": {"osv": audit.GO_VULN_ID}},
+    ]
+
+
 def test_vex_is_exact_and_only_allowed_when_gosu_is_absent(tmp_path: Path) -> None:
     vex = audit.build_vex(
         analysis_path=_analysis(tmp_path),
