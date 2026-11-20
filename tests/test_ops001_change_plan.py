@@ -37,7 +37,7 @@ def test_ops001_candidate_evidence_is_complete_and_accepted_without_deploy_auth(
     assert "用户已经明确接受" in evidence
     assert "不授权服务器拉取" in evidence
     assert "OPS-REG-003" in evidence
-    assert "`OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 进行中" in plan
+    assert "`OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 阻塞" in plan
     assert "192.168." not in evidence
 
 

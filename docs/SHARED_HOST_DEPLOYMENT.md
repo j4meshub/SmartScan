@@ -88,7 +88,7 @@ OPS-000已完成历史现场事实和资源策略确认。部署当天由OPS-001
 - API、Web、CPU Worker、AI Worker、AI Gateway 和运维工具均发布固定 digest，同时生成漏洞扫描、SBOM 和版本锁文件。
 - 主线`0961cc3`和`f38dd4f`五镜像只保留历史证据并拒绝部署。提交`2adbf4f`产生的五个兼容digest已通过目标服务器匿名manifest、来源、平台、SBOM、SLSA、可修复High/Critical、全部Critical、Web子路径和Ops契约核验，并获用户明确接受为UAT候选；接受不自动回填公开模板，也不授权拉取或部署。服务器Docker Hub仍不可达；原PostgreSQL固定候选因不可修复Critical被拒绝，完整应用部署继续阻塞。
 - loop阶段使用[`OPS001_LOOP_SUDO_EXECUTOR.md`](OPS001_LOOP_SUDO_EXECUTOR.md)中的固定执行器。OPS-001B执行器已人工升级，固定空UAT经单次`recreate-empty`和两次独立`verify`通过；50 GiB完整物理预分配、ext4和挂载门禁已获用户接受。该完成事实不扩大AI的Docker、网络、Secret、迁移、Compose或Nginx权限。
-- `OPS-REG-003`已实现GitHub Actions的官方来源、完整多平台、SBOM、双漏洞扫描和自定义in-toto复制契约，但指定PostgreSQL固定候选未通过门禁，PR不合并且GHCR包未创建。用户授权新固定候选并通过全部门禁前不得进入复制或UAT配置。
+- `OPS-REG-003`已实现GitHub Actions的官方来源、完整多平台、SBOM、双漏洞扫描和自定义in-toto复制契约，但旧候选及`OPS-REG-003A`比较的四个新官方17谱系候选均未通过门禁，PR不合并且GHCR包未创建。等待上游修复或用户另行授权可审计最小镜像路线；通过全部门禁前不得进入复制或UAT配置。
 - UAT使用专用完整预分配50 GiB后备文件、reserved block为0的ext4和依赖`/mnt/data`的systemd mount；不修改共享盘挂载或`/etc/fstab`。八个服务根文件系统只读，所有tmpfs有界；Docker日志在loop外按每容器`10m×3`轮转。
 - 服务器不检出源码、不安装项目虚拟环境、不现场构建，也不接受GitHub自动SSH部署；每次变更由服务器共同使用人确认后人工执行。
 - UAT不新增Alertmanager、Node Exporter或主机代理，也不挂载宿主机`/`、`/proc`、`/sys`；现有Prometheus/Grafana接入不是基础UAT前置条件。

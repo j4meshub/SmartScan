@@ -127,6 +127,8 @@ def test_candidate_matrix_uses_only_frozen_digests_and_does_not_publish() -> Non
         "initdb",
         "pg_dump",
         "pg_restore",
+        "pg_basebackup",
+        "pg_verifybackup",
         "locale -a",
         "/usr/share/zoneinfo/UTC",
         "$PGDATA",

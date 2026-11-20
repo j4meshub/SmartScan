@@ -16,7 +16,7 @@
 - 现有共享Nginx 8077使用独立include，将`/smartscan/`去前缀转发到18082；不占用80/443，不覆盖其他location。
 - HTTP只验收登录、项目、上传、处理、预览、导出和Range。实时相机、企业微信及正式移动验收继续等待HTTPS。
 - 基础栈合计5.5 vCPU/8.75 GiB，启用AI后7.5 vCPU/11.75 GiB；整栈不得超过8 vCPU/16 GiB。八个服务根文件系统只读，所有tmpfs都有明确上限；每个服务设置CPU、内存、PID和`10m×3`日志轮转，全部`restart: "no"`。Docker日志位于loop之外，八容器理论上限约240 MiB。
-- 服务器不保存源码、不现场构建、不使用可变tag。`0961cc3`和`f38dd4f`只保留历史制品证据并拒绝部署；`2adbf4f`五镜像已通过来源、平台、SBOM、SLSA、可修复漏洞、严格Critical、Web基路径及Ops loop/只读/tmpfs/资源契约核验，并获用户明确接受为UAT候选，但尚未授权拉取或启动。Docker Hub从目标服务器不可达，且原PostgreSQL固定候选因不可修复Critical被拒绝；当前`OPS-REG-003A`须先选择新固定候选并完成全部门禁，才可复制到公开GHCR、服务器匿名核验和接受。
+- 服务器不保存源码、不现场构建、不使用可变tag。`0961cc3`和`f38dd4f`只保留历史制品证据并拒绝部署；`2adbf4f`五镜像已通过来源、平台、SBOM、SLSA、可修复漏洞、严格Critical、Web基路径及Ops loop/只读/tmpfs/资源契约核验，并获用户明确接受为UAT候选，但尚未授权拉取或启动。Docker Hub从目标服务器不可达，且原候选与`OPS-REG-003A`四个新PostgreSQL候选全部未通过硬门禁；必须等待上游修复或另行批准可审计最小镜像路线，产生通过门禁的新固定制品后才能复制、公开、服务器匿名核验和接受。
 - AI Worker 和 AI Gateway 位于显式 `ai` Profile，默认不启动；运行配置默认关闭真实 Provider。
 - 保留应用健康和带令牌的应用指标，不申请19081。可以复用现有Prometheus/Grafana或记录人工检查能力缺口；不部署Alertmanager、Node Exporter，不挂载宿主机`/`、`/proc`或`/sys`。
 - UAT数据允许丢弃和重建，不要求备份，也不启用没有异机目标的WAL归档。

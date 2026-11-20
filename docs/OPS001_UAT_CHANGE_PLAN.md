@@ -71,7 +71,7 @@ ghcr.io/j4meshub/smartscan-ops@sha256:ef4dd40c7b8a494e92540dc5bb476ab14490340214
 
 主线`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`产生的五个最新镜像已经完成服务器匿名manifest、Registry digest、`linux/amd64`、完整源提交、SPDX SBOM、SLSA provenance、全部Critical、可修复High/Critical、Web子路径及Ops loop/只读/tmpfs/资源校验。2026-11-20用户已接受这五个固定digest作为UAT候选，精确值见[`2ADBF4F_CONTAINER_VERIFICATION.md`](2ADBF4F_CONTAINER_VERIFICATION.md)。接受不授权拉取、网络、容器、Secret、迁移、Nginx或启动；后续自动构建不得替换。
 
-PostgreSQL 17上游候选`docker.io/library/postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`已被严格漏洞门禁拒绝：存在1项不可修复Critical、1项可修复Critical及多项可修复High。目标服务器Docker Hub不可达的问题仍存在，但在选择安全的新固定候选前不再进入GHCR复制。禁止用代理、登录、未知源、`docker pull`、现场打补丁或可变`17`标签绕过。新候选需要用户明确授权并重跑全部门禁。
+PostgreSQL 17原上游候选`docker.io/library/postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`已被严格漏洞门禁拒绝。后续获授权比较的Bookworm、Trixie、当前`17`及Alpine四个固定候选也都含可修复Critical和至少26项可修复High，全部拒绝；详见[`POSTGRES_17_CANDIDATE_MATRIX.md`](POSTGRES_17_CANDIDATE_MATRIX.md)。目标服务器Docker Hub不可达的问题仍存在，但在出现安全候选前不进入GHCR复制。禁止用代理、登录、未知源、`docker pull`、现场打补丁、可变标签或改级/忽略漏洞绕过。
 
 ## 5. Nginx最小增量
 

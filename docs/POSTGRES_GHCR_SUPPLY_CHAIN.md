@@ -68,7 +68,7 @@ PostgreSQL 固定制品必须同时通过：
 
 PR #84运行`44652361383`证明指定固定候选没有通过漏洞门禁：`libxml2`存在当前无修复版本的Critical `CVE-2026-6653`，`gosu`内Go标准库存在可修复Critical `CVE-2025-68121`，可修复High/Critical门禁同样失败。因此PR不合并、main复制不执行、GHCR Package未创建。详细风险见[PostgreSQL固定digest漏洞门禁报告](POSTGRES_FIXED_DIGEST_VULNERABILITY_REPORT.md)。
 
-用户已授权`OPS-REG-003A`比较四个已冻结候选，但尚未接受任何新PostgreSQL digest。新候选必须重跑本文件的全部门禁；可变标签仅用于记录发现关系，不得作为最终供应链、部署或UAT引用。
+用户已授权`OPS-REG-003A`比较四个已冻结候选，但运行`44656028361`证明四者均未通过硬门禁，详见[PostgreSQL 17固定候选比较报告](POSTGRES_17_CANDIDATE_MATRIX.md)。当前没有可接受的新PostgreSQL digest；可变标签仅用于记录发现关系，不得作为最终供应链、部署或UAT引用。
 
 ## 本地验证
 

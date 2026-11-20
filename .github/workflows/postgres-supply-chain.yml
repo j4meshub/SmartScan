@@ -65,6 +65,8 @@ jobs:
             printf "initdb=%s\n" "$(command -v initdb)"
             printf "pg_dump=%s\n" "$(command -v pg_dump)"
             printf "pg_restore=%s\n" "$(command -v pg_restore)"
+            printf "pg_basebackup=%s\n" "$(command -v pg_basebackup)"
+            printf "pg_verifybackup=%s\n" "$(command -v pg_verifybackup)"
             printf "postgres_version=%s\n" "$(postgres --version)"
             printf "initdb_directory=%s\n" "$(test -d /docker-entrypoint-initdb.d && echo present)"
             printf "utc_timezone=%s\n" "$(test -e /usr/share/zoneinfo/UTC && echo present || echo absent)"
@@ -85,21 +87,23 @@ jobs:
           image-ref: docker.io/library/postgres@${{ matrix.digest }}
           format: json
           output: candidate-${{ matrix.name }}/postgres-critical-all.json
-          exit-code: "0"
+          exit-code: "1"
           ignore-unfixed: false
           vuln-type: os,library
           severity: CRITICAL
       - name: 记录可修复 High 与 Critical 漏洞
+        if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: docker.io/library/postgres@${{ matrix.digest }}
           format: json
           output: candidate-${{ matrix.name }}/postgres-high-critical-fixable.json
-          exit-code: "0"
+          exit-code: "1"
           ignore-unfixed: true
           vuln-type: os,library
           severity: HIGH,CRITICAL
       - name: 记录全部 High 漏洞供风险复核
+        if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: docker.io/library/postgres@${{ matrix.digest }}
