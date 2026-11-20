@@ -383,7 +383,7 @@ def validate_compose_contract(
     expected_tmpfs = {
         "postgres": {
             "/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777",
-            "/var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=0777",
+            "/var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3775,uid=70,gid=70",
         },
         "migrate": {"/tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=10001,gid=10001"},
         "api": {

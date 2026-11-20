@@ -59,7 +59,7 @@ docker run -d \
   --user 70:70 \
   --read-only \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777 \
-  --tmpfs /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=0777 \
+  --tmpfs /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3775,uid=70,gid=70 \
   --mount "type=bind,src=${data_root},dst=/var/lib/postgresql/data" \
   --mount "type=bind,src=${init_sql},dst=/docker-entrypoint-initdb.d/10-utf8.sql,readonly" \
   --env POSTGRES_DB=smartscan \
@@ -92,7 +92,7 @@ docker run --rm \
   --env SMARTSCAN_DATABASE_URL=postgresql+psycopg://smartscan:ci-audit-only@postgres:5432/smartscan \
   --env SMARTSCAN_ENV=production \
   --env SMARTSCAN_AUTO_MIGRATE=false \
-  "${ops_image}" python -m services.api.app.migrations upgrade
+  "${ops_image}" -m services.api.app.migrations upgrade
 test -n "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT version_num FROM alembic_version')"
 
 stage="restart_and_verify_persistence"
