@@ -12,7 +12,7 @@
 | 当前分支 | `codex/ops-001d-final-readonly-preflight` |
 | 最后验证基线 | `c9aa132`与2026-11-20目标服务器脱敏只读证据 |
 | 工作包提交 | `0efb5301031166335448384300cac75e70769857` |
-| PR | [#87](https://github.com/j4meshub/SmartScan/pull/87)等待CI与自审 |
+| PR | [#87](https://github.com/j4meshub/SmartScan/pull/87)的19项检查全部完成：16项成功、3项按PR规则跳过发布；合并结果以GitHub为准 |
 | 下一工作包 | `OPS-001`应用部署分阶段授权；先准备仓库外配置与精确对象清单，任何目录、Secret、网络、拉取、迁移、Compose或Nginx动作仍须用户单独授权 |
 
 ## 当前工作包进展
@@ -23,6 +23,7 @@
 - 8077仍由现有Nginx结构监听，未发现`/smartscan/`或18082既有代理；`127.0.0.1:18082`空闲且19081未使用。三张仓库外固定候选网络彼此独立，并与现场Docker IPAM、全部主机/策略/VPN可见路由和接口前缀无冲突。
 - 共享盘在loop已分配后仍约有693 GiB可用，高于约528 GiB安全余量；inode、128逻辑CPU、约406 GiB当前可用内存、15分钟负载及现有容器健康状态均通过门禁。本轮未读取容器环境变量、Secret、业务数据或完整inspect，也未修改服务器、仓库外配置、Docker、Nginx或网络。
 - 本地专项首次为`1 failed, 69 passed, 16 skipped`，原因是更新部署说明时把上游Alpine固定digest简写，触发来源可追溯契约；恢复完整digest后专项为`70 passed, 16 skipped`。全量Python为`550 passed, 23 skipped`、覆盖率`87.79%`，Ruff检查、177个Python文件格式、迁移漂移和差异空白检查均通过。跳过项仍为既有PostgreSQL/Docker/Linux执行器外部门禁，本轮真实受限执行器与Registry只读证据已单独记录。
+- PR #87首个完整头`eaacece`的19项检查为16项成功、3项按PR规则跳过发布，失败与待运行均为0；API、Web、Android、iOS、容器、五镜像验证和可审计PostgreSQL门禁全部通过。自审确认没有服务器写入、敏感信息、精确内部网络或越权部署步骤进入提交。
 - 用户已明确接受`2adbf4f`对应API、Worker、AI Gateway、Web和Ops五个固定digest为UAT候选，`OPS-001C`转为完成；接受不授权拉取或部署，后续digest不得自动替换。
 - PR #84的`OPS-REG-003/003A`保留严格扫描失败证据且不合并：bookworm、trixie、当前17和Alpine官方原样候选均未通过。`OPS-REG-003B`固定以Alpine候选为构建起点，升级系统包、删除gosu并以`70:70`运行。
 - 新门禁组合Trivy全量High/Critical、上游gosu发布制品逐字节核验、二进制govulncheck/符号证据、最终SBOM、精确VEX和数据库生命周期兼容性。VEX只允许声明`CVE-2025-68121`因最终组件不存在而不受影响，不能豁免其他发现。
