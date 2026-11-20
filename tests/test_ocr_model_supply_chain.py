@@ -38,7 +38,9 @@ def test_official_sources_and_exact_hashes_are_locked() -> None:
 
 def test_workflow_pr_never_publishes_and_main_uses_minimal_permissions() -> None:
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    assert workflow[True]["pull_request"] is None
+    assert "docs/**" not in workflow[True]["pull_request"]["paths"]
+    assert "deploy/ocr-models/**" in workflow[True]["pull_request"]["paths"]
+    assert workflow[True]["push"]["paths"] == workflow[True]["pull_request"]["paths"]
     verify = workflow["jobs"]["verify"]
     publish = workflow["jobs"]["publish"]
     assert verify["permissions"] == {"contents": "read"}

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 本文件作为root安装资产，仓库强制LF以保证人工SHA-256复核跨平台一致。
 set -euo pipefail
 umask 077
 
@@ -6,7 +7,7 @@ readonly EXPECTED_HOSTNAME="ctiecaiserver"
 readonly EXPECTED_SUDO_USER="szhzx"
 readonly INSTALL_PATH="/usr/local/libexec/smartscan/smartscan-uat-ocr-model"
 readonly HELPER_PATH="/usr/local/libexec/smartscan/smartscan_uat_ocr_model.py"
-readonly HELPER_SHA256="f4c4cc8bb6023901845a880ec2eaa82ade3da5eba25bb20caea2a790ae63761b"
+readonly HELPER_SHA256="2ed78a585de81aabfe7c3a1c438382961415497e8b0ff530fd0992285809bfd5"
 readonly PYTHON_BIN="/usr/bin/python3"
 
 fail() {
