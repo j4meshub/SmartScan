@@ -28,6 +28,7 @@
 - 第四轮`44668166767`由脱敏阶段证据定位到`run_smartscan_migrations`：Ops镜像已有`ENTRYPOINT ["python"]`，测试又重复传入`python`，实际形成`python python -m ...`。修正为只传`-m ... upgrade`；同时把PostgreSQL socket tmpfs固定为`uid/gid 70`和`mode=3775`，避免非root entrypoint对root拥有的socket目录产生权限警告。该修复不跳过迁移或放宽只读/tmpfs门禁。
 - 第五轮`44668876577`在`wait_for_health`失败：测试只用`pg_isready`会误认Docker Official Image执行初始化脚本时的临时PostgreSQL进程，随后该临时进程按设计关闭，导致最终检查竞态失败。临时容器现增加与Compose一致的Docker healthcheck，并同时要求PID 1已经切换为最终`postgres`进程、健康状态为`healthy`且`pg_isready`成功；重启后复用同一严格检查，不以端口短暂可用代替最终服务健康。
 - 第六轮`44669532896`已通过最终进程健康检查，随后在`run_smartscan_migrations`被SmartScan生产配置门禁拒绝：临时迁移容器未提供强密钥、手机号保护、超级管理员和OCR配置。验证脚本现于受控临时目录随机生成权限`0600`的迁移env文件，启用生产模式、禁用Mock并满足全部生产安全校验；文件随CI临时目录清理，固定秘密不会进入仓库、命令行或日志。迁移仍使用真实生产配置门禁，不降级到development。
+- 第七轮`44670089211`已越过生产配置校验，但initdb夹具预先创建的UTF-8探针表触发了SmartScan对未知旧数据库基线的拒绝保护。initdb脚本改为执行无持久对象的UTF-8往返断言；空库完成真实迁移后才创建中文数据探针，随后继续验证重启、`pg_dump/pg_restore`和基础备份。旧库保护未被跳过或放宽。
 
 - 用户已接受OPS-001B存储验收：`recreate-empty`一次成功，两次独立`verify`通过；50 GiB后备文件完整物理预分配且不再稀疏，ext4、label、reserved block、`rw,nosuid,nodev,noatime`、唯一loop、autoclear、systemd和共享盘安全余量全部通过。SmartScan应用从未启动，没有触碰其他服务或项目；原始服务器输出和真实loop设备名不进入仓库。
 - 目标服务器仅通过`smartscan-server`进行无sudo只读复核。`auth.docker.io` DNS同时返回IPv4/IPv6，但IPv4连接443端口超时、IPv6立即不可达；因此TLS握手、匿名token和`library/postgres` manifest均未发生。PostgreSQL固定digest尚未完成服务器侧核验，不得拉取或部署。

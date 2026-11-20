@@ -54,11 +54,15 @@ mkdir -p "${data_root}"
 sudo chown 70:70 "${data_root}"
 sudo chmod 0700 "${data_root}"
 cat > "${init_sql}" <<'SQL'
-CREATE TABLE public.smartscan_utf8_probe (
-    id integer PRIMARY KEY,
-    content text NOT NULL
-);
-INSERT INTO public.smartscan_utf8_probe (id, content) VALUES (1, '智能扫描验证');
+DO $smartscan$
+BEGIN
+    IF current_setting('server_encoding') <> 'UTF8'
+       OR convert_from(convert_to('智能扫描验证', 'UTF8'), 'UTF8') <> '智能扫描验证' THEN
+        RAISE EXCEPTION 'SmartScan UTF-8 initdb probe failed';
+    END IF;
+    RAISE NOTICE 'smartscan_utf8_init_probe=passed';
+END;
+$smartscan$;
 SQL
 chmod 0444 "${init_sql}"
 python - "${migration_env}" <<'PY'
@@ -133,7 +137,6 @@ test "$(docker exec "${container}" id -g)" = "70"
 test "$(stat -c '%u:%g' "${data_root}")" = "70:70"
 test "$(docker exec "${container}" sh -ec 'test ! -e /usr/local/bin/gosu; echo absent')" = "absent"
 test "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SHOW server_encoding')" = "UTF8"
-test "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT content FROM public.smartscan_utf8_probe WHERE id=1')" = "智能扫描验证"
 
 stage="run_smartscan_migrations"
 docker run --rm \
@@ -141,6 +144,10 @@ docker run --rm \
   --env-file "${migration_env}" \
   "${ops_image}" -m services.api.app.migrations upgrade
 test -n "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT version_num FROM alembic_version')"
+docker exec "${container}" psql -U smartscan -d smartscan -v ON_ERROR_STOP=1 -c \
+  "CREATE TABLE public.smartscan_utf8_probe (id integer PRIMARY KEY, content text NOT NULL); INSERT INTO public.smartscan_utf8_probe (id, content) VALUES (1, '智能扫描验证');" \
+  >/dev/null
+test "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT content FROM public.smartscan_utf8_probe WHERE id=1')" = "智能扫描验证"
 
 stage="restart_and_verify_persistence"
 docker restart "${container}" >/dev/null
