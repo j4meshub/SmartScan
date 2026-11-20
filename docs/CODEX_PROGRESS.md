@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-REG-003B` 可审计PostgreSQL 17运行镜像 |
-| 工作包状态 | 进行中；PR阶段只验证不发布，等待严格扫描、govulncheck、VEX和数据库生命周期CI证据 |
+| 工作包状态 | 进行中；PR阶段全部技术门禁已通过，等待PR完整CI、合并后主线发布及发布证据核验 |
 | 当前分支 | `codex/ops-reg-003b-auditable-postgres` |
-| 最后验证基线 | `main`（OPS-001B存储验收已通过；五个`2adbf4f` SmartScan固定digest已获用户接受） |
-| 工作包提交 | 待提交 |
-| PR | 待创建；PR #84保留失败证据且不得合并，003B成功后关闭 |
+| 最后验证基线 | PR #85头提交（可审计镜像运行`44670537202`已通过；OPS-001B存储与五个应用digest已获用户接受） |
+| 工作包提交 | PR #85提交序列；合并后记录主线squash提交 |
+| PR | [#85](https://github.com/j4meshub/SmartScan/pull/85)；PR #84保留失败证据且不得合并，003B主线发布成功后关闭 |
 | 下一工作包 | 003B合并后人工公开PostgreSQL Package、目标服务器匿名核验并由用户接受固定digest；之后才申请OPS-001应用部署授权 |
 
 ## 当前工作包进展
@@ -21,7 +21,7 @@
 - PR #84的`OPS-REG-003/003A`保留严格扫描失败证据且不合并：bookworm、trixie、当前17和Alpine官方原样候选均未通过。`OPS-REG-003B`固定以Alpine候选为构建起点，升级系统包、删除gosu并以`70:70`运行。
 - 新门禁组合Trivy全量High/Critical、上游gosu发布制品逐字节核验、二进制govulncheck/符号证据、最终SBOM、精确VEX和数据库生命周期兼容性。VEX只允许声明`CVE-2025-68121`因最终组件不存在而不受影响，不能豁免其他发现。
 - 本轮不连接或修改服务器，不拉取服务器镜像，不创建网络、Secret、迁移、容器或Nginx配置；PR验证通过前不发布GHCR镜像。
-- 本地专项`46 passed`；全量Python`548 passed, 23 skipped`、覆盖率`87.79%`，Ruff检查、177个Python文件格式、迁移漂移、工作流YAML和差异空白检查通过。23项跳过仍是既有PostgreSQL/Docker及Linux执行器外部门禁；本机没有Docker/Bash，真实镜像构建、二进制审计、Compose解析和数据库生命周期测试由PR的Ubuntu Runner补证。
+- 本地专项最终`42 passed`；全量Python`549 passed, 23 skipped`、覆盖率`87.79%`，Ruff检查、177个Python文件格式、迁移漂移、H5 JavaScript与`48 passed` Node单元测试、工作流YAML和差异空白检查通过。23项跳过仍是既有PostgreSQL/Docker及Linux执行器外部门禁；本机没有Docker/Bash，真实镜像构建、二进制审计、Compose解析和数据库生命周期测试由PR的Ubuntu Runner补证。
 - PR #85首轮可审计PostgreSQL运行`44666113997`在gosu摘要与上游字节一致后失败：`govulncheck -json`输出是多个可缩进JSON对象连续组成的流，解析器错误地假设每行一个完整对象。现改用`JSONDecoder.raw_decode`逐对象解析并增加回归测试；未忽略任何发现、退出状态或符号证据，也未降低漏洞门禁。
 - 第二轮`44666698352`的扫描门禁得到High/Critical为0，gosu二进制与上游1.20摘要一致；govulncheck只报告目标Go标准库模块版本，没有目标`crypto/tls`符号，`go tool nm`也未发现受影响符号。但数据库生命周期脚本在`chown 70:70`后由普通Runner执行`chmod`失败，而缺少`pipefail`的`tee`管道错误地让作业显示成功且证据文件为空。该绿灯按失败处理：改为受控Runner sudo设置/清理临时目录，显式`set -euo pipefail`，并要求非空证据和`result=passed`；未把假阳性计入验收。
 - 第三轮`44667604147`证明假阳性已被阻断，但生命周期脚本在约2秒内无输出退出，现有日志不足以判断具体失败检查。新增不读取环境变量和容器inspect的阶段标识；失败时只输出阶段、行号、退出码和临时PostgreSQL容器末尾100行日志，继续失败关闭并避免记录密码。
@@ -29,6 +29,7 @@
 - 第五轮`44668876577`在`wait_for_health`失败：测试只用`pg_isready`会误认Docker Official Image执行初始化脚本时的临时PostgreSQL进程，随后该临时进程按设计关闭，导致最终检查竞态失败。临时容器现增加与Compose一致的Docker healthcheck，并同时要求PID 1已经切换为最终`postgres`进程、健康状态为`healthy`且`pg_isready`成功；重启后复用同一严格检查，不以端口短暂可用代替最终服务健康。
 - 第六轮`44669532896`已通过最终进程健康检查，随后在`run_smartscan_migrations`被SmartScan生产配置门禁拒绝：临时迁移容器未提供强密钥、手机号保护、超级管理员和OCR配置。验证脚本现于受控临时目录随机生成权限`0600`的迁移env文件，启用生产模式、禁用Mock并满足全部生产安全校验；文件随CI临时目录清理，固定秘密不会进入仓库、命令行或日志。迁移仍使用真实生产配置门禁，不降级到development。
 - 第七轮`44670089211`已越过生产配置校验，但initdb夹具预先创建的UTF-8探针表触发了SmartScan对未知旧数据库基线的拒绝保护。initdb脚本改为执行无持久对象的UTF-8往返断言；空库完成真实迁移后才创建中文数据探针，随后继续验证重启、`pg_dump/pg_restore`和基础备份。旧库保护未被跳过或放宽。
+- 第八轮可审计PostgreSQL运行`44670537202`成功：上游gosu与1.20发布制品逐字节一致，二进制govulncheck对`CVE-2025-68121`只有模块级命中且受影响`crypto/tls`符号为0；最终SBOM含47个组件且不含gosu，Trivy High/Critical、Critical和可修复High/Critical均为0。精确VEX绑定单一CVE、最终本地镜像摘要、源提交、证据摘要、复核日期、90天有效期及失效条件。UID/GID 70、UTF-8中文、initdb、生产配置空库迁移、最终健康、重启持久化、dump/restore、basebackup/verifybackup及只读根/tmpfs全部通过。PR不发布镜像，合并main后的GHCR固定digest仍须独立核验且未经用户接受。
 
 - 用户已接受OPS-001B存储验收：`recreate-empty`一次成功，两次独立`verify`通过；50 GiB后备文件完整物理预分配且不再稀疏，ext4、label、reserved block、`rw,nosuid,nodev,noatime`、唯一loop、autoclear、systemd和共享盘安全余量全部通过。SmartScan应用从未启动，没有触碰其他服务或项目；原始服务器输出和真实loop设备名不进入仓库。
 - 目标服务器仅通过`smartscan-server`进行无sudo只读复核。`auth.docker.io` DNS同时返回IPv4/IPv6，但IPv4连接443端口超时、IPv6立即不可达；因此TLS握手、匿名token和`library/postgres` manifest均未发生。PostgreSQL固定digest尚未完成服务器侧核验，不得拉取或部署。
