@@ -8,7 +8,7 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OCR-002` UAT离线模型制品 |
-| 工作包状态 | 进行中；官方来源、制品和受限安装器已实现，等待PR真实CPU与供应链门禁 |
+| 工作包状态 | 等待人工验收；PR #90代码头真实CPU、OCI、SBOM、漏洞及全仓门禁已通过，等待合并后的GHCR候选和用户接受 |
 | 当前分支 | `codex/ocr-002-uat-offline-model-artifact` |
 | 最后验证基线 | `5f7c0e7`：常规CI `44694859302`、容器供应链 `44694859282`、可审计PostgreSQL `44694859373`全部成功 |
 | 工作包提交 | `540a6c7`（主体实现）、`5f7c0e7`（Linux CI身份解析修复） |
@@ -26,6 +26,7 @@
 - 本地最终专项`19 passed, 1 skipped`，跳过项仅为Windows符号链接权限；全量Python`576 passed, 29 skipped`、覆盖率87.74%，Ruff检查和184个Python文件格式、迁移漂移、差异空白检查全部通过。29项跳过仍是既有PostgreSQL/Docker/Linux执行器门禁；新安装器的Linux身份、Bash/sudoers、真实Ubuntu CPU峰值内存、OCI、SBOM和漏洞扫描由PR Runner补证。
 - PR #90首轮OCR专用作业在安装运行时阶段失败：2026-11-20的`ubuntu-latest`默认Python已变为3.14，而PaddlePaddle 3.3.1没有该版本wheel。模型归档组装和样本摘要此前均已通过；修复为使用固定完整SHA的官方`actions/setup-python`显式选择3.11，不放宽依赖版本、真实推理或制品门禁。
 - 第二轮已完成Python 3.11依赖安装和三张真实样本，但Linux双Worker阶段长时间无进展；定位为Paddle线程池初始化后使用Linux默认`fork`的不安全进程模型。并发验收显式改为`spawn`两个独立进程，与本机Windows成功路径一致；没有减少Worker数量、样本或验证范围。
+- PR #90最终代码头`f4f7039`的OCR模型供应链运行`44713910091`成功：官方归档、清单、许可证和样本摘要均通过；Linux真实CPU结果为简体中文1行3.90秒、英文146行32.33秒、中英混排37行8.03秒，单进程峰值约970,956 KiB。两个spawn Worker并发结果均为1行，分别2.68秒和2.64秒，单进程峰值同量级；低于每个CPU Worker 2 GiB上限。scratch OCI构建、SPDX、High/Critical扫描、in-toto映射和证据Artifact均成功，PR发布作业按规则跳过。其余常规CI、五应用镜像、可审计PostgreSQL、Android及固定Xcode iOS Simulator全部成功，无失败；本轮仍未发布模型Package或修改服务器。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。
