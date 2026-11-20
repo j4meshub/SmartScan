@@ -9,6 +9,16 @@ network="smartscan-postgres-audit-${GITHUB_RUN_ID:-local}"
 data_root="${work_root}/data"
 init_sql="${work_root}/10-utf8.sql"
 dump_file="${work_root}/smartscan.dump"
+stage="prepare"
+
+on_error() {
+  exit_code=$?
+  line_number=$1
+  printf 'result=failed\nstage=%s\nline=%s\nexit_code=%s\n' \
+    "${stage}" "${line_number}" "${exit_code}" >&2
+  docker logs --tail 100 "${container}" >&2 || true
+  exit "${exit_code}"
+}
 
 cleanup() {
   docker rm -f "${container}" >/dev/null 2>&1 || true
@@ -24,7 +34,9 @@ cleanup() {
   esac
 }
 trap cleanup EXIT
+trap 'on_error "${LINENO}"' ERR
 
+stage="prepare_data_directory"
 mkdir -p "${data_root}"
 sudo chown 70:70 "${data_root}"
 sudo chmod 0700 "${data_root}"
@@ -37,7 +49,9 @@ INSERT INTO public.smartscan_utf8_probe (id, content) VALUES (1, '智能扫描�
 SQL
 chmod 0444 "${init_sql}"
 
+stage="create_test_network"
 docker network create "${network}" >/dev/null
+stage="start_postgres"
 docker run -d \
   --name "${container}" \
   --network "${network}" \
@@ -54,6 +68,7 @@ docker run -d \
   --env 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C' \
   "${image}" >/dev/null
 
+stage="wait_for_health"
 for _ in $(seq 1 60); do
   if docker exec "${container}" pg_isready -U smartscan -d smartscan >/dev/null 2>&1; then
     break
@@ -62,6 +77,7 @@ for _ in $(seq 1 60); do
 done
 docker exec "${container}" pg_isready -U smartscan -d smartscan >/dev/null
 
+stage="verify_identity_and_utf8"
 test "$(docker inspect --format '{{.Config.User}}' "${container}")" = "70:70"
 test "$(docker exec "${container}" id -u)" = "70"
 test "$(docker exec "${container}" id -g)" = "70"
@@ -70,6 +86,7 @@ test "$(docker exec "${container}" sh -ec 'test ! -e /usr/local/bin/gosu; echo a
 test "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SHOW server_encoding')" = "UTF8"
 test "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT content FROM public.smartscan_utf8_probe WHERE id=1')" = "智能扫描验证"
 
+stage="run_smartscan_migrations"
 docker run --rm \
   --network "${network}" \
   --env SMARTSCAN_DATABASE_URL=postgresql+psycopg://smartscan:ci-audit-only@postgres:5432/smartscan \
@@ -78,6 +95,7 @@ docker run --rm \
   "${ops_image}" python -m services.api.app.migrations upgrade
 test -n "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT version_num FROM alembic_version')"
 
+stage="restart_and_verify_persistence"
 docker restart "${container}" >/dev/null
 for _ in $(seq 1 60); do
   if docker exec "${container}" pg_isready -U smartscan -d smartscan >/dev/null 2>&1; then
@@ -87,18 +105,21 @@ for _ in $(seq 1 60); do
 done
 test "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT content FROM public.smartscan_utf8_probe WHERE id=1')" = "智能扫描验证"
 
+stage="dump_and_restore"
 docker exec "${container}" pg_dump -U smartscan -d smartscan -Fc > "${dump_file}"
 test -s "${dump_file}"
 docker exec "${container}" createdb -U smartscan smartscan_restore
 docker exec -i "${container}" pg_restore -U smartscan -d smartscan_restore < "${dump_file}"
 test "$(docker exec "${container}" psql -U smartscan -d smartscan_restore -Atc 'SELECT content FROM public.smartscan_utf8_probe WHERE id=1')" = "智能扫描验证"
 
+stage="basebackup_and_verify"
 docker exec "${container}" sh -ec '
   rm -rf /tmp/basebackup
   pg_basebackup --host=/var/run/postgresql --username=smartscan --pgdata=/tmp/basebackup
   pg_verifybackup /tmp/basebackup
 '
 
+stage="verify_read_only_runtime"
 docker inspect "${container}" --format '{{json .HostConfig.ReadonlyRootfs}} {{json .HostConfig.Tmpfs}}' \
   | grep -F 'true' >/dev/null
 printf '%s\n' 'result=passed' 'uid_gid=70:70' 'server_encoding=UTF8' \

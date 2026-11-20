@@ -80,8 +80,14 @@ def test_runtime_contract_covers_database_lifecycle_and_tools() -> None:
         "pg_verifybackup",
         "sudo chmod 0700",
         "sudo rm -rf",
+        'stage="start_postgres"',
+        'stage="run_smartscan_migrations"',
+        'stage="basebackup_and_verify"',
+        'docker logs --tail 100 "${container}"',
     ):
         assert evidence in text
+
+    assert "docker inspect" not in text.split("on_error()", 1)[1].split("cleanup()", 1)[0]
 
 
 def test_analyze_gosu_requires_identical_fixed_release_and_records_symbols(
