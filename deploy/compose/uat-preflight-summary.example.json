@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "status": "passed",
+  "captured_at": "REPLACE_WITH_ISO8601_TIME",
+  "checks": {
+    "trusted_host_identity": true,
+    "loop_storage": true,
+    "shared_nginx_8077": true,
+    "loopback_18082_free": true,
+    "docker_networks_non_overlapping": true,
+    "host_routes_non_overlapping": true,
+    "resources_below_stop_threshold": true,
+    "six_manifests_anonymous_readable": true
+  },
+  "contains_sensitive_data": false
+}

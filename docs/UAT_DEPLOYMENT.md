@@ -11,6 +11,7 @@
 - Compose项目名固定为`smartscan-uat`，数据根固定为`/mnt/data/smartscan/uat`，Secret和确认文件位于`/etc/smartscan/uat`。
 - UAT使用完整预分配、非稀疏的50 GiB loop后备文件，以`nodiscard,lazy_itable_init=0,lazy_journal_init=0`格式化为reserved block为0的ext4，并由依赖`/mnt/data`的systemd mount单元挂载到`/mnt/data/smartscan/uat`；不使用project quota、`/etc/fstab`或共享数据盘重挂载。
 - 50 GiB分配为数据库/WAL 12 GiB、业务文件32 GiB、OCR模型4 GiB、ext4元数据与运行余量2 GiB。前3项数据预算为48 GiB；创建后实际可用不足48 GiB时必须降低业务预算，不能扩大后备文件。70%提示、85%告警并执行受控清理、95%停止新增写入。
+- 宿主机“预分配后仍保留15%或200 GiB中的较高者”由loop执行器和现场预检保证；应用容器看到的是50 GiB loop，因此运行配置使用2 GiB绝对余量和15%比例余量。不得把宿主机200 GiB门禁写入容器配置，否则会永久阻止上传。
 - PostgreSQL是SmartScan专用容器；只有Web发布`127.0.0.1:18082`，PostgreSQL、API、Worker和AI Gateway均不发布宿主机端口。
 - `data`、`edge`、`egress`三张网络使用部署当天现场无冲突结果确定的固定CIDR和网关；Compose不允许自动分配。
 - 现有共享Nginx 8077使用独立include，将`/smartscan/`去前缀转发到18082；不占用80/443，不覆盖其他location。
@@ -90,12 +91,14 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 2. 形成仓库外精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值记录。
 3. 复核已验收的50 GiB非稀疏loop、ext4、systemd mount、实际可用空间与autoclear仍正常；不得重新格式化、扩大或影响现有loop挂载。
 4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验；只有取得新的应用部署授权后才可拉取并核对RepoDigest、平台、版本和UID/GID，且不得使用`main`或`latest`。
-5. 在loop内创建数据子目录，安装配置，创建三张网络，校验配置和Compose，执行一次性迁移，再启动PostgreSQL、API、CPU Worker与Web；AI Profile另行授权。
-6. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
-7. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
+5. 共同使用人人工审核并安装OPS-001C受限执行器、固定配置工具和精确sudoers；第一项写操作只授权`prepare-directories`。随后分别安装root拥有的仓库外输入/脱敏证据，并单独授权`generate-config`和`verify-config`。
+6. 固定真实OCR模型包的官方来源、许可证、版本、完整文件清单和SHA-256，并只读安装到模型目录；空目录、Mock模型或启动时联网下载不能通过。创建三张网络、拉取六个固定digest并核对RepoDigest、平台、版本和实际UID/GID后，安装固定镜像身份记录，再单独授权`apply-ownership`。
+7. 校验配置和Compose，启动PostgreSQL并执行一次性迁移，再启动API、两个CPU Worker与Web；AI Profile另行授权。
+8. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
+9. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
 
 生产仍使用独立的`smartscan-prod`、100 GiB硬上限、数据库、网络、目录和Secret，不得从本文件直接推导生产部署。
 
 ## 当前外部门禁
 
-截至2026-11-20，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过，但OPS-001仍等待应用部署的分阶段人工授权。实际部署仍缺仓库外精确配置与Secret，以及目录、Docker网络、镜像拉取、PostgreSQL/迁移、Compose应用和Nginx增量的逐项授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)；本文件不授权创建或修改任何真实资源。
+截至2026-11-20，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过；OPS-001C正在仓库准备目录/配置/Secret和镜像身份的受限工具，但尚未安装或执行。实际部署仍缺真实OCR模型包、仓库外输入与Secret，以及目录、Docker网络、镜像拉取/身份、PostgreSQL/迁移、Compose应用和Nginx增量的逐项授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)和[OPS-001C受限执行器说明](OPS001C_UAT_DEPLOYMENT_PREPARATION.md)；本文件不授权创建或修改任何真实资源。

@@ -113,10 +113,13 @@ location ^~ /smartscan/ {
 3. OPS-001A/OPS-001B执行器、mount单元和sudoers已由共同使用人安装；固定空UAT已通过单次`recreate-empty`和两次独立`verify`，存储阶段完成。后续不得因应用部署重新格式化或重建已验收文件系统。
 4. 用户明确接受`2adbf4f`五个SmartScan固定digest；接受只解除制品选择门禁，不授权拉取。
 5. `OPS-REG-003B`、PostgreSQL用户接受和`OPS-001D`服务器匿名核验已完成；六个镜像在新的应用部署授权前仍不得拉取。
-6. 另行设计并授权应用阶段后，在已挂载loop内按核验UID/GID创建数据子目录，安装仓库外`0600`配置，创建三张网络并拉取固定digest。
-7. 运行预检、loop证据、UAT配置和Compose解析校验；启动PostgreSQL并等健康，再运行一次性migrate，失败即停。
-8. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。
-9. 最后单独授权Nginx增量安装、测试和reload，经8077基础UAT并观察共租户。
+6. OPS-001C在仓库提供应用准备执行器、配置工具和精确sudoers；共同使用人必须先人工审核摘要并安装。安装后第一项服务器写操作只单独授权`prepare-directories`，不自动扩大到配置、Docker或Nginx。
+7. 共同使用人从仓库外现场记录安装root拥有的部署输入、预检摘要和loop证据；再分别授权`generate-config`与`verify-config`。所有Secret在目标主机随机生成且不回显。
+8. 真实OCR模型包的来源、许可、版本、完整文件清单和SHA-256通过后，只读安装到模型目录。仓库当前没有可部署权重；在模型固定前不得启动CPU Worker。
+9. 单独授权三张网络和六镜像拉取；核对RepoDigest、平台、版本、OCI用户及实际UID/GID，安装固定身份记录后才授权`apply-ownership`。
+10. 运行预检、loop证据、UAT配置和Compose解析校验；启动PostgreSQL并等健康，再运行一次性migrate，失败即停。
+11. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。
+12. 最后单独授权Nginx增量安装、测试和reload，经8077基础UAT并观察共租户。
 
 OPS-001A/OPS-001B只解决loop存储阶段。共同使用人人工升级执行器和sudoers后，AI仍只能运行以下五条命令：
 
@@ -187,6 +190,6 @@ HTTP IP入口不能通过`getUserMedia`实时相机、企业微信、Android/iOS
 
 ## 9. 最终授权点
 
-实际部署必须分别取得：部署窗口只读复查；精确三网/18082/停止阈值确认；共同使用人手工升级受限执行器/sudoers授权；升级后独立`recreate-empty`授权；连续`verify`证据确认；PostgreSQL Registry恢复及候选拉取核验授权；loop内应用目录和Secret安装授权；Docker网络/镜像拉取授权；PostgreSQL/迁移/应用启动授权；Nginx安装测试reload授权；受限`stop`、应用回滚及最终保留或清理授权。SmartScan五镜像已经接受，但不替代其他阶段授权。
+实际部署必须分别取得：共同使用人人工安装OPS-001C执行器/配置工具/sudoers；`prepare-directories`；仓库外输入和脱敏证据安装；`generate-config`/`verify-config`；真实OCR模型包选型与安装；Docker三网和六镜像拉取；镜像身份记录与`apply-ownership`；PostgreSQL/迁移/应用启动；Nginx安装测试reload；受限`stop`、应用回滚及最终保留或清理。loop创建、空UAT重建、连续`verify`、六镜像接受和最终只读预检已经完成，不应再次执行或被误写成待办。镜像接受不替代任何写入授权。
 
 未获相应授权前，不得创建目录、后备文件、文件系统、挂载、Secret、网络或容器，不得拉取镜像、迁移或修改/reload Nginx。

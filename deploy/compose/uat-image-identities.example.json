@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "REPLACE_WITH_ISO8601_TIME",
+  "platform": "linux/amd64",
+  "images": {
+    "SMARTSCAN_UAT_POSTGRES_IMAGE": {
+      "reference": "ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0",
+      "repo_digest_verified": false,
+      "config_user": "REPLACE_AFTER_PULL",
+      "runtime_uid": -1,
+      "runtime_gid": -1
+    },
+    "SMARTSCAN_UAT_API_IMAGE": {
+      "reference": "ghcr.io/j4meshub/smartscan-api@sha256:80aea0a272791ea44d76895dbd825d091620e0f43ad76c32f32fb6ba97c646d0",
+      "repo_digest_verified": false,
+      "config_user": "REPLACE_AFTER_PULL",
+      "runtime_uid": -1,
+      "runtime_gid": -1
+    },
+    "SMARTSCAN_UAT_WORKER_IMAGE": {
+      "reference": "ghcr.io/j4meshub/smartscan-worker@sha256:f1cb15e434e99fdced69885667e8646346c75bc293e8ecf9f6b0fa24951768a6",
+      "repo_digest_verified": false,
+      "config_user": "REPLACE_AFTER_PULL",
+      "runtime_uid": -1,
+      "runtime_gid": -1
+    },
+    "SMARTSCAN_UAT_AI_GATEWAY_IMAGE": {
+      "reference": "ghcr.io/j4meshub/smartscan-ai-gateway@sha256:1813ada8bda225530d71e5afa9e1c3fd640d5e23d05000d370fdccad0e5e8b00",
+      "repo_digest_verified": false,
+      "config_user": "REPLACE_AFTER_PULL",
+      "runtime_uid": -1,
+      "runtime_gid": -1
+    },
+    "SMARTSCAN_UAT_WEB_IMAGE": {
+      "reference": "ghcr.io/j4meshub/smartscan-web@sha256:3d701a4bcaf24c03ead231f10abd316ba83ab89a6984894dfe31af404d3c930c",
+      "repo_digest_verified": false,
+      "config_user": "REPLACE_AFTER_PULL",
+      "runtime_uid": -1,
+      "runtime_gid": -1
+    },
+    "SMARTSCAN_UAT_OPS_IMAGE": {
+      "reference": "ghcr.io/j4meshub/smartscan-ops@sha256:be6c50fbdbc9404a9d9589a53799dbc6084470a63f2306ec6bee5736adf94cae",
+      "repo_digest_verified": false,
+      "config_user": "REPLACE_AFTER_PULL",
+      "runtime_uid": -1,
+      "runtime_gid": -1
+    }
+  }
+}

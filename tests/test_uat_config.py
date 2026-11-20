@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from tools.validate_uat_config import (
+    ACCEPTED_UAT_IMAGES,
     DEFAULT_COMPOSE_FILE,
     UatConfigError,
     _validate_digest_image,
@@ -187,6 +188,18 @@ def test_runtime_business_quota_must_match_storage_budget(tmp_path: Path) -> Non
         _validate(tmp_path, runtime=runtime)
 
 
+def test_runtime_uses_loop_local_reserve_not_host_reserve(tmp_path: Path) -> None:
+    runtime = _write_changed(
+        FIXTURES / "runtime.env",
+        tmp_path / "runtime.env",
+        "SMARTSCAN_STORAGE_MIN_FREE_BYTES=2147483648",
+        "SMARTSCAN_STORAGE_MIN_FREE_BYTES=214748364800",
+    )
+
+    with pytest.raises(UatConfigError, match="应用内绝对预留必须为 2 GiB"):
+        _validate(tmp_path, runtime=runtime)
+
+
 @pytest.mark.parametrize(
     ("key", "repository", "digest"),
     [
@@ -210,6 +223,26 @@ def test_known_incompatible_uat_images_fail_closed(key: str, repository: str, di
             repository=repository,
             ci_fixture=False,
         )
+
+
+def test_real_uat_config_accepts_only_user_accepted_fixed_digests() -> None:
+    for key, value in ACCEPTED_UAT_IMAGES.items():
+        repository = value.rsplit("@sha256:", 1)[0]
+        assert _validate_digest_image(
+            value,
+            key,
+            repository=repository,
+            ci_fixture=False,
+        )
+
+        changed = value[:-1] + ("0" if value[-1] != "0" else "1")
+        with pytest.raises(UatConfigError, match="不是用户已接受"):
+            _validate_digest_image(
+                changed,
+                key,
+                repository=repository,
+                ci_fixture=False,
+            )
 
 
 @pytest.mark.parametrize(

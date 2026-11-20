@@ -35,6 +35,8 @@ def build_manifest(
     paddleocr_version: str,
     paddlepaddle_version: str,
     model_version: str,
+    source: str,
+    license_name: str,
 ) -> dict[str, object]:
     root = root.resolve()
     safe_relative_directory(root, detection_dir)
@@ -47,11 +49,15 @@ def build_manifest(
             files[relative] = sha256_file(path)
     if not files:
         raise ValueError("模型目录中没有可校验文件")
+    if not source.strip() or not license_name.strip():
+        raise ValueError("模型清单必须记录来源和许可证")
     return {
         "schema_version": 1,
         "paddleocr_version": paddleocr_version,
         "paddlepaddle_version": paddlepaddle_version,
         "model_version": model_version,
+        "source": source.strip(),
+        "license": license_name.strip(),
         "text_detection_dir": Path(detection_dir).as_posix(),
         "text_recognition_dir": Path(recognition_dir).as_posix(),
         "files": files,
@@ -66,6 +72,8 @@ def main() -> None:
     parser.add_argument("--paddleocr-version", default="3.7.0")
     parser.add_argument("--paddlepaddle-version", default="3.3.1")
     parser.add_argument("--model-version", default="PP-OCRv6-small-v1")
+    parser.add_argument("--source", required=True, help="固定模型来源URL或内部制品记录")
+    parser.add_argument("--license", dest="license_name", required=True, help="许可证名称和版本")
     args = parser.parse_args()
     manifest = build_manifest(
         args.root,
@@ -74,6 +82,8 @@ def main() -> None:
         paddleocr_version=args.paddleocr_version,
         paddlepaddle_version=args.paddlepaddle_version,
         model_version=args.model_version,
+        source=args.source,
+        license_name=args.license_name,
     )
     destination = args.root.resolve() / "manifest.json"
     incoming = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.incoming")

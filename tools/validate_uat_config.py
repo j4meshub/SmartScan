@@ -61,6 +61,14 @@ IMAGE_REPOSITORIES = {
     "SMARTSCAN_UAT_OPS_IMAGE": "ghcr.io/j4meshub/smartscan-ops",
 }
 POSTGRES_REPOSITORY = "ghcr.io/j4meshub/smartscan-postgres"
+ACCEPTED_UAT_IMAGES = {
+    "SMARTSCAN_UAT_POSTGRES_IMAGE": "ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0",
+    "SMARTSCAN_UAT_API_IMAGE": "ghcr.io/j4meshub/smartscan-api@sha256:80aea0a272791ea44d76895dbd825d091620e0f43ad76c32f32fb6ba97c646d0",
+    "SMARTSCAN_UAT_WORKER_IMAGE": "ghcr.io/j4meshub/smartscan-worker@sha256:f1cb15e434e99fdced69885667e8646346c75bc293e8ecf9f6b0fa24951768a6",
+    "SMARTSCAN_UAT_AI_GATEWAY_IMAGE": "ghcr.io/j4meshub/smartscan-ai-gateway@sha256:1813ada8bda225530d71e5afa9e1c3fd640d5e23d05000d370fdccad0e5e8b00",
+    "SMARTSCAN_UAT_WEB_IMAGE": "ghcr.io/j4meshub/smartscan-web@sha256:3d701a4bcaf24c03ead231f10abd316ba83ab89a6984894dfe31af404d3c930c",
+    "SMARTSCAN_UAT_OPS_IMAGE": "ghcr.io/j4meshub/smartscan-ops@sha256:be6c50fbdbc9404a9d9589a53799dbc6084470a63f2306ec6bee5736adf94cae",
+}
 BLOCKED_UAT_IMAGE_DIGESTS = {
     "SMARTSCAN_UAT_WEB_IMAGE": {"44a0faf547140844eb065a65034d442b66dd9f971ae5521b8a97400bd50df915"},
     "SMARTSCAN_UAT_OPS_IMAGE": {"ef4dd40c7b8a494e92540dc5bb476ab144903402142a0bbb0fdc4fd688138a5b"},
@@ -170,6 +178,8 @@ def _validate_digest_image(
     if not ci_fixture:
         _require(len(set(digest)) >= 8, f"{key} 仍是模板 digest")
         _require(not _has_placeholder(reference), f"{key} 仍是模板仓库")
+        accepted = ACCEPTED_UAT_IMAGES.get(key)
+        _require(accepted is not None and value == accepted, f"{key} 不是用户已接受的固定UAT候选")
     return digest
 
 
@@ -612,8 +622,8 @@ def validate_uat_config(
     except StagingConfigError as exc:
         raise UatConfigError(str(exc).replace("staging", "UAT")) from exc
     _require(
-        int(runtime["SMARTSCAN_STORAGE_MIN_FREE_BYTES"]) >= 200 * GIB,
-        "UAT 磁盘绝对预留必须至少 200 GiB",
+        int(runtime["SMARTSCAN_STORAGE_MIN_FREE_BYTES"]) == 2 * GIB,
+        "UAT 应用内绝对预留必须为 2 GiB；宿主机 200 GiB 余量由 loop 执行器和现场预检保证",
     )
     _require(
         float(runtime["SMARTSCAN_STORAGE_MIN_FREE_PERCENT"]) >= 15, "UAT 磁盘比例预留必须至少 15%"

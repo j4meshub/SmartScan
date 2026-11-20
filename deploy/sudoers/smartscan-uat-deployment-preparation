@@ -1,0 +1,8 @@
+Cmnd_Alias SMARTSCAN_UAT_DEPLOYMENT_PREPARATION = \
+    /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation prepare-directories, \
+    /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation generate-config, \
+    /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation verify-config, \
+    /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation apply-ownership, \
+    /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation status
+
+szhzx ALL=(root) NOPASSWD: SMARTSCAN_UAT_DEPLOYMENT_PREPARATION
