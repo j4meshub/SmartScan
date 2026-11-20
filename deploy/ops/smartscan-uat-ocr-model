@@ -7,7 +7,7 @@ readonly EXPECTED_HOSTNAME="ctiecaiserver"
 readonly EXPECTED_SUDO_USER="szhzx"
 readonly INSTALL_PATH="/usr/local/libexec/smartscan/smartscan-uat-ocr-model"
 readonly HELPER_PATH="/usr/local/libexec/smartscan/smartscan_uat_ocr_model.py"
-readonly HELPER_SHA256="2ed78a585de81aabfe7c3a1c438382961415497e8b0ff530fd0992285809bfd5"
+readonly HELPER_SHA256="654dd06634c64ef15f95523ba227cbb7ec866c6eae162db3b33911afc82cadac"
 readonly PYTHON_BIN="/usr/bin/python3"
 
 fail() {

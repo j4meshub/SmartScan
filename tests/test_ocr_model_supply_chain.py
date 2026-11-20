@@ -63,7 +63,9 @@ def test_workflow_pr_never_publishes_and_main_uses_minimal_permissions() -> None
 def test_restricted_installer_has_only_three_exact_commands() -> None:
     executor = EXECUTOR.read_text(encoding="utf-8")
     sudoers = SUDOERS.read_text(encoding="utf-8")
-    helper_digest = hashlib.sha256(HELPER.read_bytes()).hexdigest()
+    # Git 中固定为 LF；兼容在同一工作树内新增 .gitattributes 后尚未重检出的 Windows 文件。
+    helper_bytes = HELPER.read_bytes().replace(b"\r\n", b"\n")
+    helper_digest = hashlib.sha256(helper_bytes).hexdigest()
     assert helper_digest in executor
     for action in ("install", "verify", "status"):
         assert f"smartscan-uat-ocr-model {action}" in sudoers
