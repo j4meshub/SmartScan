@@ -1,0 +1,211 @@
+#!/bin/bash
+set -euo pipefail
+
+umask 077
+IFS=$' \t\n'
+export LC_ALL=C
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+readonly PATH
+
+readonly EXECUTOR_PATH="/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation"
+readonly HELPER_PATH="/usr/local/libexec/smartscan/smartscan-uat-config"
+readonly HELPER_SHA256="0fcfd58fa5d7f76fa953e69885b26de567f039e13c856ae101397e930610e729"
+readonly EXPECTED_HOSTNAME="ctiecaiserver"
+readonly EXPECTED_SUDO_USER="szhzx"
+readonly ROOT_UID="0"
+readonly ROOT_GID="0"
+
+readonly UAT_MOUNT="/mnt/data/smartscan/uat"
+readonly POSTGRES_ROOT="/mnt/data/smartscan/uat/postgres"
+readonly DATA_ROOT="/mnt/data/smartscan/uat/data"
+readonly MODELS_PARENT="/mnt/data/smartscan/uat/models"
+readonly MODEL_ROOT="/mnt/data/smartscan/uat/models/ocr"
+readonly CONFIG_ROOT="/etc/smartscan/uat"
+
+readonly HOSTNAME_CMD="/usr/bin/hostname"
+readonly READLINK_CMD="/usr/bin/readlink"
+readonly STAT_CMD="/usr/bin/stat"
+readonly SHA256SUM_CMD="/usr/bin/sha256sum"
+readonly AWK_CMD="/usr/bin/awk"
+readonly FINDMNT_CMD="/usr/bin/findmnt"
+readonly INSTALL_CMD="/usr/bin/install"
+readonly FIND_CMD="/usr/bin/find"
+readonly PYTHON_CMD="/usr/bin/python3"
+readonly LOGGER_CMD="/usr/bin/logger"
+
+CURRENT_ACTION="unvalidated"
+
+usage() {
+    printf '用法：sudo -n %s {prepare-directories|generate-config|verify-config|apply-ownership|status}\n' "$EXECUTOR_PATH" >&2
+}
+
+log_event() {
+    local result="$1"
+    local reason="$2"
+    local exit_code="${3:-0}"
+    "$LOGGER_CMD" -p authpriv.notice -t smartscan-uat-deployment-preparation -- \
+        "action=${CURRENT_ACTION} result=${result} reason=${reason} exit_code=${exit_code}" \
+        >/dev/null 2>&1 || true
+}
+
+fail() {
+    local reason="$1"
+    local message="$2"
+    local exit_code="${3:-1}"
+    log_event "failed" "$reason" "$exit_code"
+    printf 'status=failed\nreason=%s\nmessage=%s\n' "$reason" "$message" >&2
+    exit "$exit_code"
+}
+
+unexpected_error() {
+    local exit_code="$?"
+    trap - ERR
+    log_event "failed" "unexpected_error" "$exit_code"
+    printf 'status=failed\nreason=unexpected_error\nexit_code=%s\n' "$exit_code" >&2
+    exit "$exit_code"
+}
+trap unexpected_error ERR
+
+require_exact_command() {
+    if [[ "$#" -ne 1 ]]; then
+        usage
+        exit 64
+    fi
+    case "$1" in
+        prepare-directories|generate-config|verify-config|apply-ownership|status)
+            CURRENT_ACTION="$1"
+            ;;
+        *)
+            usage
+            exit 64
+            ;;
+    esac
+}
+
+require_root_context() {
+    [[ "$EUID" -eq "$ROOT_UID" ]] || fail "root_required" "执行器只能由sudo以root运行"
+    [[ "${SUDO_USER:-}" == "$EXPECTED_SUDO_USER" ]] \
+        || fail "sudo_user_mismatch" "SUDO_USER与固定授权用户不一致"
+    [[ "${SUDO_COMMAND:-}" == "$EXECUTOR_PATH $CURRENT_ACTION" ]] \
+        || fail "sudo_command_mismatch" "SUDO_COMMAND不是固定执行器与单一子命令"
+    [[ "$($HOSTNAME_CMD -s)" == "$EXPECTED_HOSTNAME" ]] \
+        || fail "hostname_mismatch" "当前主机不是固定目标主机"
+    [[ "$($READLINK_CMD -f "${BASH_SOURCE[0]}")" == "$EXECUTOR_PATH" ]] \
+        || fail "executor_path_mismatch" "执行器不是从固定安装路径启动"
+    [[ -f "$EXECUTOR_PATH" && ! -L "$EXECUTOR_PATH" ]] \
+        || fail "executor_type_invalid" "执行器必须是普通文件且不能是符号链接"
+    [[ "$($STAT_CMD -c '%u:%g:%a' "$EXECUTOR_PATH")" == "${ROOT_UID}:${ROOT_GID}:755" ]] \
+        || fail "executor_permissions_invalid" "执行器必须由root拥有且权限为0755"
+}
+
+require_helper() {
+    [[ -f "$HELPER_PATH" && ! -L "$HELPER_PATH" ]] \
+        || fail "helper_type_invalid" "固定配置工具不存在、不是普通文件或是符号链接"
+    [[ "$($STAT_CMD -c '%u:%g:%a' "$HELPER_PATH")" == "${ROOT_UID}:${ROOT_GID}:755" ]] \
+        || fail "helper_permissions_invalid" "固定配置工具必须由root拥有且权限为0755"
+    local actual_sha256
+    actual_sha256="$($SHA256SUM_CMD "$HELPER_PATH" | "$AWK_CMD" '{print $1}')"
+    [[ "$actual_sha256" == "$HELPER_SHA256" ]] \
+        || fail "helper_sha256_mismatch" "固定配置工具与已审核仓库摘要不一致"
+}
+
+require_mount() {
+    [[ -d "$UAT_MOUNT" && ! -L "$UAT_MOUNT" ]] \
+        || fail "uat_mount_type_invalid" "UAT挂载点必须是非符号链接目录"
+    local record
+    record="$($FINDMNT_CMD -rn --mountpoint "$UAT_MOUNT" -o TARGET,FSTYPE,LABEL 2>/dev/null || true)"
+    [[ "$record" == "$UAT_MOUNT ext4 smartscan-uat" ]] \
+        || fail "uat_mount_identity_invalid" "UAT固定ext4挂载未处于已验收状态"
+}
+
+require_existing_directory() {
+    local path="$1"
+    local expected="$2"
+    [[ -d "$path" && ! -L "$path" ]] || fail "directory_type_invalid" "固定目录缺失或类型异常"
+    [[ "$($STAT_CMD -c '%U:%G:%a' "$path")" == "$expected" ]] \
+        || fail "directory_permissions_invalid" "固定目录所有者或权限异常"
+}
+
+require_no_unexpected_children() {
+    local unexpected
+    unexpected="$($FIND_CMD "$UAT_MOUNT" -mindepth 1 -maxdepth 1 \
+        ! -name lost+found ! -name postgres ! -name data ! -name models -print -quit)"
+    [[ -z "$unexpected" ]] || fail "unexpected_uat_object" "UAT挂载根存在非SmartScan准备对象"
+}
+
+prepare_directories() {
+    require_mount
+    require_no_unexpected_children
+
+    if [[ -e "$CONFIG_ROOT" || -L "$CONFIG_ROOT" ]]; then
+        require_existing_directory "$CONFIG_ROOT" "root:${EXPECTED_SUDO_USER}:750"
+    else
+        "$INSTALL_CMD" -d -o root -g "$EXPECTED_SUDO_USER" -m 0750 "$CONFIG_ROOT"
+    fi
+
+    if [[ -e "$POSTGRES_ROOT" || -L "$POSTGRES_ROOT" ]]; then
+        require_existing_directory "$POSTGRES_ROOT" "root:root:700"
+    else
+        "$INSTALL_CMD" -d -o root -g root -m 0700 "$POSTGRES_ROOT"
+    fi
+    if [[ -e "$DATA_ROOT" || -L "$DATA_ROOT" ]]; then
+        require_existing_directory "$DATA_ROOT" "root:root:750"
+    else
+        "$INSTALL_CMD" -d -o root -g root -m 0750 "$DATA_ROOT"
+    fi
+    if [[ -e "$MODELS_PARENT" || -L "$MODELS_PARENT" ]]; then
+        require_existing_directory "$MODELS_PARENT" "root:root:755"
+    else
+        "$INSTALL_CMD" -d -o root -g root -m 0755 "$MODELS_PARENT"
+    fi
+    if [[ -e "$MODEL_ROOT" || -L "$MODEL_ROOT" ]]; then
+        require_existing_directory "$MODEL_ROOT" "root:root:755"
+    else
+        "$INSTALL_CMD" -d -o root -g root -m 0755 "$MODEL_ROOT"
+    fi
+    require_no_unexpected_children
+    log_event "passed" "directories_ready"
+    printf 'status=passed\naction=prepare-directories\nresult=directories_ready\nsecret_values_printed=false\n'
+}
+
+generate_config() {
+    require_mount
+    require_helper
+    require_existing_directory "$CONFIG_ROOT" "root:${EXPECTED_SUDO_USER}:750"
+    "$PYTHON_CMD" "$HELPER_PATH" generate
+    log_event "passed" "config_generated"
+}
+
+verify_config() {
+    require_mount
+    require_helper
+    require_existing_directory "$CONFIG_ROOT" "root:${EXPECTED_SUDO_USER}:750"
+    "$PYTHON_CMD" "$HELPER_PATH" verify
+    log_event "passed" "config_verified"
+}
+
+apply_ownership() {
+    require_mount
+    require_helper
+    require_existing_directory "$CONFIG_ROOT" "root:${EXPECTED_SUDO_USER}:750"
+    "$PYTHON_CMD" "$HELPER_PATH" apply-ownership
+    log_event "passed" "ownership_applied"
+}
+
+status_report() {
+    require_mount
+    require_helper
+    "$PYTHON_CMD" "$HELPER_PATH" status
+    log_event "passed" "status_reported"
+}
+
+require_exact_command "$@"
+require_root_context
+
+case "$CURRENT_ACTION" in
+    prepare-directories) prepare_directories ;;
+    generate-config) generate_config ;;
+    verify-config) verify_config ;;
+    apply-ownership) apply_ownership ;;
+    status) status_report ;;
+esac

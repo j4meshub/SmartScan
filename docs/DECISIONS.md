@@ -682,3 +682,14 @@
 - 现场证据：仅通过批准的SSH别名核对可信主机身份；六个固定digest的匿名manifest均成功且Registry摘要逐字一致。PostgreSQL为OCI image manifest，配置元数据证明`linux/amd64`、`USER 70:70`和17.12。loop受限执行器`status/verify`、8077结构、18082空闲、三张仓库外候选网络冲突检查、共享盘/inode及CPU/内存/Swap/负载/容器健康门禁全部通过。
 - 边界：仓库只保存脱敏结论，不保存精确候选CIDR、原始路由/IPAM、内部地址、真实loop设备或服务器快照。本轮未下载镜像层、未执行Docker登录/拉取、未连接数据库，也未修改服务器文件、网络、Nginx或仓库外配置。
 - 影响：`OPS-001D`完成，`OPS-001`可以进入应用部署准备与分阶段授权，但预检通过不构成写入许可。目录/Secret、三张网络、六镜像拉取、PostgreSQL与迁移、应用Compose、Nginx增量和回滚仍须分别取得用户明确授权。
+
+## D-094：应用部署准备采用五命令受限执行器并保留OCR模型硬门禁
+
+- 状态：已确认并在仓库实现，等待PR验证和人工安装
+- 日期：2026-11-20
+- 决策：扩展`OPS-001C`范围，在不连接服务器的前提下准备固定目录、仓库外配置、主机本地Secret生成、镜像身份记录及受限sudo执行器。执行器只接受`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`五个无参数子命令；不包含Docker、Nginx、网络、数据库、迁移、通用shell、`systemctl`或删除能力。配置工具逐字固定用户接受的六个digest，后续构建和未接受PostgreSQL制品不能自动替换。
+- 账号与Secret：基础UAT生产模式关闭短信和企业微信，普通注册不能绕过短信挑战；首次账号由API固定引导为`admin`超级管理员并强制改密。数据库、应用、手机号保护、引导管理员和指标Secret只在目标主机随机生成，写入0600固定文件，工具不打印值；人工交付不得由AI读取或通过Git、聊天、命令参数、日志和普通终端回显传递。
+- OCR门禁：CPU Worker在进入任务循环前初始化PaddleOCR并验证`manifest.json`、版本、目录和全部SHA-256。仓库当前没有已接受的真实模型权重、来源/许可快照和完整清单，因此空目录、Mock或联网下载不得通过；真实模型制品继续阻塞`verify-config`和两个CPU Worker启动。这是已知外部制品门禁，不是业务代码遗漏。
+- 所有权与顺序：PostgreSQL保持70:70；API/Worker/Web/Ops的源码用户意图不等于接受digest的运行证据。必须先创建空目录，再单独授权拉取和核验六镜像，记录实际RepoDigest、平台、OCI用户及数字UID/GID，最后才允许固定执行器对三个SmartScan目录应用所有权。PostgreSQL目录非空时拒绝改变所有权。
+- 容量纠偏：宿主机预分配50 GiB后的15%或200 GiB安全余量继续由loop执行器和现场预检保证；应用只看到50 GiB loop，`SMARTSCAN_STORAGE_MIN_FREE_BYTES`改为loop内2 GiB，另保留15%比例、32 GiB业务配额和70/85/95阈值。旧模板把宿主机200 GiB写入容器运行配置会永久阻止上传，现被本决策取代，但宿主机余量门禁没有降低。
+- 影响：仓库工具合并后仍不构成安装或部署授权。共同使用人须人工审核三个root资产和摘要；安装后第一项可单独授权的服务器写操作仅为`prepare-directories`。仓库外输入/证据、配置生成、OCR模型、三网、镜像拉取、所有权、PostgreSQL、迁移、应用、Nginx和任何清理继续分别授权。

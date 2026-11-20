@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "target_hostname": "REPLACE_WITH_APPROVED_HOSTNAME",
+  "shared_entry_origin": "http://REPLACE_WITH_INTERNAL_HOST:8077",
+  "confirmation": {
+    "confirmed_by": "REPLACE_WITH_SHARED_SERVER_USER",
+    "confirmed_at": "REPLACE_WITH_ISO8601_TIME",
+    "change_record": "REPLACE_WITH_CHANGE_RECORD",
+    "validation_record": "REPLACE_WITH_VALIDATION_RECORD",
+    "rollback_record": "REPLACE_WITH_ROLLBACK_RECORD"
+  },
+  "networks": {
+    "data": {
+      "subnet": "REPLACE_WITH_APPROVED_DATA_CIDR",
+      "gateway": "REPLACE_WITH_APPROVED_DATA_GATEWAY"
+    },
+    "edge": {
+      "subnet": "REPLACE_WITH_APPROVED_EDGE_CIDR",
+      "gateway": "REPLACE_WITH_APPROVED_EDGE_GATEWAY"
+    },
+    "egress": {
+      "subnet": "REPLACE_WITH_APPROVED_EGRESS_CIDR",
+      "gateway": "REPLACE_WITH_APPROVED_EGRESS_GATEWAY"
+    }
+  },
+  "reserved_cidrs": [
+    "REPLACE_WITH_REDACTED_RESERVED_CIDR"
+  ],
+  "monitoring_record": "REPLACE_WITH_ACCEPTED_MANUAL_MONITORING_RECORD"
+}

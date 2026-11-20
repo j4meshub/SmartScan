@@ -28,7 +28,9 @@ models/ocr/
 python tools/build_ocr_manifest.py models/ocr \
   --detection-dir PP-OCRv6_small_det \
   --recognition-dir PP-OCRv6_small_rec \
-  --model-version PP-OCRv6-small-v1
+  --model-version PP-OCRv6-small-v1 \
+  --source '<固定官方来源或内部制品记录>' \
+  --license '<已审核的许可证名称和版本>'
 ```
 
 清单记录 PaddleOCR、PaddlePaddle、模型包版本和模型目录内每个文件的 SHA-256。Worker 初始化时逐项校验，拒绝绝对路径、目录逃逸、缺失文件、版本偏差和哈希偏差。更新模型时必须使用新的 `SMARTSCAN_OCR_MODEL_VERSION`，重新生成清单并通过固定数据集，不可静默替换同版本内容。

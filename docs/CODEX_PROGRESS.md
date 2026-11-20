@@ -7,15 +7,24 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001D` 应用部署前最终只读预检 |
-| 工作包状态 | 完成；六个固定digest、loop、入口、候选网络和资源门禁均通过，应用部署仍未授权 |
-| 当前分支 | `codex/ops-001d-final-readonly-preflight` |
-| 最后验证基线 | `c9aa132`与2026-11-20目标服务器脱敏只读证据 |
-| 工作包提交 | `0efb5301031166335448384300cac75e70769857` |
-| PR | [#87](https://github.com/j4meshub/SmartScan/pull/87)的19项检查全部完成：16项成功、3项按PR规则跳过发布；合并结果以GitHub为准 |
-| 下一工作包 | `OPS-001`应用部署分阶段授权；先准备仓库外配置与精确对象清单，任何目录、Secret、网络、拉取、迁移、Compose或Nginx动作仍须用户单独授权 |
+| 当前工作包 | `OPS-001C` UAT应用部署受限执行器与配置准备 |
+| 工作包状态 | 进行中；仓库工具和测试已实现，等待全量验证、PR CI与合并；服务器未修改 |
+| 当前分支 | `codex/ops-001c-uat-deployment-preparation` |
+| 最后验证基线 | `main@6bfa4b1`及已接受的OPS-001D脱敏只读证据 |
+| 工作包提交 | 待本工作包中文提交 |
+| PR | 待创建；本工作包不得连接或修改服务器 |
+| 下一工作包 | 共同使用人人工审核并安装固定执行器/配置工具/sudoers；安装后第一项可单独授权的写操作仅为`prepare-directories`。真实OCR模型包选型与安装仍是CPU Worker启动前置门禁 |
 
 ## 当前工作包进展
+
+- 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
+- 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。
+- 未来固定目录为`postgres`、`data`、`models/ocr`和`/etc/smartscan/uat`。最终所有权必须在六镜像拉取后用`image-identities.json`核验：PostgreSQL强制70:70，API与Worker必须证明共享数字UID/GID；源码Dockerfile中的10001意图和Web未声明`USER`都不能替代实际digest证据。
+- 生产模式普通注册需要短信挑战，而基础UAT关闭短信，因此首次启动使用随机`SMARTSCAN_SUPERADMIN_PASSWORD`创建`admin`并强制改密。初始值只写0600交付文件和运行配置，禁止AI读取、终端回显或进入Git/聊天/日志。
+- CPU Worker会在进入任务循环前校验真实OCR模型包。仓库当前没有已接受的权重、来源/许可快照和完整SHA-256清单；空目录、Mock或联网下载不得通过。因此模型制品独立阻塞`verify-config`和CPU Worker启动，但不把仓库工具实现误记为失败。
+- 修正既有UAT容量配置冲突：宿主机预分配后15%/200 GiB余量继续由loop执行器和现场预检保证；应用实际看到50 GiB loop，内部配置改为2 GiB绝对余量、15%比例及32 GiB业务配额，避免错误的200 GiB门禁让所有上传永久失败。
+- 本轮没有连接`smartscan-server`，没有安装执行器、创建目录或Secret，也没有调用sudo、Docker、数据库、网络、Nginx或迁移。
+- 本地专项最终`48 passed, 4 skipped`，4项仅需Linux Bash/`visudo`/POSIX权限并由PR Ubuntu Runner补证；全量Python`562 passed, 26 skipped`、覆盖率87.79%。Ruff检查和180个Python文件格式、迁移漂移、H5 JavaScript语法、Node单元`48 passed`、Chromium子路径E2E`9 passed`及差异空白检查均通过。本机未安装Docker CLI，Compose真实解析与Linux执行器/sudoers门禁等待PR CI；现有Python UAT解析器已覆盖固定digest、资源总量、只读根、tmpfs、日志和网络契约。
 
 - 用户明确接受`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`作为基础UAT候选；文档提交产生的`sha256:e54319a0ae69c22731599fb942500e942e5ba03d34c32406a3d747bffcefd04b`明确不接受，不能自动替换。
 - 仅通过SSH别名`smartscan-server`核对可信主机身份后，目标服务器对PostgreSQL和五个SmartScan固定digest的匿名manifest请求均返回成功且摘要逐字一致。PostgreSQL为OCI image manifest，配置元数据证明`linux/amd64`、`USER 70:70`和PostgreSQL 17.12；未下载镜像层、未登录Registry或改变镜像缓存。
