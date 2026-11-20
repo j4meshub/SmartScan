@@ -68,7 +68,18 @@ jobs:
           format: spdx-json
           output-file: container-evidence/${{ matrix.service }}.spdx.json
           upload-artifact: false
+      - name: 拦截全部 Critical 漏洞
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: local/${{ matrix.image }}:${{ github.sha }}
+          format: json
+          output: container-evidence/${{ matrix.service }}-critical-all.json
+          exit-code: "1"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: CRITICAL
       - name: 拦截可修复的 High 与 Critical 漏洞
+        if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: local/${{ matrix.image }}:${{ github.sha }}
@@ -77,11 +88,26 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: HIGH,CRITICAL
+      - name: 记录全部 High 漏洞供风险复核
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: local/${{ matrix.image }}:${{ github.sha }}
+          format: json
+          output: container-evidence/${{ matrix.service }}-high-all.json
+          exit-code: "0"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: HIGH
       - name: 保存 SBOM 证据
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: container-evidence-${{ matrix.service }}
-          path: container-evidence/${{ matrix.service }}.spdx.json
+          path: |
+            container-evidence/${{ matrix.service }}.spdx.json
+            container-evidence/${{ matrix.service }}-critical-all.json
+            container-evidence/${{ matrix.service }}-high-all.json
           if-no-files-found: error
           retention-days: 30
 

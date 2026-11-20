@@ -656,3 +656,12 @@
 - 应用候选：主线`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`五个GHCR镜像的服务器匿名manifest、Registry digest、`linux/amd64`、OCI revision、SPDX SBOM、SLSA provenance、可修复High/Critical、Web子路径和Ops部署契约均通过。该组只具备提交用户接受的资格；在用户明确接受前不得写入真实UAT配置，后续自动digest不得替代。
 - PostgreSQL决策：服务器对`auth.docker.io`的IPv4连接超时、IPv6不可达，因而未进入TLS、匿名token或manifest阶段。禁止代理、登录、不明镜像源或以pull绕过。新增`OPS-REG-003`，由GitHub Actions从Docker Official Image固定digest复制完整多平台manifest到公开GHCR，并保存上游仓库/digest、`17` tag对应、平台、SBOM、漏洞及自定义in-toto映射；不得宣称复制产物由SmartScan构建或带有Docker官方签名。
 - 影响：OPS-001B标记完成，OPS-001C进入候选人工接受，OPS-001新增OPS-REG-003依赖。PostgreSQL GHCR产物仍须公开可见性人工确认、目标服务器匿名manifest核验及用户明确接受；镜像拉取、UID/GID检查、迁移、Compose和Nginx继续是独立部署授权。
+
+## D-091：PostgreSQL按固定上游制品复制并分离两类漏洞门禁
+
+- 状态：仓库实现进行中；等待Actions制品、首次公开、服务器匿名核验和用户接受
+- 日期：2026-11-20
+- 决策：固定`docker.io/library/postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`作为唯一上游候选。GitHub Actions在PR只核验，在`main`使用`docker buildx imagetools create`把完整多平台索引内容寻址复制到`ghcr.io/j4meshub/smartscan-postgres`；不使用Dockerfile、不修改层、不发布`latest/main`，也不自动替换UAT配置。中文映射和自定义in-toto声明明确这是固定上游制品复制，不是SmartScan源码重建，也不声称Docker官方在GHCR发布。
+- 来源证据：核验Docker Hub官方命名空间、Docker Official Images公开元数据、固定digest媒体类型、完整平台列表、`linux/amd64` descriptor及其配置中的`PG_MAJOR=17`和`PG_VERSION=17.x`。2026-11-20实测固定候选仍存在且配置版本为`17.12-1.pgdg13+1`；可变`17`标签已移动到`sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c`。该差异必须保留，固定候选继续由不可变digest和PG 17配置追溯，不能把标签移动误记为固定候选失效或仍相等。
+- 漏洞：PostgreSQL必须同时通过“全部Critical，`ignore-unfixed=false`”与“可修复High/Critical，`ignore-unfixed=true`”；`2adbf4f`五个SmartScan固定候选补做前一类严格扫描，未来五镜像构建也固定执行两类门禁。任何Critical不得自动豁免；不可修复High必须形成风险记录。
+- 影响：首次Package可能为私有，工作流不得自动公开。只有用户人工公开后，才允许目标服务器通过匿名DNS/TLS/HEAD/manifest核验；不允许登录、pull、代理或其他镜像站。六个digest仍需用户明确接受，接受不授权应用部署；UID/GID、迁移、Compose、Nginx和启动继续独立授权。

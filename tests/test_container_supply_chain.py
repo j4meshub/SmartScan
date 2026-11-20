@@ -57,6 +57,12 @@ def test_pull_requests_cannot_publish_or_deploy() -> None:
     assert "push: true" in text
     assert "packages: write" in text
     assert "attestations: write" in text
+    assert "ignore-unfixed: false" in text
+    assert "severity: CRITICAL" in text
+    assert "ignore-unfixed: true" in text
+    assert "severity: HIGH,CRITICAL" in text
+    assert "记录全部 High 漏洞供风险复核" in text
+    assert "high-all.json" in text
     for forbidden in ("ssh ", "scp ", "rsync ", "docker context", "appleboy/"):
         assert forbidden not in text.lower()
 

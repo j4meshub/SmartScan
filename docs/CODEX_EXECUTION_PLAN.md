@@ -4,7 +4,7 @@
 
 建立日期：2026-10-20
 
-最近修订：2026-11-19（UAT存储验收与应用制品候选核验）
+最近修订：2026-11-20（PostgreSQL固定上游制品GHCR供应链）
 
 产品基线：`智能扫描H5安卓与苹果应用开发实施方案-v1.4.md`
 
@@ -178,7 +178,7 @@ M8 门禁：所有 Provider 关闭或故障时不影响扫描、净化、扫书�
 | `OPS-000` 共享宿主机预检与资源分配 | 完成 | GOV-003、用户授权的只读权限 | 2026-11-17 已通过唯一 SSH 别名完成现场采集，2026-11-18 完成 8077 Nginx/18082 只读复核；服务器共同使用人已定版 50 GiB UAT、100 GiB初期生产、整栈8 vCPU/16 GiB、单一回环端口和现场无冲突自确认机制。部署当天的新鲜快照、精确CIDR及端口复核属于 OPS-001 前置门禁，不再等待不存在的外部运维岗位 |
 | `OPS-REG-001` 双仓库与镜像供应链 | 放弃 | GOV-003（历史） | 因 Git 提交身份、历史重写和双仓库分叉风险，经 GOV-004 明确放弃当前阶段接入；由 `OPS-REG-002` 替代，不是任务遗漏 |
 | `OPS-REG-002` GitHub Actions 与公开 GHCR 镜像供应链 | 完成 | GOV-004 | PR #74 已合并；主线 `0961cc3` 重新发布包含 UAT 交付的五个镜像，用户于 2026-11-17 接受为当前公开 UAT 候选，目标服务器匿名 manifest 查询逐一核对成功。UAT/生产仍只允许人工审批后按 digest 拉取，不建立服务器自动部署连接 |
-| `OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 未开始 | OPS-REG-002, OPS-001C | 因目标服务器无法连接`auth.docker.io:443`，由GitHub Actions按官方固定digest复制完整多平台manifest到公开GHCR；必须保留上游仓库/digest、`17` tag对应、平台、SBOM、漏洞及自定义in-toto来源映射，不得伪装成SmartScan构建或Docker官方签名。服务器匿名manifest核验和用户明确接受后才可进入UAT配置 |
+| `OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 | 进行中 | OPS-REG-002, OPS-001C | 已实现PR只核验、main内容寻址复制完整多平台manifest、官方来源/可变`17`标签/`linux/amd64`/PG 17配置证据、SPDX SBOM、自定义in-toto映射和双漏洞门禁；同时对`2adbf4f`五镜像补严格Critical扫描。等待PR CI、main发布、Package人工公开、目标服务器匿名manifest核验和用户明确接受；不得自动进入UAT配置 |
 | `OPS-001A` UAT loop受限sudo执行器准备 | 完成 | GOV-005, OPS-000, PR #80 | PR #81已合并，服务器共同使用人已人工审核并安装固定路径执行器、mount单元和精确sudoers。首次`create`创建了50 GiB ext4且内部验证通过，但稍后独立`verify`暴露ext4 lazy初始化后的`backing_sparse`现场兼容问题；该新证据由`OPS-001B`处理，不回写为本工作包遗漏 |
 | `OPS-001B` ext4 loop完整预分配修复 | 完成 | OPS-001A、现场空UAT证据 | PR #82已合并，用户人工升级执行器后单独授权`recreate-empty`；固定空UAT已用禁用lazy初始化的参数重建，两次独立`verify`均通过。50 GiB完整物理预分配、ext4/label/reserved block、挂载参数、唯一loop/autoclear、systemd及共享盘安全余量均获用户接受，应用从未启动且未触碰其他项目 |
 | `OPS-001C` 应用部署候选核验 | 等待人工验收 | OPS-001B, OPS-REG-002 | 目标服务器对主线`2adbf4f`五个GHCR digest的匿名manifest核验通过；来源提交、`linux/amd64`、SPDX SBOM、SLSA provenance、可修复High/Critical、Web子路径和Ops部署契约均通过。五镜像只提交用户接受，不自动进入UAT配置；Docker Hub在IPv4连接超时、IPv6不可达，PostgreSQL固定digest仍未完成服务器侧核验 |

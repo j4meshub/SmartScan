@@ -1,0 +1,198 @@
+name: PostgreSQL 固定制品供应链
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: postgres-supply-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  POSTGRES_UPSTREAM: docker.io/library/postgres
+  POSTGRES_UPSTREAM_DIGEST: sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
+  POSTGRES_DESTINATION: ghcr.io/j4meshub/smartscan-postgres
+  POSTGRES_MIRROR_TAG: upstream-sha256-0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac
+
+jobs:
+  verify-postgres-upstream:
+    name: 核验 PostgreSQL 官方固定制品
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 检出核验工具
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 核验官方来源、17标签、平台和版本
+        run: >-
+          python tools/postgres_supply_chain.py inspect-upstream
+          --output-dir postgres-evidence
+      - name: 生成 linux/amd64 SPDX JSON SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: ${{ env.POSTGRES_UPSTREAM }}@${{ env.POSTGRES_UPSTREAM_DIGEST }}
+          format: spdx-json
+          output-file: postgres-evidence/postgres-linux-amd64.spdx.json
+          upload-artifact: false
+      - name: 拦截全部 Critical 漏洞
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.POSTGRES_UPSTREAM }}@${{ env.POSTGRES_UPSTREAM_DIGEST }}
+          format: json
+          output: postgres-evidence/postgres-critical-all.json
+          exit-code: "1"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: CRITICAL
+      - name: 拦截可修复 High 与 Critical 漏洞
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.POSTGRES_UPSTREAM }}@${{ env.POSTGRES_UPSTREAM_DIGEST }}
+          format: json
+          output: postgres-evidence/postgres-high-critical-fixable.json
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: 记录全部 High 漏洞供风险复核
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.POSTGRES_UPSTREAM }}@${{ env.POSTGRES_UPSTREAM_DIGEST }}
+          format: json
+          output: postgres-evidence/postgres-high-all.json
+          exit-code: "0"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: HIGH
+      - name: 保存上游核验、SBOM和漏洞证据
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: postgres-upstream-evidence
+          path: postgres-evidence
+          if-no-files-found: error
+          retention-days: 90
+
+  verify-smartscan-critical:
+    name: 严格 Critical / ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            image: ghcr.io/j4meshub/smartscan-api@sha256:80aea0a272791ea44d76895dbd825d091620e0f43ad76c32f32fb6ba97c646d0
+          - service: worker
+            image: ghcr.io/j4meshub/smartscan-worker@sha256:f1cb15e434e99fdced69885667e8646346c75bc293e8ecf9f6b0fa24951768a6
+          - service: ai-gateway
+            image: ghcr.io/j4meshub/smartscan-ai-gateway@sha256:1813ada8bda225530d71e5afa9e1c3fd640d5e23d05000d370fdccad0e5e8b00
+          - service: web
+            image: ghcr.io/j4meshub/smartscan-web@sha256:3d701a4bcaf24c03ead231f10abd316ba83ab89a6984894dfe31af404d3c930c
+          - service: ops
+            image: ghcr.io/j4meshub/smartscan-ops@sha256:be6c50fbdbc9404a9d9589a53799dbc6084470a63f2306ec6bee5736adf94cae
+    steps:
+      - name: 严格扫描固定候选的全部 Critical 漏洞
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: json
+          output: ${{ matrix.service }}-critical-all.json
+          exit-code: "1"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: CRITICAL
+      - name: 记录全部 High 漏洞供风险复核
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: json
+          output: ${{ matrix.service }}-high-all.json
+          exit-code: "0"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: HIGH
+      - name: 保存严格扫描证据
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: 2adbf4f-critical-${{ matrix.service }}
+          path: |
+            ${{ matrix.service }}-critical-all.json
+            ${{ matrix.service }}-high-all.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish-postgres-mirror:
+    name: 复制固定 PostgreSQL 制品到 GHCR
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify-postgres-upstream, verify-smartscan-critical]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: 检出证据生成器
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 准备 Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 下载已通过的上游证据
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: postgres-upstream-evidence
+          path: postgres-evidence
+      - name: 登录 GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 内容寻址复制完整多平台制品
+        run: >-
+          docker buildx imagetools create
+          --tag "${POSTGRES_DESTINATION}:${POSTGRES_MIRROR_TAG}"
+          --metadata-file postgres-evidence/ghcr-copy-metadata.json
+          "${POSTGRES_UPSTREAM}@${POSTGRES_UPSTREAM_DIGEST}"
+      - name: 读取目标固定 digest
+        id: destination
+        run: >-
+          python tools/postgres_supply_chain.py extract-destination
+          --metadata postgres-evidence/ghcr-copy-metadata.json
+          --github-output "$GITHUB_OUTPUT"
+      - name: 核对 GHCR 多平台 manifest
+        run: >-
+          docker buildx imagetools inspect --raw
+          "${POSTGRES_DESTINATION}@${{ steps.destination.outputs.digest }}"
+          > postgres-evidence/ghcr-index.json
+      - name: 生成中文来源映射与 in-toto 声明
+        env:
+          SMARTSCAN_WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          python tools/postgres_supply_chain.py finalize
+          --upstream-evidence postgres-evidence/upstream-verification.json
+          --destination-index postgres-evidence/ghcr-index.json
+          --destination-digest "${{ steps.destination.outputs.digest }}"
+          --source-commit "${{ github.sha }}"
+          --workflow-run-url "$SMARTSCAN_WORKFLOW_RUN_URL"
+          --output-dir postgres-release
+      - name: 保存固定制品发布证据
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smartscan-postgres-release-${{ github.sha }}
+          path: |
+            postgres-release
+            postgres-evidence/upstream-verification.json
+            postgres-evidence/postgres-linux-amd64.spdx.json
+            postgres-evidence/postgres-critical-all.json
+            postgres-evidence/postgres-high-critical-fixable.json
+            postgres-evidence/postgres-high-all.json
+            postgres-evidence/ghcr-copy-metadata.json
+            postgres-evidence/ghcr-index.json
+          if-no-files-found: error
+          retention-days: 90

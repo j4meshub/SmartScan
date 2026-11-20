@@ -86,9 +86,9 @@ OPS-000已完成历史现场事实和资源策略确认。部署当天由OPS-001
 
 - GitHub 是唯一代码仓库、PR、评审、合并、Tag 和版本事实来源；GitHub Actions 构建并发布公开 GHCR 镜像。
 - API、Web、CPU Worker、AI Worker、AI Gateway 和运维工具均发布固定 digest，同时生成漏洞扫描、SBOM 和版本锁文件。
-- 主线`0961cc3`和`f38dd4f`五镜像只保留历史证据并拒绝部署。提交`2adbf4f`产生的五个兼容digest已通过目标服务器匿名manifest、来源、平台、SBOM、SLSA、可修复High/Critical、Web子路径和Ops契约核验，等待用户明确接受，不自动回填公开模板或授权拉取。服务器IPv4连接`auth.docker.io:443`超时、IPv6不可达，PostgreSQL候选尚未完成服务器侧核验，完整应用部署继续阻塞。
+- 主线`0961cc3`和`f38dd4f`五镜像只保留历史证据并拒绝部署。提交`2adbf4f`产生的五个兼容digest已通过目标服务器匿名manifest、来源、平台、SBOM、SLSA、可修复High/Critical、Web子路径和Ops契约核验；`OPS-REG-003`正补齐全部Critical扫描。整组等待用户明确接受，不自动回填公开模板或授权拉取。服务器IPv4连接`auth.docker.io:443`超时、IPv6不可达，PostgreSQL改走GHCR固定上游复制供应链，完整应用部署继续阻塞。
 - loop阶段使用[`OPS001_LOOP_SUDO_EXECUTOR.md`](OPS001_LOOP_SUDO_EXECUTOR.md)中的固定执行器。OPS-001B执行器已人工升级，固定空UAT经单次`recreate-empty`和两次独立`verify`通过；50 GiB完整物理预分配、ext4和挂载门禁已获用户接受。该完成事实不扩大AI的Docker、网络、Secret、迁移、Compose或Nginx权限。
-- `OPS-REG-003`将在GitHub Actions中从Docker Official Image固定digest复制完整多平台PostgreSQL manifest到公开GHCR，保留上游来源映射而不伪造构建来源；服务器匿名核验和用户接受前不得进入UAT配置。
+- `OPS-REG-003`已实现GitHub Actions从Docker Official Image固定digest复制完整多平台PostgreSQL manifest到GHCR，保留官方元数据、当前`17`标签关系、SBOM、双漏洞扫描和自定义in-toto映射而不伪造构建来源；main发布、人工公开、服务器匿名核验和用户接受完成前不得进入UAT配置。
 - UAT使用专用完整预分配50 GiB后备文件、reserved block为0的ext4和依赖`/mnt/data`的systemd mount；不修改共享盘挂载或`/etc/fstab`。八个服务根文件系统只读，所有tmpfs有界；Docker日志在loop外按每容器`10m×3`轮转。
 - 服务器不检出源码、不安装项目虚拟环境、不现场构建，也不接受GitHub自动SSH部署；每次变更由服务器共同使用人确认后人工执行。
 - UAT不新增Alertmanager、Node Exporter或主机代理，也不挂载宿主机`/`、`/proc`、`/sys`；现有Prometheus/Grafana接入不是基础UAT前置条件。

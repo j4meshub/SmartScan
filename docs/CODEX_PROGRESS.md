@@ -1,21 +1,30 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-19
+更新时间：2026-11-20
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001C` 应用部署候选核验 |
-| 工作包状态 | 等待人工验收；loop存储已通过，五个SmartScan候选已完成只读核验，等待用户接受；PostgreSQL供应链仍阻塞应用部署 |
-| 当前分支 | `codex/ops-001c-app-candidate-validation` |
-| 最后验证基线 | `2adbf4f`（PR #82合并；OPS-001B执行器、空UAT重建和两次独立验证已获用户接受） |
-| 工作包提交 | `a463384`（存储验收、五镜像候选核验及PostgreSQL GHCR供应链计划） |
-| PR | [#83](https://github.com/j4meshub/SmartScan/pull/83)；只记录脱敏验收与公开制品证据，不包含服务器原始响应或内部地址 |
-| 下一工作包 | `OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链；完成服务器匿名核验和用户接受后，再申请OPS-001应用部署授权 |
+| 当前工作包 | `OPS-REG-003` 官方PostgreSQL固定digest GHCR供应链 |
+| 工作包状态 | 进行中；仓库实现与本机上游只读核验已完成，等待PR CI、main发布、Package人工公开、目标服务器匿名核验和用户接受 |
+| 当前分支 | `codex/ops-reg-003-postgres-ghcr` |
+| 最后验证基线 | `64585b5`（PR #83合并；OPS-001B存储门禁通过，OPS-001C五镜像候选核验完成） |
+| 工作包提交 | 待提交 |
+| PR | 待创建；不得在PR事件发布PostgreSQL镜像 |
+| 下一工作包 | 完成OPS-REG-003外部门禁后回到OPS-001，申请应用部署阶段的精确授权 |
 
 ## 当前工作包进展
+
+- 用户再次确认OPS-001 loop保持enabled/active且不执行`stop`；存储门禁正式通过，OPS-001整体仍等待应用部署。
+- 新增独立PostgreSQL供应链：PR仅核验，只有`main`合并后才能用`GITHUB_TOKEN`将`docker.io/library/postgres@sha256:0d938e...`完整多平台制品内容寻址复制到`ghcr.io/j4meshub/smartscan-postgres`。不使用Dockerfile、不改层、不发布`latest/main`，也不自动替换UAT配置。
+- 2026-11-20本机只读实测确认固定候选仍存在，媒体类型为OCI image index，含16个descriptor和`linux/amd64`；其配置为`PG_MAJOR=17`、`PG_VERSION=17.12-1.pgdg13+1`。Docker Official Images元数据把精确`17`标签绑定到`docker-library/postgres`源码和完整提交。
+- 可变`17`标签当前已移动到`sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c`，不再等于固定候选。流程明确记录这一关系；固定候选的PG 17配置证据仍成立，部署继续只允许digest。
+- PostgreSQL将生成linux/amd64 SPDX SBOM、全部Critical（`ignore-unfixed=false`）与可修复High/Critical（`ignore-unfixed=true`）两类扫描证据，以及明确“固定上游复制而非源码重建”的自定义in-toto声明。
+- `2adbf4f`五个SmartScan固定候选新增全部Critical严格扫描；常规五镜像供应链也增加相同门禁。任何Critical均不自动豁免；不可修复High仍须风险记录。
+- 本工作包尚未连接或修改服务器，没有sudo、pull/login、Docker对象、Secret、数据库、迁移、Nginx或应用启动操作。Package首次发布后的可见性和目标服务器匿名核验仍是人工门禁。
+- 本地专项最终为`12 passed`，全量Python为`546 passed, 23 skipped`、覆盖率87.79%；Ruff检查、177个Python文件格式、迁移漂移和差异空白检查通过。23项跳过仍为既有PostgreSQL/Docker外部环境与Linux受限执行器门禁；PostgreSQL真实SBOM、六镜像扫描和GHCR复制必须由GitHub Actions补证。
 
 - 用户已接受OPS-001B存储验收：`recreate-empty`一次成功，两次独立`verify`通过；50 GiB后备文件完整物理预分配且不再稀疏，ext4、label、reserved block、`rw,nosuid,nodev,noatime`、唯一loop、autoclear、systemd和共享盘安全余量全部通过。SmartScan应用从未启动，没有触碰其他服务或项目；原始服务器输出和真实loop设备名不进入仓库。
 - 目标服务器仅通过`smartscan-server`进行无sudo只读复核。`auth.docker.io` DNS同时返回IPv4/IPv6，但IPv4连接443端口超时、IPv6立即不可达；因此TLS握手、匿名token和`library/postgres` manifest均未发生。PostgreSQL固定digest尚未完成服务器侧核验，不得拉取或部署。
@@ -997,7 +1006,7 @@ git diff --check
 
 ## 下一步
 
-1. 请用户审阅并明确接受`2adbf4f`五个固定GHCR候选；接受不等于拉取或部署授权，新digest不得自动替换。
-2. 执行`OPS-REG-003`，把Docker Official Image的PostgreSQL 17固定digest按原始多平台manifest复制到公开GHCR，完成上游来源、SBOM、漏洞、服务器匿名manifest和用户接受门禁。
+1. 完成`OPS-REG-003` PR CI并合并；主线发布后读取中文来源映射、SBOM和六镜像漏洞报告，任何Critical立即停止并报告。
+2. 用户检查首次创建的`smartscan-postgres` Package不含Secret后人工设为公开；随后只读完成目标服务器匿名manifest核验。六个digest仍须用户最终明确接受，不能自动进入UAT配置。
 3. 存储和全部制品门禁满足后，再单独申请OPS-001应用部署：部署当天重新采集网络/端口/资源，确认三张CIDR、8077/18082，生成仓库外Secret，按镜像实际UID/GID准备子目录，并逐项授权Docker网络、镜像拉取、迁移、Compose和Nginx。
 4. 授权固定数据集到位后，另行解锁 `POC-003/004/005`、`OCR-001`、`EXAM-001`、`BOOK-001/002/003` 与 `AI-005/010/011/012`；Mock、合成样本和模拟器不能替代真实门禁。

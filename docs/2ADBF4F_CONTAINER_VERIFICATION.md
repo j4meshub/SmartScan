@@ -22,7 +22,7 @@
 - 中文发布清单和五个OCI配置标签均绑定完整源提交`2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697`，来源仓库为GitHub SmartScan，清单声明不包含Secret。
 - 目标服务器对五个OCI index的匿名`HEAD`和manifest查询返回HTTP 200；Registry digest逐一匹配，五个index均包含`linux/amd64`。未记录真实loop设备、内部地址或原始响应。
 - 五份SBOM均为SPDX 2.3；五个固定digest均有`application/vnd.in-toto+json`的SLSA provenance，证明主体digest逐一匹配，`resolvedDependencies`绑定完整源提交。
-- 工作流以Trivy扫描`os,library`，设置`ignore-unfixed: true`、`severity: HIGH,CRITICAL`及失败退出码；五项日志均显示被扫描目标为Clean。因此“可修复High/Critical为0”门禁通过；该证据不宣称不可修复漏洞已被扫描为0。
+- 原工作流以Trivy扫描`os,library`，设置`ignore-unfixed: true`、`severity: HIGH,CRITICAL`及失败退出码；五项日志均显示被扫描目标为Clean。因此“可修复High/Critical为0”门禁通过。`OPS-REG-003`已增加五个固定digest的`ignore-unfixed=false`、`severity=CRITICAL`严格补扫；在对应Actions结果通过前，本记录仍不宣称不可修复Critical为0。
 - H5部署路径单元测试和Chromium E2E覆盖`/smartscan/`及`/smartscan/api`；主线Web作业成功。
 - Ops镜像从同一提交复制`tools/`，包含loop计划/证据、UAT Compose、只读根文件系统、有界tmpfs、50 GiB/48 GiB预算及8 vCPU/16 GiB整栈限制的校验逻辑；主线API与容器作业已执行相应测试和Compose解析。
 
@@ -30,7 +30,7 @@
 
 目标服务器对`auth.docker.io`的DNS解析同时获得IPv4和IPv6结果，但IPv4连接443端口超时，IPv6立即无法连接；TLS握手、匿名Registry token和`library/postgres` manifest查询均未发生。因此候选`postgres@sha256:0d938e975177bef9f1f61f3f9dbcf2e0aa0a139568f66d3415ed8892eb97f6ac`尚未完成服务器侧核验，不能进入实际部署。
 
-下一独立工作包`OPS-REG-003`应在GitHub Actions中从Docker Official Image的固定digest复制完整多平台manifest到公开GHCR，不重建或改写上游层；同时保存上游仓库、固定digest、`17` tag对应关系、平台清单、SBOM、漏洞结果和自定义in-toto来源映射。发布后仍须人工确认公开可见性、目标服务器匿名manifest核验和用户明确接受，不能把镜像复制误记为Docker官方签名或SmartScan自行构建的来源证明。
+`OPS-REG-003`已进入仓库实现：GitHub Actions从Docker Official Image的固定digest复制完整多平台manifest到GHCR，不重建或改写上游层；同时保存上游仓库、固定digest、当前`17` tag关系、平台清单、SBOM、两类漏洞结果和自定义in-toto来源映射。2026-11-20只读核验确认可变`17`标签已移动，固定候选仍由`PG_MAJOR=17`和`PG_VERSION=17.12-1.pgdg13+1`证明为PostgreSQL 17。发布后仍须人工确认公开可见性、目标服务器匿名manifest核验和用户明确接受，不能把镜像复制误记为Docker官方签名或SmartScan自行构建的来源证明。
 
 ## 当前边界
 

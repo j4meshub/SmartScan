@@ -28,7 +28,7 @@
 
 1. 使用仓库 Dockerfile 构建本地镜像。
 2. 生成 SPDX JSON SBOM，并保存为 `container-evidence-<服务>` Artifact。
-3. 使用 Trivy 检查操作系统与语言依赖；存在有修复版本的 High 或 Critical 漏洞时失败。暂时没有修复版本的漏洞仍出现在报告中，发布前必须完成风险复核。
+3. 使用 Trivy 以`ignore-unfixed=false`检查全部Critical，任何Critical都失败；再以`ignore-unfixed=true`检查可修复High/Critical，存在可用修复版本的High或Critical同样失败；另存全部High JSON报告，确保不可修复High能在发布前逐项风险复核。
 
 `main` 发布阶段重新使用相同缓存构建并推送：
 
@@ -86,3 +86,7 @@ docker build -f deploy/ops/Dockerfile -t smartscan-ops:local .
 ```
 
 Windows 本机没有 Docker 时，前三项必须本地通过，五类真实构建、SBOM 和扫描由 GitHub Actions 补证。
+
+## PostgreSQL固定上游制品
+
+目标服务器无法访问Docker Hub认证端点，因此PostgreSQL不走服务器直连上游。`OPS-REG-003`使用独立工作流把Docker Official Image固定digest完整复制到GHCR，并保存官方元数据、可变`17`标签关系、完整平台、PG 17配置、SBOM、双漏洞扫描和自定义in-toto来源映射。它不使用Dockerfile重建，也不声称SmartScan或Docker官方构建了GHCR复制品。详见[PostgreSQL固定digest GHCR供应链](POSTGRES_GHCR_SUPPLY_CHAIN.md)。
