@@ -84,6 +84,13 @@ def test_runtime_contract_covers_database_lifecycle_and_tools() -> None:
         "pg_basebackup",
         "pg_verifybackup",
         '"${ops_image}" -m services.api.app.migrations upgrade',
+        '--env-file "${migration_env}"',
+        'chmod 0600 "${migration_env}"',
+        "secrets.token_urlsafe(48)",
+        '"SMARTSCAN_ENV": "production"',
+        '"SMARTSCAN_SMS_MODE": "disabled"',
+        '"SMARTSCAN_WECOM_MODE": "disabled"',
+        '"SMARTSCAN_OCR_ENABLED": "true"',
         "sudo chmod 0700",
         "sudo rm -rf",
         'stage="start_postgres"',
@@ -94,6 +101,7 @@ def test_runtime_contract_covers_database_lifecycle_and_tools() -> None:
         assert evidence in text
 
     assert "docker inspect" not in text.split("on_error()", 1)[1].split("cleanup()", 1)[0]
+    assert "REPLACE_WITH" not in text
 
 
 def test_analyze_gosu_requires_identical_fixed_release_and_records_symbols(

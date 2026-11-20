@@ -9,6 +9,7 @@ network="smartscan-postgres-audit-${GITHUB_RUN_ID:-local}"
 data_root="${work_root}/data"
 init_sql="${work_root}/10-utf8.sql"
 dump_file="${work_root}/smartscan.dump"
+migration_env="${work_root}/migration.env"
 stage="prepare"
 
 wait_for_final_health() {
@@ -60,6 +61,43 @@ CREATE TABLE public.smartscan_utf8_probe (
 INSERT INTO public.smartscan_utf8_probe (id, content) VALUES (1, '智能扫描验证');
 SQL
 chmod 0444 "${init_sql}"
+python - "${migration_env}" <<'PY'
+import base64
+import json
+import secrets
+import sys
+from pathlib import Path
+
+output = Path(sys.argv[1])
+hmac_id = "ci-v1"
+encryption_id = "phone-ci-v1"
+values = {
+    "SMARTSCAN_ENV": "production",
+    "SMARTSCAN_DATABASE_URL": (
+        "postgresql+psycopg://smartscan:ci-audit-only@postgres:5432/smartscan"
+    ),
+    "SMARTSCAN_AUTO_MIGRATE": "false",
+    "SMARTSCAN_STORAGE_ROOT": "/tmp/smartscan-storage",
+    "SMARTSCAN_SECRET_KEY": secrets.token_urlsafe(48),
+    "SMARTSCAN_PHONE_HMAC_ACTIVE_KEY_ID": hmac_id,
+    "SMARTSCAN_PHONE_HMAC_PEPPERS": json.dumps(
+        {hmac_id: secrets.token_urlsafe(48)}, separators=(",", ":")
+    ),
+    "SMARTSCAN_PHONE_ENCRYPTION_ACTIVE_KEY_ID": encryption_id,
+    "SMARTSCAN_PHONE_ENCRYPTION_KEYS": json.dumps(
+        {
+            encryption_id: base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
+        },
+        separators=(",", ":"),
+    ),
+    "SMARTSCAN_SUPERADMIN_PASSWORD": secrets.token_urlsafe(32),
+    "SMARTSCAN_SMS_MODE": "disabled",
+    "SMARTSCAN_WECOM_MODE": "disabled",
+    "SMARTSCAN_OCR_ENABLED": "true",
+}
+output.write_text("".join(f"{key}={value}\n" for key, value in values.items()), encoding="utf-8")
+PY
+chmod 0600 "${migration_env}"
 
 stage="create_test_network"
 docker network create "${network}" >/dev/null
@@ -100,9 +138,7 @@ test "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT c
 stage="run_smartscan_migrations"
 docker run --rm \
   --network "${network}" \
-  --env SMARTSCAN_DATABASE_URL=postgresql+psycopg://smartscan:ci-audit-only@postgres:5432/smartscan \
-  --env SMARTSCAN_ENV=production \
-  --env SMARTSCAN_AUTO_MIGRATE=false \
+  --env-file "${migration_env}" \
   "${ops_image}" -m services.api.app.migrations upgrade
 test -n "$(docker exec "${container}" psql -U smartscan -d smartscan -Atc 'SELECT version_num FROM alembic_version')"
 
