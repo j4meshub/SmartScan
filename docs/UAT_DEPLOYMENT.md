@@ -36,7 +36,9 @@
 | `deploy/sudoers/smartscan-uat-loop-storage` | 只允许五组精确命令参数的sudoers模板 |
 | `docs/OPS001_LOOP_SUDO_EXECUTOR.md` | 用户人工审核、安装、验证和回滚说明 |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template` | 只含 `/smartscan/` 的8077增量location模板 |
-| `tools/shared_host_preflight.py` | 现场只读采集与离线冲突校验 |
+| `tools/shared_host_preflight.py` | 现场只读采集、离线冲突校验及OPS-001E固定三证据生成 |
+| `tools/run_uat_bootstrap_over_ssh.py` | Windows通过固定SSH别名以内存载荷运行生成器，CIDR不进入参数或Git |
+| `docs/OPS001E_UAT_BOOTSTRAP_EVIDENCE.md` | 仓库外暂存、摘要审核、root安装及下一授权边界 |
 | `tools/validate_uat_config.py` | 部署参数、审批、运行配置和 Compose 契约校验 |
 | `tools/validate_uat_loop_storage.py` | 50 GiB、非稀疏、ext4、autoclear与systemd证据校验 |
 | `docs/OPS001_UAT_CHANGE_PLAN.md` | 未执行的精确变更对象、顺序、验收、授权和回滚方案 |
@@ -91,8 +93,8 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 2. 形成仓库外精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值记录。
 3. 复核已验收的50 GiB非稀疏loop、ext4、systemd mount、实际可用空间与autoclear仍正常；不得重新格式化、扩大或影响现有loop挂载。
 4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验；只有取得新的应用部署授权后才可拉取并核对RepoDigest、平台、版本和UID/GID，且不得使用`main`或`latest`。
-5. OPS-001C受限执行器、固定配置工具和sudoers已人工安装，`prepare-directories`已单独授权并成功；固定目录存在且为空。随后分别安装root拥有的仓库外输入/脱敏证据，并单独授权`generate-config`和`verify-config`。
-6. 固定真实OCR模型包的官方来源、许可证、版本、完整文件清单和SHA-256，并只读安装到模型目录；空目录、Mock模型或启动时联网下载不能通过。创建三张网络、拉取六个固定digest并核对RepoDigest、平台、版本和实际UID/GID后，安装固定镜像身份记录，再单独授权`apply-ownership`。
+5. OPS-001C受限执行器、固定配置工具和sudoers已人工安装，`prepare-directories`已单独授权并成功。OPS-001E重新通过现场只读门禁后，在固定用户暂存根生成三份0600仓库外证据；共同使用人核对SHA-256并独立安装为root拥有，再分别授权`generate-config`和`verify-config`。
+6. 固定真实OCR模型已按来源、许可、版本和完整SHA-256清单完成受限安装，模型状态为`installed=true,status=passed`；空目录、Mock或运行时联网下载仍禁止。创建三张网络、拉取六个固定digest并核对RepoDigest、平台、版本和实际UID/GID后，安装固定镜像身份记录，再单独授权`apply-ownership`。
 7. 校验配置和Compose，启动PostgreSQL并执行一次性迁移，再启动API、两个CPU Worker与Web；AI Profile另行授权。
 8. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
 9. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
@@ -101,4 +103,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-23，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过；OPS-001C工具已人工安装，目录准备成功，配置/Secret/镜像身份尚不存在。OCR模型`linux/amd64`子digest已接受；服务器人工pull在Layer约376.8 KB处连接重置，直接Docker拉取路线停止。OCR-002D正在以同一固定Layer实现Windows断点下载、离线复核和受限安全暂存；PR合并、执行器人工安装、本机下载、SCP、`stage/verify`与既有`install/verify`仍须逐项授权。模型目录为空，实际部署还缺上述模型门禁、仓库外输入与Secret、Docker网络、应用镜像拉取/身份、PostgreSQL/迁移、Compose应用和Nginx增量。
+截至2026-11-23，OPS-000事实采集、50 GiB loop、六镜像候选、`OPS-001D`最终只读预检及OCR固定模型受限安装均已通过；OPS-001C工具已人工安装且目录准备成功。OPS-001E本轮重新确认CIDR、8077/18082、资源、loop与OCR门禁，正在补齐仓库外三证据生成器。配置/Secret/镜像身份仍不存在，应用未启动；实际部署还缺三证据root安装、`generate-config/verify-config`、Docker网络、应用镜像拉取/身份、目录所有权、PostgreSQL/迁移、Compose应用和Nginx增量。

@@ -7,15 +7,23 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OCR-002D` 可审计离线模型Layer传输 |
-| 工作包状态 | 完成；仓库工具、测试、文档和真实Layer CI通过，服务器安装与模型传输仍未授权 |
-| 当前分支 | `codex/ocr-002d-offline-model-transfer` |
-| 最后验证基线 | `ca291a5`：PR #99代码头20项成功、4项按PR规则跳过；Windows、Ubuntu及真实Layer端到端门禁全部通过 |
-| 工作包提交 | `49a4771`（主体）、`1d713df`（Config摘要）、`6513253`（真实Layer依赖）、`ca291a5`（Windows UTF-8） |
-| PR | [#99](https://github.com/j4meshub/SmartScan/pull/99)（全部适用CI通过） |
-| 下一工作包 | PR合并后由共同使用人人工安装固定暂存执行器；再分别授权本机下载、SCP、`stage/verify`及既有`install/verify`，任何授权均不自动延续 |
+| 当前工作包 | `OPS-001E` UAT仓库外部署输入与证据准备 |
+| 工作包状态 | 进行中；现场只读门禁及仓库实现本地验证通过，等待中文PR与Ubuntu CI补证 |
+| 当前分支 | `codex/ops-001e-uat-bootstrap-evidence` |
+| 最后验证基线 | 专项`52 passed, 5 skipped`；全量`606 passed, 37 skipped`、覆盖率87.74%，Ruff/189文件格式/迁移漂移通过；本机无Docker CLI，Compose解析等待PR CI |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | PR合并后在固定用户暂存目录生成三份0600证据并报告SHA-256；由共同使用人独立授权root安装后，才进入`generate-config/verify-config` |
 
 ## 当前工作包进展
+
+- OCR-002D离线链路已按独立授权完成本机下载、固定路径SCP、安全`stage/verify`和最终`install/verify`；目标服务器模型安装器当前为`installed=true,status=passed`，版本`PP-OCRv6-small-v1`。上传Layer与暂存树仍完整，未执行删除、替换或清理。OCR-002服务器模型安装门禁正式通过。
+- OPS-001E重新通过唯一SSH别名核对可信主机身份。loop受限执行器`status/verify`、OCR模型`verify/status`均通过；50 GiB完整预分配、ext4、挂载、autoclear、systemd和至少48 GiB可用空间保持正常。
+- 本轮现场Docker网络27张、IPv4子网25个、IPv4路由84条、策略规则3条、可见VPN接口1个；三张仓库外候选`/28`彼此独立且与现场IPAM、路由和接口前缀无冲突。8077仍有监听和两个配置指令，19个可读Nginx配置文件中未发现`/smartscan/`或18082引用；18082空闲。普通用户执行`nginx -T`因配置打开权限失败，未使用sudo，改由只读解析全部可访问include完成最小冲突核验。
+- `/mnt/data`当前约690.4 GiB可用，高于约527.9 GiB安全余量，inode空闲98.3%；宿主机128逻辑CPU、约399.3 GiB可用内存、8 GiB Swap中约5.6 GiB空闲，15分钟负载约9.78。当前容器90个、运行57个、无unhealthy或restarting；相比上次仅容器总数增加2、资源数值小幅波动，未触发停止阈值。
+- 仓库现有工具只能采集/校验快照或消费已安装输入，不能安全生成三份仓库外文件。依照用户门禁，没有手写JSON；新增`prepare-bootstrap`固定生成路径和Windows内存SSH启动器，真实CIDR只经标准输入进入远端进程，不出现在Git、命令参数或摘要输出。原始IPAM/路由快照只驻留内存。
+- 本工作包截至当前没有生成三份服务器暂存文件，没有安装到`/etc/smartscan/uat`，没有生成或读取Secret，也没有创建Docker网络、拉取镜像、连接数据库、迁移、启动容器或修改Nginx。
+- OPS-001E专项最终`52 passed, 5 skipped`，跳过项仅为Windows不具备的POSIX权限、Bash或`visudo`路径；全量Python`606 passed, 37 skipped`、覆盖率87.74%，Ruff检查、189个Python文件格式和迁移漂移全部通过。本机没有Docker CLI，Compose真实解析与Linux权限/原子输出由PR Ubuntu Runner补证，不得据本机缺失伪记为通过。
 
 - 服务器人工执行已接受平台子digest的pull后，在唯一Layer约376.8 KB处收到`connection reset by peer`；结合OCR-002C的1 MiB Range仅约19.1 KB/s，确认直接Docker拉取路线停止。Docker可能保留部分缓存，本工作包不清理、不删除且不执行`prune`。
 - OCR-002D固定同一供应链index、`linux/amd64`manifest、config、唯一Layer及来源提交；离线传输下载的是原始26,534,130字节Layer，大小或SHA-256变化立即失败，禁止重新打包后冒用原Layer摘要。

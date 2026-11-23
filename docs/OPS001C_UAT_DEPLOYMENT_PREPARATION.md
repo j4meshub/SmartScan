@@ -43,9 +43,9 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation status
 
 | 文件 | 所有者/权限 | 产生方式 |
 |---|---|---|
-| `deployment-input.json` | `root:root 0600` | 共同使用人从仓库外现场记录生成并人工安装；只含内部入口、CIDR、确认记录和监控缺口记录，不含Secret |
-| `preflight-summary.json` | `root:root 0600` | 从已通过的最终只读预检生成脱敏摘要并人工安装 |
-| `loop-storage-evidence.json` | `root:root 0600` | 从已通过的loop验收生成脱敏摘要并人工安装 |
+| `deployment-input.json` | `root:root 0600` | OPS-001E在固定用户暂存根从仓库外CIDR和现场事实生成，共同使用人核对摘要后独立安装；不含Secret |
+| `preflight-summary.json` | `root:root 0600` | OPS-001E从内存中的新鲜只读快照生成脱敏摘要，原始IPAM/路由不落盘 |
+| `loop-storage-evidence.json` | `root:root 0600` | OPS-001E从受限loop验证和只读挂载事实生成；真实loop设备仅留在仓库外0600文件 |
 | `deploy.env` | `szhzx:szhzx 0600` | `generate-config`本机生成；供Compose读取 |
 | `runtime.env` | `szhzx:szhzx 0600` | `generate-config`本机生成；供容器读取 |
 | `shared-host-allocation.json` | `root:root 0600` | `generate-config`根据固定输入生成 |
@@ -95,14 +95,9 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation status
 
 CPU Worker的`main()`在进入心跳和领取任务循环前调用`get_ocr_engine()`。生产配置固定`SMARTSCAN_OCR_ENABLED=true`，模型目录缺少`manifest.json`、版本不符、目录不完整或任一文件SHA-256不符都会使Worker启动失败。
 
-仓库当前只有适配器、清单生成工具和自动化假模型，没有可部署的真实`PP-OCRv6_small_det`/`PP-OCRv6_small_rec`权重包，也没有已接受的来源快照、许可证证据、完整文件清单和SHA-256。因此：
+OCR-002D现已完成同一固定Layer的离线下载、上传、安全暂存和最终受限安装。目标服务器模型安装器返回`installed=true,status=passed`，版本为`PP-OCRv6-small-v1`；完整文件集合、许可证、来源和逐文件SHA-256均已通过，模型目录为`root:root`且不可组/全局写。模型目录继续只读挂载到`/opt/smartscan/models/ocr`，API、PostgreSQL和Web不读取模型。
 
-- `prepare-directories`可以创建空模型目录，但`verify-config`必须失败；
-- 不得使用空目录、Mock模型或首次启动联网下载通过门禁；
-- 在启动两个CPU Worker前，必须另行完成模型制品工作包：固定官方来源和取得时间、许可证文本/版本、内部模型版本`PP-OCRv6-small-v1`、完整文件清单/SHA-256、总大小不超过4 GiB，并以`root:root`、不可组/全局写的方式安装；
-- 模型目录只读挂载到`/opt/smartscan/models/ocr`，API、PostgreSQL和Web不读取模型。
-
-模型缺失不阻止仓库工具完成，但阻塞`verify-config`和应用Compose启动阶段。
+因此OCR文件门禁不再阻塞`verify-config`，但真实授权数据集质量验收仍未完成；模型安装通过不能冒充识别准确率、方向融合、容量或双Worker业务验收通过。空目录、Mock和运行时联网下载继续禁止。
 
 ## 镜像身份和所有权
 
@@ -174,13 +169,12 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation status
 
 1. 人工安装三个root资产；
 2. `prepare-directories`；
-3. 安装仓库外输入和两份脱敏证据；
+3. 按[`OPS001E_UAT_BOOTSTRAP_EVIDENCE.md`](OPS001E_UAT_BOOTSTRAP_EVIDENCE.md)生成、审核并安装仓库外输入和两份脱敏证据；
 4. `generate-config`与`verify-config`；
-5. 固定OCR模型包选型、安装和验证；
-6. 创建三张固定网络；
-7. 拉取六个固定digest并产生镜像身份记录；
-8. `apply-ownership`；
-9. 启动PostgreSQL、执行迁移、启动API/两个CPU Worker/Web；
-10. 单独评审共享Nginx include、`nginx -t`和reload。
+5. 创建三张固定网络；
+6. 拉取六个固定digest并产生镜像身份记录；
+7. `apply-ownership`；
+8. 启动PostgreSQL、执行迁移、启动API/两个CPU Worker/Web；
+9. 单独评审共享Nginx include、`nginx -t`和reload。
 
 AI Profile、数据删除、清理、Nginx写入和reload均不在本执行器中。

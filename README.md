@@ -223,7 +223,7 @@ Compose 会先运行一次性 `migrate` 服务，迁移成功后才启动 API �
 
 AI 网关使用独立 `ai` Profile，默认不启动；需要验证注册配置时执行 `docker compose --profile ai -f deploy/compose/docker-compose.yml up --build ai-gateway`。该操作不会自动启用任何 Provider；容器默认只读、无 Linux capabilities，并启用 `no-new-privileges`。
 
-共享宿主机按需验收使用独立的[`smartscan-uat`配置](docs/UAT_DEPLOYMENT.md)：复用8077的`/smartscan/`路径、仅发布`127.0.0.1:18082`，使用完整预分配50 GiB loop ext4、只读容器根文件系统和整栈8 vCPU/16 GiB。固定网络、变更、验证和回滚由服务器共同使用人确认；服务器只人工拉取明确接受的GHCR固定digest，不保存源码或现场构建。实际创建对象、sudo边界、验收和撤回顺序见[OPS-001变更方案](docs/OPS001_UAT_CHANGE_PLAN.md)，目录/配置/Secret和镜像身份的最小权限准备见[OPS-001C受限执行器说明](docs/OPS001C_UAT_DEPLOYMENT_PREPARATION.md)，真实CPU OCR模型的固定来源、独立制品和受限安装见[OCR-002模型供应链](docs/OCR_MODEL_SUPPLY_CHAIN.md)。原[隔离 staging 部署基线](docs/STAGING_DEPLOYMENT.md)只保留历史证据。
+共享宿主机按需验收使用独立的[`smartscan-uat`配置](docs/UAT_DEPLOYMENT.md)：复用8077的`/smartscan/`路径、仅发布`127.0.0.1:18082`，使用完整预分配50 GiB loop ext4、只读容器根文件系统和整栈8 vCPU/16 GiB。固定网络、变更、验证和回滚由服务器共同使用人确认；服务器只人工拉取明确接受的GHCR固定digest，不保存源码或现场构建。实际创建对象、sudo边界、验收和撤回顺序见[OPS-001变更方案](docs/OPS001_UAT_CHANGE_PLAN.md)，目录/配置/Secret和镜像身份的最小权限准备见[OPS-001C受限执行器说明](docs/OPS001C_UAT_DEPLOYMENT_PREPARATION.md)，三份仓库外部署输入与证据的内存采集、固定暂存和root安装边界见[OPS-001E仓库外证据说明](docs/OPS001E_UAT_BOOTSTRAP_EVIDENCE.md)，真实CPU OCR模型的固定来源、独立制品和受限安装见[OCR-002模型供应链](docs/OCR_MODEL_SUPPLY_CHAIN.md)。原[隔离 staging 部署基线](docs/STAGING_DEPLOYMENT.md)只保留历史证据。
 
 共享Nginx增量模板、`internal`/Range容器链路和后续TLS门禁见[TLS、内部文件发送与BBR基线](docs/NETWORK_AND_FILE_DELIVERY.md)。HTTP基础UAT只覆盖登录、项目、上传、处理、预览和导出；实时相机、企微及正式移动网络验收继续要求HTTPS。
 

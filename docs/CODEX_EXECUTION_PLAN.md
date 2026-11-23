@@ -87,7 +87,7 @@ M2 门禁：统一账号、冲突、停用绕过、删除和权限矩阵集成�
 | `SCAN-001` 页面版本与复核 | 完成 | M0 | 页面旋转、质量、处理版本和独立复核状态；原图不可覆盖 |
 | `JOB-001` 完整任务状态机 | 完成 | SCAN-001 | 排队、基础处理、基础就绪、可选增强、就绪、可重试失败、最终失败和取消；租约可恢复 |
 | `OCR-001` 基础 OCR | 等待人工验收 | JOB-001 | CPU OCR、四方向融合、标题候选、隐私字段过滤和默认命名；代码与 CI 已通过，真实模型固定集、方向 `≥98%` 和 CPU 容量待验收 |
-| `OCR-002` UAT离线模型制品 | 阻塞 | OCR-001, OPS-001C | 固定来源、许可、真实CPU、SBOM/来源证明、漏洞、匿名manifest和安装器均通过；服务器直接拉取路线因Blob/CDN连接重置停止，改由OCR-002D传输同一已接受Layer。离线暂存、安装和Worker启动仍须独立授权 |
+| `OCR-002` UAT离线模型制品 | 完成 | OCR-001, OPS-001C | 固定来源、许可、真实CPU、SBOM/来源证明、漏洞、匿名manifest和安装器均通过；服务器直接拉取路线因Blob/CDN连接重置停止，改由OCR-002D传输同一已接受Layer。固定Layer上传、安全暂存和最终`install/verify`现已通过，模型为`PP-OCRv6-small-v1`；Worker启动仍属于OPS-001应用阶段 |
 | `OCR-002A` 模型镜像拉取兼容性只读诊断 | 完成 | OCR-002、用户只读授权 | Registry对象树完整，但顶层index与平台子manifest仅接受OCI媒体类型，Docker list/schema2单独协商返回404；Docker 29.0.2 containerd image store无mirror、无用户配置干扰，目标目录仍为空。结论为C类媒体协商差异；不自动接受子digest、不重试拉取 |
 | `OCR-002B` 平台子manifest固定拉取 | 放弃 | OCR-002A、用户接受与拉取授权 | `linux/amd64`子digest、config、layer和来源提交已获精确接受，但服务器人工pull最终在Layer约376.8 KB处连接重置；直接Docker拉取路线按D-102停止并由OCR-002D替代，失败证据保留且不清理部分缓存 |
 | `OCR-002C` GHCR模型Layer传输只读诊断 | 完成 | OCR-002B、用户只读授权 | 原始pull进程不存在，镜像未落盘、零关联容器且模型目录为空。固定layer HEAD为200、长度/摘要正确；1 MiB Range为206但耗时54.900秒、平均19,099.9 B/s，归类为B类Blob/CDN传输严重受限，不是权限或对象缺失 |
@@ -188,9 +188,10 @@ M8 门禁：所有 Provider 关闭或故障时不影响扫描、净化、扫书�
 | `OPS-REG-003B` 可审计PostgreSQL 17运行镜像 | 完成 | OPS-REG-003A | PR #85合并为`264520c`；主线运行`44673210889`完成严格扫描、gosu二进制可达性、精确VEX、SBOM、SLSA和数据库生命周期测试，并发布`ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0`。Package公开、用户接受和目标服务器匿名核验均已完成；拉取与部署仍是独立人工门禁 |
 | `OPS-001A` UAT loop受限sudo执行器准备 | 完成 | GOV-005, OPS-000, PR #80 | PR #81已合并，服务器共同使用人已人工审核并安装固定路径执行器、mount单元和精确sudoers。首次`create`创建了50 GiB ext4且内部验证通过，但稍后独立`verify`暴露ext4 lazy初始化后的`backing_sparse`现场兼容问题；该新证据由`OPS-001B`处理，不回写为本工作包遗漏 |
 | `OPS-001B` ext4 loop完整预分配修复 | 完成 | OPS-001A、现场空UAT证据 | PR #82已合并，用户人工升级执行器后单独授权`recreate-empty`；固定空UAT已用禁用lazy初始化的参数重建，两次独立`verify`均通过。50 GiB完整物理预分配、ext4/label/reserved block、挂载参数、唯一loop/autoclear、systemd及共享盘安全余量均获用户接受，应用从未启动且未触碰其他项目 |
-| `OPS-001C` 应用部署候选核验与准备 | 完成 | OPS-001B, OPS-REG-002, OPS-001D, OPS-REG-003B | PR #89完成固定目录/配置、主机本地Secret生成、镜像身份证据和五命令受限sudo执行器。真实OCR模型digest现已固定并接受，但尚未拉取或安装，继续阻塞两个CPU Worker；配置、网络、拉取、暂存、模型安装、所有权、迁移、容器、Nginx或启动仍需分阶段授权，后续digest不得自动替换 |
+| `OPS-001C` 应用部署候选核验与准备 | 完成 | OPS-001B, OPS-REG-002, OPS-001D, OPS-REG-003B | PR #89完成固定目录/配置、主机本地Secret生成、镜像身份证据和五命令受限sudo执行器；三个root资产已人工安装，目录准备已通过。真实OCR模型已由OCR-002D固定安装并验证；配置、网络、应用镜像拉取、所有权、迁移、容器、Nginx或启动仍需分阶段授权，后续digest不得自动替换 |
 | `OPS-001D` 应用部署前最终只读预检 | 完成 | OPS-001B, OPS-001C, OPS-REG-003B、用户只读授权 | 用户已接受可审计PostgreSQL固定digest并明确拒绝后续文档提交产生的额外digest。目标服务器通过唯一SSH别名完成六镜像匿名manifest、PostgreSQL `linux/amd64`配置、loop、8077/18082、Docker IPAM、全部路由/策略路由/接口及资源门禁复核；全部通过且未拉取镜像、写文件或修改服务器 |
-| `OPS-001` 共享主机验收栈 | 等待人工验收 | GOV-005, OPS-000, OPS-001A, OPS-001B, OPS-001C, OPS-001D, OPS-REG-003B, OCR-002, M3 | loop存储、六个应用/数据库固定镜像及部署现场只读门禁均已通过，应用尚未启动。OCR模型实际拉取当前阻塞，执行器已安装但目标目录为空；解阻后仍由用户分别授权模型拉取/暂存/安装、仓库外证据/Secret、三张网络、应用镜像拉取、身份/所有权、PostgreSQL与迁移、Compose及Nginx增量。预检通过不构成写入或部署授权 |
+| `OPS-001E` UAT仓库外部署输入与证据准备 | 进行中 | OPS-001C, OPS-001D, OCR-002、用户仓库外暂存授权 | 重新采集只读IPAM/路由/端口/资源/Nginx最小结构并核对loop和OCR；从标准输入接收三张仓库外CIDR，在固定用户暂存目录原子生成三份0600证据。原始快照只驻留内存，不打印内部入口、CIDR、真实loop设备或Secret；root安装及配置生成仍需独立授权 |
+| `OPS-001` 共享主机验收栈 | 等待人工验收 | GOV-005, OPS-000, OPS-001A, OPS-001B, OPS-001C, OPS-001D, OPS-001E, OPS-REG-003B, OCR-002, M3 | loop存储、OCR模型安装、六个应用/数据库固定镜像及部署现场只读门禁均已通过，应用尚未启动。当前先完成仓库外输入/证据生成与独立root安装；此后仍由用户分别授权Secret配置、三张网络、应用镜像拉取、身份/所有权、PostgreSQL与迁移、Compose及Nginx增量。预检或模型通过均不构成应用部署授权 |
 | `OPS-002A` 内网/VPN HTTPS 入口 | 未开始 | OPS-001 基础 UAT 通过 | 基础 HTTP UAT 通过后再配置内部域名和可信 HTTPS；用于 `getUserMedia` 实时相机、企业微信和正式移动端安全验收。不占用主机80/443，不覆盖共享 Nginx 全局配置 |
 | `OPS-002B` 公网或零信任入口 | 阻塞 | OPS-002A、公司公网访问决策 | 后续非 VPN 移动使用独立立项；即使开放产品入口，也不重新暴露 AI 媒体下载路由 |
 | `OPS-003` 共享监控接入 | 进行中 | OPS-001 | 保留应用健康检查和带令牌的应用指标；能方便接入时复用现有 Prometheus/Grafana，否则 UAT 使用人工资源检查并记录共同使用人接受的能力缺口。不新增 Alertmanager、Node Exporter或独立19081端口，不挂载宿主机 `/`、`/proc`、`/sys`；不阻塞基础 UAT |
