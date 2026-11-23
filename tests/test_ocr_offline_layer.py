@@ -245,11 +245,13 @@ def test_config_blob_binds_platform_and_source_commit(
         separators=(",", ":"),
     ).encode()
     monkeypatch.setattr(downloader, "CONFIG_SIZE", len(payload))
+    config_digest = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+    monkeypatch.setattr(downloader, "CONFIG_DIGEST", config_digest)
     response = _Response(
         payload,
         status=200,
         headers={
-            "Docker-Content-Digest": contract.CONFIG_DIGEST,
+            "Docker-Content-Digest": config_digest,
             "Content-Length": str(len(payload)),
         },
     )
@@ -257,11 +259,13 @@ def test_config_blob_binds_platform_and_source_commit(
     downloader._verify_config_blob("memory-only-token")
 
     payload = payload.replace(contract.SOURCE_COMMIT.encode(), b"0" * 40)
+    config_digest = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+    monkeypatch.setattr(downloader, "CONFIG_DIGEST", config_digest)
     response = _Response(
         payload,
         status=200,
         headers={
-            "Docker-Content-Digest": contract.CONFIG_DIGEST,
+            "Docker-Content-Digest": config_digest,
             "Content-Length": str(len(payload)),
         },
     )

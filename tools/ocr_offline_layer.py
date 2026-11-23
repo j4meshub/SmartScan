@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import ssl
@@ -164,7 +165,8 @@ def _verify_config_blob(token: str) -> None:
     try:
         if response.getcode() != 200:
             raise DownloadError("config_request_failed")
-        if response.headers.get("Docker-Content-Digest") != CONFIG_DIGEST:
+        returned_digest = response.headers.get("Docker-Content-Digest")
+        if returned_digest is not None and returned_digest != CONFIG_DIGEST:
             raise DownloadError("config_digest_mismatch")
         content_length = response.headers.get("Content-Length")
         if content_length is not None and int(content_length) != CONFIG_SIZE:
@@ -172,6 +174,8 @@ def _verify_config_blob(token: str) -> None:
         payload_bytes = response.read(CONFIG_SIZE + 1)
         if len(payload_bytes) != CONFIG_SIZE:
             raise DownloadError("config_size_mismatch")
+        if f"sha256:{hashlib.sha256(payload_bytes).hexdigest()}" != CONFIG_DIGEST:
+            raise DownloadError("config_digest_mismatch")
         payload = json.loads(payload_bytes.decode("utf-8"))
     except (OSError, ValueError) as exc:
         raise DownloadError("config_invalid") from exc

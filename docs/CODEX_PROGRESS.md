@@ -22,6 +22,7 @@
 - Windows工具只接受`download/verify`，令牌仅驻留内存，HTTPS重定向限制到GHCR批准域名；支持固定`.part`与Range续传，完成后校验OCI描述符、config平台/来源、gzip/tar、精确大小和摘要，再原子改名。下载目录已被Git忽略。
 - 新受限暂存器只允许固定`stage/verify/status`，验证上传文件所有者、0600权限、大小、摘要和安全tar成员；拒绝路径穿越、链接、设备、FIFO、重复/额外文件、超过4 GiB及已有/部分状态。成功树为`root:root`、目录0755、文件0444，并复用现有模型安装器清单验证；失败保留现场且无删除能力。
 - 本地专项最终`28 passed, 8 skipped`，跳过项为Windows不具备的POSIX所有权、符号链接、Bash/visudo和真实Layer环境；全量Python`596 passed, 36 skipped`、覆盖率87.74%，Ruff检查、191个Python文件格式及迁移漂移全部通过。真实26,534,130字节Layer下载、安全暂存和既有安装器集成由PR Ubuntu Runner补证，真实文件不会提交仓库。
+- PR #99首轮真实Layer作业在读取config Blob后报`config_digest_mismatch`：GHCR重定向后的Blob/CDN响应不保证保留Registry的`Docker-Content-Digest`头。修复为“响应头存在时必须匹配，同时始终对1877字节正文计算固定SHA-256”，并保留平台、来源提交和精确大小检查；这是传输语义兼容修复，不是放宽config身份门禁。
 - 本工作包未连接或修改`smartscan-server`，未下载真实模型到仓库，未上传、提取、安装模型，也未执行Docker、sudo、Secret、数据库、网络、容器或Nginx操作。
 
 - 用户已人工安装OPS-001C执行器、配置工具和sudoers，并单独授权完成`prepare-directories`。固定`postgres`、`data`、`models`、`models/ocr`和`/etc/smartscan/uat`目录已按预期所有者/权限创建并通过执行器验证；配置、Secret、引导密码和镜像身份文件仍不存在，Docker、数据库和Nginx未修改。
