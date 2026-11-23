@@ -11,8 +11,8 @@
 | 工作包状态 | 完成只读诊断；结论为C类媒体协商差异，`OCR-002`仍阻塞并等待平台子digest的正式接受与独立拉取授权 |
 | 当前分支 | `codex/ocr-002a-pull-compat-diagnosis` |
 | 最后验证基线 | `fdbaa34`：固定digest拉取阻塞证据已合并；2026-11-23 Registry对象树、媒体协商、Docker白名单状态与空模型目录诊断完成 |
-| 工作包提交 | `06569aa`（PR #90主体合并）、`9be7b7c`（PR #91 LF完整性与触发范围修复） |
-| PR | [#90](https://github.com/j4meshub/SmartScan/pull/90)、[#91](https://github.com/j4meshub/SmartScan/pull/91)均已合并 |
+| 工作包提交 | `b428dc5`（OCR-002A只读诊断证据） |
+| PR | [#95](https://github.com/j4meshub/SmartScan/pull/95)（等待CI） |
 | 下一工作包 | 由用户决定是否正式接受`linux/amd64`子manifest `sha256:7c5dcc…a15f7`为平台运行候选；接受后仍需单独授权一次按完整子digest拉取，不得重试顶层digest或使用Tag |
 
 ## 当前工作包进展
