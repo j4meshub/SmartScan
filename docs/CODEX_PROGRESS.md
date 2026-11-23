@@ -11,8 +11,8 @@
 | 工作包状态 | 阻塞；子digest已接受，但拉取前受限`status`返回需要密码，按门禁停止且未执行`docker pull` |
 | 当前分支 | `codex/ocr-002b-child-pull-preflight-blocked` |
 | 最后验证基线 | `8e429ee`：OCR-002A诊断已通过PR #95合并；2026-11-23子digest拉取前现场检查除NOPASSWD授权外通过 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `d908b5d`（OCR-002B拉取前失败关闭证据） |
+| PR | [#96](https://github.com/j4meshub/SmartScan/pull/96)（等待CI） |
 | 下一工作包 | 由共同使用人人工恢复并核验精确模型`status` NOPASSWD授权；随后重新单独授权一次子digest拉取，不得沿用本次已停止的授权 |
 
 ## 当前工作包进展
