@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """通过固定SSH别名以内存载荷运行UAT仓库外证据生成器。"""
 
 from __future__ import annotations
