@@ -87,9 +87,9 @@ M2 门禁：统一账号、冲突、停用绕过、删除和权限矩阵集成�
 | `SCAN-001` 页面版本与复核 | 完成 | M0 | 页面旋转、质量、处理版本和独立复核状态；原图不可覆盖 |
 | `JOB-001` 完整任务状态机 | 完成 | SCAN-001 | 排队、基础处理、基础就绪、可选增强、就绪、可重试失败、最终失败和取消；租约可恢复 |
 | `OCR-001` 基础 OCR | 等待人工验收 | JOB-001 | CPU OCR、四方向融合、标题候选、隐私字段过滤和默认命名；代码与 CI 已通过，真实模型固定集、方向 `≥98%` 和 CPU 容量待验收 |
-| `OCR-002` UAT离线模型制品 | 阻塞 | OCR-001, OPS-001C | 固定来源、许可、真实CPU、SBOM/来源证明、漏洞、匿名manifest和执行器安装均通过；`linux/amd64`子manifest已获接受，但拉取前受限`status`的NOPASSWD授权失效，未执行子digest拉取。恢复并人工核验精确授权前不得拉取、暂存、提取、安装或启动CPU Worker |
+| `OCR-002` UAT离线模型制品 | 阻塞 | OCR-001, OPS-001C | 固定来源、许可、真实CPU、SBOM/来源证明、漏洞、匿名manifest和执行器安装均通过；`linux/amd64`子manifest已接受，NOPASSWD已恢复，但唯一授权的pull停在唯一layer下载且数分钟后仍未形成本地镜像。不得自动重试、暂存、提取、安装或启动CPU Worker |
 | `OCR-002A` 模型镜像拉取兼容性只读诊断 | 完成 | OCR-002、用户只读授权 | Registry对象树完整，但顶层index与平台子manifest仅接受OCI媒体类型，Docker list/schema2单独协商返回404；Docker 29.0.2 containerd image store无mirror、无用户配置干扰，目标目录仍为空。结论为C类媒体协商差异；不自动接受子digest、不重试拉取 |
-| `OCR-002B` 平台子manifest固定拉取 | 阻塞 | OCR-002A、用户接受与拉取授权 | `linux/amd64`子digest、config、layer和来源提交已获精确接受；可信主机、空间、未缓存和零关联容器通过，但受限模型`status`返回需要密码，按门禁在pull前停止。修复精确sudoers授权并重新单独授权前不执行pull |
+| `OCR-002B` 平台子manifest固定拉取 | 阻塞 | OCR-002A、用户接受与拉取授权 | `linux/amd64`子digest、config、layer和来源提交已获精确接受；可信主机、空间、未缓存、零关联容器与`status=empty`通过。单次pull已解析manifest并开始唯一layer，但未返回完成/错误且持续未落盘；保持失败关闭，不自动重试 |
 | `EXPORT-001` JPG/PDF | 完成 | OCR-001 | 单页/多页、清晰/均衡/小文件、可选文本层和稳定文件名 |
 | `FILE-001` 文件生命周期 | 完成 | JOB-001 | 取消上传、删除项目、临时目录回收、鉴权下载和 Range/X-Accel 设计 |
 | `API-001` v1 契约冻结 | 完成 | EXPORT-001, FILE-001 | OpenAPI 快照、客户端兼容矩阵和弃用规则 |
