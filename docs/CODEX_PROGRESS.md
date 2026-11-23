@@ -7,13 +7,13 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OCR-002A` 模型镜像拉取兼容性只读诊断 |
-| 工作包状态 | 完成只读诊断；结论为C类媒体协商差异，`OCR-002`仍阻塞并等待平台子digest的正式接受与独立拉取授权 |
-| 当前分支 | `codex/ocr-002a-pull-compat-diagnosis` |
-| 最后验证基线 | `fdbaa34`：固定digest拉取阻塞证据已合并；2026-11-23 Registry对象树、媒体协商、Docker白名单状态与空模型目录诊断完成 |
-| 工作包提交 | `b428dc5`（OCR-002A只读诊断证据） |
-| PR | [#95](https://github.com/j4meshub/SmartScan/pull/95)（等待CI） |
-| 下一工作包 | 由用户决定是否正式接受`linux/amd64`子manifest `sha256:7c5dcc…a15f7`为平台运行候选；接受后仍需单独授权一次按完整子digest拉取，不得重试顶层digest或使用Tag |
+| 当前工作包 | `OCR-002B` 平台子manifest固定拉取 |
+| 工作包状态 | 阻塞；子digest已接受，但拉取前受限`status`返回需要密码，按门禁停止且未执行`docker pull` |
+| 当前分支 | `codex/ocr-002b-child-pull-preflight-blocked` |
+| 最后验证基线 | `8e429ee`：OCR-002A诊断已通过PR #95合并；2026-11-23子digest拉取前现场检查除NOPASSWD授权外通过 |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | 由共同使用人人工恢复并核验精确模型`status` NOPASSWD授权；随后重新单独授权一次子digest拉取，不得沿用本次已停止的授权 |
 
 ## 当前工作包进展
 
@@ -37,6 +37,8 @@
 - 平台子manifest、config和唯一layer实际完整：config `c63449…e480d`为OCI config、1877字节；layer `fdae8d…aebfb`为OCI gzip layer、26,534,130字节。两者HEAD均返回200、`Docker-Content-Digest`逐字一致。不存在config/layer缺失，不归类为B。
 - Docker白名单诊断：Engine/API为29.0.2/1.52，context为`default`，存储驱动`overlayfs`，DriverStatus确认containerd image store；Registry mirror数量0，当前用户Docker配置文件不存在，精确顶层引用未缓存且相关容器0。聚合空间为镜像514.7 GB、容器16.66 GB、本地卷298.6 GB、Build Cache 136.7 GB；未读取无关对象明细。唯一受限sudo命令`status`仍返回`installed=false,status=empty`。
 - 结论优先采用平台子manifest兼容方案而不是继续使用已失败的顶层index：只有用户正式接受`sha256:7c5dcc…a15f7`并单独授权后，才允许执行一次完整子digest拉取。顶层digest继续作为供应链index/证明关联证据，不得自动改写为平台部署引用；若子digest仍失败，再建设Docker schema2兼容制品并产生新候选。
+- 用户随后精确接受`linux/amd64`子manifest `sha256:7c5dcc…a15f7`，并把顶层`0fc7f9…40c13`、config `c63449…e480d`、layer `fdae8d…aebfb`和来源提交`9be7b7c…25a2`固定为关联证据；历史候选、Tag及后续自动digest仍不接受。
+- `OCR-002B`拉取前现场检查确认可信主机身份、Docker 29.0.2/API 1.52、`overlayfs`、约743.5 GB可用空间、精确子digest未缓存且关联容器为0。但精确命令`sudo -n /usr/local/libexec/smartscan/smartscan-uat-ocr-model status`返回“需要密码”，无法重新证明目标仍为空。按用户门禁立即停止，未执行唯一授权的`docker pull`，也未登录、重试、创建容器、提取、安装、清理或修改服务器。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。
