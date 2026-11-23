@@ -103,4 +103,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-23，OPS-000事实采集、50 GiB loop、六镜像候选、`OPS-001D`最终只读预检及OCR固定模型受限安装均已通过；OPS-001C工具已人工安装且目录准备成功。OPS-001E本轮重新确认CIDR、8077/18082、资源、loop与OCR门禁，正在补齐仓库外三证据生成器。配置/Secret/镜像身份仍不存在，应用未启动；实际部署还缺三证据root安装、`generate-config/verify-config`、Docker网络、应用镜像拉取/身份、目录所有权、PostgreSQL/迁移、Compose应用和Nginx增量。
+截至2026-11-23，OPS-000事实采集、50 GiB loop、六镜像候选、`OPS-001D`最终只读预检及OCR固定模型受限安装均已通过；OPS-001C工具已人工安装且目录准备成功。OPS-001E重新确认CIDR、8077/18082、资源、loop与OCR门禁，并已在固定用户暂存根安全生成三份仓库外证据；它们尚未安装到`/etc/smartscan/uat`。配置/Secret/镜像身份仍不存在，应用未启动；实际部署还缺三证据root安装、`generate-config/verify-config`、Docker网络、应用镜像拉取/身份、目录所有权、PostgreSQL/迁移、Compose应用和Nginx增量。
