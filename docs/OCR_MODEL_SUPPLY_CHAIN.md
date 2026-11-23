@@ -92,6 +92,18 @@ manifest媒体类型返回200；Docker manifest list/schema2媒体类型的单�
 证明关联证据。用户接受及一次精确子digest拉取必须分别授权；本次诊断不构成接受或拉取。
 若子digest仍无法拉取，再发布显式Docker schema2兼容的新候选，不使用Tag临时绕过。
 
+### OCR-002B 平台子manifest接受与拉取前停止
+
+用户已精确接受`linux/amd64`运行manifest
+`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`；
+其上级index、config、layer和来源提交继续构成不可替换的关联证据。接受不扩展到Tag、历史
+候选、后续构建或其他平台。
+
+目标服务器拉取前确认子digest未缓存、无关联容器且空间充足，但受限模型执行器的精确
+NOPASSWD `status`命令返回需要密码。由于无法重新确认目标目录仍为空，流程在`docker pull`
+前失败关闭；没有产生Docker写入。共同使用人恢复并人工验证该精确sudoers授权后，仍须
+重新单独授权一次子digest拉取，不能沿用已经停止的授权。
+
 ## 服务器离线提取边界
 
 后续Docker阶段只负责拉取已接受的固定digest，并把`/models/ocr`复制到固定暂存目录

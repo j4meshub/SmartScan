@@ -729,3 +729,11 @@
 - 协商差异：顶层只在OCI index Accept下返回200，平台子manifest只在OCI manifest Accept下返回200；Docker manifest list/schema2单独Accept返回404。Docker 29.0.2/API 1.52使用`overlayfs`和containerd image store，context为`default`，Registry mirror数量0，用户Docker配置文件不存在，精确顶层引用未缓存且无相关容器。诊断归类为C，不归类为D。
 - 决策：不继续重试顶层digest，不自动接受平台子digest，也不立即重发制品。优先把`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`作为待人工接受的`linux/amd64`运行候选；顶层digest保留为供应链index和证明关联证据。只有用户明确接受并另行授权后，才能执行一次完整子digest拉取。
 - 影响：如果平台子digest可拉取，再继续固定暂存与受限安装；若仍失败，则建设Docker schema2兼容的独立新候选并重新执行来源、SBOM、漏洞、证明和用户接受门禁。任何路径都禁止Tag、自动digest替换、登录、镜像站、容器或清理绕过。本轮唯一sudo`status`仍为`installed=false,status=empty`。
+
+## D-099：接受OCR平台子manifest但拉取前授权检查失败关闭
+
+- 状态：平台候选已接受；拉取阻塞
+- 日期：2026-11-23
+- 接受范围：用户明确接受`ghcr.io/j4meshub/smartscan-ocr-models@sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`作为目标UAT服务器的`linux/amd64`运行制品；其上级index为`0fc7f9…40c13`、config为`c63449…e480d`、layer为`fdae8d…aebfb`、来源提交为`9be7b7c…25a2`。顶层index仅作供应链和证明关联根，不再直接拉取；Tag、历史及后续自动digest均未接受。
+- 现场门禁：可信主机身份、Docker服务、存储空间、子digest未缓存和零关联容器均通过。随后精确受限命令`sudo -n /usr/local/libexec/smartscan/smartscan-uat-ocr-model status`返回需要密码，不能把此前的`empty`证据当作本次拉取前实时证据。
+- 决策：按用户预先设定的失败关闭规则，在任何Docker写入前停止。本轮没有执行`docker pull`、登录、重试、容器、提取、安装、清理、网络、配置、Secret或服务启动。共同使用人需在自己的终端恢复并核验精确NOPASSWD授权；其后必须取得新的单次拉取授权，当前授权不自动延续。
