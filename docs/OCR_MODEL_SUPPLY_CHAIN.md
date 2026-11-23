@@ -141,7 +141,7 @@ Layer媒体类型、精确大小、SHA-256、gzip/tar结构和完整预期成员
 `.smartscan-offline-transfer/`已被Git忽略，真实模型和临时文件不得提交。
 
 仓库下载工具的LF规范化SHA-256为
-`ef7cfe1b7aca043cca7293488744640fbe793e039215442f72e69c16940e1c75`。只有PR合并且取得本机下载
+`dd385f2df6d44f5f24479d60687ee99a05c6ed00959b95b7dd9d3f7471448732`。只有PR合并且取得本机下载
 授权后，才在仓库根目录运行：
 
 ```powershell

@@ -286,6 +286,7 @@ def test_download_script_has_no_url_digest_or_repository_arguments() -> None:
         cwd=downloader.ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     assert result.returncode == 0

@@ -291,7 +291,15 @@ def verify_fixed_layer() -> dict[str, object]:
     return {**result, "path": str(FINAL_PATH)}
 
 
+def _configure_text_streams() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _configure_text_streams()
     parser = argparse.ArgumentParser(description="SmartScan固定OCR模型Layer离线传输工具")
     parser.add_argument("command", choices=("download", "verify"))
     args = parser.parse_args(argv)
