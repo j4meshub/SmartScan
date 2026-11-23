@@ -101,4 +101,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-23，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过；OPS-001C工具已人工安装，目录准备成功，配置/Secret/镜像身份尚不存在。OCR模型`linux/amd64`子digest已接受，NOPASSWD与拉取前`status=empty`已恢复；单次pull解析manifest后停在唯一layer下载，数分钟后仍未形成本地镜像。不得自动重试、暂存或安装。实际部署仍缺模型传输解阻与安装、后续逐项授权、仓库外输入与Secret、Docker网络、应用镜像拉取/身份、PostgreSQL/迁移、Compose应用和Nginx增量。
+截至2026-11-23，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过；OPS-001C工具已人工安装，目录准备成功，配置/Secret/镜像身份尚不存在。OCR模型`linux/amd64`子digest已接受；OCR-002C确认layer HEAD正常但1 MiB Range耗时54.900秒、平均约19.1 KB/s，属于Blob/CDN传输严重受限。镜像未落盘、模型目录为空，不再尝试Docker pull、暂存或安装。实际部署仍缺模型传输解阻与安装、后续逐项授权、仓库外输入与Secret、Docker网络、应用镜像拉取/身份、PostgreSQL/迁移、Compose应用和Nginx增量。

@@ -90,6 +90,7 @@ M2 门禁：统一账号、冲突、停用绕过、删除和权限矩阵集成�
 | `OCR-002` UAT离线模型制品 | 阻塞 | OCR-001, OPS-001C | 固定来源、许可、真实CPU、SBOM/来源证明、漏洞、匿名manifest和执行器安装均通过；`linux/amd64`子manifest已接受，NOPASSWD已恢复，但唯一授权的pull停在唯一layer下载且数分钟后仍未形成本地镜像。不得自动重试、暂存、提取、安装或启动CPU Worker |
 | `OCR-002A` 模型镜像拉取兼容性只读诊断 | 完成 | OCR-002、用户只读授权 | Registry对象树完整，但顶层index与平台子manifest仅接受OCI媒体类型，Docker list/schema2单独协商返回404；Docker 29.0.2 containerd image store无mirror、无用户配置干扰，目标目录仍为空。结论为C类媒体协商差异；不自动接受子digest、不重试拉取 |
 | `OCR-002B` 平台子manifest固定拉取 | 阻塞 | OCR-002A、用户接受与拉取授权 | `linux/amd64`子digest、config、layer和来源提交已获精确接受；可信主机、空间、未缓存、零关联容器与`status=empty`通过。单次pull已解析manifest并开始唯一layer，但未返回完成/错误且持续未落盘；保持失败关闭，不自动重试 |
+| `OCR-002C` GHCR模型Layer传输只读诊断 | 完成 | OCR-002B、用户只读授权 | 原始pull进程不存在，镜像未落盘、零关联容器且模型目录为空。固定layer HEAD为200、长度/摘要正确；1 MiB Range为206但耗时54.900秒、平均19,099.9 B/s，归类为B类Blob/CDN传输严重受限，不是权限或对象缺失 |
 | `EXPORT-001` JPG/PDF | 完成 | OCR-001 | 单页/多页、清晰/均衡/小文件、可选文本层和稳定文件名 |
 | `FILE-001` 文件生命周期 | 完成 | JOB-001 | 取消上传、删除项目、临时目录回收、鉴权下载和 Range/X-Accel 设计 |
 | `API-001` v1 契约冻结 | 完成 | EXPORT-001, FILE-001 | OpenAPI 快照、客户端兼容矩阵和弃用规则 |

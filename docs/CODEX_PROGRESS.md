@@ -7,13 +7,13 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OCR-002B` 平台子manifest固定拉取 |
-| 工作包状态 | 阻塞；NOPASSWD与`status=empty`已恢复，单次子digest pull停在layer下载且数分钟后仍未形成本地镜像；未重试 |
-| 当前分支 | `codex/ocr-002b-child-pull-incomplete` |
-| 最后验证基线 | `d3580ea`：PR #96失败关闭证据已合并；随后共同使用人恢复sudo规则，2026-11-23单次子digest拉取未完成 |
-| 工作包提交 | `0468f39`（OCR-002B layer传输未完成证据） |
-| PR | [#97](https://github.com/j4meshub/SmartScan/pull/97)（等待CI） |
-| 下一工作包 | 先设计并单独授权GHCR blob/CDN传输的只读诊断或人工观察原始pull结果；没有新决策前不得重试pull或转入暂存安装 |
+| 当前工作包 | `OCR-002C` GHCR模型Layer传输只读诊断 |
+| 工作包状态 | 完成只读诊断；归类为B类Blob/CDN传输严重受限，`OCR-002`继续阻塞且不得重试Docker pull |
+| 当前分支 | `codex/ocr-002c-ghcr-layer-diagnosis` |
+| 最后验证基线 | `4310f09`：PR #97已合并；2026-11-23目标服务器固定layer HEAD/Range与原始pull现场只读诊断完成 |
+| 工作包提交 | `c61689e`（OCR-002C Blob/CDN只读诊断证据） |
+| PR | [#98](https://github.com/j4meshub/SmartScan/pull/98)（等待CI） |
+| 下一工作包 | 设计公司网络路径改善或可审计离线固定模型制品传输方案；未经新决策不得Docker pull、暂存、提取或安装 |
 
 ## 当前工作包进展
 
@@ -41,6 +41,9 @@
 - `OCR-002B`拉取前现场检查确认可信主机身份、Docker 29.0.2/API 1.52、`overlayfs`、约743.5 GB可用空间、精确子digest未缓存且关联容器为0。但精确命令`sudo -n /usr/local/libexec/smartscan/smartscan-uat-ocr-model status`返回“需要密码”，无法重新证明目标仍为空。按用户门禁立即停止，未执行唯一授权的`docker pull`，也未登录、重试、创建容器、提取、安装、清理或修改服务器。
 - 共同使用人随后人工恢复并验证固定sudoers：root所有权/权限、固定摘要、单文件及完整visudo、`sudo -l`和清除认证缓存后的NOPASSWD均通过；新的拉取前`status`实时返回`installed=false,status=empty`。这取代上一条中的当前sudo阻塞，但保留其当时失败关闭事实。
 - 新的独立授权只调用一次精确子digest pull。Docker已成功解析平台manifest并输出唯一layer `fdae8d…aebfb: Pulling fs layer`，但没有返回成功摘要或明确daemon错误；随后在数分钟观察窗口内，精确引用多次只读inspect仍返回本地镜像不存在。没有再次调用pull，也没有Tag、顶层index、登录、容器、提取、安装、镜像删除或prune。当前归类为“layer传输未完成”，不能记录为成功或直接断言制品损坏。
+- `OCR-002C`现场复核确认原始pull客户端进程已不存在，精确子digest仍未缓存、关联容器为0，Docker聚合空间无异常，受限`status`仍为`installed=false,status=empty`。因此不属于仍在运行的D类。
+- 匿名固定layer HEAD返回200，`Content-Length=26,534,130`、`Docker-Content-Digest=fdae8d…aebfb`完全一致，耗时2.049秒且无重定向。1 MiB Range GET正确返回206、实际读取1,048,576字节、仅1次HTTPS重定向且Range未被忽略，但耗时54.900秒、平均19,099.9 B/s；未保存正文或输出令牌/签名URL。
+- 结论为B类：Manifest/Registry元数据和权限正常，Blob/CDN链路可达但传输严重受限。按用户门禁不再尝试Docker pull；下一步必须单独评估公司网络路径或可审计离线固定制品传输，不能用Tag、替代digest或未校验文件绕过。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。
