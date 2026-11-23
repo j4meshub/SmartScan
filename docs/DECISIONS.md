@@ -745,3 +745,11 @@
 - 前置恢复：共同使用人已重新安装并核验固定sudoers摘要、root权限、visudo和NOPASSWD；清除认证缓存后`status`仍返回`installed=false,status=empty`。新的现场预检同时确认可信主机、空间充足、子digest未缓存且无关联容器。
 - 单次拉取：在新的独立授权下只执行一次已接受的`linux/amd64`子digest pull。Docker成功解析该manifest并开始拉取唯一layer `fdae8d…aebfb`，没有再出现顶层index的`not found`，但也未返回下载完成或明确错误。数分钟内仅以精确引用执行只读inspect，均未发现本地镜像。
 - 决策：当前证据更接近GHCR blob/CDN传输缓慢或卡住，不能归类为OCI媒体协商失败、制品缺失或成功拉取。禁止重发pull、Tag、登录、清理、容器、暂存和安装；下一步需单独设计只读传输诊断或由共同使用人确认原始pull最终状态。只有本地RepoDigest、config、平台和revision全部通过后才能进入提取阶段。
+
+## D-101：GHCR模型Blob可达但传输严重受限
+
+- 状态：只读诊断完成；模型传输继续阻塞
+- 日期：2026-11-23
+- 现场状态：可信主机不变，原始精确pull客户端进程数量为0；子digest未进入本地缓存、关联容器为0，Docker聚合空间未触发停止阈值，受限模型`status`仍为`installed=false,status=empty`。
+- Registry证据：固定layer HEAD返回HTTP 200，长度26,534,130字节、摘要`sha256:fdae8d…aebfb`逐字一致，耗时2.049秒且无重定向。固定`bytes=0-1048575` Range GET返回HTTP 206，实际读取1,048,576字节、1次HTTPS重定向、未忽略Range；耗时54.900秒，平均19,099.9 B/s。正文丢弃，匿名令牌和签名URL未输出或落盘。
+- 分类与决策：结果归入B类而非A/C/D。Manifest和权限链路正常，Blob/CDN可达但速度严重受限；上次pull更可能因层传输耗时和前台会话生命周期结束而未完成。依照用户门禁不再尝试Docker pull，下一步只能独立评估网络路径改善或可审计离线固定制品传输。离线方案仍须绑定已接受digest、逐文件摘要、来源证据和单独安装授权。
