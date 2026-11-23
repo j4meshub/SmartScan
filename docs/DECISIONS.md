@@ -696,10 +696,19 @@
 
 ## D-095：OCR模型采用官方未转换权重、独立OCI制品和固定对象安装器
 
-- 状态：已确认供应链设计，等待PR真实CPU和main发布证据
+- 状态：已确认并完成供应链实现；安装验收由D-096继续约束
 - 日期：2026-11-20
 - 现场事实：OPS-001C三个固定资产已由共同使用人人工安装，`prepare-directories`已单独授权并成功。`postgres`、`data`、`models`、`models/ocr`和配置根目录已按固定权限创建；配置、Secret、引导密码和镜像身份文件仍不存在，Docker、数据库与Nginx未修改。
 - 模型决策：固定PaddleOCR `v3.7.0`完整提交中的`PP-OCRv6_small_det`和`PP-OCRv6_small_rec`，运行时为PaddleOCR 3.7.0、PaddlePaddle 3.3.1和`paddle_static` CPU。官方BCE归档与PaddlePaddle官方模型仓库固定提交的六个推理文件逐字节一致，只规范化目录名，不转换模型。现有Worker关闭方向分类、文档方向和去弯曲，因此不增加分类模型或其他权重。
 - 许可与分发：PaddleOCR固定版本和两个官方模型仓库均提供Apache-2.0证据，制品保留完整许可证、第三方声明、归档/文件摘要和来源提交；证据支持对这些固定字节进行公开再分发。制品使用独立`scratch` OCI包`ghcr.io/j4meshub/smartscan-ocr-models`，与六个应用/数据库镜像分离，不包含运行包、Secret、用户数据或联网脚本。PR只验证，main才发布；Package公开、digest接受和服务器匿名核验互相独立，后续构建不得自动替换。
 - 安装边界：新增独立root执行器，只允许无参数`install/verify/status`，固定暂存目录、目标目录、版本和清单；拒绝链接、异常对象、缺失/额外/篡改文件、非空目标和超过4 GiB。安装后文件为`root:root`且不可组/全局写，Worker只读挂载。执行器不授予Docker、联网、删除、替换、通用shell、Secret、数据库、网络或Nginx权限；部分失败保留证据，清理或替换必须新授权。
 - 影响：OCR-002从“外部来源未固定阻塞”转为“供应链实现进行中”。只有PR真实CPU简体中文/英文/中英混排、双Worker读取、SBOM、来源证明和漏洞门禁通过，main发布候选并经用户接受、服务器核验与受限安装后，才能解除`verify-config`和CPU Worker启动门禁。Mock、空目录或运行时联网下载仍不得替代真实验收。
+
+## D-096：接受唯一OCR模型候选并通过服务器匿名只读核验
+
+- 状态：已确认并完成只读验收，等待受限安装
+- 日期：2026-11-23
+- 决策：用户明确接受`ghcr.io/j4meshub/smartscan-ocr-models@sha256:0fc7f95eb14f18996c6f22d71b4873b28e79ea0afde8a66ddea6b6c095740c13`为SmartScan UAT唯一OCR模型候选；历史`77d67e…3441`明确不接受，后续自动构建不得替换。接受仅允许记录候选和只读核验，不授权拉取、暂存容器、提取、安装、Worker或其他应用启动。
+- 现场证据：三个固定安装资产已由共同使用人人工核对摘要、root所有权、权限和sudoers语法并安装。通过唯一SSH别名核对可信主机身份后，唯一sudo命令`status`返回`installed=false,status=empty`。服务器DNS、TLS 1.3、匿名令牌、OCI index、`linux/amd64`运行manifest和配置均成功；Registry摘要逐字一致，来源提交为`9be7b7c…25a2`，单个压缩层`26,534,130`字节，低于4 GiB。目标目录为空。
+- 边界：本轮未执行Docker登录/拉取、容器、提取、`install/verify`、网络、Secret、数据库、迁移、Nginx、权限修改、服务启动或删除。仓库只保存脱敏结论，不保存内部地址、临时Registry令牌、原始主机快照或凭据。
+- 影响：OCR-002继续保持“等待人工验收”，但阻塞点从候选接受和执行器安装收敛为四个独立阶段：固定digest拉取、固定暂存与提取、受限`install/verify`、最终`verify-config`与CPU Worker启动。任何阶段失败立即停止，不得自动清理、替换digest或扩大sudo/Docker授权。
