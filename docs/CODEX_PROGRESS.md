@@ -7,13 +7,13 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OCR-002` UAT离线模型制品 |
-| 工作包状态 | 阻塞；目标服务器按完整接受digest执行唯一授权的`docker pull`时返回`not found`，已失败关闭且未重试、替换或清理 |
-| 当前分支 | `codex/ocr-002-pull-failure-evidence` |
-| 最后验证基线 | `4e36ed3`：候选接受与服务器匿名manifest只读核验已合并；随后Docker Engine实际拉取固定digest失败 |
-| 工作包提交 | `06569aa`（PR #90主体合并）、`9be7b7c`（PR #91 LF完整性与触发范围修复） |
-| PR | [#90](https://github.com/j4meshub/SmartScan/pull/90)、[#91](https://github.com/j4meshub/SmartScan/pull/91)均已合并 |
-| 下一工作包 | 先在不改服务器的前提下定位GHCR匿名manifest成功但Docker Engine按digest拉取`not found`的差异；未经新决策不得重试、登录、使用Tag/替代digest或进入暂存安装 |
+| 当前工作包 | `OCR-002A` 模型镜像拉取兼容性只读诊断 |
+| 工作包状态 | 完成只读诊断；结论为C类媒体协商差异，`OCR-002`仍阻塞并等待平台子digest的正式接受与独立拉取授权 |
+| 当前分支 | `codex/ocr-002a-pull-compat-diagnosis` |
+| 最后验证基线 | `fdbaa34`：固定digest拉取阻塞证据已合并；2026-11-23 Registry对象树、媒体协商、Docker白名单状态与空模型目录诊断完成 |
+| 工作包提交 | `b428dc5`（OCR-002A只读诊断证据） |
+| PR | [#95](https://github.com/j4meshub/SmartScan/pull/95)（等待CI） |
+| 下一工作包 | 由用户决定是否正式接受`linux/amd64`子manifest `sha256:7c5dcc…a15f7`为平台运行候选；接受后仍需单独授权一次按完整子digest拉取，不得重试顶层digest或使用Tag |
 
 ## 当前工作包进展
 
@@ -33,6 +33,10 @@
 - 2026-11-23用户明确接受上述`0fc7f9…40c13`为UAT唯一模型候选，并拒绝历史`77d67e…3441`及后续自动digest；接受不授权拉取、暂存、提取、安装或Worker启动。三个受限安装资产已由共同使用人人工核对摘要、root所有权、权限及sudoers语法并完成安装。
 - 同日仅通过SSH别名完成服务器只读核验：主机身份仍为可信基线；受限执行器唯一sudo命令`status`返回`installed=false,status=empty`。服务器DNS和TLS 1.3成功，匿名Registry令牌、OCI index、`linux/amd64`运行manifest及配置均返回200，Registry摘要与接受值逐字一致，来源提交为`9be7b7c…25a2`。制品仅一个压缩层`26,534,130`字节，远低于4 GiB；目标目录仍为空。未执行Docker、安装、文件写入、Secret、数据库、网络、Nginx或服务启动。
 - 后续单独授权的固定digest拉取阶段再次核对可信主机身份，Docker 29.0.2可读；拉取前精确digest不在缓存、运行容器为0，Docker根目录所在文件系统可用约743.5 GB，根文件系统可用约168.9 GB。唯一写操作`docker pull ghcr.io/j4meshub/smartscan-ocr-models@sha256:0fc7f9…40c13`由daemon返回`failed to resolve reference ... not found`。按门禁立即停止，没有重试、Tag、替代digest、登录、容器、提取、安装、删除或prune，也没有执行拉取后`status`；可能的部分缓存保持原状，等待独立诊断决策。
+- `OCR-002A`只读诊断确认顶层index有2个descriptor：`linux/amd64`运行descriptor为OCI manifest、大小482字节，另有1个`unknown/unknown`证明descriptor。顶层仅在`application/vnd.oci.image.index.v1+json`协商下HEAD/GET返回200；OCI manifest、Docker manifest list和Docker schema2单独Accept均返回404。平台子manifest仅在OCI manifest Accept下返回200，Docker schema2 Accept返回404，因此归类为C类媒体协商差异。
+- 平台子manifest、config和唯一layer实际完整：config `c63449…e480d`为OCI config、1877字节；layer `fdae8d…aebfb`为OCI gzip layer、26,534,130字节。两者HEAD均返回200、`Docker-Content-Digest`逐字一致。不存在config/layer缺失，不归类为B。
+- Docker白名单诊断：Engine/API为29.0.2/1.52，context为`default`，存储驱动`overlayfs`，DriverStatus确认containerd image store；Registry mirror数量0，当前用户Docker配置文件不存在，精确顶层引用未缓存且相关容器0。聚合空间为镜像514.7 GB、容器16.66 GB、本地卷298.6 GB、Build Cache 136.7 GB；未读取无关对象明细。唯一受限sudo命令`status`仍返回`installed=false,status=empty`。
+- 结论优先采用平台子manifest兼容方案而不是继续使用已失败的顶层index：只有用户正式接受`sha256:7c5dcc…a15f7`并单独授权后，才允许执行一次完整子digest拉取。顶层digest继续作为供应链index/证明关联证据，不得自动改写为平台部署引用；若子digest仍失败，再建设Docker schema2兼容制品并产生新候选。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。
