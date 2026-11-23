@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OCR-002D` 可审计离线模型Layer传输 |
-| 工作包状态 | 进行中；仓库实现与本地专项测试通过，等待真实Layer CI、PR和合并 |
+| 工作包状态 | 完成；仓库工具、测试、文档和真实Layer CI通过，服务器安装与模型传输仍未授权 |
 | 当前分支 | `codex/ocr-002d-offline-model-transfer` |
-| 最后验证基线 | `df33ac6`：PR #98已合并；服务器人工pull随后在约376.8 KB处因GHCR Blob/CDN连接重置失败 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 最后验证基线 | `ca291a5`：PR #99代码头20项成功、4项按PR规则跳过；Windows、Ubuntu及真实Layer端到端门禁全部通过 |
+| 工作包提交 | `49a4771`（主体）、`1d713df`（Config摘要）、`6513253`（真实Layer依赖）、`ca291a5`（Windows UTF-8） |
+| PR | [#99](https://github.com/j4meshub/SmartScan/pull/99)（全部适用CI通过） |
 | 下一工作包 | PR合并后由共同使用人人工安装固定暂存执行器；再分别授权本机下载、SCP、`stage/verify`及既有`install/verify`，任何授权均不自动延续 |
 
 ## 当前工作包进展
@@ -25,6 +25,7 @@
 - PR #99首轮真实Layer作业在读取config Blob后报`config_digest_mismatch`：GHCR重定向后的Blob/CDN响应不保证保留Registry的`Docker-Content-Digest`头。修复为“响应头存在时必须匹配，同时始终对1877字节正文计算固定SHA-256”，并保留平台、来源提交和精确大小检查；这是传输语义兼容修复，不是放宽config身份门禁。
 - 第二轮真实Layer已完整下载并两次离线复核通过：26,534,130字节和`fdae8d…aebfb`均一致；随后在启动端到端暂存测试前发现该独立作业未安装`pytest`。修复为与单元作业一致地安装仓库开发测试依赖，不改变Layer、暂存器或安装器契约。
 - 第三轮Ubuntu真实Layer端到端验证已通过；Windows作业仅在`--help`把中文说明写入被捕获的非UTF-8控制台时触发`UnicodeEncodeError`。下载器现显式把标准输出/错误配置为UTF-8并使用替换型错误处理，保证Windows管道和PowerShell可运行；协议、摘要和文件门禁未改变。
+- PR #99代码头`ca291a5`最终共有20项成功、4项因PR不发布规则跳过、0项失败；三项OCR-002D专用作业全部成功。真实Layer作业完成原始26,534,130字节下载、离线复核、安全暂存和既有`install/verify`契约集成，并在作业结束清理临时文件；没有发布或替换任何模型digest。
 - 本工作包未连接或修改`smartscan-server`，未下载真实模型到仓库，未上传、提取、安装模型，也未执行Docker、sudo、Secret、数据库、网络、容器或Nginx操作。
 
 - 用户已人工安装OPS-001C执行器、配置工具和sudoers，并单独授权完成`prepare-directories`。固定`postgres`、`data`、`models`、`models/ocr`和`/etc/smartscan/uat`目录已按预期所有者/权限创建并通过执行器验证；配置、Secret、引导密码和镜像身份文件仍不存在，Docker、数据库和Nginx未修改。

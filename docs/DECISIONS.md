@@ -756,7 +756,7 @@
 
 ## D-102：OCR模型改用同一固定Layer的可审计离线传输
 
-- 状态：已决策，仓库实现进行中
+- 状态：已实现，等待服务器侧分段人工授权
 - 日期：2026-11-23
 - 新证据：共同使用人在自己的SSH终端执行已接受平台子digest的pull，唯一Layer下载约376.8 KB后收到`connection reset by peer`。这与D-101的低速Range证据一致，确认服务器到GHCR Blob/CDN链路不适合作为当前安装路径；失败不改变Registry对象、来源或模型内容的真实性。
 - 决策：停止服务器Docker pull路线。Windows工具经GHCR Registry API下载固定Layer `sha256:fdae8d…aebfb`的原始26,534,130字节，支持固定`.part`断点续传；必须同时验证index、平台manifest、config、来源提交、媒体类型、大小、SHA-256及gzip/tar结构。离线传输不重打包、不生成新模型版本，顶层index仍是供应链和证明关联根。
