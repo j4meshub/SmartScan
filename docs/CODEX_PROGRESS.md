@@ -11,8 +11,8 @@
 | 工作包状态 | 完成只读诊断；归类为B类Blob/CDN传输严重受限，`OCR-002`继续阻塞且不得重试Docker pull |
 | 当前分支 | `codex/ocr-002c-ghcr-layer-diagnosis` |
 | 最后验证基线 | `4310f09`：PR #97已合并；2026-11-23目标服务器固定layer HEAD/Range与原始pull现场只读诊断完成 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `c61689e`（OCR-002C Blob/CDN只读诊断证据） |
+| PR | [#98](https://github.com/j4meshub/SmartScan/pull/98)（等待CI） |
 | 下一工作包 | 设计公司网络路径改善或可审计离线固定模型制品传输方案；未经新决策不得Docker pull、暂存、提取或安装 |
 
 ## 当前工作包进展
