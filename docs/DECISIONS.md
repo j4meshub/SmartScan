@@ -712,3 +712,11 @@
 - 现场证据：三个固定安装资产已由共同使用人人工核对摘要、root所有权、权限和sudoers语法并安装。通过唯一SSH别名核对可信主机身份后，唯一sudo命令`status`返回`installed=false,status=empty`。服务器DNS、TLS 1.3、匿名令牌、OCI index、`linux/amd64`运行manifest和配置均成功；Registry摘要逐字一致，来源提交为`9be7b7c…25a2`，单个压缩层`26,534,130`字节，低于4 GiB。目标目录为空。
 - 边界：本轮未执行Docker登录/拉取、容器、提取、`install/verify`、网络、Secret、数据库、迁移、Nginx、权限修改、服务启动或删除。仓库只保存脱敏结论，不保存内部地址、临时Registry令牌、原始主机快照或凭据。
 - 影响：OCR-002继续保持“等待人工验收”，但阻塞点从候选接受和执行器安装收敛为四个独立阶段：固定digest拉取、固定暂存与提取、受限`install/verify`、最终`verify-config`与CPU Worker启动。任何阶段失败立即停止，不得自动清理、替换digest或扩大sudo/Docker授权。
+
+## D-097：固定OCR模型实际拉取失败后保持失败关闭
+
+- 状态：阻塞证据
+- 日期：2026-11-23
+- 现场事实：目标服务器可信身份与Docker读取权限通过；拉取前接受digest不在本机缓存、无运行容器，Docker根目录与根文件系统分别约有743.5 GB和168.9 GB可用。唯一授权的完整digest`docker pull`由Docker daemon返回`failed to resolve reference ... not found`。
+- 决策：该失败不推翻D-096的来源、接受和匿名manifest证据，但证明“Registry API可读”不能替代“Docker Engine可拉取”。本轮立即停止且不执行拉取后检查；禁止自动重试、`docker login`、Tag、历史/后续digest、代理、其他镜像站、容器创建、提取、镜像删除或`prune`。可能的部分缓存保留原状。
+- 影响：OCR-002状态改为“阻塞”。下一步只能先以仓库/GitHub制品和只读Registry证据定位GHCR引用、OCI index、匿名访问或Docker兼容差异；任何新的服务器查询、重试、制品调整或拉取方案都需要用户单独授权。模型暂存、安装、`verify-config`和CPU Worker继续禁止。

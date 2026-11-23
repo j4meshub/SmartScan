@@ -101,4 +101,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-23，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过；OPS-001C工具已人工安装，目录准备成功，配置/Secret/镜像身份尚不存在。OCR-002固定模型digest已由用户接受并完成服务器匿名只读核验，受限模型执行器已人工安装，但目标目录仍为空。实际部署还缺模型拉取/暂存/安装、仓库外输入与Secret、Docker网络、应用镜像拉取/身份、PostgreSQL/迁移、Compose应用和Nginx增量的逐项授权。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)、[OPS-001C受限执行器说明](OPS001C_UAT_DEPLOYMENT_PREPARATION.md)和[OCR模型供应链](OCR_MODEL_SUPPLY_CHAIN.md)；本文件不授权进一步服务器写入。
+截至2026-11-23，OPS-000事实采集、50 GiB loop、六镜像候选及`OPS-001D`最终只读预检均已通过；OPS-001C工具已人工安装，目录准备成功，配置/Secret/镜像身份尚不存在。OCR-002固定模型digest已接受、匿名manifest核验通过且受限执行器已安装，但目标Docker Engine按完整digest拉取返回`not found`，因此模型阶段阻塞且目标目录仍为空。原因澄清前不得重试、登录、使用Tag/替代digest或进入暂存安装。实际部署仍缺模型供应链解阻及后续逐项授权、仓库外输入与Secret、Docker网络、应用镜像拉取/身份、PostgreSQL/迁移、Compose应用和Nginx增量。详见[OPS-001共享宿主机UAT变更方案](OPS001_UAT_CHANGE_PLAN.md)、[OPS-001C受限执行器说明](OPS001C_UAT_DEPLOYMENT_PREPARATION.md)和[OCR模型供应链](OCR_MODEL_SUPPLY_CHAIN.md)。
