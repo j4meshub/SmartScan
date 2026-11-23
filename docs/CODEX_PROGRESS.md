@@ -11,8 +11,8 @@
 | 工作包状态 | 阻塞；NOPASSWD与`status=empty`已恢复，单次子digest pull停在layer下载且数分钟后仍未形成本地镜像；未重试 |
 | 当前分支 | `codex/ocr-002b-child-pull-incomplete` |
 | 最后验证基线 | `d3580ea`：PR #96失败关闭证据已合并；随后共同使用人恢复sudo规则，2026-11-23单次子digest拉取未完成 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `0468f39`（OCR-002B layer传输未完成证据） |
+| PR | [#97](https://github.com/j4meshub/SmartScan/pull/97)（等待CI） |
 | 下一工作包 | 先设计并单独授权GHCR blob/CDN传输的只读诊断或人工观察原始pull结果；没有新决策前不得重试pull或转入暂存安装 |
 
 ## 当前工作包进展
