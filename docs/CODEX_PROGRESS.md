@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001E` UAT仓库外部署输入与证据准备 |
-| 工作包状态 | 进行中；现场只读门禁及仓库实现本地验证通过，等待中文PR与Ubuntu CI补证 |
-| 当前分支 | `codex/ops-001e-uat-bootstrap-evidence` |
-| 最后验证基线 | 专项`52 passed, 5 skipped`；全量`606 passed, 37 skipped`、覆盖率87.74%，Ruff/189文件格式/迁移漂移通过；本机无Docker CLI，Compose解析等待PR CI |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包状态 | 进行中；PR #100已合并，首次现场生成暴露系统回环/链路本地前缀过滤缺口，修复与回归测试进行中；服务器未产生暂存文件 |
+| 当前分支 | `codex/ops-001e-reserved-cidr-fix` |
+| 最后验证基线 | PR #100全部适用CI通过；保留网段过滤回归专项`10 passed, 1 skipped`，Ruff与格式检查通过 |
+| 工作包提交 | `70d4d77`、`dba22fb`、`93f3b5b`（PR #100）；现场兼容修复待提交 |
+| PR | [#100](https://github.com/j4meshub/SmartScan/pull/100)已合并；兼容修复PR待创建 |
 | 下一工作包 | PR合并后在固定用户暂存目录生成三份0600证据并报告SHA-256；由共同使用人独立授权root安装后，才进入`generate-config/verify-config` |
 
 ## 当前工作包进展
@@ -24,6 +24,7 @@
 - 仓库现有工具只能采集/校验快照或消费已安装输入，不能安全生成三份仓库外文件。依照用户门禁，没有手写JSON；新增`prepare-bootstrap`固定生成路径和Windows内存SSH启动器，真实CIDR只经标准输入进入远端进程，不出现在Git、命令参数或摘要输出。原始IPAM/路由快照只驻留内存。
 - 本工作包截至当前没有生成三份服务器暂存文件，没有安装到`/etc/smartscan/uat`，没有生成或读取Secret，也没有创建Docker网络、拉取镜像、连接数据库、迁移、启动容器或修改Nginx。
 - OPS-001E专项最终`52 passed, 5 skipped`，跳过项仅为Windows不具备的POSIX权限、Bash或`visudo`路径；全量Python`606 passed, 37 skipped`、覆盖率87.74%，Ruff检查、189个Python文件格式和迁移漂移全部通过。本机没有Docker CLI，Compose真实解析与Linux权限/原子输出由PR Ubuntu Runner补证，不得据本机缺失伪记为通过。
+- PR #100全部适用CI通过并合并为`796ac37`。合并后的首次调用因标准输入关闭被安全拒绝；携带固定标准输入的第二次调用又在写文件前发现现场保留网段包含系统回环或链路本地前缀，并被既有可分配私网规则拒绝。没有手写或降低门禁；修复仅从脱敏`reserved_cidrs`排除不可分配的回环/链路本地前缀，现场冲突检查仍使用完整IPAM、路由和接口快照。回归专项`10 passed, 1 skipped`。
 
 - 服务器人工执行已接受平台子digest的pull后，在唯一Layer约376.8 KB处收到`connection reset by peer`；结合OCR-002C的1 MiB Range仅约19.1 KB/s，确认直接Docker拉取路线停止。Docker可能保留部分缓存，本工作包不清理、不删除且不执行`prune`。
 - OCR-002D固定同一供应链index、`linux/amd64`manifest、config、唯一Layer及来源提交；离线传输下载的是原始26,534,130字节Layer，大小或SHA-256变化立即失败，禁止重新打包后冒用原Layer摘要。

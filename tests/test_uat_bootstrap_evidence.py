@@ -32,7 +32,11 @@ def _snapshot() -> dict[str, object]:
     return {
         "network": {
             "addresses": [{"address": "10.8.0.150"}],
-            "routes": [{"family": 4, "dst": "10.8.0.0/24"}],
+            "routes": [
+                {"family": 4, "dst": "10.8.0.0/24"},
+                {"family": 4, "dst": "127.0.0.0/8"},
+                {"family": 4, "dst": "169.254.0.0/16"},
+            ],
         },
         "docker": {
             "networks": [{"subnets": [{"subnet": "172.20.0.0/16"}]}],
