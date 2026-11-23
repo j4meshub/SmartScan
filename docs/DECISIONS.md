@@ -737,3 +737,11 @@
 - 接受范围：用户明确接受`ghcr.io/j4meshub/smartscan-ocr-models@sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`作为目标UAT服务器的`linux/amd64`运行制品；其上级index为`0fc7f9…40c13`、config为`c63449…e480d`、layer为`fdae8d…aebfb`、来源提交为`9be7b7c…25a2`。顶层index仅作供应链和证明关联根，不再直接拉取；Tag、历史及后续自动digest均未接受。
 - 现场门禁：可信主机身份、Docker服务、存储空间、子digest未缓存和零关联容器均通过。随后精确受限命令`sudo -n /usr/local/libexec/smartscan/smartscan-uat-ocr-model status`返回需要密码，不能把此前的`empty`证据当作本次拉取前实时证据。
 - 决策：按用户预先设定的失败关闭规则，在任何Docker写入前停止。本轮没有执行`docker pull`、登录、重试、容器、提取、安装、清理、网络、配置、Secret或服务启动。共同使用人需在自己的终端恢复并核验精确NOPASSWD授权；其后必须取得新的单次拉取授权，当前授权不自动延续。
+
+## D-100：OCR平台子manifest解析成功但layer传输未完成
+
+- 状态：阻塞；等待独立传输诊断或原始操作结果
+- 日期：2026-11-23
+- 前置恢复：共同使用人已重新安装并核验固定sudoers摘要、root权限、visudo和NOPASSWD；清除认证缓存后`status`仍返回`installed=false,status=empty`。新的现场预检同时确认可信主机、空间充足、子digest未缓存且无关联容器。
+- 单次拉取：在新的独立授权下只执行一次已接受的`linux/amd64`子digest pull。Docker成功解析该manifest并开始拉取唯一layer `fdae8d…aebfb`，没有再出现顶层index的`not found`，但也未返回下载完成或明确错误。数分钟内仅以精确引用执行只读inspect，均未发现本地镜像。
+- 决策：当前证据更接近GHCR blob/CDN传输缓慢或卡住，不能归类为OCI媒体协商失败、制品缺失或成功拉取。禁止重发pull、Tag、登录、清理、容器、暂存和安装；下一步需单独设计只读传输诊断或由共同使用人确认原始pull最终状态。只有本地RepoDigest、config、平台和revision全部通过后才能进入提取阶段。
