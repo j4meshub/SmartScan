@@ -762,3 +762,12 @@
 - 决策：停止服务器Docker pull路线。Windows工具经GHCR Registry API下载固定Layer `sha256:fdae8d…aebfb`的原始26,534,130字节，支持固定`.part`断点续传；必须同时验证index、平台manifest、config、来源提交、媒体类型、大小、SHA-256及gzip/tar结构。离线传输不重打包、不生成新模型版本，顶层index仍是供应链和证明关联根。
 - 服务器边界：未来上传只允许固定用户路径、普通文件、所有者`szhzx`、权限0600。新的root暂存执行器只授权无参数`stage/verify/status`，只安全解包到固定暂存树并复用既有模型清单验证；不提供下载、Docker、删除、替换、shell或任意路径。既有模型安装器不修改，`install/verify`继续是后续独立授权。
 - 影响：本工作包只交付工具、测试、CI与说明，不连接或修改服务器，也不把真实Layer提交Git。Docker部分缓存保持不动；任何本机下载、SCP、执行器安装、暂存、最终安装和Worker启动都需在PR合并后分别授权。
+
+## D-103：OCR安装门禁通过后仓库外证据采用内存采集与固定原子输出
+
+- 状态：OCR安装已确认；OPS-001E仓库实现进行中
+- 日期：2026-11-23
+- 现场事实：共同使用人分阶段授权完成固定Layer的本机下载、离线复核、固定路径SCP、安全`stage/verify`和最终`install/verify`。模型安装器返回`installed=true,status=passed`，版本为`PP-OCRv6-small-v1`；上传Layer和暂存树仍完整，没有执行清理、替换或应用启动。OCR-002服务器模型安装门禁据此通过，但真实数据质量验收仍独立保留。
+- 新鲜预检：仅通过SSH别名重新核对可信主机身份、loop与OCR受限验证、全部Docker IPAM、主机/策略/VPN可见路由、8077配置最小结构、18082、磁盘/inode、CPU、内存、Swap、负载和容器健康。三张仓库外候选网络仍无冲突，8077没有SmartScan路径或18082引用，18082空闲，资源未触发停止阈值。普通用户`nginx -T`因配置打开权限失败且未提权；改为只读解析全部可访问include并只输出计数，不保存或展示配置正文。
+- 决策：`OPS-001E`只从标准输入接收三张仓库外`/28`，网关确定为各网段首个可用地址；共享入口从当前SSH连接的服务器端私有地址推导并与接口事实交叉验证。原始快照、IPAM、路由和内部地址只驻留目标进程内存，不落盘、不打印。生成器只在固定用户暂存根原子创建`deployment-input.json`、`preflight-summary.json`和`loop-storage-evidence.json`，拒绝已有文件、链接、宽松权限和部分输出。
+- 安全边界：Windows启动器固定SSH别名并以内存帧传输受审生成器源码和私有CIDR，参数中不出现CIDR或Secret。三份暂存文件为`szhzx:szhzx 0600`，安装到`/etc/smartscan/uat`必须由共同使用人另行审核SHA-256并执行精确root安装；`generate-config/verify-config`又是下一独立授权。当前决策不授权Secret、Docker网络、镜像、所有权、数据库、迁移、容器或Nginx修改。

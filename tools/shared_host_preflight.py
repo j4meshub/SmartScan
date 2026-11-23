@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import hashlib
 import ipaddress
 import json
@@ -20,6 +21,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+try:
+    import pwd
+except ModuleNotFoundError:  # Windows 仅运行纯函数测试
+    pwd = None  # type: ignore[assignment]
+
 SCHEMA_VERSION = "1.0"
 ALLOCATION_SCHEMA_VERSION = "1.2"
 GIB = 1024**3
@@ -28,6 +34,20 @@ REQUIRED_NETWORKS = frozenset({"data", "edge", "egress"})
 FORBIDDEN_HOST_PORTS = frozenset({80, 443})
 PLACEHOLDER_WORDS = ("replace", "example", "placeholder", "change-me", "待填写", "待确认")
 SAFE_BIND_ADDRESSES = frozenset({"127.0.0.1", "::1"})
+BOOTSTRAP_ROOT = Path("/home/szhzx/smartscan-uat-config-bootstrap")
+BOOTSTRAP_FILENAMES = (
+    "deployment-input.json",
+    "preflight-summary.json",
+    "loop-storage-evidence.json",
+)
+EXPECTED_HOSTNAME = "ctiecaiserver"
+EXPECTED_USER = "szhzx"
+LOOP_EXECUTOR = "/usr/local/libexec/smartscan/smartscan-uat-loop-storage"
+OCR_EXECUTOR = "/usr/local/libexec/smartscan/smartscan-uat-ocr-model"
+LOOP_BACKING_FILE = "/mnt/data/smartscan-loop/uat.ext4"
+LOOP_MOUNT_POINT = "/mnt/data/smartscan/uat"
+LOOP_UNIT_NAME = "mnt-data-smartscan-uat.mount"
+LOOP_UNIT_PATH = f"/etc/systemd/system/{LOOP_UNIT_NAME}"
 Runner = Callable[[tuple[str, ...]], str]
 
 
@@ -196,6 +216,7 @@ def _parse_containers(raw: str) -> list[dict[str, str]]:
                 "name": str(item.get("Names", "")),
                 "image": str(item.get("Image", "")),
                 "state": str(item.get("State", "")),
+                "status": str(item.get("Status", "")),
                 "ports": str(item.get("Ports", "")),
                 "networks": str(item.get("Networks", "")),
             }
@@ -919,6 +940,495 @@ def _write_new_json(path: Path, document: Mapping[str, Any]) -> None:
         raise
 
 
+def _canonical_json(document: Mapping[str, Any]) -> bytes:
+    return (
+        json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    )
+
+
+def _first_usable_gateway(network: ipaddress.IPv4Network) -> str:
+    try:
+        return str(next(network.hosts()))
+    except StopIteration as exc:  # pragma: no cover - /28 契约已排除此分支
+        raise PreflightError("gateway_invalid", "候选网段没有可用网关") from exc
+
+
+def _bootstrap_networks(spec: Mapping[str, Any]) -> dict[str, dict[str, str]]:
+    _require(spec.get("schema_version") == "1.0", "schema_invalid", "引导输入版本无效")
+    _require(
+        set(spec) == {"schema_version", "networks"},
+        "input_invalid",
+        "引导输入只允许schema_version和networks",
+    )
+    values = spec.get("networks")
+    _require(
+        isinstance(values, dict) and set(values) == REQUIRED_NETWORKS,
+        "networks_invalid",
+        "引导输入必须精确包含data、edge和egress",
+    )
+    result: dict[str, dict[str, str]] = {}
+    parsed: list[ipaddress.IPv4Network] = []
+    for name in sorted(REQUIRED_NETWORKS):
+        network = _network(values[name], name)
+        _require(network.prefixlen == 28, "cidr_size_invalid", f"{name}必须是/28固定网段")
+        parsed.append(network)
+        result[name] = {"subnet": str(network), "gateway": _first_usable_gateway(network)}
+    for index, network in enumerate(parsed):
+        _require(
+            not any(network.overlaps(other) for other in parsed[index + 1 :]),
+            "requested_network_overlap",
+            "三张候选网络相互重叠",
+        )
+    return result
+
+
+def _server_address_from_ssh(
+    snapshot: Mapping[str, Any], ssh_connection: str
+) -> ipaddress.IPv4Address:
+    fields = ssh_connection.split()
+    _require(len(fields) == 4, "ssh_context_invalid", "缺少可信SSH连接上下文")
+    try:
+        address = ipaddress.ip_address(fields[2])
+    except ValueError as exc:
+        raise PreflightError("ssh_context_invalid", "SSH目标地址无效") from exc
+    _require(
+        isinstance(address, ipaddress.IPv4Address) and address.is_private,
+        "ssh_context_invalid",
+        "SSH目标必须是私有IPv4地址",
+    )
+    network = snapshot.get("network") if isinstance(snapshot.get("network"), dict) else {}
+    host_addresses = {
+        str(item.get("address", ""))
+        for item in network.get("addresses", [])
+        if isinstance(item, dict) and item.get("address")
+    }
+    _require(str(address) in host_addresses, "ssh_context_invalid", "SSH目标地址不属于当前主机")
+    return address
+
+
+def _reserved_cidrs(snapshot: Mapping[str, Any]) -> list[str]:
+    networks = _existing_networks(snapshot) + _route_networks(snapshot)
+    values = {str(network) for network in networks if network.is_private and network.prefixlen > 0}
+    _require(bool(values), "reserved_cidrs_missing", "未取得现场保留网段")
+    return sorted(
+        values, key=lambda value: (int(ipaddress.ip_network(value).network_address), value)
+    )
+
+
+def build_bootstrap_deployment_input(
+    snapshot: Mapping[str, Any],
+    spec: Mapping[str, Any],
+    *,
+    ssh_connection: str,
+    captured_at: str,
+) -> dict[str, Any]:
+    """从仓库外CIDR与只读现场快照生成不含Secret的部署输入。"""
+
+    address = _server_address_from_ssh(snapshot, ssh_connection)
+    return {
+        "schema_version": "1.0",
+        "target_hostname": EXPECTED_HOSTNAME,
+        "shared_entry_origin": f"http://{address}:8077",
+        "confirmation": {
+            "confirmed_by": "服务器共同使用人 szhzx",
+            "confirmed_at": captured_at,
+            "change_record": "OPS-001E-UAT仓库外部署输入与证据准备",
+            "validation_record": "OPS-001E-现场只读预检、loop与OCR门禁通过",
+            "rollback_record": "未安装到/etc；暂存证据的清理必须另行授权",
+        },
+        "networks": _bootstrap_networks(spec),
+        "reserved_cidrs": _reserved_cidrs(snapshot),
+        "monitoring_record": "D-085：UAT接受应用健康检查与人工资源检查能力缺口",
+    }
+
+
+def build_uat_allocation(deployment: Mapping[str, Any]) -> dict[str, Any]:
+    """生成与受限配置工具1.2契约逐字段一致的资源确认。"""
+
+    networks = deployment["networks"]
+    return {
+        "schema_version": "1.2",
+        "environment": "uat",
+        "compose_project_name": "smartscan-uat",
+        "target_hostname": EXPECTED_HOSTNAME,
+        "confirmation": deployment["confirmation"],
+        "networks": networks,
+        "reserved_cidrs": deployment["reserved_cidrs"],
+        "host_ports": [{"purpose": "UAT Web 回环入口", "port": 18082, "bind_address": "127.0.0.1"}],
+        "storage": {
+            "root": LOOP_MOUNT_POINT,
+            "quota_bytes": 50 * GIB,
+            "hard_limit_type": "loop_ext4",
+            "hard_limit_confirmed": True,
+            "warning_percent": 70,
+            "cleanup_percent": 85,
+            "stop_writes_percent": 95,
+            "disposable_data": True,
+        },
+        "storage_budgets": {
+            "postgres_and_wal_bytes": 12 * GIB,
+            "business_data_bytes": 32 * GIB,
+            "ocr_models_bytes": 4 * GIB,
+            "filesystem_and_runtime_bytes": 2 * GIB,
+        },
+        "loop_storage": {
+            "backing_file": LOOP_BACKING_FILE,
+            "backing_file_bytes": 50 * GIB,
+            "fully_preallocated": True,
+            "sparse_file_forbidden": True,
+            "filesystem_type": "ext4",
+            "reserved_blocks_percent": 0,
+            "mount_point": LOOP_MOUNT_POINT,
+            "mount_options": ["loop", "nodev", "nosuid", "noatime"],
+            "autoclear_required": True,
+            "systemd_unit_name": LOOP_UNIT_NAME,
+            "systemd_unit_path": LOOP_UNIT_PATH,
+            "requires_mounts_for": "/mnt/data",
+            "rollback_documented": True,
+        },
+        "docker_logging": {
+            "storage_scope": "shared_docker_root_outside_uat_loop",
+            "driver": "json-file",
+            "max_size": "10m",
+            "max_file": 3,
+            "max_container_count": 8,
+            "maximum_bytes": 240 * 1024**2,
+        },
+        "resources": {"cpu_limit": 8, "memory_limit_bytes": 16 * GIB},
+        "ingress": {
+            "mode": "http_basic_uat",
+            "public_access": False,
+            "shared_nginx_port": 8077,
+            "base_path": "/smartscan/",
+            "upstream": "127.0.0.1:18082",
+            "https_required_after_basic_uat": True,
+        },
+        "monitoring": {
+            "mode": "manual",
+            "deploy_node_exporter": False,
+            "deploy_alertmanager": False,
+            "application_metrics_enabled": True,
+            "accepted_capability_gap": True,
+            "record_reference": deployment["monitoring_record"],
+        },
+        "backup": {
+            "required": False,
+            "disposable_uat_data": True,
+            "single_host_risk_acknowledged": True,
+        },
+    }
+
+
+def _parse_key_value_output(raw: str, label: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in raw.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    _require(values.get("status") == "passed", "executor_failed", f"{label}未通过")
+    return values
+
+
+def build_loop_evidence(
+    verify_output: str,
+    findmnt_output: str,
+    *,
+    captured_at: str,
+) -> dict[str, Any]:
+    """将已通过的受限loop验证与只读挂载事实转为固定证据。"""
+
+    verified = _parse_key_value_output(verify_output, "loop验证")
+    _require(verified.get("action") == "verify", "executor_failed", "loop动作不是verify")
+    _require(verified.get("backing_size_bytes") == str(50 * GIB), "loop_invalid", "loop大小无效")
+    _require(verified.get("fully_preallocated") == "true", "loop_invalid", "loop不是完整预分配")
+    _require(verified.get("filesystem") == "ext4", "loop_invalid", "loop文件系统无效")
+    _require(verified.get("label") == "smartscan-uat", "loop_invalid", "loop标签无效")
+    _require(verified.get("mount_active") == "true", "loop_invalid", "loop挂载未激活")
+    _require(verified.get("autoclear") == "true", "loop_invalid", "loop未启用autoclear")
+    _require(
+        verified.get("unit_enabled") == "true" and verified.get("unit_active") == "true",
+        "loop_invalid",
+        "loop systemd单元未启用",
+    )
+    try:
+        mount_document = json.loads(findmnt_output)
+        filesystems = mount_document["filesystems"]
+        mount = filesystems[0]
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+        raise PreflightError("loop_invalid", "findmnt返回无效") from exc
+    source = str(mount.get("source", ""))
+    _require(re.fullmatch(r"/dev/loop[0-9]+", source) is not None, "loop_invalid", "挂载源不是loop")
+    _require(mount.get("target") == LOOP_MOUNT_POINT, "loop_invalid", "loop挂载点无效")
+    _require(mount.get("fstype") == "ext4", "loop_invalid", "loop挂载类型无效")
+    options = {item for item in str(mount.get("options", "")).split(",") if item}
+    _require({"nodev", "nosuid", "noatime"} <= options, "loop_invalid", "loop挂载参数不完整")
+    usable_bytes = int(verified.get("usable_bytes", "0"))
+    _require(usable_bytes >= 48 * GIB, "loop_invalid", "loop可用空间不足48 GiB")
+    return {
+        "schema_version": "1.0",
+        "captured_at": captured_at,
+        "backing_file": {
+            "path": LOOP_BACKING_FILE,
+            "size_bytes": 50 * GIB,
+            "allocated_bytes": 50 * GIB,
+            "sparse": False,
+            "mode": "0600",
+        },
+        "filesystem": {
+            "type": "ext4",
+            "label": "smartscan-uat",
+            "reserved_blocks_percent": 0,
+            "usable_bytes": usable_bytes,
+        },
+        "mount": {
+            "active": True,
+            "source": source,
+            "target": LOOP_MOUNT_POINT,
+            "type": "ext4",
+            "options": sorted(options | {"loop"}),
+        },
+        "loop": {"backing_file": LOOP_BACKING_FILE, "autoclear": True},
+        "systemd_unit": {
+            "name": LOOP_UNIT_NAME,
+            "path": LOOP_UNIT_PATH,
+            "mode": "0644",
+            "enabled": True,
+            "active": True,
+            "requires_mounts_for": "/mnt/data",
+            "rollback_record": "OPS-001B受限执行器stop仅在单独授权后执行并保留后备文件",
+        },
+        "contains_sensitive_data": False,
+    }
+
+
+def _inspect_nginx_configuration(main_path: Path = Path("/etc/nginx/nginx.conf")) -> None:
+    queue = [main_path]
+    seen: set[Path] = set()
+    texts: list[str] = []
+    while queue:
+        path = queue.pop(0)
+        if path in seen:
+            continue
+        seen.add(path)
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise PreflightError("nginx_config_unreadable", "Nginx include不可读") from exc
+        texts.append(text)
+        for raw in re.findall(r"(?m)^\s*include\s+([^;]+);", text):
+            candidate = raw.strip().strip("\"'")
+            if not candidate.startswith("/"):
+                candidate = str(path.parent / candidate)
+            queue.extend(Path(item) for item in sorted(glob.glob(candidate)))
+    combined = "\n".join(texts)
+    _require(
+        bool(re.search(r"(?m)^\s*listen\s+[^;]*\b8077\b[^;]*;", combined)),
+        "nginx_8077_missing",
+        "共享Nginx没有8077入口",
+    )
+    locations = re.findall(r"(?m)^\s*location\s+([^\s{]+)", combined)
+    _require(
+        not any(value.casefold().startswith("/smartscan") for value in locations),
+        "nginx_path_conflict",
+        "共享Nginx已存在SmartScan路径",
+    )
+    _require("127.0.0.1:18082" not in combined, "nginx_upstream_conflict", "18082已被Nginx引用")
+
+
+def _validate_ocr_outputs(verify_output: str, status_output: str) -> None:
+    try:
+        verified = json.loads(verify_output)
+        status = json.loads(status_output)
+    except json.JSONDecodeError as exc:
+        raise PreflightError("ocr_invalid", "OCR受限执行器返回无效") from exc
+    _require(verified.get("status") == "passed", "ocr_invalid", "OCR模型验证未通过")
+    _require(
+        status.get("installed") is True and status.get("status") == "passed",
+        "ocr_invalid",
+        "OCR模型未安装",
+    )
+    _require(
+        verified.get("artifact_version") == "PP-OCRv6-small-v1"
+        and status.get("artifact_version") == "PP-OCRv6-small-v1",
+        "ocr_invalid",
+        "OCR模型版本无效",
+    )
+
+
+def _validate_shared_runtime_health(snapshot: Mapping[str, Any]) -> None:
+    network = snapshot.get("network") if isinstance(snapshot.get("network"), dict) else {}
+    listeners = network.get("listeners", [])
+    _require(
+        any(isinstance(item, dict) and item.get("port") == 8077 for item in listeners),
+        "nginx_8077_missing",
+        "共享Nginx没有监听8077",
+    )
+    docker = snapshot.get("docker") if isinstance(snapshot.get("docker"), dict) else {}
+    containers = docker.get("containers", [])
+    for item in containers:
+        if not isinstance(item, dict):
+            continue
+        state = str(item.get("state", "")).casefold()
+        status = str(item.get("status", "")).casefold()
+        _require(
+            state != "restarting" and "restarting" not in status,
+            "container_unhealthy",
+            "存在重启中的共租户容器",
+        )
+        _require("unhealthy" not in status, "container_unhealthy", "存在不健康的共租户容器")
+
+
+def _validate_bootstrap_file(path: Path, *, expected_uid: int) -> tuple[int, str]:
+    info = path.lstat()
+    _require(stat.S_ISREG(info.st_mode), "output_invalid", "证据不是普通文件")
+    _require(not path.is_symlink() and info.st_nlink == 1, "output_invalid", "证据链接状态无效")
+    _require(info.st_uid == expected_uid, "output_invalid", "证据所有者无效")
+    _require(stat.S_IMODE(info.st_mode) == 0o600, "output_invalid", "证据权限必须为0600")
+    raw = path.read_bytes()
+    return len(raw), hashlib.sha256(raw).hexdigest()
+
+
+def _generator_sha256() -> str:
+    injected = globals().get("__generator_sha256__")
+    if isinstance(injected, str) and re.fullmatch(r"[0-9a-f]{64}", injected):
+        return injected
+    source = Path(__file__)
+    _require(source.is_file(), "generator_identity_missing", "无法确认生成器摘要")
+    return hashlib.sha256(source.read_bytes()).hexdigest()
+
+
+def _prepare_output_root(path: Path, *, expected_uid: int) -> None:
+    if not path.exists():
+        path.mkdir(mode=0o700)
+        path.chmod(0o700)
+    info = path.lstat()
+    _require(
+        stat.S_ISDIR(info.st_mode) and not path.is_symlink(), "output_invalid", "暂存根不是普通目录"
+    )
+    _require(info.st_uid == expected_uid, "output_invalid", "暂存根所有者无效")
+    _require(stat.S_IMODE(info.st_mode) == 0o700, "output_invalid", "暂存根权限必须为0700")
+    _require(not any(path.iterdir()), "output_exists", "暂存根必须为空")
+    for name in BOOTSTRAP_FILENAMES:
+        _require(not (path / name).exists(), "output_exists", "拒绝覆盖已有引导证据")
+
+
+def _write_bootstrap_documents(path: Path, documents: Mapping[str, Mapping[str, Any]]) -> None:
+    """以同目录临时文件和硬链接提交三份证据，失败时不留下部分结果。"""
+
+    _require(set(documents) == set(BOOTSTRAP_FILENAMES), "output_invalid", "证据文件集合无效")
+    temporary: list[Path] = []
+    published: list[Path] = []
+    try:
+        for name in BOOTSTRAP_FILENAMES:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=path,
+                prefix=f".{name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temp = Path(handle.name)
+                temporary.append(temp)
+                handle.write(_canonical_json(documents[name]))
+                handle.flush()
+                os.fsync(handle.fileno())
+            temp.chmod(0o600)
+        for name, temp in zip(BOOTSTRAP_FILENAMES, temporary, strict=True):
+            target = path / name
+            try:
+                os.link(temp, target)
+            except FileExistsError as exc:
+                raise PreflightError("output_exists", "拒绝覆盖已有引导证据") from exc
+            published.append(target)
+        for temp in temporary:
+            temp.unlink()
+        temporary.clear()
+    except BaseException:
+        for target in published:
+            target.unlink(missing_ok=True)
+        for temp in temporary:
+            temp.unlink(missing_ok=True)
+        raise
+
+
+def prepare_bootstrap_command(args: argparse.Namespace) -> int:
+    _require(sys.platform.startswith("linux"), "platform_invalid", "引导证据只允许在Linux生成")
+    _require(pwd is not None, "platform_invalid", "缺少Linux用户数据库")
+    uid = os.getuid()
+    _require(socket.gethostname() == EXPECTED_HOSTNAME, "hostname_mismatch", "目标主机不匹配")
+    _require(
+        pwd.getpwuid(uid).pw_name == EXPECTED_USER and uid == 1000, "user_mismatch", "执行用户无效"
+    )
+    try:
+        spec = json.load(sys.stdin)
+    except json.JSONDecodeError as exc:
+        raise PreflightError("input_invalid", "标准输入不是有效引导JSON") from exc
+    _require(isinstance(spec, dict), "input_invalid", "引导输入根节点必须是对象")
+    now = datetime.now(UTC)
+    captured_at = now.isoformat().replace("+00:00", "Z")
+    snapshot = build_snapshot(now=now)
+    deployment = build_bootstrap_deployment_input(
+        snapshot,
+        spec,
+        ssh_connection=os.environ.get("SSH_CONNECTION", ""),
+        captured_at=captured_at,
+    )
+    allocation = build_uat_allocation(deployment)
+    allocation_raw = _canonical_json(allocation)
+    snapshot_raw = _canonical_json(snapshot)
+    result = validate_preflight(
+        snapshot,
+        allocation,
+        snapshot_sha256=hashlib.sha256(snapshot_raw).hexdigest(),
+        allocation_sha256=hashlib.sha256(allocation_raw).hexdigest(),
+        now=now,
+    )
+    _validate_shared_runtime_health(snapshot)
+    _inspect_nginx_configuration()
+    loop_output = _run_command(("sudo", "-n", LOOP_EXECUTOR, "verify"))
+    findmnt_output = _run_command(
+        ("findmnt", "-J", "-T", LOOP_MOUNT_POINT, "-o", "SOURCE,TARGET,FSTYPE,OPTIONS")
+    )
+    loop_evidence = build_loop_evidence(loop_output, findmnt_output, captured_at=captured_at)
+    ocr_verify = _run_command(("sudo", "-n", OCR_EXECUTOR, "verify"))
+    ocr_status = _run_command(("sudo", "-n", OCR_EXECUTOR, "status"))
+    _validate_ocr_outputs(ocr_verify, ocr_status)
+    preflight = result.safe_summary()
+    preflight["checks"] = list(preflight["checks"]) + [
+        "shared_nginx_8077_no_smartscan_conflict",
+        "loop_storage_verified",
+        "ocr_model_verified",
+    ]
+    preflight["contains_sensitive_data"] = False
+    preflight["generator_sha256"] = _generator_sha256()
+    documents = {
+        "deployment-input.json": deployment,
+        "preflight-summary.json": preflight,
+        "loop-storage-evidence.json": loop_evidence,
+    }
+    _prepare_output_root(BOOTSTRAP_ROOT, expected_uid=uid)
+    _write_bootstrap_documents(BOOTSTRAP_ROOT, documents)
+    summaries = []
+    for name in BOOTSTRAP_FILENAMES:
+        size, digest = _validate_bootstrap_file(BOOTSTRAP_ROOT / name, expected_uid=uid)
+        summaries.append({"name": name, "size_bytes": size, "sha256": digest, "mode": "0600"})
+    print(
+        json.dumps(
+            {
+                "status": "prepared",
+                "root": str(BOOTSTRAP_ROOT),
+                "generator_sha256": preflight["generator_sha256"],
+                "files": summaries,
+                "contains_sensitive_data": False,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def collect_command(args: argparse.Namespace) -> int:
     _require(sys.platform.startswith("linux"), "platform_invalid", "现场采集只允许在 Linux 执行")
     snapshot = build_snapshot()
@@ -956,6 +1466,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--evidence", type=Path)
     validate.add_argument("--max-age-hours", type=int, default=DEFAULT_MAX_AGE_HOURS)
     validate.set_defaults(handler=validate_command)
+    prepare = subparsers.add_parser(
+        "prepare-bootstrap",
+        help="在目标主机从标准输入CIDR与只读现场事实生成三份固定仓库外证据",
+    )
+    prepare.set_defaults(handler=prepare_bootstrap_command)
     return parser
 
 
