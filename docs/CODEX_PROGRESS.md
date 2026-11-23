@@ -8,12 +8,12 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OCR-002` UAT离线模型制品 |
-| 工作包状态 | 等待人工验收；固定digest已由用户接受并完成服务器匿名只读核验，受限安装器已人工安装，等待模型拉取、暂存、提取和受限安装的独立授权 |
-| 当前分支 | `codex/ocr-002-accepted-candidate-evidence` |
-| 最后验证基线 | `107536e`：OCR最终候选证据已合并；2026-11-23目标服务器只读核验digest、OCI平台、配置、大小及空目标目录全部通过 |
+| 工作包状态 | 阻塞；目标服务器按完整接受digest执行唯一授权的`docker pull`时返回`not found`，已失败关闭且未重试、替换或清理 |
+| 当前分支 | `codex/ocr-002-pull-failure-evidence` |
+| 最后验证基线 | `4e36ed3`：候选接受与服务器匿名manifest只读核验已合并；随后Docker Engine实际拉取固定digest失败 |
 | 工作包提交 | `06569aa`（PR #90主体合并）、`9be7b7c`（PR #91 LF完整性与触发范围修复） |
 | PR | [#90](https://github.com/j4meshub/SmartScan/pull/90)、[#91](https://github.com/j4meshub/SmartScan/pull/91)均已合并 |
-| 下一工作包 | 分阶段授权服务器拉取已接受模型digest、创建固定暂存容器、只读提取和哈希核验；通过后再单独授权受限`install/verify`，最后执行`verify-config` |
+| 下一工作包 | 先在不改服务器的前提下定位GHCR匿名manifest成功但Docker Engine按digest拉取`not found`的差异；未经新决策不得重试、登录、使用Tag/替代digest或进入暂存安装 |
 
 ## 当前工作包进展
 
@@ -32,6 +32,7 @@
 - 合并后的main运行`44722932514`全部成功，发布时生成未接受候选`ghcr.io/j4meshub/smartscan-ocr-models@sha256:0fc7f95eb14f18996c6f22d71b4873b28e79ea0afde8a66ddea6b6c095740c13`。匿名manifest请求返回200且`Docker-Content-Digest`逐字一致；媒体类型为OCI image index，包含`linux/amd64`运行manifest`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`和独立证明manifest。运行配置标签的来源提交为`9be7b7c366f568d82a19341e072a3144ddd025a2`。Package已可匿名读取，无需修改可见性；后续接受事实见下一条及D-096。
 - 2026-11-23用户明确接受上述`0fc7f9…40c13`为UAT唯一模型候选，并拒绝历史`77d67e…3441`及后续自动digest；接受不授权拉取、暂存、提取、安装或Worker启动。三个受限安装资产已由共同使用人人工核对摘要、root所有权、权限及sudoers语法并完成安装。
 - 同日仅通过SSH别名完成服务器只读核验：主机身份仍为可信基线；受限执行器唯一sudo命令`status`返回`installed=false,status=empty`。服务器DNS和TLS 1.3成功，匿名Registry令牌、OCI index、`linux/amd64`运行manifest及配置均返回200，Registry摘要与接受值逐字一致，来源提交为`9be7b7c…25a2`。制品仅一个压缩层`26,534,130`字节，远低于4 GiB；目标目录仍为空。未执行Docker、安装、文件写入、Secret、数据库、网络、Nginx或服务启动。
+- 后续单独授权的固定digest拉取阶段再次核对可信主机身份，Docker 29.0.2可读；拉取前精确digest不在缓存、运行容器为0，Docker根目录所在文件系统可用约743.5 GB，根文件系统可用约168.9 GB。唯一写操作`docker pull ghcr.io/j4meshub/smartscan-ocr-models@sha256:0fc7f9…40c13`由daemon返回`failed to resolve reference ... not found`。按门禁立即停止，没有重试、Tag、替代digest、登录、容器、提取、安装、删除或prune，也没有执行拉取后`status`；可能的部分缓存保持原状，等待独立诊断决策。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。

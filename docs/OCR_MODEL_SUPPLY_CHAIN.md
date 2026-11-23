@@ -69,6 +69,12 @@ manifest；运行配置的来源仓库与提交标签均与上述main提交一�
 `26,534,130`字节，远低于4 GiB。此前`77d67e…3441`候选明确不接受，只保留为历史证据；
 后续自动构建产生的新digest也不得替换当前接受值。
 
+2026-11-23目标服务器在可信身份、Docker可读、空间充足、精确digest未缓存且无运行容器的
+前提下，执行唯一授权的完整digest拉取；Docker daemon返回`failed to resolve reference ...
+not found`。操作立即停止，没有重试、登录、Tag、替代digest、容器、提取、删除或`prune`。
+这与此前匿名Registry manifest成功的证据并存，必须作为独立兼容性/Registry路径问题调查；
+不得把manifest成功改写为实际拉取成功，也不得自动选择新制品。
+
 ## 服务器离线提取边界
 
 后续Docker阶段只负责拉取已接受的固定digest，并把`/models/ocr`复制到固定暂存目录
