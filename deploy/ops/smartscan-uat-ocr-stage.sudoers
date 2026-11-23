@@ -1,0 +1,3 @@
+# SmartScan UAT OCR离线Layer暂存只允许三条固定命令；本文件强制LF。
+Cmnd_Alias SMARTSCAN_UAT_OCR_STAGE = /usr/local/libexec/smartscan/smartscan-uat-ocr-stage stage, /usr/local/libexec/smartscan/smartscan-uat-ocr-stage verify, /usr/local/libexec/smartscan/smartscan-uat-ocr-stage status
+szhzx ALL=(root) NOPASSWD: SMARTSCAN_UAT_OCR_STAGE

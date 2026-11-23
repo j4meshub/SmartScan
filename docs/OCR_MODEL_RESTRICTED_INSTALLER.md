@@ -34,3 +34,36 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-ocr-model status
 符号链接、异常文件、缺失/多余/重复文件、摘要/大小/许可证/schema偏差和超过4 GiB。
 成功后所有文件为root只读。中途失败不会把部分状态记为成功，也不会自动清理；必须先
 报告，再由用户决定独立清理授权。`verify`重新计算完整清单；`status`只返回脱敏状态。
+
+## OCR-002D 固定Layer暂存执行器
+
+GHCR Blob/CDN链路不稳定后，新增一组独立安装资产。它只把已上传的原始固定Layer安全解包到
+既有安装器要求的暂存树，不修改已经人工安装的模型安装器：
+
+| 仓库文件 | 安装位置 | 所有者/权限 | LF规范化SHA-256 |
+|---|---|---|---|
+| `deploy/ops/smartscan-uat-ocr-stage` | `/usr/local/libexec/smartscan/smartscan-uat-ocr-stage` | `root:root 0755` | `14aef2c9fd31b5e7e31fafb076ec9388faa30fd8d397b1718fb4fa3354505ede` |
+| `deploy/ops/smartscan_uat_ocr_stage.py` | `/usr/local/libexec/smartscan/smartscan_uat_ocr_stage.py` | `root:root 0644` | `34ff9a749737c38ec64b1dedd274a58e8d04612327fc3a80acc783ce84f146a1` |
+| `deploy/ops/smartscan_ocr_layer_contract.py` | `/usr/local/libexec/smartscan/smartscan_ocr_layer_contract.py` | `root:root 0644` | `90b52b43f6bd5f0792d193e1405b28c9f4737813fe78a56eb011dfc4bc8b0997` |
+| `deploy/ops/smartscan-uat-ocr-stage.sudoers` | `/etc/sudoers.d/smartscan-uat-ocr-stage` | `root:root 0440` | `f813940d1957ad6c115da68db018aabbda43f9cb929323d9b46c44a4fd08d0df` |
+
+共同使用人只能在PR合并并审核固定提交后，在自己的SSH终端用交互式`sudo install`安装，随后
+执行`sudo visudo -cf /etc/sudoers`并逐个核对所有权、权限和SHA-256。AI不得请求、读取、保存
+或传递sudo密码。sudoers只允许以下三条无额外参数命令：
+
+```text
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-ocr-stage stage
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-ocr-stage verify
+sudo -n /usr/local/libexec/smartscan/smartscan-uat-ocr-stage status
+```
+
+上传文件固定为
+`/home/szhzx/smartscan-ocr-offline-transfer/smartscan-ocr-layer-fdae8d61585e.tar.gz`，必须是
+`szhzx`拥有的0600普通单链接文件，大小26,534,130字节且SHA-256为
+`fdae8d61585eef7d6a5c810e10847cd10039f3a8b69645d480c6d4127c1aebfb`。暂存执行器拒绝绝对路径、
+`..`、链接、设备、FIFO、重复/额外成员、大小异常和超过4 GiB；固定暂存树已有任何完整或部分
+状态时也拒绝覆盖。中途失败保留`.partial`证据，执行器没有清理或替换命令。
+
+完整顺序为：本机固定下载与离线`verify` → 单独授权创建固定用户上传目录和SCP → 重新核对
+0600/所有者/大小/摘要 → 单独授权暂存`stage`和`verify` → 单独授权既有模型`install`和
+`verify`。每一步授权互不延续，最终模型目录验证通过前CPU Worker继续失败关闭。

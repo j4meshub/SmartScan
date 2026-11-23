@@ -120,11 +120,56 @@ NOPASSWD `status`命令返回需要密码。由于无法重新确认目标目录
 速度，归类为B类。当前不再尝试Docker pull；下一步需单独设计公司网络路径改善或可审计
 离线固定制品传输，仍须保持已接受digest、哈希、来源和安装门禁。
 
+### OCR-002D 可审计离线Layer传输
+
+共同使用人随后人工执行精确平台子digest拉取，唯一Layer在约376.8 KB处因TCP连接被对端重置
+而失败。服务器Docker pull路线至此停止；可能存在的部分缓存不删除、不`prune`，也不作为可安装
+制品。离线路线仍绑定以下同一组已接受对象：
+
+| 对象 | 固定值 |
+|---|---|
+| 供应链index | `sha256:0fc7f95eb14f18996c6f22d71b4873b28e79ea0afde8a66ddea6b6c095740c13` |
+| `linux/amd64` manifest | `sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7` |
+| config | `sha256:c6344931bf46a076ebc180117988d7240e5f0e7320db647a6a98d365a74e480d`，1877字节 |
+| gzip Layer | `sha256:fdae8d61585eef7d6a5c810e10847cd10039f3a8b69645d480c6d4127c1aebfb`，26,534,130字节 |
+| 来源提交 | `9be7b7c366f568d82a19341e072a3144ddd025a2` |
+
+`tools/ocr_offline_layer.py`不接受URL、仓库、Tag或digest参数，只提供`download`和离线
+`verify`。下载令牌不落盘，HTTPS重定向只允许GHCR批准的Blob/CDN域名；固定`.part`支持
+Range续传，完成前不覆盖最终文件。原子改名以前必须重新验证index/platform/config/来源、
+Layer媒体类型、精确大小、SHA-256、gzip/tar结构和完整预期成员。固定输出目录
+`.smartscan-offline-transfer/`已被Git忽略，真实模型和临时文件不得提交。
+
+仓库下载工具的LF规范化SHA-256为
+`bcd522bd7727fe91518f99594c695a6cf86216cd416716154a4cbf7e2be6a3c3`。只有PR合并且取得本机下载
+授权后，才在仓库根目录运行：
+
+```powershell
+python tools/ocr_offline_layer.py download
+python tools/ocr_offline_layer.py verify
+```
+
+固定输出为
+`.smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz`，精确大小26,534,130
+字节，SHA-256为`fdae8d61585eef7d6a5c810e10847cd10039f3a8b69645d480c6d4127c1aebfb`。
+PR合并后仍须另行授权创建服务器固定用户目录和上传；未来SCP命令固定为：
+
+```powershell
+scp .smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz smartscan-server:/home/szhzx/smartscan-ocr-offline-transfer/smartscan-ocr-layer-fdae8d61585e.tar.gz
+```
+
+上传前必须已由`szhzx`创建固定目录并设为0700；上传后必须独立核对普通文件、所有者、0600、
+精确大小和摘要。以上命令不包含自动建目录、改权限、暂存或安装，不能在没有对应授权时执行。
+
+离线传输的是上述原始Layer字节，不是新模型版本。任何重打包都会改变Layer摘要，必须被拒绝，
+不能以“内容相同”为由冒用现有digest。PR的Ubuntu真实Layer作业只在临时工作区下载、复核并于
+结束时清理；PR和main均不发布或替换模型制品。
+
 ## 服务器离线提取边界
 
-后续Docker阶段只负责拉取已接受的固定digest，并把`/models/ocr`复制到固定暂存目录
-`/mnt/data/smartscan/uat/models/.ocr-staging/PP-OCRv6-small-v1`。不得直接把容器内容复制
-进最终目录。受限root安装器完成完整清单复核后，才把文件复制到
+服务器Docker提取路线已经停止。未来只允许把固定Layer上传到固定用户路径，再由独立受限
+暂存执行器安全解包到`/mnt/data/smartscan/uat/models/.ocr-staging/PP-OCRv6-small-v1`。
+不得直接把上传文件或tar内容复制进最终目录。受限root安装器完成完整清单复核后，才把文件复制到
 `/mnt/data/smartscan/uat/models/ocr`，设置`root:root`、目录`0755`、文件`0444`。
 Worker只读挂载最终目录，运行时禁止联网下载。
 

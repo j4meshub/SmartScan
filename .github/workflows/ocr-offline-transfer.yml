@@ -1,0 +1,84 @@
+name: OCR离线Layer传输验证
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ocr-offline-transfer.yml"
+      - ".gitattributes"
+      - ".gitignore"
+      - "deploy/ops/smartscan-uat-ocr-stage*"
+      - "deploy/ops/smartscan_ocr_layer_contract.py"
+      - "tests/test_ocr_offline_layer.py"
+      - "tests/test_uat_ocr_stage.py"
+      - "tools/ocr_offline_layer.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ocr-offline-transfer.yml"
+      - ".gitattributes"
+      - ".gitignore"
+      - "deploy/ops/smartscan-uat-ocr-stage*"
+      - "deploy/ops/smartscan_ocr_layer_contract.py"
+      - "tests/test_ocr_offline_layer.py"
+      - "tests/test_uat_ocr_stage.py"
+      - "tools/ocr_offline_layer.py"
+  workflow_dispatch:
+
+concurrency:
+  group: ocr-offline-transfer-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: ${{ matrix.os }}固定下载与安全暂存测试
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 固定Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 安装测试依赖
+        run: python -m pip install --disable-pip-version-check -e ".[dev]"
+      - name: 执行固定下载、tar安全和安装器集成测试
+        run: >-
+          python -m pytest
+          tests/test_ocr_offline_layer.py
+          tests/test_uat_ocr_stage.py
+          tests/test_uat_ocr_model_installer.py
+          -q
+
+  real-layer:
+    name: Ubuntu真实固定Layer端到端验证
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 固定Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: 下载并离线复核已接受Layer
+        run: |
+          set -euo pipefail
+          trap 'rm -rf .smartscan-offline-transfer' EXIT
+          python tools/ocr_offline_layer.py download
+          python tools/ocr_offline_layer.py verify
+          SMARTSCAN_REAL_OCR_LAYER="$PWD/.smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz" \
+            python -m pytest tests/test_uat_ocr_stage.py \
+            -k real_fixed_layer_stages_and_matches_existing_installer -q
+          test ! -e .smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz.part
+      - name: 确认真实模型文件未进入Git
+        run: |
+          set -euo pipefail
+          test -z "$(git status --short --untracked-files=all)"
