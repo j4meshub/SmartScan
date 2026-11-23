@@ -87,10 +87,11 @@ M2 门禁：统一账号、冲突、停用绕过、删除和权限矩阵集成�
 | `SCAN-001` 页面版本与复核 | 完成 | M0 | 页面旋转、质量、处理版本和独立复核状态；原图不可覆盖 |
 | `JOB-001` 完整任务状态机 | 完成 | SCAN-001 | 排队、基础处理、基础就绪、可选增强、就绪、可重试失败、最终失败和取消；租约可恢复 |
 | `OCR-001` 基础 OCR | 等待人工验收 | JOB-001 | CPU OCR、四方向融合、标题候选、隐私字段过滤和默认命名；代码与 CI 已通过，真实模型固定集、方向 `≥98%` 和 CPU 容量待验收 |
-| `OCR-002` UAT离线模型制品 | 阻塞 | OCR-001, OPS-001C | 固定来源、许可、真实CPU、SBOM/来源证明、漏洞、匿名manifest和执行器安装均通过；`linux/amd64`子manifest已接受，NOPASSWD已恢复，但唯一授权的pull停在唯一layer下载且数分钟后仍未形成本地镜像。不得自动重试、暂存、提取、安装或启动CPU Worker |
+| `OCR-002` UAT离线模型制品 | 阻塞 | OCR-001, OPS-001C | 固定来源、许可、真实CPU、SBOM/来源证明、漏洞、匿名manifest和安装器均通过；服务器直接拉取路线因Blob/CDN连接重置停止，改由OCR-002D传输同一已接受Layer。离线暂存、安装和Worker启动仍须独立授权 |
 | `OCR-002A` 模型镜像拉取兼容性只读诊断 | 完成 | OCR-002、用户只读授权 | Registry对象树完整，但顶层index与平台子manifest仅接受OCI媒体类型，Docker list/schema2单独协商返回404；Docker 29.0.2 containerd image store无mirror、无用户配置干扰，目标目录仍为空。结论为C类媒体协商差异；不自动接受子digest、不重试拉取 |
-| `OCR-002B` 平台子manifest固定拉取 | 阻塞 | OCR-002A、用户接受与拉取授权 | `linux/amd64`子digest、config、layer和来源提交已获精确接受；可信主机、空间、未缓存、零关联容器与`status=empty`通过。单次pull已解析manifest并开始唯一layer，但未返回完成/错误且持续未落盘；保持失败关闭，不自动重试 |
+| `OCR-002B` 平台子manifest固定拉取 | 放弃 | OCR-002A、用户接受与拉取授权 | `linux/amd64`子digest、config、layer和来源提交已获精确接受，但服务器人工pull最终在Layer约376.8 KB处连接重置；直接Docker拉取路线按D-102停止并由OCR-002D替代，失败证据保留且不清理部分缓存 |
 | `OCR-002C` GHCR模型Layer传输只读诊断 | 完成 | OCR-002B、用户只读授权 | 原始pull进程不存在，镜像未落盘、零关联容器且模型目录为空。固定layer HEAD为200、长度/摘要正确；1 MiB Range为206但耗时54.900秒、平均19,099.9 B/s，归类为B类Blob/CDN传输严重受限，不是权限或对象缺失 |
+| `OCR-002D` 可审计离线模型Layer传输 | 完成 | OCR-002C、用户确认服务器pull失败 | Windows固定下载/离线复核、Range续传、Git忽略、同一Layer身份核对、安全tar暂存、受限`stage/verify/status`及既有安装器集成已实现；PR #99真实Layer端到端CI通过。本工作包未连接或修改服务器，人工安装和后续逐阶段授权仍是OCR-002外部门禁 |
 | `EXPORT-001` JPG/PDF | 完成 | OCR-001 | 单页/多页、清晰/均衡/小文件、可选文本层和稳定文件名 |
 | `FILE-001` 文件生命周期 | 完成 | JOB-001 | 取消上传、删除项目、临时目录回收、鉴权下载和 Range/X-Accel 设计 |
 | `API-001` v1 契约冻结 | 完成 | EXPORT-001, FILE-001 | OpenAPI 快照、客户端兼容矩阵和弃用规则 |

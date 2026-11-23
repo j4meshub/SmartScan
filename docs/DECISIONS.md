@@ -753,3 +753,12 @@
 - 现场状态：可信主机不变，原始精确pull客户端进程数量为0；子digest未进入本地缓存、关联容器为0，Docker聚合空间未触发停止阈值，受限模型`status`仍为`installed=false,status=empty`。
 - Registry证据：固定layer HEAD返回HTTP 200，长度26,534,130字节、摘要`sha256:fdae8d…aebfb`逐字一致，耗时2.049秒且无重定向。固定`bytes=0-1048575` Range GET返回HTTP 206，实际读取1,048,576字节、1次HTTPS重定向、未忽略Range；耗时54.900秒，平均19,099.9 B/s。正文丢弃，匿名令牌和签名URL未输出或落盘。
 - 分类与决策：结果归入B类而非A/C/D。Manifest和权限链路正常，Blob/CDN可达但速度严重受限；上次pull更可能因层传输耗时和前台会话生命周期结束而未完成。依照用户门禁不再尝试Docker pull，下一步只能独立评估网络路径改善或可审计离线固定制品传输。离线方案仍须绑定已接受digest、逐文件摘要、来源证据和单独安装授权。
+
+## D-102：OCR模型改用同一固定Layer的可审计离线传输
+
+- 状态：已实现，等待服务器侧分段人工授权
+- 日期：2026-11-23
+- 新证据：共同使用人在自己的SSH终端执行已接受平台子digest的pull，唯一Layer下载约376.8 KB后收到`connection reset by peer`。这与D-101的低速Range证据一致，确认服务器到GHCR Blob/CDN链路不适合作为当前安装路径；失败不改变Registry对象、来源或模型内容的真实性。
+- 决策：停止服务器Docker pull路线。Windows工具经GHCR Registry API下载固定Layer `sha256:fdae8d…aebfb`的原始26,534,130字节，支持固定`.part`断点续传；必须同时验证index、平台manifest、config、来源提交、媒体类型、大小、SHA-256及gzip/tar结构。离线传输不重打包、不生成新模型版本，顶层index仍是供应链和证明关联根。
+- 服务器边界：未来上传只允许固定用户路径、普通文件、所有者`szhzx`、权限0600。新的root暂存执行器只授权无参数`stage/verify/status`，只安全解包到固定暂存树并复用既有模型清单验证；不提供下载、Docker、删除、替换、shell或任意路径。既有模型安装器不修改，`install/verify`继续是后续独立授权。
+- 影响：本工作包只交付工具、测试、CI与说明，不连接或修改服务器，也不把真实Layer提交Git。Docker部分缓存保持不动；任何本机下载、SCP、执行器安装、暂存、最终安装和Worker启动都需在PR合并后分别授权。

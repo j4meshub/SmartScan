@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# 本文件作为root安装资产，仓库强制LF以保证人工SHA-256复核跨平台一致。
+set -euo pipefail
+umask 077
+
+readonly EXPECTED_HOSTNAME="ctiecaiserver"
+readonly EXPECTED_SUDO_USER="szhzx"
+readonly INSTALL_PATH="/usr/local/libexec/smartscan/smartscan-uat-ocr-stage"
+readonly STAGE_HELPER="/usr/local/libexec/smartscan/smartscan_uat_ocr_stage.py"
+readonly CONTRACT_HELPER="/usr/local/libexec/smartscan/smartscan_ocr_layer_contract.py"
+readonly MODEL_HELPER="/usr/local/libexec/smartscan/smartscan_uat_ocr_model.py"
+readonly STAGE_HELPER_SHA256="34ff9a749737c38ec64b1dedd274a58e8d04612327fc3a80acc783ce84f146a1"
+readonly CONTRACT_HELPER_SHA256="90b52b43f6bd5f0792d193e1405b28c9f4737813fe78a56eb011dfc4bc8b0997"
+readonly MODEL_HELPER_SHA256="654dd06634c64ef15f95523ba227cbb7ec866c6eae162db3b33911afc82cadac"
+readonly PYTHON_BIN="/usr/bin/python3"
+
+fail() {
+    printf 'status=failed reason=%s\n' "$1" >&2
+    exit 1
+}
+
+[[ $# -eq 1 ]] || fail "invalid_arguments"
+case "$1" in
+    stage|verify|status) ;;
+    *) fail "invalid_command" ;;
+esac
+[[ "$(hostname)" == "$EXPECTED_HOSTNAME" ]] || fail "hostname_mismatch"
+[[ "${SUDO_USER:-}" == "$EXPECTED_SUDO_USER" ]] || fail "sudo_user_mismatch"
+[[ "$(id -u)" == "0" ]] || fail "root_required"
+[[ "$0" == "$INSTALL_PATH" ]] || fail "install_path_mismatch"
+[[ -f "$INSTALL_PATH" && ! -L "$INSTALL_PATH" ]] || fail "executor_invalid"
+[[ -f "$STAGE_HELPER" && ! -L "$STAGE_HELPER" ]] || fail "stage_helper_invalid"
+[[ -f "$CONTRACT_HELPER" && ! -L "$CONTRACT_HELPER" ]] || fail "contract_helper_invalid"
+[[ -f "$MODEL_HELPER" && ! -L "$MODEL_HELPER" ]] || fail "model_helper_invalid"
+[[ "$(stat -c '%U:%G:%a' "$INSTALL_PATH")" == "root:root:755" ]] || fail "executor_permissions"
+[[ "$(stat -c '%U:%G:%a' "$STAGE_HELPER")" == "root:root:644" ]] || fail "stage_helper_permissions"
+[[ "$(stat -c '%U:%G:%a' "$CONTRACT_HELPER")" == "root:root:644" ]] || fail "contract_helper_permissions"
+[[ "$(stat -c '%U:%G:%a' "$MODEL_HELPER")" == "root:root:644" ]] || fail "model_helper_permissions"
+printf '%s  %s\n' "$STAGE_HELPER_SHA256" "$STAGE_HELPER" | sha256sum --check --status \
+    || fail "stage_helper_checksum"
+printf '%s  %s\n' "$CONTRACT_HELPER_SHA256" "$CONTRACT_HELPER" | sha256sum --check --status \
+    || fail "contract_helper_checksum"
+printf '%s  %s\n' "$MODEL_HELPER_SHA256" "$MODEL_HELPER" | sha256sum --check --status \
+    || fail "model_helper_checksum"
+
+case "$1" in
+    stage)
+        "$PYTHON_BIN" -c 'import sys; sys.path.insert(0,"/usr/local/libexec/smartscan"); from smartscan_uat_ocr_stage import render,stage_fixed; print(render(stage_fixed()))'
+        ;;
+    verify)
+        "$PYTHON_BIN" -c 'import sys; sys.path.insert(0,"/usr/local/libexec/smartscan"); from smartscan_uat_ocr_stage import render,verify_fixed; print(render(verify_fixed()))'
+        ;;
+    status)
+        "$PYTHON_BIN" -c 'import sys; sys.path.insert(0,"/usr/local/libexec/smartscan"); from smartscan_uat_ocr_stage import render,status_fixed; print(render(status_fixed()))'
+        ;;
+esac

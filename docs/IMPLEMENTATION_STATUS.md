@@ -24,7 +24,7 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 | 可选 AI | 通用文档、复杂 OCR、本机试用、三端接入与主动上传代码完成 | Provider、安全、可靠性、项目授权、版本候选、专用 Worker 与安全媒体已实现；AI 网关默认内部取图并使用 data URL、multipart 或 Files API 主动上传，签名 URL 降为兼容模式。H5、Android、iOS 和默认 Mock 使用同一候选语义；试卷、扫书与公司真实模型验收尚未完成，M8 总体仍为进行中 |
 | Android | M5 无外部 AI 核心与 M8 AI 接入自动化门禁完成；正式分发延期 | 已实现分层 API、登录/Keystore/Room、CameraX、离线续传、编辑分享、账号删除、签名更新，以及 AI 项目授权、任务进度、候选对比/决定和来源基础版本预览；PR #67 代码头 API/Web/Android/iOS/容器五项 CI 通过，客户端不保存部署连接配置。开发期使用本地或 CI 测试 APK；正式渠道、密钥、系统安装器、TalkBack、网络切换和真机升级在稳定版本后验收 |
 | iOS | M6 无外部 AI 核心、REL-002 仓库门禁与 M8 通用 AI 接入自动门禁完成 | 已实现可复现工程、身份/Keychain、AVFoundation、后台续传、编辑导出分享、账号删除、双语元数据与隐私清单；外部 AI 项目授权、双类型任务、候选对比/决定和来源版本预览已通过固定 Xcode 16.4 Simulator 编译与 XCTest。真实 Apple 参数、签名、真机与审核仍未通过 |
-| CI 与部署 | OPS-000、OPS-001B、OPS-001C、OPS-001D、OPS-REG-003B、OCR-002A和OCR-002C完成；OCR-002传输阻塞 | 50 GiB loop与六个固定UAT镜像已验收。OCR平台子digest已接受；固定layer元数据与权限正常，但1 MiB Range耗时54.900秒、平均约19.1 KB/s，确认Blob/CDN链路严重受限。镜像未落盘，模型目录为空；不再尝试Docker pull，配置、Secret、镜像身份和应用均未启动 |
+| CI 与部署 | OPS-000、OPS-001B、OPS-001C、OPS-001D、OPS-REG-003B、OCR-002A、OCR-002C和OCR-002D仓库侧完成 | 50 GiB loop与六个固定UAT镜像已验收。服务器直接拉取OCR Layer时连接重置，路线停止；固定原始Layer的Windows断点下载、离线验证、安全暂存、精确sudo边界和真实Layer CI已通过。人工安装及本机下载/SCP/暂存/最终安装仍需分段授权；模型目录为空，配置、Secret、镜像身份和应用均未启动 |
 | 数据库迁移 | 已实现 | Alembic 初始基线、空库升级、旧基线无损接管、版本门禁和 Compose 一次性迁移服务 |
 | API 分层 | 已实现 | 应用装配、认证路由、扫描路由、管理路由、领域服务和存储访问已分离，并由公开契约测试保护 |
 | 测试与 CI 基线 | 已实现 | 测试会话使用临时数据库/存储，保存完整 OpenAPI 快照，GitHub Actions 对应用代码执行 77% 覆盖率门禁 |

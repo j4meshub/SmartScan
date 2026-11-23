@@ -7,15 +7,26 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OCR-002C` GHCR模型Layer传输只读诊断 |
-| 工作包状态 | 完成只读诊断；归类为B类Blob/CDN传输严重受限，`OCR-002`继续阻塞且不得重试Docker pull |
-| 当前分支 | `codex/ocr-002c-ghcr-layer-diagnosis` |
-| 最后验证基线 | `4310f09`：PR #97已合并；2026-11-23目标服务器固定layer HEAD/Range与原始pull现场只读诊断完成 |
-| 工作包提交 | `c61689e`（OCR-002C Blob/CDN只读诊断证据） |
-| PR | [#98](https://github.com/j4meshub/SmartScan/pull/98)（等待CI） |
-| 下一工作包 | 设计公司网络路径改善或可审计离线固定模型制品传输方案；未经新决策不得Docker pull、暂存、提取或安装 |
+| 当前工作包 | `OCR-002D` 可审计离线模型Layer传输 |
+| 工作包状态 | 完成；仓库工具、测试、文档和真实Layer CI通过，服务器安装与模型传输仍未授权 |
+| 当前分支 | `codex/ocr-002d-offline-model-transfer` |
+| 最后验证基线 | `ca291a5`：PR #99代码头20项成功、4项按PR规则跳过；Windows、Ubuntu及真实Layer端到端门禁全部通过 |
+| 工作包提交 | `49a4771`（主体）、`1d713df`（Config摘要）、`6513253`（真实Layer依赖）、`ca291a5`（Windows UTF-8） |
+| PR | [#99](https://github.com/j4meshub/SmartScan/pull/99)（全部适用CI通过） |
+| 下一工作包 | PR合并后由共同使用人人工安装固定暂存执行器；再分别授权本机下载、SCP、`stage/verify`及既有`install/verify`，任何授权均不自动延续 |
 
 ## 当前工作包进展
+
+- 服务器人工执行已接受平台子digest的pull后，在唯一Layer约376.8 KB处收到`connection reset by peer`；结合OCR-002C的1 MiB Range仅约19.1 KB/s，确认直接Docker拉取路线停止。Docker可能保留部分缓存，本工作包不清理、不删除且不执行`prune`。
+- OCR-002D固定同一供应链index、`linux/amd64`manifest、config、唯一Layer及来源提交；离线传输下载的是原始26,534,130字节Layer，大小或SHA-256变化立即失败，禁止重新打包后冒用原Layer摘要。
+- Windows工具只接受`download/verify`，令牌仅驻留内存，HTTPS重定向限制到GHCR批准域名；支持固定`.part`与Range续传，完成后校验OCI描述符、config平台/来源、gzip/tar、精确大小和摘要，再原子改名。下载目录已被Git忽略。
+- 新受限暂存器只允许固定`stage/verify/status`，验证上传文件所有者、0600权限、大小、摘要和安全tar成员；拒绝路径穿越、链接、设备、FIFO、重复/额外文件、超过4 GiB及已有/部分状态。成功树为`root:root`、目录0755、文件0444，并复用现有模型安装器清单验证；失败保留现场且无删除能力。
+- 本地专项最终`28 passed, 8 skipped`，跳过项为Windows不具备的POSIX所有权、符号链接、Bash/visudo和真实Layer环境；全量Python`596 passed, 36 skipped`、覆盖率87.74%，Ruff检查、191个Python文件格式及迁移漂移全部通过。真实26,534,130字节Layer下载、安全暂存和既有安装器集成由PR Ubuntu Runner补证，真实文件不会提交仓库。
+- PR #99首轮真实Layer作业在读取config Blob后报`config_digest_mismatch`：GHCR重定向后的Blob/CDN响应不保证保留Registry的`Docker-Content-Digest`头。修复为“响应头存在时必须匹配，同时始终对1877字节正文计算固定SHA-256”，并保留平台、来源提交和精确大小检查；这是传输语义兼容修复，不是放宽config身份门禁。
+- 第二轮真实Layer已完整下载并两次离线复核通过：26,534,130字节和`fdae8d…aebfb`均一致；随后在启动端到端暂存测试前发现该独立作业未安装`pytest`。修复为与单元作业一致地安装仓库开发测试依赖，不改变Layer、暂存器或安装器契约。
+- 第三轮Ubuntu真实Layer端到端验证已通过；Windows作业仅在`--help`把中文说明写入被捕获的非UTF-8控制台时触发`UnicodeEncodeError`。下载器现显式把标准输出/错误配置为UTF-8并使用替换型错误处理，保证Windows管道和PowerShell可运行；协议、摘要和文件门禁未改变。
+- PR #99代码头`ca291a5`最终共有20项成功、4项因PR不发布规则跳过、0项失败；三项OCR-002D专用作业全部成功。真实Layer作业完成原始26,534,130字节下载、离线复核、安全暂存和既有`install/verify`契约集成，并在作业结束清理临时文件；没有发布或替换任何模型digest。
+- 本工作包未连接或修改`smartscan-server`，未下载真实模型到仓库，未上传、提取、安装模型，也未执行Docker、sudo、Secret、数据库、网络、容器或Nginx操作。
 
 - 用户已人工安装OPS-001C执行器、配置工具和sudoers，并单独授权完成`prepare-directories`。固定`postgres`、`data`、`models`、`models/ocr`和`/etc/smartscan/uat`目录已按预期所有者/权限创建并通过执行器验证；配置、Secret、引导密码和镜像身份文件仍不存在，Docker、数据库和Nginx未修改。
 - OCR-002确认真实后端为PaddleOCR 3.7.0、PaddlePaddle 3.3.1的`paddle_static` CPU推理，只使用`PP-OCRv6_small_det/rec`，不需要方向分类模型。官方BCE归档与PaddlePaddle官方模型仓库固定提交的六个推理文件逐字节一致，不需要格式转换。

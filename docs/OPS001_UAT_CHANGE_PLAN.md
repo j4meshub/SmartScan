@@ -115,7 +115,7 @@ location ^~ /smartscan/ {
 5. `OPS-REG-003B`、PostgreSQL用户接受和`OPS-001D`服务器匿名核验已完成；六个镜像在新的应用部署授权前仍不得拉取。
 6. OPS-001C应用准备执行器、配置工具和精确sudoers已由共同使用人人工安装，`prepare-directories`已单独授权并成功；该事实不自动扩大到配置、Docker或Nginx。
 7. 共同使用人从仓库外现场记录安装root拥有的部署输入、预检摘要和loop证据；再分别授权`generate-config`与`verify-config`。所有Secret在目标主机随机生成且不回显。
-8. OCR-002已固定真实OCR模型来源、许可、版本、清单和SHA-256；平台子manifest已获精确接受。OCR-002C确认layer HEAD正常，但1 MiB Range平均仅19,099.9 B/s，归类为B类Blob/CDN传输严重受限；不再尝试Docker pull。网络路径或可审计离线传输解阻后，仍须分别授权固定暂存、提取和受限`install/verify`，全部通过前不得启动CPU Worker。
+8. OCR-002已固定真实OCR模型来源、许可、版本、清单和SHA-256；平台子manifest已获精确接受。服务器人工pull在Layer约376.8 KB处连接重置，直接Docker拉取路线停止。OCR-002D只传输同一固定Layer原始字节：PR真实Layer CI通过后，分别人工安装受限暂存器、授权本机固定下载/离线复核、固定路径SCP、`stage/verify`和既有`install/verify`；全部通过前不得启动CPU Worker。部分Docker缓存保持原状，不清理、不`prune`。
 9. 单独授权三张网络和六镜像拉取；核对RepoDigest、平台、版本、OCI用户及实际UID/GID，安装固定身份记录后才授权`apply-ownership`。
 10. 运行预检、loop证据、UAT配置和Compose解析校验；启动PostgreSQL并等健康，再运行一次性migrate，失败即停。
 11. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。
