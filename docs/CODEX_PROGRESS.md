@@ -1,6 +1,6 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-20
+更新时间：2026-11-23
 
 ## 当前断点
 
@@ -8,12 +8,12 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OCR-002` UAT离线模型制品 |
-| 工作包状态 | 等待人工验收；真实CPU、OCI、SBOM、漏洞、来源证明及全仓门禁已通过，最终GHCR候选已匿名核验，等待用户接受与服务器安装 |
-| 当前分支 | `codex/ocr-002-final-candidate-evidence` |
-| 最后验证基线 | `9be7b7c`：PR #91共21项检查无失败；main OCR供应链`44722932514`成功发布并核验最终未接受候选 |
+| 工作包状态 | 等待人工验收；固定digest已由用户接受并完成服务器匿名只读核验，受限安装器已人工安装，等待模型拉取、暂存、提取和受限安装的独立授权 |
+| 当前分支 | `codex/ocr-002-accepted-candidate-evidence` |
+| 最后验证基线 | `107536e`：OCR最终候选证据已合并；2026-11-23目标服务器只读核验digest、OCI平台、配置、大小及空目标目录全部通过 |
 | 工作包提交 | `06569aa`（PR #90主体合并）、`9be7b7c`（PR #91 LF完整性与触发范围修复） |
 | PR | [#90](https://github.com/j4meshub/SmartScan/pull/90)、[#91](https://github.com/j4meshub/SmartScan/pull/91)均已合并 |
-| 下一工作包 | 用户明确接受最终模型digest；之后分别人工安装受限执行器，并单独授权服务器拉取、固定暂存、受限安装、模型核验与`verify-config` |
+| 下一工作包 | 分阶段授权服务器拉取已接受模型digest、创建固定暂存容器、只读提取和哈希核验；通过后再单独授权受限`install/verify`，最后执行`verify-config` |
 
 ## 当前工作包进展
 
@@ -29,13 +29,15 @@
 - PR #90最终代码头`f4f7039`的OCR模型供应链运行`44713910091`成功：官方归档、清单、许可证和样本摘要均通过；Linux真实CPU结果为简体中文1行3.90秒、英文146行32.33秒、中英混排37行8.03秒，单进程峰值约970,956 KiB。两个spawn Worker并发结果均为1行，分别2.68秒和2.64秒，单进程峰值同量级；低于每个CPU Worker 2 GiB上限。scratch OCI构建、SPDX、High/Critical扫描、in-toto映射和证据Artifact均成功，PR发布作业按规则跳过。其余常规CI、五应用镜像、可审计PostgreSQL、Android及固定Xcode iOS Simulator全部成功，无失败；本轮仍未发布模型Package或修改服务器。
 - PR #90合并后main运行`44716740224`曾发布候选`ghcr.io/j4meshub/smartscan-ocr-models@sha256:77d67ee84526c46bdbee7143cb0b9cbc959159c5afc7a86eaf8ccb2bdfbf3441`。该候选从未接受或部署；它保留为历史证据，不得自动替换UAT配置。
 - main在Windows重新检出后暴露新安装资产未受`.gitattributes`强制LF的问题，`core.autocrlf`会改变人工SHA-256和执行器内固定摘要。PR #91为三份root资产固定LF、刷新规范化摘要，并为模型工作流增加精确路径过滤；21项检查无失败，合并提交为`9be7b7c366f568d82a19341e072a3144ddd025a2`。这是跨平台制品完整性修复，未连接服务器。
-- 合并后的main运行`44722932514`全部成功，发布最终未接受候选`ghcr.io/j4meshub/smartscan-ocr-models@sha256:0fc7f95eb14f18996c6f22d71b4873b28e79ea0afde8a66ddea6b6c095740c13`。匿名manifest请求返回200且`Docker-Content-Digest`逐字一致；媒体类型为OCI image index，包含`linux/amd64`运行manifest`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`和独立证明manifest。运行配置标签的来源提交为`9be7b7c366f568d82a19341e072a3144ddd025a2`。Package已可匿名读取，无需修改可见性；候选仍为`accepted=false`，等待用户明确接受。
+- 合并后的main运行`44722932514`全部成功，发布时生成未接受候选`ghcr.io/j4meshub/smartscan-ocr-models@sha256:0fc7f95eb14f18996c6f22d71b4873b28e79ea0afde8a66ddea6b6c095740c13`。匿名manifest请求返回200且`Docker-Content-Digest`逐字一致；媒体类型为OCI image index，包含`linux/amd64`运行manifest`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`和独立证明manifest。运行配置标签的来源提交为`9be7b7c366f568d82a19341e072a3144ddd025a2`。Package已可匿名读取，无需修改可见性；后续接受事实见下一条及D-096。
+- 2026-11-23用户明确接受上述`0fc7f9…40c13`为UAT唯一模型候选，并拒绝历史`77d67e…3441`及后续自动digest；接受不授权拉取、暂存、提取、安装或Worker启动。三个受限安装资产已由共同使用人人工核对摘要、root所有权、权限及sudoers语法并完成安装。
+- 同日仅通过SSH别名完成服务器只读核验：主机身份仍为可信基线；受限执行器唯一sudo命令`status`返回`installed=false,status=empty`。服务器DNS和TLS 1.3成功，匿名Registry令牌、OCI index、`linux/amd64`运行manifest及配置均返回200，Registry摘要与接受值逐字一致，来源提交为`9be7b7c…25a2`。制品仅一个压缩层`26,534,130`字节，远低于4 GiB；目标目录仍为空。未执行Docker、安装、文件写入、Secret、数据库、网络、Nginx或服务启动。
 
 - 新增计划安装到`/usr/local/libexec/smartscan/smartscan-uat-deployment-preparation`的root执行器，只接受无额外参数的`prepare-directories`、`generate-config`、`verify-config`、`apply-ownership`和`status`；sudoers只授予这五条完整命令，不包含Docker、Nginx、数据库、网络、通用shell、`systemctl`、`prune`或删除能力。
 - 配置工具固定六个用户已接受digest，拒绝`latest/main`、后续自动digest和未接受的PostgreSQL制品；真实内部入口/CIDR只从root拥有的仓库外固定输入读取。数据库、应用、手机号保护、引导管理员和指标Secret均在目标主机随机生成，输出只包含字段存在性/长度和脱敏摘要。
 - 未来固定目录为`postgres`、`data`、`models/ocr`和`/etc/smartscan/uat`。最终所有权必须在六镜像拉取后用`image-identities.json`核验：PostgreSQL强制70:70，API与Worker必须证明共享数字UID/GID；源码Dockerfile中的10001意图和Web未声明`USER`都不能替代实际digest证据。
 - 生产模式普通注册需要短信挑战，而基础UAT关闭短信，因此首次启动使用随机`SMARTSCAN_SUPERADMIN_PASSWORD`创建`admin`并强制改密。初始值只写0600交付文件和运行配置，禁止AI读取、终端回显或进入Git/聊天/日志。
-- CPU Worker会在进入任务循环前校验真实OCR模型包。仓库当前没有已接受的权重、来源/许可快照和完整SHA-256清单；空目录、Mock或联网下载不得通过。因此模型制品独立阻塞`verify-config`和CPU Worker启动，但不把仓库工具实现误记为失败。
+- CPU Worker会在进入任务循环前校验真实OCR模型包。当前已有用户接受的固定模型digest、来源/许可快照和完整SHA-256清单，但目标目录仍为空；在固定digest拉取、暂存提取、受限安装和`verify`通过前，`verify-config`与CPU Worker继续失败关闭。空目录、Mock或联网下载不得替代该门禁。
 - 修正既有UAT容量配置冲突：宿主机预分配后15%/200 GiB余量继续由loop执行器和现场预检保证；应用实际看到50 GiB loop，内部配置改为2 GiB绝对余量、15%比例及32 GiB业务配额，避免错误的200 GiB门禁让所有上传永久失败。
 - 本轮没有连接`smartscan-server`，没有安装执行器、创建目录或Secret，也没有调用sudo、Docker、数据库、网络、Nginx或迁移。
 - 本地专项最终`48 passed, 4 skipped`，4项仅需Linux Bash/`visudo`/POSIX权限并由PR Ubuntu Runner补证；全量Python`562 passed, 26 skipped`、覆盖率87.79%。Ruff检查和180个Python文件格式、迁移漂移、H5 JavaScript语法、Node单元`48 passed`、Chromium子路径E2E`9 passed`及差异空白检查均通过。本机未安装Docker CLI；Compose真实解析与Linux执行器/sudoers门禁已由PR CI补证并通过，现有Python UAT解析器覆盖固定digest、资源总量、只读根、tmpfs、日志和网络契约。

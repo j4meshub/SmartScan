@@ -115,7 +115,7 @@ location ^~ /smartscan/ {
 5. `OPS-REG-003B`、PostgreSQL用户接受和`OPS-001D`服务器匿名核验已完成；六个镜像在新的应用部署授权前仍不得拉取。
 6. OPS-001C应用准备执行器、配置工具和精确sudoers已由共同使用人人工安装，`prepare-directories`已单独授权并成功；该事实不自动扩大到配置、Docker或Nginx。
 7. 共同使用人从仓库外现场记录安装root拥有的部署输入、预检摘要和loop证据；再分别授权`generate-config`与`verify-config`。所有Secret在目标主机随机生成且不回显。
-8. OCR-002已固定真实OCR模型的来源、许可、版本、完整文件清单和SHA-256，并准备独立OCI制品与受限安装器；在PR真实CPU门禁、main发布、用户接受digest、服务器匿名核验和只读安装完成前不得启动CPU Worker。
+8. OCR-002已固定真实OCR模型的来源、许可、版本、完整清单和SHA-256；固定OCI digest已由用户接受并完成服务器匿名只读核验，受限安装器也已人工安装。目标目录仍为空；必须分别授权拉取、固定暂存、提取、受限`install/verify`，全部通过前不得启动CPU Worker。
 9. 单独授权三张网络和六镜像拉取；核对RepoDigest、平台、版本、OCI用户及实际UID/GID，安装固定身份记录后才授权`apply-ownership`。
 10. 运行预检、loop证据、UAT配置和Compose解析校验；启动PostgreSQL并等健康，再运行一次性migrate，失败即停。
 11. 启动API、两个CPU Worker和内层Web，AI关闭；先验证`127.0.0.1:18082`。
