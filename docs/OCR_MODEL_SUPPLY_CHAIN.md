@@ -75,6 +75,23 @@ not found`。操作立即停止，没有重试、登录、Tag、替代digest、�
 这与此前匿名Registry manifest成功的证据并存，必须作为独立兼容性/Registry路径问题调查；
 不得把manifest成功改写为实际拉取成功，也不得自动选择新制品。
 
+### OCR-002A 媒体协商诊断
+
+后续只读诊断确认发布对象树完整：顶层OCI index包含一个大小482字节的`linux/amd64`
+运行manifest和一个`unknown/unknown`证明descriptor；运行manifest引用1877字节OCI config及
+26,534,130字节OCI gzip layer。子manifest、config和layer的HEAD均为200且摘要一致。
+
+差异发生在Accept协商：顶层仅对OCI index媒体类型返回200，平台子manifest仅对OCI
+manifest媒体类型返回200；Docker manifest list/schema2媒体类型的单独HEAD/GET返回404。
+目标Docker 29.0.2使用containerd image store，Registry mirror数量为0，当前用户Docker配置
+文件不存在，因此没有发现mirror或客户端认证配置导致的路径差异。诊断归类为C，而不是
+对象缺失的B或认证配置存在的D。
+
+推荐把`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`
+作为待人工接受的`linux/amd64`平台运行候选，顶层`0fc7f9…40c13`继续作为供应链index和
+证明关联证据。用户接受及一次精确子digest拉取必须分别授权；本次诊断不构成接受或拉取。
+若子digest仍无法拉取，再发布显式Docker schema2兼容的新候选，不使用Tag临时绕过。
+
 ## 服务器离线提取边界
 
 后续Docker阶段只负责拉取已接受的固定digest，并把`/models/ocr`复制到固定暂存目录

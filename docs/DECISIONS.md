@@ -720,3 +720,12 @@
 - 现场事实：目标服务器可信身份与Docker读取权限通过；拉取前接受digest不在本机缓存、无运行容器，Docker根目录与根文件系统分别约有743.5 GB和168.9 GB可用。唯一授权的完整digest`docker pull`由Docker daemon返回`failed to resolve reference ... not found`。
 - 决策：该失败不推翻D-096的来源、接受和匿名manifest证据，但证明“Registry API可读”不能替代“Docker Engine可拉取”。本轮立即停止且不执行拉取后检查；禁止自动重试、`docker login`、Tag、历史/后续digest、代理、其他镜像站、容器创建、提取、镜像删除或`prune`。可能的部分缓存保留原状。
 - 影响：OCR-002状态改为“阻塞”。下一步只能先以仓库/GitHub制品和只读Registry证据定位GHCR引用、OCI index、匿名访问或Docker兼容差异；任何新的服务器查询、重试、制品调整或拉取方案都需要用户单独授权。模型暂存、安装、`verify-config`和CPU Worker继续禁止。
+
+## D-098：OCR模型拉取问题归类为OCI媒体协商差异
+
+- 状态：已完成只读诊断，等待平台候选决策
+- 日期：2026-11-23
+- Registry证据：顶层OCI index、`linux/amd64`子manifest、OCI config和唯一gzip layer全部存在，HEAD/GET、摘要及大小一致；config为1877字节，layer为26,534,130字节。顶层包含2个descriptor，其中1个运行descriptor和1个`unknown/unknown`证明descriptor。因此发布制品不属于对象缺失的B类。
+- 协商差异：顶层只在OCI index Accept下返回200，平台子manifest只在OCI manifest Accept下返回200；Docker manifest list/schema2单独Accept返回404。Docker 29.0.2/API 1.52使用`overlayfs`和containerd image store，context为`default`，Registry mirror数量0，用户Docker配置文件不存在，精确顶层引用未缓存且无相关容器。诊断归类为C，不归类为D。
+- 决策：不继续重试顶层digest，不自动接受平台子digest，也不立即重发制品。优先把`sha256:7c5dccfc9b5cb3175718344b913d0993b13ad489835fbdbc4204e11f658a15f7`作为待人工接受的`linux/amd64`运行候选；顶层digest保留为供应链index和证明关联证据。只有用户明确接受并另行授权后，才能执行一次完整子digest拉取。
+- 影响：如果平台子digest可拉取，再继续固定暂存与受限安装；若仍失败，则建设Docker schema2兼容的独立新候选并重新执行来源、SBOM、漏洞、证明和用户接受门禁。任何路径都禁止Tag、自动digest替换、登录、镜像站、容器或清理绕过。本轮唯一sudo`status`仍为`installed=false,status=empty`。
