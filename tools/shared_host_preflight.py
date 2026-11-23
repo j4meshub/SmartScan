@@ -1008,7 +1008,14 @@ def _server_address_from_ssh(
 
 def _reserved_cidrs(snapshot: Mapping[str, Any]) -> list[str]:
     networks = _existing_networks(snapshot) + _route_networks(snapshot)
-    values = {str(network) for network in networks if network.is_private and network.prefixlen > 0}
+    values = {
+        str(network)
+        for network in networks
+        if network.is_private
+        and not network.is_loopback
+        and not network.is_link_local
+        and network.prefixlen > 0
+    }
     _require(bool(values), "reserved_cidrs_missing", "未取得现场保留网段")
     return sorted(
         values, key=lambda value: (int(ipaddress.ip_network(value).network_address), value)
