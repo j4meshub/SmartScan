@@ -4,7 +4,7 @@
 
 本工作包补齐`deployment-input.json`、`preflight-summary.json`和`loop-storage-evidence.json`的安全生成路径。三份文件只在目标服务器的固定用户暂存目录产生，不提交Git，不安装到`/etc/smartscan/uat`，也不生成Secret。
 
-生成过程仅通过SSH别名`smartscan-server`运行。原始Docker IPAM、路由、接口地址、内部入口和真实loop设备只存在于目标进程内存或仓库外0600文件中；标准输出只报告文件名、字节数和SHA-256。
+生成过程仅通过SSH别名`smartscan-server`运行。原始Docker IPAM、路由、接口地址、内部入口和真实loop设备只存在于目标进程内存或仓库外0600文件中；标准输出只报告固定暂存根、生成器SHA-256及各文件名、字节数和SHA-256。
 
 本工作包不授权Docker网络、镜像拉取、容器、数据库、迁移、Nginx变更、`generate-config`、`verify-config`或应用启动。
 

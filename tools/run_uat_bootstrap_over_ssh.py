@@ -24,13 +24,14 @@ ROOT = Path(__file__).parents[1]
 GENERATOR = ROOT / "tools" / "shared_host_preflight.py"
 SSH_ALIAS = "smartscan-server"
 REMOTE_COMMAND = "python3 -c " + shlex.quote(
-    "import io,sys;"
+    "import hashlib,io,sys;"
     "n=int(sys.stdin.buffer.readline());"
     "src=sys.stdin.buffer.read(n);"
     "spec=sys.stdin.buffer.read();"
     "sys.argv=['shared_host_preflight.py','prepare-bootstrap'];"
     "sys.stdin=io.TextIOWrapper(io.BytesIO(spec),encoding='utf-8');"
-    "ns={'__name__':'__main__','__file__':'shared_host_preflight.py'};"
+    "ns={'__name__':'__main__','__file__':'shared_host_preflight.py',"
+    "'__generator_sha256__':hashlib.sha256(src).hexdigest()};"
     "exec(compile(src,'shared_host_preflight.py','exec'),ns,ns)"
 )
 Runner = Callable[..., subprocess.CompletedProcess[bytes]]

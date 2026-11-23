@@ -1289,6 +1289,15 @@ def _validate_bootstrap_file(path: Path, *, expected_uid: int) -> tuple[int, str
     return len(raw), hashlib.sha256(raw).hexdigest()
 
 
+def _generator_sha256() -> str:
+    injected = globals().get("__generator_sha256__")
+    if isinstance(injected, str) and re.fullmatch(r"[0-9a-f]{64}", injected):
+        return injected
+    source = Path(__file__)
+    _require(source.is_file(), "generator_identity_missing", "无法确认生成器摘要")
+    return hashlib.sha256(source.read_bytes()).hexdigest()
+
+
 def _prepare_output_root(path: Path, *, expected_uid: int) -> None:
     if not path.exists():
         path.mkdir(mode=0o700)
@@ -1392,6 +1401,7 @@ def prepare_bootstrap_command(args: argparse.Namespace) -> int:
         "ocr_model_verified",
     ]
     preflight["contains_sensitive_data"] = False
+    preflight["generator_sha256"] = _generator_sha256()
     documents = {
         "deployment-input.json": deployment,
         "preflight-summary.json": preflight,
@@ -1405,7 +1415,13 @@ def prepare_bootstrap_command(args: argparse.Namespace) -> int:
         summaries.append({"name": name, "size_bytes": size, "sha256": digest, "mode": "0600"})
     print(
         json.dumps(
-            {"status": "prepared", "files": summaries, "contains_sensitive_data": False},
+            {
+                "status": "prepared",
+                "root": str(BOOTSTRAP_ROOT),
+                "generator_sha256": preflight["generator_sha256"],
+                "files": summaries,
+                "contains_sensitive_data": False,
+            },
             ensure_ascii=False,
             sort_keys=True,
         )

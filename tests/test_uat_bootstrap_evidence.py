@@ -255,6 +255,7 @@ def test_payload_rejects_unknown_input_fields() -> None:
 def test_remote_loader_preserves_framed_standard_input() -> None:
     loader = shlex.split(REMOTE_COMMAND)
     assert loader[:2] == ["python3", "-c"]
+    assert "__generator_sha256__" in loader[2]
     source = b"import sys; print(sys.stdin.read(), end='')"
     private_input = b'{"private":"value"}'
     payload = str(len(source)).encode() + b"\n" + source + private_input
