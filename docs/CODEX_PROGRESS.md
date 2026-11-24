@@ -11,8 +11,8 @@
 | 工作包状态 | 阻塞；第一个PostgreSQL固定digest唯一pull在GHCR Blob传输阶段连接重置，后五镜像按门禁未尝试 |
 | 当前分支 | `codex/ops-001h-image-pull-static-identity` |
 | 最后验证基线 | 失败后原始pull进程为0，六个精确引用均未完整缓存；三网零端点、容器健康、18082和Docker空间保持通过 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `01c561b`（脱敏失败关闭证据） |
+| PR | [#105](https://github.com/j4meshub/SmartScan/pull/105) |
 | 下一工作包 | 等待用户对固定镜像传输阻塞作出新的独立决策；在六镜像全部本地可用前不得进入受控身份探测、`image-identities.json`或`apply-ownership` |
 
 ## 当前工作包进展
