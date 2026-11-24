@@ -13,6 +13,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -769,27 +770,25 @@ def _run_checked(arguments: list[str], *, input_stream: BinaryIO | None = None) 
     return output.strip()
 
 
+def _run_remote(command: str, *, input_stream: BinaryIO | None = None) -> str:
+    """通过单一远端命令参数执行固定脚本，避免 Windows OpenSSH 重组 sh -c 参数。"""
+    _require(
+        "\x00" not in command and "\r" not in command and "\n" not in command,
+        "remote_command_invalid",
+    )
+    return _run_checked(["ssh", SERVER_ALIAS, command], input_stream=input_stream)
+
+
 def upload_archives() -> dict[str, Any]:
     release = load_release()
     verify_archives()
-    identity = _run_checked(
-        [
-            "ssh",
-            SERVER_ALIAS,
-            "sh",
-            "-c",
-            'printf \'%s:%s:%s\' "$(hostname -s)" "$(whoami)" "$(id -u)"',
-        ]
-    )
+    identity = _run_remote('printf \'%s:%s:%s\' "$(hostname -s)" "$(whoami)" "$(id -u)"')
     _require(identity == "ctiecaiserver:szhzx:1000", "server_identity_mismatch")
-    _run_checked(
-        [
-            "ssh",
-            SERVER_ALIAS,
-            "sh",
-            "-c",
-            f'umask 077; test ! -L {SERVER_UPLOAD_ROOT}; mkdir -p {SERVER_UPLOAD_ROOT}; chmod 700 {SERVER_UPLOAD_ROOT}; test "$(stat -c %U:%a {SERVER_UPLOAD_ROOT})" = szhzx:700',
-        ]
+    upload_root = shlex.quote(str(SERVER_UPLOAD_ROOT))
+    _run_remote(
+        f"umask 077; test ! -L {upload_root}; mkdir -p {upload_root}; "
+        f"chmod 700 {upload_root}; "
+        f'test "$(stat -c %U:%a {upload_root})" = szhzx:700'
     )
     root = DOWNLOAD_ROOT / release.release_id
     names = [item.archive_name for item in release.images] + [
@@ -801,48 +800,36 @@ def upload_archives() -> dict[str, Any]:
         size, digest = path.stat().st_size, _sha256_file(path)
         remote_part = SERVER_UPLOAD_ROOT / f"{name}.part"
         remote_final = SERVER_UPLOAD_ROOT / name
-        state = _run_checked(
-            [
-                "ssh",
-                SERVER_ALIAS,
-                "sh",
-                "-c",
-                f"test ! -L {remote_part} && test ! -L {remote_final}; if test -f {remote_final}; then stat -c 'final:%s' {remote_final}; elif test -f {remote_part}; then stat -c 'part:%s' {remote_part}; else echo missing:0; fi",
-            ]
+        quoted_part = shlex.quote(str(remote_part))
+        quoted_final = shlex.quote(str(remote_final))
+        state = _run_remote(
+            f"test ! -L {quoted_part} && test ! -L {quoted_final}; "
+            f"if test -f {quoted_final}; then stat -c 'final:%s' {quoted_final}; "
+            f"elif test -f {quoted_part}; then stat -c 'part:%s' {quoted_part}; "
+            "else echo missing:0; fi"
         )
         kind, current_text = state.split(":", 1)
         current = int(current_text)
         if kind == "final":
-            remote_hash = _run_checked(
-                ["ssh", SERVER_ALIAS, "sha256sum", str(remote_final)]
-            ).split()[0]
+            remote_hash = _run_remote(f"sha256sum {quoted_final}").split()[0]
             _require(current == size and remote_hash == digest, "remote_archive_existing_invalid")
             continue
         _require(current <= size, "remote_part_too_large")
         with path.open("rb") as stream:
             stream.seek(current)
-            _run_checked(
-                [
-                    "ssh",
-                    SERVER_ALIAS,
-                    "python3",
-                    "-c",
-                    "import os,sys; p=sys.argv[1]; n=int(sys.argv[2]); f=open(p,'ab' if n else 'xb'); f.write(sys.stdin.buffer.read()); f.flush(); os.fsync(f.fileno()); f.close(); os.chmod(p,0o600)",
-                    str(remote_part),
-                    str(current),
-                ],
+            uploader = (
+                "import os,sys; p=sys.argv[1]; n=int(sys.argv[2]); "
+                "f=open(p,'ab' if n else 'xb'); f.write(sys.stdin.buffer.read()); "
+                "f.flush(); os.fsync(f.fileno()); f.close(); os.chmod(p,0o600)"
+            )
+            _run_remote(
+                f"python3 -c {shlex.quote(uploader)} {quoted_part} {current}",
                 input_stream=stream,
             )
-        remote_hash = _run_checked(["ssh", SERVER_ALIAS, "sha256sum", str(remote_part)]).split()[0]
+        remote_hash = _run_remote(f"sha256sum {quoted_part}").split()[0]
         _require(remote_hash == digest, "remote_part_digest_mismatch")
-        _run_checked(
-            [
-                "ssh",
-                SERVER_ALIAS,
-                "sh",
-                "-c",
-                f"test ! -e {remote_final}; mv {remote_part} {remote_final}; chmod 600 {remote_final}",
-            ]
+        _run_remote(
+            f"test ! -e {quoted_final}; mv {quoted_part} {quoted_final}; chmod 600 {quoted_final}"
         )
     return {"status": "passed", "uploaded_files": len(names), "secrets_included": False}
 

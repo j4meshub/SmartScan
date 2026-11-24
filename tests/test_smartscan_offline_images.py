@@ -403,6 +403,26 @@ def test_cli_rejects_extra_arguments_and_does_not_echo_credentials(capsys) -> No
     assert "evil.invalid" not in output.out + output.err
 
 
+def test_remote_command_is_single_openssh_argument_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[list[str], object]] = []
+    stream = io.BytesIO(b"fixed archive")
+
+    def run_checked(arguments: list[str], *, input_stream=None) -> str:
+        calls.append((arguments, input_stream))
+        return "passed"
+
+    monkeypatch.setattr(offline, "_run_checked", run_checked)
+
+    assert offline._run_remote("printf '%s' fixed", input_stream=stream) == "passed"
+    assert calls == [
+        (["ssh", "smartscan-server", "printf '%s' fixed"], stream),
+    ]
+    assert "sh" not in calls[0][0]
+    assert "-c" not in calls[0][0]
+
+
 def test_gitignore_excludes_archives_and_parts() -> None:
     text = (offline.ROOT / ".gitignore").read_text(encoding="utf-8")
     assert ".smartscan-offline-transfer/" in text
