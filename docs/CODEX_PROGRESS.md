@@ -7,13 +7,13 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001I` UAT离线制品准备与Windows OpenSSH上传兼容修复 |
-| 工作包状态 | 进行中；PR #108分块续传已合并，按需运行六归档已完整下载并复核；首次固定上传在写入前暴露Windows OpenSSH远端参数重组问题，正在修复且服务器固定上传目录仍不存在 |
-| 当前分支 | `codex/ops-001i-windows-ssh-upload-fix` |
-| 最后验证基线 | 按需运行`45354251007`成功；六归档合计917,084,160字节且`download/verify/status`均通过；上传兼容专项`14 passed`、全量Python`632 passed, 37 skipped`、覆盖率87.74%，Ruff、格式和隔离库迁移漂移通过 |
-| 工作包提交 | OPS-001I为`d41be181`，302兼容修复为`2e6234c`，分块续传修复由PR #108合并为`69b6f05`；Windows SSH上传修复待提交 |
-| PR | 待创建Windows SSH上传修复PR；[#106](https://github.com/j4meshub/SmartScan/pull/106)、[#107](https://github.com/j4meshub/SmartScan/pull/107)与[#108](https://github.com/j4meshub/SmartScan/pull/108)已合并 |
-| 下一工作包 | 上传兼容PR通过并合并后，仅用同一固定工具上传六归档及两份映射，再暂存控制器安装资产；控制器安装、发布接受、镜像导入与服务操作仍未授权 |
+| 当前工作包 | `OPS-001I` UAT离线制品准备与控制器人工安装门禁 |
+| 工作包状态 | 等待人工验收；六归档与两份映射已在服务器固定目录完成普通用户上传和摘要复核，六个控制器安装资产已按规范LF字节暂存，尚未执行任何sudo安装或控制器命令 |
+| 当前分支 | `codex/ops-001i-artifact-preparation-evidence` |
+| 最后验证基线 | 按需运行`45354251007`成功；本机六归档`download/verify/status`通过；服务器八个离线文件和六个安装资产均为固定普通文件、摘要一致且无`.part`；PR #109共22项检查全部通过 |
+| 工作包提交 | OPS-001I为`d41be181`；下载兼容修复为`2e6234c`、`69b6f05`；Windows SSH上传修复由PR #109合并为`14bb724` |
+| PR | [#106](https://github.com/j4meshub/SmartScan/pull/106)、[#107](https://github.com/j4meshub/SmartScan/pull/107)、[#108](https://github.com/j4meshub/SmartScan/pull/108)与[#109](https://github.com/j4meshub/SmartScan/pull/109)已合并；本次仅提交脱敏现场证据 |
+| 下一工作包 | 由共同使用人一次性安装统一控制器五个运行资产和sudoers，执行`status`；之后须单独授权`accept-release`与迁移前停止的首次`resume-basic-uat`，本轮未导入镜像或启动服务 |
 
 ## 当前工作包进展
 
@@ -24,6 +24,8 @@
 - 分块续传修复把每个Artifact约束为8 MiB固定Range，逐块核对`206`、`Content-Range`、总长度和可选`Content-Length`，精确读取后主动关闭连接；完成前只写`.part`，全部字节到齐才原子改名。已有完成zip或部分文件均按固定大小处理，错误范围、截断、超长或符号链接继续失败关闭。
 - PR #108全部适用CI通过并合并为`69b6f05`。同一固定下载会话从既有断点续接，最终六个归档、发布清单和映射均完成；独立`verify/status`通过，六归档合计917,084,160字节，目录无`.part`，Git工作区保持干净。
 - 首次执行固定`upload`在服务器写入前返回脱敏`command_failed:ssh`。只读复核确认可信主机身份不变且固定上传目录仍不存在；根因是Windows OpenSSH会重新拼接`ssh host sh -c <脚本>`的远端参数，导致脚本未作为一个`-c`参数传递。修复把每个受限远端操作作为单一OpenSSH远端命令参数，继续固定服务器、路径、摘要和原子改名，不增加自定义命令能力。
+- PR #109共22项检查全部通过并合并为`14bb724`。合并后的固定工具只连接唯一SSH别名，成功上传六归档和两份发布元数据；服务器侧逐文件大小及SHA-256与接受映射一致，固定目录为部署用户所有、0700，八个文件均为普通文件、0600、硬链接数1，未遗留`.part`或异常文件。
+- 统一控制器安装资产从接受提交`d41be181`的Git对象直接导出，避免Windows工作树换行改变摘要。包装器、Python辅助工具、sudoers、UAT Compose、共享Nginx模板和发布清单共六个文件已进入固定普通用户暂存目录；目录0700、文件0600、硬链接数1，摘要与PR #106文档一致且无`.part`。本轮没有使用sudo安装、执行控制器、导入镜像、身份探测、生成镜像身份、启动数据库/应用、迁移或修改Nginx。
 - 用户决定停止服务器直接`docker pull`路线，`OPS-001H`按真实失败证据标记为被替代。当前六个已接受源digest保持不变；新方案不使用Tag、镜像站或代理，也不清理daemon可能保留的部分Layer缓存。
 - 新增审核发布清单、通用离线工具、六个独立Docker image archive工作流和源index/manifest→`linux/amd64` manifest→config/layer→归档SHA→image ID→本地不可变Tag映射。首轮CI证明纯OCI layout只被主Runner的新镜像存储接受、传统独立daemon以缺少`manifest.json`拒绝；归档因此改为兼容Docker load且内嵌原Registry证据的格式。Compose改用独立`local-images.env`及`pull_policy: never`，不伪造离线导入后不会保留的Registry RepoDigest。
 - PR专项最终在无外部接口的独立Docker daemon中逐一导入六个归档，全部本地Tag与预期image ID一致，受限UID/GID探测成功；八个Compose服务均解析为本地不可变Tag和`pull_policy: never`。六归档合计917,084,160字节（874.60 MiB），精确逐件摘要已获用户接受，但仍未完整下载、上传或导入服务器。
