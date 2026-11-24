@@ -1,19 +1,19 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-23
+更新时间：2026-11-24
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001E` UAT仓库外部署输入与证据准备 |
-| 工作包状态 | 完成；三份仓库外证据已在固定用户暂存目录原子生成并通过独立脱敏复核，尚未安装到`/etc/smartscan/uat` |
-| 当前分支 | `codex/ops-001e-bootstrap-result` |
-| 最后验证基线 | PR #100、#101全部适用CI通过；现场生成器与独立复核均为passed，目录0700、三文件0600且硬链接数1 |
-| 工作包提交 | `70d4d77`、`dba22fb`、`93f3b5b`（PR #100），`3593a68`（PR #101）；结果记录待提交 |
-| PR | [#100](https://github.com/j4meshub/SmartScan/pull/100)、[#101](https://github.com/j4meshub/SmartScan/pull/101)已合并；结果记录PR待创建 |
-| 下一工作包 | 由共同使用人独立审核并执行三份证据的精确root安装；安装后再单独授权`generate-config/verify-config`，不得自动延续到Docker或应用启动 |
+| 当前工作包 | `OPS-001F` UAT配置生成与验证 |
+| 工作包状态 | 完成；三份root证据摘要人工复核后，受限生成和验证均一次通过，Secret未回显且应用未启动 |
+| 当前分支 | `codex/ops-001f-uat-config-generation` |
+| 最后验证基线 | `generate-config`与`verify-config`均为passed；四个输出为普通文件、0600、硬链接数1，最终脱敏status通过 |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | 单独授权创建三张固定网络并拉取六个已接受digest；逐一核验RepoDigest、平台、版本及UID/GID后，生成并人工安装`image-identities.json`，再单独授权`apply-ownership` |
 
 ## 当前工作包进展
 
@@ -23,10 +23,13 @@
 - `/mnt/data`当前约690.4 GiB可用，高于约527.9 GiB安全余量，inode空闲98.3%；宿主机128逻辑CPU、约399.3 GiB可用内存、8 GiB Swap中约5.6 GiB空闲，15分钟负载约9.78。当前容器90个、运行57个、无unhealthy或restarting；相比上次仅容器总数增加2、资源数值小幅波动，未触发停止阈值。
 - 仓库现有工具只能采集/校验快照或消费已安装输入，不能安全生成三份仓库外文件。依照用户门禁，没有手写JSON；新增`prepare-bootstrap`固定生成路径和Windows内存SSH启动器，真实CIDR只经标准输入进入远端进程，不出现在Git、命令参数或摘要输出。原始IPAM/路由快照只驻留内存。
 - 修复合并后，固定生成器在`/home/szhzx/smartscan-uat-config-bootstrap`原子创建三份仓库外证据。目录为`szhzx`所有、0700且仅含固定文件；三文件均为`szhzx`所有、0600、普通文件、非符号链接、硬链接数1。`deployment-input.json`为2755字节、SHA-256 `bb5cc5e469d27f349f20c4eb59de15c6ebf0eecdae49252ffbe36c33d689b6bf`；`preflight-summary.json`为1016字节、SHA-256 `745daec3acbc7b72ee61716f65bac5b58daabf72132dd320648796fc3c7f19e1`；`loop-storage-evidence.json`为1088字节、SHA-256 `732aae782aed973ae424a3d23e8271fcd0214f4a18e3771dae0434045f259e4f`。独立只读复核确认schema和关键状态通过，未输出正文或内部地址。
-- 三份证据尚未安装到`/etc/smartscan/uat`，没有生成或读取Secret，也没有创建Docker网络、拉取镜像、连接数据库、迁移、启动容器或修改Nginx。
+- 三份证据已由共同使用人以`root:root 0600`安装到固定配置根，并在自己的终端复核SHA-256与OPS-001E接受值逐字一致；AI未读取证据正文。随后初始`status`确认`deploy.env`、`runtime.env`、`shared-host-allocation.json`、`bootstrap-admin-password`和`image-identities.json`均不存在。
 - OPS-001E专项最终`52 passed, 5 skipped`，跳过项仅为Windows不具备的POSIX权限、Bash或`visudo`路径；全量Python`606 passed, 37 skipped`、覆盖率87.74%，Ruff检查、189个Python文件格式和迁移漂移全部通过。本机没有Docker CLI，Compose真实解析与Linux权限/原子输出由PR Ubuntu Runner补证，不得据本机缺失伪记为通过。
 - PR #100全部适用CI通过并合并为`796ac37`。合并后的首次调用因标准输入关闭被安全拒绝；携带固定标准输入的第二次调用又在写文件前发现现场保留网段包含系统回环或链路本地前缀，并被既有可分配私网规则拒绝。没有手写或降低门禁；修复仅从脱敏`reserved_cidrs`排除不可分配的回环/链路本地前缀，现场冲突检查仍使用完整IPAM、路由和接口快照。回归专项`10 passed, 1 skipped`。
-- 修复PR #101全部适用CI通过并合并为`b45f031`；第三次运行生成成功，生成器摘要为`d6bda54ffed220f9589b386442651bb6002c8ccc385618fd15917da4d4f6333f`。OPS-001E据此完成，但root安装和配置Secret阶段仍未授权。
+- 修复PR #101全部适用CI通过并合并为`b45f031`；第三次运行生成成功，生成器摘要为`d6bda54ffed220f9589b386442651bb6002c8ccc385618fd15917da4d4f6333f`。OPS-001E据此完成；脱敏结果PR #102随后合并为`5a3ed14`。
+- OPS-001F中，普通用户可见元数据确认三份root证据均为普通文件、非符号链接、`root:root 0600`、硬链接数1且大小符合；通用`sudo -n sha256sum`按sudoers边界被拒绝后没有绕过，共同使用人在自己的终端完成精确摘要复核。新的受限`status`再次确认四个配置输出与镜像身份文件均不存在。
+- `generate-config`只执行一次并返回`result=generated,status=passed`；数据库、应用、手机号保护、指标和引导管理员共七类Secret均在目标服务器本地随机生成，仅返回存在性和长度，`value_printed=false`。独立`verify-config`一次通过：六个固定镜像引用、OCR版本/六文件/来源/许可证、Secret长度和短信/企微/真实AI关闭状态均符合契约。
+- 最终`status`确认`deploy.env`、`runtime.env`、`shared-host-allocation.json`和`bootstrap-admin-password`均为文件，`image-identities.json`仍缺失。前三者与密码交付文件均为普通文件、0600、硬链接数1；部署与运行环境及密码文件属于`szhzx:szhzx`，资源确认属于`root:root`。本轮未读取密码或环境文件正文，未执行`apply-ownership`、Docker、数据库、迁移、容器或Nginx操作。
 
 - 服务器人工执行已接受平台子digest的pull后，在唯一Layer约376.8 KB处收到`connection reset by peer`；结合OCR-002C的1 MiB Range仅约19.1 KB/s，确认直接Docker拉取路线停止。Docker可能保留部分缓存，本工作包不清理、不删除且不执行`prune`。
 - OCR-002D固定同一供应链index、`linux/amd64`manifest、config、唯一Layer及来源提交；离线传输下载的是原始26,534,130字节Layer，大小或SHA-256变化立即失败，禁止重新打包后冒用原Layer摘要。
@@ -39,7 +42,7 @@
 - PR #99代码头`ca291a5`最终共有20项成功、4项因PR不发布规则跳过、0项失败；三项OCR-002D专用作业全部成功。真实Layer作业完成原始26,534,130字节下载、离线复核、安全暂存和既有`install/verify`契约集成，并在作业结束清理临时文件；没有发布或替换任何模型digest。
 - 本工作包未连接或修改`smartscan-server`，未下载真实模型到仓库，未上传、提取、安装模型，也未执行Docker、sudo、Secret、数据库、网络、容器或Nginx操作。
 
-- 用户已人工安装OPS-001C执行器、配置工具和sudoers，并单独授权完成`prepare-directories`。固定`postgres`、`data`、`models`、`models/ocr`和`/etc/smartscan/uat`目录已按预期所有者/权限创建并通过执行器验证；配置、Secret、引导密码和镜像身份文件仍不存在，Docker、数据库和Nginx未修改。
+- 在OPS-001C目录准备阶段，用户已人工安装执行器、配置工具和sudoers，并单独授权完成`prepare-directories`；当时配置、Secret、引导密码和镜像身份文件均不存在。该历史状态已由本页前述OPS-001F配置生成事实更新，Docker、数据库和Nginx仍未修改。
 - OCR-002确认真实后端为PaddleOCR 3.7.0、PaddlePaddle 3.3.1的`paddle_static` CPU推理，只使用`PP-OCRv6_small_det/rec`，不需要方向分类模型。官方BCE归档与PaddlePaddle官方模型仓库固定提交的六个推理文件逐字节一致，不需要格式转换。
 - 来源锁固定PaddleOCR `v3.7.0`完整提交、两个官方归档URL/大小/SHA-256、官方模型仓库提交和六个文件摘要。上游项目及两份官方模型卡均为Apache-2.0；制品保留完整许可证和第三方来源声明，来源或摘要变化时许可结论失效。
 - 新增独立`scratch` OCI制品`ghcr.io/j4meshub/smartscan-ocr-models`，PR只组装、验证、真实CPU测试、SBOM和扫描而不发布，main才发布。发布digest不会自动获接受或写入UAT配置；首次可见性仍由用户人工决定。
