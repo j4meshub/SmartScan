@@ -11,8 +11,8 @@
 | 工作包状态 | 完成；创建前全部现场门禁通过，三张固定网络逐一创建并按白名单字段验证，端点数均为0 |
 | 当前分支 | `codex/ops-001g-uat-networks` |
 | 最后验证基线 | loop与OCR受限验证通过；8077无SmartScan冲突、18082空闲；三张网络的driver、scope、internal、IPAM、标签和零端点全部通过 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `bec6a8e`（现场证据与计划） |
+| PR | [#104](https://github.com/j4meshub/SmartScan/pull/104) |
 | 下一工作包 | 单独授权拉取六个已接受固定digest；逐一核验RepoDigest、`linux/amd64`、版本及镜像UID/GID后，生成并人工安装`image-identities.json`，再单独授权`apply-ownership` |
 
 ## 当前工作包进展
