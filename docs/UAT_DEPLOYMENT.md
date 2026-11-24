@@ -2,7 +2,7 @@
 
 ## 状态与用途
 
-本文件是 `OPS-001` 的仓库侧交付，定义按需启停的 `smartscan-uat` 验收栈。`OPS-000` 已完成主机事实采集和资源决策；OPS-001B的固定空UAT已完成单次`recreate-empty`和两次独立`verify`，50 GiB完整预分配loop存储门禁正式通过。应用尚未部署，制品、配置、Docker和Nginx仍需独立授权。
+本文件是 `OPS-001` 的仓库侧交付，定义按需启停的 `smartscan-uat` 验收栈。`OPS-000` 已完成主机事实采集和资源决策；OPS-001B的固定空UAT已完成单次`recreate-empty`和两次独立`verify`，50 GiB完整预分配loop存储门禁正式通过。OPS-001G已创建三张固定Docker网络且端点数均为0；应用尚未部署，镜像、所有权、数据库、Compose和Nginx仍需独立授权。
 
 旧 `docker-compose.staging.yml`、`/srv/smartscan/staging` 及其监控/备份叠加文件仅保留历史证据，不得与本 UAT 栈混用。UAT 可以使用人工资源检查且不要求备份；生产监控和数据风险由 `OPS-003`、`OPS-004` 继续处理。
 
@@ -94,7 +94,7 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 3. 复核已验收的50 GiB非稀疏loop、ext4、systemd mount、实际可用空间与autoclear仍正常；不得重新格式化、扩大或影响现有loop挂载。
 4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验；只有取得新的应用部署授权后才可拉取并核对RepoDigest、平台、版本和UID/GID，且不得使用`main`或`latest`。
 5. OPS-001C受限执行器、固定配置工具和sudoers已人工安装，`prepare-directories`已成功。OPS-001E三份仓库外证据已由共同使用人核对SHA-256并独立安装为root拥有；OPS-001F已一次执行`generate-config`并由独立`verify-config`确认配置、Secret长度、固定镜像和OCR契约通过，所有Secret均未回显。
-6. 固定真实OCR模型已按来源、许可、版本和完整SHA-256清单完成受限安装，模型状态为`installed=true,status=passed`；空目录、Mock或运行时联网下载仍禁止。创建三张网络、拉取六个固定digest并核对RepoDigest、平台、版本和实际UID/GID后，安装固定镜像身份记录，再单独授权`apply-ownership`。
+6. 固定真实OCR模型已按来源、许可、版本和完整SHA-256清单完成受限安装，模型状态为`installed=true,status=passed`；空目录、Mock或运行时联网下载仍禁止。三张固定网络已创建并验证为零端点；下一步拉取六个固定digest并核对RepoDigest、平台、版本和实际UID/GID，安装固定镜像身份记录后再单独授权`apply-ownership`。
 7. 校验配置和Compose，启动PostgreSQL并执行一次性迁移，再启动API、两个CPU Worker与Web；AI Profile另行授权。
 8. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
 9. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
@@ -103,4 +103,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-24，OPS-000事实采集、50 GiB loop、六镜像候选、`OPS-001D`最终只读预检、OPS-001E证据及OCR固定模型受限安装均已通过；OPS-001C工具和目录准备完成，OPS-001F配置与服务器本地Secret已生成并验证。`image-identities.json`仍不存在，应用未启动；实际部署还缺Docker网络、应用镜像拉取/身份、目录所有权、PostgreSQL/迁移、Compose应用和Nginx增量。
+截至2026-11-24，OPS-000事实采集、50 GiB loop、六镜像候选、`OPS-001D`最终只读预检、OPS-001E证据及OCR固定模型受限安装均已通过；OPS-001C工具和目录准备完成，OPS-001F配置与服务器本地Secret已生成并验证，OPS-001G三张固定网络已创建且无端点。`image-identities.json`仍不存在，应用未启动；实际部署还缺六镜像拉取/身份、目录所有权、PostgreSQL/迁移、Compose应用和Nginx增量。

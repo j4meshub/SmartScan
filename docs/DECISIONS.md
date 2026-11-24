@@ -780,3 +780,11 @@
 - 前置证据：共同使用人将OPS-001E三份证据安装为`root:root 0600`并在自己的终端复核SHA-256。AI只核对普通文件、非链接、硬链接数1、所有者、权限和大小；通用`sudo -n sha256sum`被既有sudoers拒绝后没有请求密码或绕过，由共同使用人的人工摘要证据补齐门禁。
 - 执行结果：受限`status`先确认四个配置输出和`image-identities.json`均不存在；`generate-config`只执行一次并成功，七类Secret只在目标服务器随机生成，只报告存在性和长度且没有回显值；独立`verify-config`一次通过六个固定镜像、OCR六文件及来源/许可、Secret长度和短信/企微/真实AI关闭契约。最终四个输出均为0600普通文件、硬链接数1，密码交付文件存在但未被AI读取。
 - 安全边界：`image-identities.json`继续缺失，未执行`apply-ownership`、Docker网络、镜像拉取、数据库、迁移、容器或Nginx。下一阶段必须单独授权三张网络与六个固定digest拉取，按RepoDigest、`linux/amd64`、版本和实际UID/GID形成脱敏身份记录并由共同使用人root安装；只有此后才能独立授权`apply-ownership`。
+
+## D-105：UAT三张固定网络经新鲜冲突复查后分阶段创建
+
+- 状态：已确认；OPS-001G完成
+- 日期：2026-11-24
+- 前置证据：仅通过可信SSH别名重新核对主机身份、loop与OCR受限验证、8077/18082、全部Docker IPAM、主机路由、策略路由、接口网段、当前VPN可见路由及共租户资源。三张仓库外固定`/28`名称与CIDR均不存在，彼此及与全部现场前缀无重叠；资源、磁盘余量和容器健康未触发停止阈值。
+- 决策与执行：按Compose契约逐一创建`smartscan-uat-data`、`smartscan-uat-edge`和`smartscan-uat-egress`三张本地bridge网络。data与edge固定为internal，egress固定为非internal受控出站；三者写入Compose项目/逻辑网络标签及SmartScan UAT归属标签。创建后逐字段核对名称、driver、scope、internal、仓库外IPAM、标签和端点数，全部通过且端点数为0。
+- 安全边界：本次没有修改、连接、断开或删除任何既有网络，没有使用`prune`，没有拉取镜像、创建容器、读取Secret、执行所有权、数据库、迁移、Compose或Nginx操作。创建后容器总数、运行数和健康状态不变，18082仍空闲。下一阶段仍须由用户单独授权六个固定digest拉取与白名单身份核验；网络创建不授权应用启动。

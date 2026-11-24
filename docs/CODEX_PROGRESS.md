@@ -7,16 +7,22 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001F` UAT配置生成与验证 |
-| 工作包状态 | 完成；三份root证据摘要人工复核后，受限生成和验证均一次通过，Secret未回显且应用未启动 |
-| 当前分支 | `codex/ops-001f-uat-config-generation` |
-| 最后验证基线 | `generate-config`与`verify-config`均为passed；四个输出为普通文件、0600、硬链接数1，最终脱敏status通过 |
+| 当前工作包 | `OPS-001G` UAT固定Docker网络创建 |
+| 工作包状态 | 完成；创建前全部现场门禁通过，三张固定网络逐一创建并按白名单字段验证，端点数均为0 |
+| 当前分支 | `codex/ops-001g-uat-networks` |
+| 最后验证基线 | loop与OCR受限验证通过；8077无SmartScan冲突、18082空闲；三张网络的driver、scope、internal、IPAM、标签和零端点全部通过 |
 | 工作包提交 | 待提交 |
 | PR | 待创建 |
-| 下一工作包 | 单独授权创建三张固定网络并拉取六个已接受digest；逐一核验RepoDigest、平台、版本及UID/GID后，生成并人工安装`image-identities.json`，再单独授权`apply-ownership` |
+| 下一工作包 | 单独授权拉取六个已接受固定digest；逐一核验RepoDigest、`linux/amd64`、版本及镜像UID/GID后，生成并人工安装`image-identities.json`，再单独授权`apply-ownership` |
 
 ## 当前工作包进展
 
+- OPS-001G创建前再次通过唯一SSH别名核对可信主机身份；loop `status/verify`、OCR `verify/status`全部通过。8077仍有监听，19个可读Nginx配置文件中没有`/smartscan/` location或18082上游引用，18082保持空闲。
+- 现场只读快照为Docker网络27张、IPv4 IPAM 25个、IPv4路由85条、策略规则3条、接口IPv4前缀28个和可见VPN类接口1个。三张仓库外固定`/28`名称与CIDR均不存在，彼此互不重叠，并与全部Docker IPAM、主机路由、策略路由、接口网段及当前VPN可见路由无冲突。
+- 创建前`/mnt/data`约690.2 GiB可用，高于约527.9 GiB安全余量；inode空闲98.3%，128逻辑CPU、约396.9 GiB可用内存、8 GiB Swap中约5.6 GiB空闲、15分钟负载约9.86。容器90个、运行57个、无unhealthy或restarting，未触发共租户停止阈值。
+- 只创建`smartscan-uat-data`、`smartscan-uat-edge`、`smartscan-uat-egress`三张固定本地bridge网络；data与edge为internal，egress为非internal受控出站。每张网络的仓库外CIDR/网关、Compose项目/逻辑网络标签及SmartScan环境/管理标签均逐字通过，端点数均为0。
+- 创建后网络总数从27增至30；容器总数、运行数、健康状态均未变化，18082仍空闲。没有修改或连接既有网络，没有拉取镜像、创建容器、读取Secret、执行所有权/数据库/迁移/Compose/Nginx操作，也没有使用`prune`。
+- 文档/UAT专项首次为`1 failed, 15 passed, 4 skipped`，唯一失败是既有测试要求保留“loop存储门禁已通过，应用部署未执行”的精确兼容语句；补回该历史结论后为`16 passed, 4 skipped`，没有放宽网络或部署门禁。Ruff检查和189个Python文件格式通过；全量Python为`606 passed, 37 skipped`、覆盖率87.74%，跳过项仍为既有PostgreSQL、Docker或Linux执行器外部门禁。
 - OCR-002D离线链路已按独立授权完成本机下载、固定路径SCP、安全`stage/verify`和最终`install/verify`；目标服务器模型安装器当前为`installed=true,status=passed`，版本`PP-OCRv6-small-v1`。上传Layer与暂存树仍完整，未执行删除、替换或清理。OCR-002服务器模型安装门禁正式通过。
 - OPS-001E重新通过唯一SSH别名核对可信主机身份。loop受限执行器`status/verify`、OCR模型`verify/status`均通过；50 GiB完整预分配、ext4、挂载、autoclear、systemd和至少48 GiB可用空间保持正常。
 - 本轮现场Docker网络27张、IPv4子网25个、IPv4路由84条、策略规则3条、可见VPN接口1个；三张仓库外候选`/28`彼此独立且与现场IPAM、路由和接口前缀无冲突。8077仍有监听和两个配置指令，19个可读Nginx配置文件中未发现`/smartscan/`或18082引用；18082空闲。普通用户执行`nginx -T`因配置打开权限失败，未使用sudo，改由只读解析全部可访问include完成最小冲突核验。
