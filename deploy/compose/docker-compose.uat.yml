@@ -2,7 +2,7 @@ name: ${COMPOSE_PROJECT_NAME:?必须设置 smartscan-uat Compose 项目名}
 
 x-common: &common
   init: true
-  pull_policy: always
+  pull_policy: never
   restart: "no"
   read_only: true
   env_file:
@@ -19,9 +19,9 @@ x-common: &common
 
 services:
   postgres:
-    image: ${SMARTSCAN_UAT_POSTGRES_IMAGE:?必须固定 PostgreSQL 镜像 digest}
+    image: ${SMARTSCAN_UAT_POSTGRES_RUNTIME_IMAGE:?必须设置已核验的 PostgreSQL 本地不可变Tag}
     user: "70:70"
-    pull_policy: always
+    pull_policy: never
     restart: "no"
     read_only: true
     environment:
@@ -55,7 +55,7 @@ services:
 
   migrate:
     <<: *common
-    image: ${SMARTSCAN_UAT_OPS_IMAGE:?必须固定运维镜像 digest}
+    image: ${SMARTSCAN_UAT_OPS_RUNTIME_IMAGE:?必须设置已核验的运维本地不可变Tag}
     entrypoint: ["python"]
     command: ["-m", "services.api.app.migrations", "upgrade"]
     tmpfs:
@@ -69,7 +69,7 @@ services:
 
   api:
     <<: *common
-    image: ${SMARTSCAN_UAT_API_IMAGE:?必须固定 API 镜像 digest}
+    image: ${SMARTSCAN_UAT_API_RUNTIME_IMAGE:?必须设置已核验的API本地不可变Tag}
     command:
       - uvicorn
       - services.api.app.main:app
@@ -111,7 +111,7 @@ services:
 
   worker-cpu-1: &worker
     <<: *common
-    image: ${SMARTSCAN_UAT_WORKER_IMAGE:?必须固定 Worker 镜像 digest}
+    image: ${SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE:?必须设置已核验的Worker本地不可变Tag}
     environment:
       SMARTSCAN_ENV: production
       SMARTSCAN_AUTO_MIGRATE: "false"
@@ -140,7 +140,7 @@ services:
   worker-ai:
     <<: *common
     profiles: ["ai"]
-    image: ${SMARTSCAN_UAT_WORKER_IMAGE:?必须固定 Worker 镜像 digest}
+    image: ${SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE:?必须设置已核验的Worker本地不可变Tag}
     command: ["python", "-m", "services.worker.app.ai_main"]
     environment:
       SMARTSCAN_ENV: production
@@ -167,7 +167,7 @@ services:
   ai-gateway:
     <<: *common
     profiles: ["ai"]
-    image: ${SMARTSCAN_UAT_AI_GATEWAY_IMAGE:?必须固定 AI 网关镜像 digest}
+    image: ${SMARTSCAN_UAT_AI_GATEWAY_RUNTIME_IMAGE:?必须设置已核验的AI网关本地不可变Tag}
     cap_drop: ["ALL"]
     tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777,uid=10001,gid=10001"]
     depends_on:
@@ -180,8 +180,8 @@ services:
     networks: [data, egress]
 
   nginx:
-    image: ${SMARTSCAN_UAT_WEB_IMAGE:?必须固定 Web 镜像 digest}
-    pull_policy: always
+    image: ${SMARTSCAN_UAT_WEB_RUNTIME_IMAGE:?必须设置已核验的Web本地不可变Tag}
+    pull_policy: never
     restart: "no"
     read_only: true
     ports:

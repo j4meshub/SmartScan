@@ -7,15 +7,25 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001H` 六镜像顺序拉取与静态身份核验 |
-| 工作包状态 | 阻塞；第一个PostgreSQL固定digest唯一pull在GHCR Blob传输阶段连接重置，后五镜像按门禁未尝试 |
-| 当前分支 | `codex/ops-001h-image-pull-static-identity` |
-| 最后验证基线 | 失败后原始pull进程为0，六个精确引用均未完整缓存；三网零端点、容器健康、18082和Docker空间保持通过 |
-| 工作包提交 | `01c561b`（脱敏失败关闭证据） |
-| PR | [#105](https://github.com/j4meshub/SmartScan/pull/105) |
-| 下一工作包 | 等待用户对固定镜像传输阻塞作出新的独立决策；在六镜像全部本地可用前不得进入受控身份探测、`image-identities.json`或`apply-ownership` |
+| 当前工作包 | `OPS-001I` UAT统一受限控制器与通用离线镜像交付 |
+| 工作包状态 | 完成；仓库实现、六镜像真实Linux完全断网导入、全部适用CI与最终自审均已通过，尚未接受发布映射或修改服务器 |
+| 当前分支 | `codex/ops-001i-uatctl-offline-images` |
+| 最后验证基线 | 本地专项94通过、5跳过；全量Python 628通过、37跳过、覆盖率87.74%；隔离库漂移通过；PR六组工作流完成六归档传统daemon断网导入、身份探测、Compose离线解析及全平台回归 |
+| 工作包提交 | `da0f833`起，最终代码验证头`23632cd` |
+| PR | [#106](https://github.com/j4meshub/SmartScan/pull/106)（全部适用CI通过，完成自审后合并） |
+| 下一工作包 | 用户人工安装统一控制器并明确接受本次发布映射后，方可按独立授权下载、校验、上传并运行`resume-basic-uat`；迁移与Nginx激活仍单独确认 |
 
 ## 当前工作包进展
+
+- 用户决定停止服务器直接`docker pull`路线，`OPS-001H`按真实失败证据标记为被替代。当前六个已接受源digest保持不变；新方案不使用Tag、镜像站或代理，也不清理daemon可能保留的部分Layer缓存。
+- 新增审核发布清单、通用离线工具、六个独立Docker image archive工作流和源index/manifest→`linux/amd64` manifest→config/layer→归档SHA→image ID→本地不可变Tag映射。首轮CI证明纯OCI layout只被主Runner的新镜像存储接受、传统独立daemon以缺少`manifest.json`拒绝；归档因此改为兼容Docker load且内嵌原Registry证据的格式。Compose改用独立`local-images.env`及`pull_policy: never`，不伪造离线导入后不会保留的Registry RepoDigest。
+- PR专项最终在无外部接口的独立Docker daemon中逐一导入六个归档，全部本地Tag与预期image ID一致，受限UID/GID探测成功；八个Compose服务均解析为本地不可变Tag和`pull_policy: never`。六归档合计917,084,160字节（874.60 MiB），精确逐件摘要记录在OPS-001I说明，尚未获用户接受、上传或导入服务器。
+- 最终代码头`23632cd`的PR六组工作流全部成功：常规CI完成API全量测试、迁移漂移、Web、Android、固定Xcode iOS和容器门禁；离线交付作业再次完成六归档生成、传统daemon完全断网导入、固定image ID/本地Tag、UID/GID探测及Compose离线解析；PostgreSQL、OCR模型、OCR Layer和五应用镜像供应链检查亦全部通过。
+- PR验证依次暴露并修复三类交付兼容问题：关键root资产新增LF约束并改用规范字节摘要；纯OCI layout被传统daemon拒绝后改为内嵌原Registry证据的Docker image archive；Compose验证改为固定运行夹具和结构化JSON断言。最后一次通用Linux Ruff还发现Windows创建的带shebang工具缺少Git可执行位，现固定为`100755`。所有失败均保留原因，没有放宽digest、完全断网、身份探测或禁止拉取门禁。
+- 新增一次性安装的`smartscan-uatctl`状态机和精确sudoers。控制器验证既有loop、OCR和配置结果；固定完成发布接受、导入、无网络UID/GID探测、身份记录、所有权、数据库和核心服务续接，并在不可逆迁移及共享Nginx激活前停止等待单独确认。删除、清理、`prune`、`down -v`和任意shell不在授权范围。
+- 为保持现场信任链，旧`smartscan-uat-config`及其执行器没有修改；离线映射和所有权验证完全由新控制器承担。首次专项发现的旧辅助工具摘要回归已修复，最终UAT/治理专项`94 passed, 5 skipped`。
+- Ruff检查及192个Python文件格式通过；最终全量Python为`628 passed, 37 skipped`、覆盖率87.74%。迁移漂移首次误用了本机未升级旧SQLite而失败，改用独立空库执行upgrade后drift通过且临时库已删除。Windows本机没有Docker CLI，Compose真实解析、六镜像归档/load和Linux权限证据由PR Runner补齐，不能在本地伪记为通过。
+- 本工作包尚未连接`smartscan-server`，没有重试pull、上传/导入镜像、创建临时容器、改变三张网络、执行所有权、启动数据库/应用、迁移或修改Nginx。
 
 - OPS-001H拉取前通过唯一SSH别名核对可信主机身份、Docker 29.0.2读取权限、三张固定网络契约和零端点、18082空闲及共租户状态。Docker根文件系统约690.2 GiB可用；容器90个、运行57个、无unhealthy或restarting。六个接受的精确引用均未完整存在于本地缓存。
 - 严格按顺序只对第一个PostgreSQL固定digest发起一次`docker pull`。原始SSH执行会话持续保留并轮询，期间只读确认服务器仅有1个匹配pull客户端；没有因为工具yield或长时间无输出发起第二个pull。

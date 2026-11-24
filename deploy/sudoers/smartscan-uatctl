@@ -1,0 +1,24 @@
+Cmnd_Alias SMARTSCAN_UATCTL = \
+    /usr/local/libexec/smartscan/smartscan-uatctl status, \
+    /usr/local/libexec/smartscan/smartscan-uatctl preflight, \
+    /usr/local/libexec/smartscan/smartscan-uatctl verify-storage, \
+    /usr/local/libexec/smartscan/smartscan-uatctl verify-models, \
+    /usr/local/libexec/smartscan/smartscan-uatctl verify-config, \
+    /usr/local/libexec/smartscan/smartscan-uatctl accept-release, \
+    /usr/local/libexec/smartscan/smartscan-uatctl import-images, \
+    /usr/local/libexec/smartscan/smartscan-uatctl verify-images, \
+    /usr/local/libexec/smartscan/smartscan-uatctl probe-identities, \
+    /usr/local/libexec/smartscan/smartscan-uatctl apply-ownership, \
+    /usr/local/libexec/smartscan/smartscan-uatctl start-database, \
+    /usr/local/libexec/smartscan/smartscan-uatctl verify-database, \
+    /usr/local/libexec/smartscan/smartscan-uatctl run-migrations, \
+    /usr/local/libexec/smartscan/smartscan-uatctl start-core, \
+    /usr/local/libexec/smartscan/smartscan-uatctl verify-core, \
+    /usr/local/libexec/smartscan/smartscan-uatctl stage-nginx, \
+    /usr/local/libexec/smartscan/smartscan-uatctl activate-nginx, \
+    /usr/local/libexec/smartscan/smartscan-uatctl verify-uat, \
+    /usr/local/libexec/smartscan/smartscan-uatctl stop-core, \
+    /usr/local/libexec/smartscan/smartscan-uatctl rollback-images, \
+    /usr/local/libexec/smartscan/smartscan-uatctl resume-basic-uat
+
+szhzx ALL=(root) NOPASSWD: SMARTSCAN_UATCTL

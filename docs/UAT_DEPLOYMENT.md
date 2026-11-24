@@ -17,7 +17,7 @@
 - 现有共享Nginx 8077使用独立include，将`/smartscan/`去前缀转发到18082；不占用80/443，不覆盖其他location。
 - HTTP只验收登录、项目、上传、处理、预览、导出和Range。实时相机、企业微信及正式移动验收继续等待HTTPS。
 - 基础栈合计5.5 vCPU/8.75 GiB，启用AI后7.5 vCPU/11.75 GiB；整栈不得超过8 vCPU/16 GiB。八个服务根文件系统只读，所有tmpfs都有明确上限；每个服务设置CPU、内存、PID和`10m×3`日志轮转，全部`restart: "no"`。Docker日志位于loop之外，八容器理论上限约240 MiB。
-- 服务器不保存源码、不现场构建、不使用可变tag。用户已接受`2adbf4f`五个应用镜像及`OPS-REG-003B`可审计PostgreSQL镜像为固定UAT候选，六个digest均完成目标服务器匿名核验，但仍不授权拉取。后续自动构建不得替换已接受候选。
+- 服务器不保存源码、不现场构建、不使用可变tag。用户已接受`2adbf4f`五个应用镜像及`OPS-REG-003B`可审计PostgreSQL镜像为固定UAT源候选。因GHCR Blob链路连接重置，服务器直接pull路线停止；OPS-001I使用同一六个源digest生成兼容传统Docker load的独立归档和内容映射，归档仍保存原始manifest/config/压缩layer证据，后续自动构建不得替换候选。
 - AI Worker 和 AI Gateway 位于显式 `ai` Profile，默认不启动；运行配置默认关闭真实 Provider。
 - 保留应用健康和带令牌的应用指标，不申请19081。可以复用现有Prometheus/Grafana或记录人工检查能力缺口；不部署Alertmanager、Node Exporter，不挂载宿主机`/`、`/proc`或`/sys`。
 - UAT数据允许丢弃和重建，不要求备份，也不启用没有异机目标的WAL归档。
@@ -29,6 +29,7 @@
 | `deploy/compose/docker-compose.uat.yml` | 按需 UAT 服务、固定网络、资源和日志边界 |
 | `deploy/compose/uat.env.example` | 无密钥部署模板与当前五个 SmartScan digest |
 | `deploy/compose/uat.runtime.env.example` | 生产安全模式的应用运行模板，外部服务默认关闭 |
+| `deploy/compose/uat.local-images.env.example` | 离线导入后由控制器生成的本地不可变Tag示例；不得人工安装代替验证 |
 | `deploy/compose/shared-host-allocation.example.json` | 服务器共同使用人资源确认模板 |
 | `deploy/compose/uat-loop-storage-evidence.example.json` | 创建后loop事实的失败关闭占位模板 |
 | `deploy/systemd/mnt-data-smartscan-uat.mount.template` | 仅供评审的持久loop mount单元 |
@@ -42,6 +43,11 @@
 | `tools/validate_uat_config.py` | 部署参数、审批、运行配置和 Compose 契约校验 |
 | `tools/validate_uat_loop_storage.py` | 50 GiB、非稀疏、ext4、autoclear与systemd证据校验 |
 | `docs/OPS001_UAT_CHANGE_PLAN.md` | 未执行的精确变更对象、顺序、验收、授权和回滚方案 |
+| `deploy/releases/uat-2026-11-24.json` | 六个已接受源digest、平台、本地不可变Tag和独立归档名 |
+| `tools/smartscan_offline_images.py` | 审核清单驱动的按需下载、离线校验、断点上传和状态工具 |
+| `deploy/ops/smartscan-uatctl` | 一次性安装、固定命令和固定摘要的统一root入口 |
+| `deploy/ops/smartscan_uatctl.py` | 镜像导入、身份、所有权、数据库、核心服务及Nginx阶段状态机 |
+| `docs/OPS001I_UATCTL_AND_OFFLINE_IMAGES.md` | 离线内容映射、人工安装、授权收敛和回滚边界 |
 
 真实文件不得提交仓库，建议路径为：
 
@@ -69,6 +75,7 @@ python tools/validate_uat_config.py \
 
 docker compose \
   --env-file /etc/smartscan/uat/deploy.env \
+  --env-file /etc/smartscan/uat/local-images.env \
   -f deploy/compose/docker-compose.uat.yml \
   config --quiet
 ```
@@ -92,10 +99,10 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 1. 重新采集现场网络、路由、VPN、端口、负载和磁盘，确认8077结构未变、18082空闲，任何冲突立即停止。
 2. 形成仓库外精确CIDR、loop参数、变更、验证、回滚和共租户停止阈值记录。
 3. 复核已验收的50 GiB非稀疏loop、ext4、systemd mount、实际可用空间与autoclear仍正常；不得重新格式化、扩大或影响现有loop挂载。
-4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验；只有取得新的应用部署授权后才可拉取并核对RepoDigest、平台、版本和UID/GID，且不得使用`main`或`latest`。
+4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验。服务器直接pull路线已经停止；按OPS-001I从按需GitHub Actions取得六个独立归档，核对源对象、平台manifest、config/layer、归档SHA、image ID及本地不可变Tag，不使用`main`、`latest`或替代digest。
 5. OPS-001C受限执行器、固定配置工具和sudoers已人工安装，`prepare-directories`已成功。OPS-001E三份仓库外证据已由共同使用人核对SHA-256并独立安装为root拥有；OPS-001F已一次执行`generate-config`并由独立`verify-config`确认配置、Secret长度、固定镜像和OCR契约通过，所有Secret均未回显。
-6. 固定真实OCR模型已按来源、许可、版本和完整SHA-256清单完成受限安装，模型状态为`installed=true,status=passed`；空目录、Mock或运行时联网下载仍禁止。三张固定网络已创建并验证为零端点；下一步拉取六个固定digest并核对RepoDigest、平台、版本和实际UID/GID，安装固定镜像身份记录后再单独授权`apply-ownership`。
-7. 校验配置和Compose，启动PostgreSQL并执行一次性迁移，再启动API、两个CPU Worker与Web；AI Profile另行授权。
+6. 固定真实OCR模型已按来源、许可、版本和完整SHA-256清单完成受限安装，模型状态为`installed=true,status=passed`；空目录、Mock或运行时联网下载仍禁止。三张固定网络已创建并验证为零端点。用户一次性安装统一控制器并接受发布映射后，控制器可离线导入六镜像、验证本地Tag/image ID、受控探测UID/GID并生成身份记录和应用所有权。
+7. `resume-basic-uat`校验既有门禁并启动PostgreSQL至健康后，在不可逆迁移前停止；用户单独确认`run-migrations`后才能继续启动API、两个CPU Worker与Web。AI Profile另行授权。
 8. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
 9. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
 
@@ -103,4 +110,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-24，OPS-000事实采集、50 GiB loop、六镜像候选、`OPS-001D`最终只读预检、OPS-001E证据及OCR固定模型受限安装均已通过；OPS-001C工具和目录准备完成，OPS-001F配置已验证，OPS-001G三张固定网络已创建且无端点。OPS-001H只对第一个PostgreSQL固定digest调用一次pull，原始会话约12分钟后因GHCR Blob连接重置失败，后五镜像未尝试。`image-identities.json`仍不存在，应用未启动；实际部署还缺六镜像本地可用与身份、目录所有权、PostgreSQL/迁移、Compose应用和Nginx增量。
+截至2026-11-24，OPS-000事实采集、50 GiB loop、六镜像源候选、`OPS-001D`最终只读预检、OPS-001E证据及OCR固定模型受限安装均已通过；OPS-001C工具和目录准备完成，OPS-001F配置已验证，OPS-001G三张固定网络已创建且无端点。OPS-001H直接pull路线因GHCR Blob连接重置停止，OPS-001I正在建立独立离线归档、内容映射和统一控制器。`image-identities.json`仍不存在，应用未启动；实际部署还缺发布映射接受/上传、镜像导入与身份、目录所有权、PostgreSQL/迁移、核心服务和Nginx增量。

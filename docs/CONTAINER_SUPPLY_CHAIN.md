@@ -55,7 +55,9 @@ GHCR 首次创建的个人 Package 默认可能是私有。首次主线发布后
 4. 由用户在 Package Settings 中将可见性改为 Public。公开操作不可逆，不由工作流自动执行。
 5. 在未登录 GHCR 的环境执行按 digest 拉取，保存成功证据。
 
-上述初始门禁已于2026-11-12完成。主线提交`0961cc3`随后重新生成五个镜像；用户于2026-11-17确认接受，目标服务器同日通过匿名manifest查询逐一核对digest。OPS-001后续复核确认该组Web/运维镜像不兼容当前`/smartscan/`和资源确认1.2契约，因此只保留为历史制品证据，禁止直接部署。`f38dd4f`五镜像又通过来源、`linux/amd64`、SBOM、漏洞和Web基路径核验，但Ops早于2026-11-19新增的loop证据和只读/tmpfs契约，因此同样未获部署接受。`2adbf4f`五镜像已经完成服务器匿名digest、来源、平台、SPDX、SLSA、可修复High/Critical及完整部署契约核验，当前等待用户明确接受。镜像验收不授权部署、拉取或修改可见性；后续新digest仍须重复内容和人工门禁，不能自动替换。
+上述初始门禁已于2026-11-12完成。主线提交`0961cc3`随后重新生成五个镜像；用户于2026-11-17确认接受，目标服务器同日通过匿名manifest查询逐一核对digest。OPS-001后续复核确认该组Web/运维镜像不兼容当前`/smartscan/`和资源确认1.2契约，因此只保留为历史制品证据，禁止直接部署。`f38dd4f`五镜像又通过来源、`linux/amd64`、SBOM、漏洞和Web基路径核验，但Ops早于2026-11-19新增的loop证据和只读/tmpfs契约，因此同样未获部署接受。`2adbf4f`五镜像已经完成服务器匿名digest、来源、平台、SPDX、SLSA、可修复High/Critical及完整部署契约核验，并已由用户接受。镜像验收不授权部署、拉取或修改可见性；后续新digest仍须重复内容和人工门禁，不能自动替换。
+
+共享服务器到GHCR Blob/CDN的直接拉取链路随后发生连接重置，OPS-001H路线停止。UAT不改变上述五个应用源digest及可审计PostgreSQL源digest，而由[OPS-001I统一控制器与离线镜像交付](OPS001I_UATCTL_AND_OFFLINE_IMAGES.md)保存源index/manifest、平台manifest、config、全部layer、归档摘要、导入image ID和本地不可变Tag的可审计映射。UAT Compose固定`pull_policy: never`；该离线路线不伪造Registry RepoDigest，也不改变常规GHCR发布供应链。
 
 当前已接受但不可部署的历史基线：
 
@@ -69,7 +71,7 @@ GHCR 首次创建的个人 Package 默认可能是私有。首次主线发布后
 
 ## 人工部署与回滚
 
-运维从 `smartscan-container-release-<提交 SHA>` Artifact 取得中文发布清单，将精确不可变引用写入服务器仓库外的部署环境文件，再人工执行：
+常规可稳定访问GHCR的环境仍可从 `smartscan-container-release-<提交 SHA>` Artifact取得中文发布清单并按digest拉取。当前共享UAT服务器改走OPS-001I独立Docker image archive，不执行以下直接pull示例：
 
 ```text
 docker pull ghcr.io/j4meshub/smartscan-api@sha256:<digest>
