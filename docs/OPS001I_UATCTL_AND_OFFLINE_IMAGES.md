@@ -66,6 +66,20 @@ UAT Compose 只使用服务器生成的 `local-images.env`，所有服务固定 
 
 工作流不发布新镜像、不改变 Package 可见性、不连接目标服务器。归档 Artifact 只在用户已经接受清单后按需生成，不是每次主线提交的常规产物。
 
+PR #106 的Linux实证候选如下。六个归档均在没有外部接口、关闭bridge/iptables/转发的独立Docker daemon中完成`docker load`、image ID核对和受限身份探测；这些摘要在用户明确接受发布映射前不得上传或导入UAT服务器。
+
+| 服务 | 归档大小 | SHA-256 |
+|---|---:|---|
+| PostgreSQL | 119,900,160字节（114.35 MiB） | `9c70db621d3f56ac7ec509f903447e1455d2b92e4a93ab1d20c511d18da70242` |
+| API | 90,163,200字节（85.99 MiB） | `8ae4194b3f28ddd7a9655ac39cf1eb01e0c6b740c953fc440ece309b7dda1fb4` |
+| Worker | 499,025,920字节（475.91 MiB） | `4f71e50cd25b0d40cc201b87cef6859c746fe9c7f490832859c553c7dd7b99db` |
+| AI Gateway | 90,132,480字节（85.96 MiB） | `cd1a5870af42ee936f6987a6c0b91c4527c0d0308be566e8cca59472fbf6394b` |
+| Web | 27,504,640字节（26.23 MiB） | `dc7b601a6737d227ed1a5fac7f573bf192dfcb412f8ee05dd20ee3d487427807` |
+| Ops | 90,357,760字节（86.17 MiB） | `035c17b916f6a7be3eccaf3787dd0b6b4ba950df7ea4f677555e37bdd0cf7ad4` |
+| 合计 | 917,084,160字节（874.60 MiB） | 每个归档独立校验 |
+
+本机最终文件占用为874.60 MiB。下载器逐个下载、解包并删除Artifact ZIP；最大Worker归档处理期间的理论瞬时占用约1.13 GiB，执行前要求至少2 GiB可用空间，以保留文件系统和ZIP开销余量。
+
 ## 统一控制器
 
 安装路径固定为：
@@ -145,4 +159,4 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl resume-basic-uat
 
 ## 当前状态
 
-截至本工作包仓库交付，服务器上的loop、OCR模型、配置和三张固定网络事实保持不变；六个应用/数据库镜像尚未通过离线归档导入，`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。
+截至本工作包仓库交付，服务器上的loop、OCR模型、配置和三张固定网络事实保持不变；六个应用/数据库镜像只在GitHub Runner完成离线导入实证，尚未上传或导入UAT服务器。`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。
