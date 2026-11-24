@@ -4,6 +4,8 @@ import hashlib
 import io
 import json
 import tarfile
+import urllib.error
+import urllib.request
 from dataclasses import replace
 from pathlib import Path
 
@@ -283,6 +285,42 @@ def test_redirect_allowlist_rejects_unapproved_hosts() -> None:
     )
     assert not offline._allowed_redirect("http://objects.githubusercontent.com/blob", github=True)
     assert not offline._allowed_redirect("https://evil.invalid/blob", github=False)
+
+
+def test_open_follow_preserves_method_and_drops_cross_host_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[urllib.request.Request] = []
+
+    class Opener:
+        def open(self, request: urllib.request.Request, *, timeout: int):
+            requests.append(request)
+            assert timeout == 120
+            if len(requests) == 1:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    302,
+                    "Found",
+                    {"Location": "https://objects.githubusercontent.com/fixed-artifact"},
+                    None,
+                )
+            return Response(b"artifact")
+
+    monkeypatch.setattr(offline.urllib.request, "build_opener", lambda *_args: Opener())
+    request = urllib.request.Request(
+        "https://api.github.com/repos/j4meshub/SmartScan/actions/artifacts/1/zip",
+        headers={"Authorization": "Bearer secret", "Accept": "application/octet-stream"},
+        method="GET",
+    )
+
+    with offline._open_follow(request, github=True) as response:
+        assert response.read() == b"artifact"
+
+    assert len(requests) == 2
+    assert requests[1].get_method() == "GET"
+    redirected_headers = {key.casefold(): value for key, value in requests[1].header_items()}
+    assert "authorization" not in redirected_headers
+    assert redirected_headers["accept"] == "application/octet-stream"
 
 
 def test_ci_build_refuses_non_actions_environment(monkeypatch: pytest.MonkeyPatch) -> None:
