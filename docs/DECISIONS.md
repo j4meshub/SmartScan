@@ -698,7 +698,7 @@
 
 - 状态：已确认并完成供应链实现；安装验收由D-096继续约束
 - 日期：2026-11-20
-- 现场事实：OPS-001C三个固定资产已由共同使用人人工安装，`prepare-directories`已单独授权并成功。`postgres`、`data`、`models`、`models/ocr`和配置根目录已按固定权限创建；配置、Secret、引导密码和镜像身份文件仍不存在，Docker、数据库与Nginx未修改。
+- 当时现场事实：OPS-001C三个固定资产已由共同使用人人工安装，`prepare-directories`已单独授权并成功。`postgres`、`data`、`models`、`models/ocr`和配置根目录已按固定权限创建；在D-095形成时配置、Secret、引导密码和镜像身份文件均不存在。该历史状态后来由D-104更新，Docker、数据库与Nginx仍未修改。
 - 模型决策：固定PaddleOCR `v3.7.0`完整提交中的`PP-OCRv6_small_det`和`PP-OCRv6_small_rec`，运行时为PaddleOCR 3.7.0、PaddlePaddle 3.3.1和`paddle_static` CPU。官方BCE归档与PaddlePaddle官方模型仓库固定提交的六个推理文件逐字节一致，只规范化目录名，不转换模型。现有Worker关闭方向分类、文档方向和去弯曲，因此不增加分类模型或其他权重。
 - 许可与分发：PaddleOCR固定版本和两个官方模型仓库均提供Apache-2.0证据，制品保留完整许可证、第三方声明、归档/文件摘要和来源提交；证据支持对这些固定字节进行公开再分发。制品使用独立`scratch` OCI包`ghcr.io/j4meshub/smartscan-ocr-models`，与六个应用/数据库镜像分离，不包含运行包、Secret、用户数据或联网脚本。PR只验证，main才发布；Package公开、digest接受和服务器匿名核验互相独立，后续构建不得自动替换。
 - 安装边界：新增独立root执行器，只允许无参数`install/verify/status`，固定暂存目录、目标目录、版本和清单；拒绝链接、异常对象、缺失/额外/篡改文件、非空目标和超过4 GiB。安装后文件为`root:root`且不可组/全局写，Worker只读挂载。执行器不授予Docker、联网、删除、替换、通用shell、Secret、数据库、网络或Nginx权限；部分失败保留证据，清理或替换必须新授权。
@@ -772,3 +772,11 @@
 - 决策：`OPS-001E`只从标准输入接收三张仓库外`/28`，网关确定为各网段首个可用地址；共享入口从当前SSH连接的服务器端私有地址推导并与接口事实交叉验证。原始快照、IPAM、路由和内部地址只驻留目标进程内存，不落盘、不打印。生成器只在固定用户暂存根原子创建`deployment-input.json`、`preflight-summary.json`和`loop-storage-evidence.json`，拒绝已有文件、链接、宽松权限和部分输出。
 - 安全边界：Windows启动器固定SSH别名并以内存帧传输受审生成器源码和私有CIDR，参数中不出现CIDR或Secret。三份暂存文件为`szhzx:szhzx 0600`，安装到`/etc/smartscan/uat`必须由共同使用人另行审核SHA-256并执行精确root安装；`generate-config/verify-config`又是下一独立授权。当前决策不授权Secret、Docker网络、镜像、所有权、数据库、迁移、容器或Nginx修改。
 - 执行结果：PR #100交付实现，PR #101修复现场回环/链路本地前缀不能作为可分配保留网段的兼容问题；完整IPAM/路由/接口事实仍用于冲突判断。修复合并后，固定暂存根和三份0600文件已原子生成并经独立只读复核确认类型、所有者、权限、硬链接数、schema、关键状态和SHA-256均通过。两次前置失败均发生在文件写入之前，没有手写绕过或遗留部分状态。
+
+## D-104：UAT配置只在服务器本地生成并继续分离镜像身份门禁
+
+- 状态：已确认；OPS-001F完成
+- 日期：2026-11-24
+- 前置证据：共同使用人将OPS-001E三份证据安装为`root:root 0600`并在自己的终端复核SHA-256。AI只核对普通文件、非链接、硬链接数1、所有者、权限和大小；通用`sudo -n sha256sum`被既有sudoers拒绝后没有请求密码或绕过，由共同使用人的人工摘要证据补齐门禁。
+- 执行结果：受限`status`先确认四个配置输出和`image-identities.json`均不存在；`generate-config`只执行一次并成功，七类Secret只在目标服务器随机生成，只报告存在性和长度且没有回显值；独立`verify-config`一次通过六个固定镜像、OCR六文件及来源/许可、Secret长度和短信/企微/真实AI关闭契约。最终四个输出均为0600普通文件、硬链接数1，密码交付文件存在但未被AI读取。
+- 安全边界：`image-identities.json`继续缺失，未执行`apply-ownership`、Docker网络、镜像拉取、数据库、迁移、容器或Nginx。下一阶段必须单独授权三张网络与六个固定digest拉取，按RepoDigest、`linux/amd64`、版本和实际UID/GID形成脱敏身份记录并由共同使用人root安装；只有此后才能独立授权`apply-ownership`。

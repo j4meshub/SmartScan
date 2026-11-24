@@ -1,6 +1,6 @@
 # OPS-001C UAT应用部署受限执行器与配置准备
 
-> 状态：仓库实现已通过PR #89；共同使用人已人工安装三个固定资产，`prepare-directories`已单独授权并成功。原OPS-001C工作包没有连接或修改共享服务器；后续目录操作来自用户另行授权。配置、Secret、引导密码和镜像身份仍未生成，Docker、数据库和Nginx仍未修改。
+> 状态：仓库实现已通过PR #89；共同使用人已人工安装三个固定资产，`prepare-directories`、OPS-001E证据安装和OPS-001F配置生成/验证均按独立授权成功。原OPS-001C工作包没有连接或修改共享服务器；后续现场操作来自用户另行授权。镜像身份仍未生成，Docker、数据库和Nginx仍未修改。
 
 本工作包没有连接或修改共享服务器；这一历史边界保持不变。服务器目录由用户在合并后另行授权创建，不能倒写成仓库工作包曾经执行部署。
 
@@ -148,7 +148,7 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uat-deployment-preparation status
 
 安装资产不包含Secret。`deployment-input.json`、两份脱敏证据和以后产生的`image-identities.json`必须分别审核后以`root:root 0600`安装；它们不属于sudoers授权，也不得通过命令参数传值。
 
-人工安装和`prepare-directories`均已完成。该步骤没有生成Secret、调用Docker、安装Nginx或改变现有loop挂载。下一步仍须分别授权仓库外输入/证据安装和`generate-config`，不得一次授权扩展到网络或应用部署。
+人工安装、`prepare-directories`、仓库外证据安装及`generate-config/verify-config`均已完成。Secret只在目标服务器本地随机生成且未回显；下一步仍须分别授权Docker网络、六镜像拉取与身份记录、`apply-ownership`及应用部署，不得因配置通过自动扩展授权。
 
 ## 分阶段回滚
 
