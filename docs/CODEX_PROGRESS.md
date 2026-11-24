@@ -7,16 +7,22 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001G` UAT固定Docker网络创建 |
-| 工作包状态 | 完成；创建前全部现场门禁通过，三张固定网络逐一创建并按白名单字段验证，端点数均为0 |
-| 当前分支 | `codex/ops-001g-uat-networks` |
-| 最后验证基线 | loop与OCR受限验证通过；8077无SmartScan冲突、18082空闲；三张网络的driver、scope、internal、IPAM、标签和零端点全部通过 |
-| 工作包提交 | `bec6a8e`（现场证据与计划） |
-| PR | [#104](https://github.com/j4meshub/SmartScan/pull/104) |
-| 下一工作包 | 单独授权拉取六个已接受固定digest；逐一核验RepoDigest、`linux/amd64`、版本及镜像UID/GID后，生成并人工安装`image-identities.json`，再单独授权`apply-ownership` |
+| 当前工作包 | `OPS-001H` 六镜像顺序拉取与静态身份核验 |
+| 工作包状态 | 阻塞；第一个PostgreSQL固定digest唯一pull在GHCR Blob传输阶段连接重置，后五镜像按门禁未尝试 |
+| 当前分支 | `codex/ops-001h-image-pull-static-identity` |
+| 最后验证基线 | 失败后原始pull进程为0，六个精确引用均未完整缓存；三网零端点、容器健康、18082和Docker空间保持通过 |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | 等待用户对固定镜像传输阻塞作出新的独立决策；在六镜像全部本地可用前不得进入受控身份探测、`image-identities.json`或`apply-ownership` |
 
 ## 当前工作包进展
 
+- OPS-001H拉取前通过唯一SSH别名核对可信主机身份、Docker 29.0.2读取权限、三张固定网络契约和零端点、18082空闲及共租户状态。Docker根文件系统约690.2 GiB可用；容器90个、运行57个、无unhealthy或restarting。六个接受的精确引用均未完整存在于本地缓存。
+- 严格按顺序只对第一个PostgreSQL固定digest发起一次`docker pull`。原始SSH执行会话持续保留并轮询，期间只读确认服务器仅有1个匹配pull客户端；没有因为工具yield或长时间无输出发起第二个pull。
+- 多数Layer曾进入`Download complete`或`Pull complete`，约12分钟后唯一会话以`failed to copy: ... connection reset by peer`和exit code 1结束。仓库仅记录错误类别，不保存远端CDN或服务器完整地址。API、Worker、AI Gateway、Web和Ops均未尝试。
+- 失败后只读确认匹配pull客户端进程数为0，PostgreSQL精确RepoDigest仍未成像，其余五个接受引用也仍未缓存。Docker聚合镜像大小在显示精度内无变化，但可能存在daemon管理的部分Layer缓存；没有删除、重试、登录、代理、镜像站、清理或`prune`。
+- 三张SmartScan网络仍为零端点，现有容器总数、运行数和健康状态未变，18082仍空闲，Docker根文件系统仍约690.2 GiB可用。本轮没有创建/启动容器、读取Secret或环境变量、生成`image-identities.json`、执行所有权/数据库/迁移/Compose/Nginx操作。
+- 文档/UAT专项为`16 passed, 4 skipped`；Ruff检查和189个Python文件格式通过；全量Python为`606 passed, 37 skipped`、覆盖率87.74%。跳过项仍为既有PostgreSQL、Docker或Linux执行器外部门禁，不能替代本轮真实GHCR传输失败证据。
 - OPS-001G创建前再次通过唯一SSH别名核对可信主机身份；loop `status/verify`、OCR `verify/status`全部通过。8077仍有监听，19个可读Nginx配置文件中没有`/smartscan/` location或18082上游引用，18082保持空闲。
 - 现场只读快照为Docker网络27张、IPv4 IPAM 25个、IPv4路由85条、策略规则3条、接口IPv4前缀28个和可见VPN类接口1个。三张仓库外固定`/28`名称与CIDR均不存在，彼此互不重叠，并与全部Docker IPAM、主机路由、策略路由、接口网段及当前VPN可见路由无冲突。
 - 创建前`/mnt/data`约690.2 GiB可用，高于约527.9 GiB安全余量；inode空闲98.3%，128逻辑CPU、约396.9 GiB可用内存、8 GiB Swap中约5.6 GiB空闲、15分钟负载约9.86。容器90个、运行57个、无unhealthy或restarting，未触发共租户停止阈值。

@@ -103,4 +103,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-24，OPS-000事实采集、50 GiB loop、六镜像候选、`OPS-001D`最终只读预检、OPS-001E证据及OCR固定模型受限安装均已通过；OPS-001C工具和目录准备完成，OPS-001F配置与服务器本地Secret已生成并验证，OPS-001G三张固定网络已创建且无端点。`image-identities.json`仍不存在，应用未启动；实际部署还缺六镜像拉取/身份、目录所有权、PostgreSQL/迁移、Compose应用和Nginx增量。
+截至2026-11-24，OPS-000事实采集、50 GiB loop、六镜像候选、`OPS-001D`最终只读预检、OPS-001E证据及OCR固定模型受限安装均已通过；OPS-001C工具和目录准备完成，OPS-001F配置已验证，OPS-001G三张固定网络已创建且无端点。OPS-001H只对第一个PostgreSQL固定digest调用一次pull，原始会话约12分钟后因GHCR Blob连接重置失败，后五镜像未尝试。`image-identities.json`仍不存在，应用未启动；实际部署还缺六镜像本地可用与身份、目录所有权、PostgreSQL/迁移、Compose应用和Nginx增量。
