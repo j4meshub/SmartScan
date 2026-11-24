@@ -1,0 +1,280 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+
+import pytest
+
+from deploy.ops import smartscan_uatctl as uatctl
+
+TEST_UID = os.getuid() if hasattr(os, "getuid") else 0
+
+
+class FakeRunner:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+        self.outputs: dict[tuple[str, ...], str] = {}
+
+    def run(self, arguments: list[str], *, check: bool = True) -> str:
+        self.calls.append(arguments)
+        key = tuple(arguments)
+        if key in self.outputs:
+            return self.outputs[key]
+        if arguments[:4] == ["/usr/bin/docker", "network", "ls", "--format"]:
+            return "smartscan-uat-data\nsmartscan-uat-edge\nsmartscan-uat-egress"
+        if arguments[-1:] == ["verify"] and "loop" in arguments[0]:
+            return "status=passed"
+        if arguments[-1:] == ["verify"] and "ocr" in arguments[0]:
+            return '{"status":"passed"}'
+        if arguments[-1:] == ["verify"] and "config" in arguments[1]:
+            return '{"status":"passed"}'
+        return ""
+
+
+def _paths(tmp_path: Path) -> uatctl.Paths:
+    config = tmp_path / "etc" / "smartscan" / "uat"
+    data = tmp_path / "mnt" / "data" / "smartscan" / "uat"
+    upload = tmp_path / "home" / "szhzx" / "smartscan-uat-offline-images"
+    libexec = tmp_path / "usr" / "local" / "libexec" / "smartscan"
+    for path in (config, data, upload, libexec):
+        path.mkdir(parents=True)
+    for name in (
+        "docker-compose.uat.yml",
+        "shared-8077-smartscan-location.conf",
+        "smartscan-uat-config",
+        "smartscan-uat-loop-storage",
+        "smartscan-uat-ocr-model",
+    ):
+        (libexec / name).write_text("fixed", encoding="utf-8")
+    return uatctl.Paths(
+        config_root=config,
+        data_root=data,
+        upload_root=upload,
+        installed_release=config / "release-manifest.json",
+        installed_map=config / "release-map.json",
+        local_images_env=config / "local-images.env",
+        image_identities=config / "image-identities.json",
+        state_file=config / "uatctl-state.json",
+        deploy_env=config / "deploy.env",
+        runtime_env=config / "runtime.env",
+        activation_plan=config / "nginx-activation.json",
+        staged_nginx=config / "nginx-smartscan-8077.locations.conf",
+        active_nginx=tmp_path / "etc" / "nginx" / "snippets" / "smartscan-uat-8077.locations.conf",
+        compose_file=libexec / "docker-compose.uat.yml",
+        nginx_template=libexec / "shared-8077-smartscan-location.conf",
+        config_helper=libexec / "smartscan-uat-config",
+        loop_executor=libexec / "smartscan-uat-loop-storage",
+        model_executor=libexec / "smartscan-uat-ocr-model",
+    )
+
+
+def _write_json(path: Path, value: dict) -> None:
+    path.write_text(json.dumps(value), encoding="utf-8")
+    path.chmod(0o600)
+
+
+def test_status_starts_without_state_and_reports_first_step(tmp_path: Path) -> None:
+    controller = uatctl.Controller(
+        _paths(tmp_path), FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID
+    )
+    assert controller.status()["next_required"] == "preflight"
+    assert not controller.paths.state_file.exists()
+
+
+def test_preflight_is_idempotent_and_rejects_missing_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    fixed_hash = hashlib.sha256(b"fixed").hexdigest()
+    monkeypatch.setattr(
+        uatctl,
+        "INSTALLED_ASSET_SHA256",
+        {
+            "docker-compose.uat.yml": fixed_hash,
+            "shared-8077-smartscan-location.conf": fixed_hash,
+            "smartscan-uat-config": fixed_hash,
+        },
+    )
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller.preflight()
+    before = paths.state_file.read_bytes()
+    controller.preflight()
+    assert paths.state_file.read_bytes() == before
+
+    runner.outputs[("/usr/bin/docker", "network", "ls", "--format", "{{.Name}}")] = (
+        "smartscan-uat-data"
+    )
+    with pytest.raises(uatctl.ControllerError, match="fixed_network_missing"):
+        uatctl.Controller(
+            _paths(tmp_path / "missing"),
+            runner,
+            root_uid=TEST_UID,
+            deploy_uid=TEST_UID,
+        ).preflight()
+
+
+def test_state_machine_rejects_skipping_release_and_import(tmp_path: Path) -> None:
+    controller = uatctl.Controller(
+        _paths(tmp_path), FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID
+    )
+    with pytest.raises(uatctl.ControllerError, match="state_prerequisite_missing"):
+        controller.import_images()
+    with pytest.raises(uatctl.ControllerError, match="state_prerequisite_missing"):
+        controller.start_database()
+    with pytest.raises(uatctl.ControllerError, match="state_prerequisite_missing"):
+        controller.start_core()
+
+
+def test_resume_stops_at_irreversible_migration_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    sequence: list[str] = []
+    safe_steps = (
+        "preflight",
+        "storage_verified",
+        "models_verified",
+        "config_verified",
+        "release_accepted",
+        "images_imported",
+        "images_verified",
+        "identities_verified",
+        "ownership_applied",
+        "database_started",
+        "database_verified",
+    )
+    method_names = (
+        "preflight",
+        "verify_storage",
+        "verify_models",
+        "verify_config",
+        "accept_release",
+        "import_images",
+        "verify_images",
+        "probe_identities",
+        "apply_ownership",
+        "start_database",
+        "verify_database",
+    )
+    for completed, method in zip(safe_steps, method_names, strict=True):
+
+        def action(step=completed):
+            sequence.append(step)
+            return controller._record(step)
+
+        monkeypatch.setattr(controller, method, action)
+    result = controller.resume_basic_uat()
+    assert result["status"] == "waiting_confirmation"
+    assert result["next_required"] == "run-migrations"
+    assert sequence == list(safe_steps)
+    assert "migrations_completed" not in controller.status()["completed"]
+
+
+def test_identity_probe_uses_no_network_no_mount_no_secret_and_limits(tmp_path: Path) -> None:
+    controller = uatctl.Controller(
+        _paths(tmp_path), FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID
+    )
+    controller.runner.outputs[
+        (
+            "/usr/bin/docker",
+            "run",
+            "--rm",
+            "--name",
+            "smartscan-uat-identity-api-u",
+            "--network",
+            "none",
+            "--read-only",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges:true",
+            "--cpus",
+            "0.10",
+            "--memory",
+            "32m",
+            "--pids-limit",
+            "16",
+            "--entrypoint",
+            "/usr/bin/id",
+            "smartscan-uat-api:sha256-80aea0a27279",
+            "-u",
+        )
+    ] = "10001"
+    assert controller._probe("api", "smartscan-uat-api:sha256-80aea0a27279", "u") == 10001
+    command = controller.runner.calls[-1]
+    assert command[command.index("--network") + 1] == "none"
+    assert "--read-only" in command and "--cap-drop" in command
+    assert not any("env" in item.casefold() or "mount" in item.casefold() for item in command)
+
+
+def test_wrapper_and_sudoers_reject_parameters_shell_prune_and_wildcards() -> None:
+    root = Path(__file__).parents[1]
+    wrapper = (root / "deploy/ops/smartscan-uatctl").read_text(encoding="utf-8")
+    helper = root / "deploy/ops/smartscan_uatctl.py"
+    sudoers = (root / "deploy/sudoers/smartscan-uatctl").read_text(encoding="utf-8")
+    assert '[[ "$#" -eq 1 ]]' in wrapper
+    assert hashlib.sha256(helper.read_bytes()).hexdigest() in wrapper
+    assert "sudo bash" not in sudoers and "sudo sh" not in sudoers
+    assert "*" not in sudoers
+    assert "prune" not in wrapper and "down -v" not in wrapper
+    for command in uatctl.COMMANDS:
+        assert f"smartscan-uatctl {command}" in sudoers
+
+
+def test_installation_guide_pins_all_controller_assets() -> None:
+    root = Path(__file__).parents[1]
+    guide = (root / "docs/OPS001I_UATCTL_AND_OFFLINE_IMAGES.md").read_text(encoding="utf-8")
+    for relative in (
+        "deploy/ops/smartscan-uatctl",
+        "deploy/ops/smartscan_uatctl.py",
+        "deploy/sudoers/smartscan-uatctl",
+        "deploy/compose/docker-compose.uat.yml",
+        "deploy/nginx/shared-8077-smartscan-location.conf.template",
+        "deploy/releases/uat-2026-11-24.json",
+    ):
+        assert hashlib.sha256((root / relative).read_bytes()).hexdigest() in guide
+
+
+def test_compose_uses_only_local_runtime_images_and_pull_never() -> None:
+    root = Path(__file__).parents[1]
+    compose = (root / "deploy/compose/docker-compose.uat.yml").read_text(encoding="utf-8")
+    assert "pull_policy: always" not in compose
+    assert compose.count("pull_policy: never") >= 3
+    for key in (
+        "POSTGRES",
+        "API",
+        "WORKER",
+        "AI_GATEWAY",
+        "WEB",
+        "OPS",
+    ):
+        assert f"SMARTSCAN_UAT_{key}_RUNTIME_IMAGE" in compose
+
+
+def test_state_file_never_contains_secret_values(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller._record("preflight", {"summary": "no-secret"})
+    text = paths.state_file.read_text(encoding="utf-8")
+    assert "password" not in text.casefold()
+    assert json.loads(text)["secrets_included"] is False
+
+
+def test_completed_migration_is_verified_but_not_run_again(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller._record("database_started")
+    controller._record("database_verified")
+    controller._record("migrations_completed")
+
+    result = controller.run_migrations()
+
+    assert result["already_complete"] is True
+    flattened = [item for command in runner.calls for item in command]
+    assert "migrate" not in flattened
+    assert "pg_isready" in flattened

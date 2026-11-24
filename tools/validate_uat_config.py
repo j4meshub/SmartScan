@@ -376,14 +376,14 @@ def validate_compose_contract(
     }
     _require(set(services) == required_services, "UAT Compose 服务集合不完整")
     expected_images = {
-        "postgres": "${SMARTSCAN_UAT_POSTGRES_IMAGE:",
-        "migrate": "${SMARTSCAN_UAT_OPS_IMAGE:",
-        "api": "${SMARTSCAN_UAT_API_IMAGE:",
-        "worker-cpu-1": "${SMARTSCAN_UAT_WORKER_IMAGE:",
-        "worker-cpu-2": "${SMARTSCAN_UAT_WORKER_IMAGE:",
-        "worker-ai": "${SMARTSCAN_UAT_WORKER_IMAGE:",
-        "ai-gateway": "${SMARTSCAN_UAT_AI_GATEWAY_IMAGE:",
-        "nginx": "${SMARTSCAN_UAT_WEB_IMAGE:",
+        "postgres": "${SMARTSCAN_UAT_POSTGRES_RUNTIME_IMAGE:",
+        "migrate": "${SMARTSCAN_UAT_OPS_RUNTIME_IMAGE:",
+        "api": "${SMARTSCAN_UAT_API_RUNTIME_IMAGE:",
+        "worker-cpu-1": "${SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE:",
+        "worker-cpu-2": "${SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE:",
+        "worker-ai": "${SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE:",
+        "ai-gateway": "${SMARTSCAN_UAT_AI_GATEWAY_RUNTIME_IMAGE:",
+        "nginx": "${SMARTSCAN_UAT_WEB_RUNTIME_IMAGE:",
     }
     cpu_total = 0.0
     memory_total = 0
@@ -416,6 +416,7 @@ def validate_compose_contract(
         _require(
             str(service.get("image", "")).startswith(expected_images[name]), f"{name} 镜像变量无效"
         )
+        _require(service.get("pull_policy") == "never", f"{name} 必须禁止Registry拉取")
         _require(
             str(service.get("restart", "")).casefold() in {"no", "false"}, f"{name} 禁止自动重启"
         )

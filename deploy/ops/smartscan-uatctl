@@ -1,0 +1,40 @@
+#!/bin/bash
+set -euo pipefail
+
+umask 077
+IFS=$' \t\n'
+export LC_ALL=C
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+readonly PATH
+
+readonly EXECUTOR="/usr/local/libexec/smartscan/smartscan-uatctl"
+readonly HELPER="/usr/local/libexec/smartscan/smartscan_uatctl.py"
+readonly EXPECTED_HOSTNAME="ctiecaiserver"
+readonly EXPECTED_USER="szhzx"
+readonly STAT="/usr/bin/stat"
+readonly SHA256="/usr/bin/sha256sum"
+readonly PYTHON="/usr/bin/python3"
+
+usage() {
+    printf '用法：sudo -n %s {%s}\n' "$EXECUTOR" "status|preflight|verify-storage|verify-models|verify-config|accept-release|import-images|verify-images|probe-identities|apply-ownership|start-database|verify-database|run-migrations|start-core|verify-core|stage-nginx|activate-nginx|verify-uat|stop-core|rollback-images|resume-basic-uat" >&2
+}
+
+[[ "$#" -eq 1 ]] || { usage; exit 64; }
+case "$1" in
+  status|preflight|verify-storage|verify-models|verify-config|accept-release|import-images|verify-images|probe-identities|apply-ownership|start-database|verify-database|run-migrations|start-core|verify-core|stage-nginx|activate-nginx|verify-uat|stop-core|rollback-images|resume-basic-uat) ;;
+  *) usage; exit 64 ;;
+esac
+
+[[ "$EUID" -eq 0 ]] || { printf 'status=failed\nreason=root_required\n' >&2; exit 1; }
+[[ "${SUDO_USER:-}" == "$EXPECTED_USER" ]] || { printf 'status=failed\nreason=sudo_user_mismatch\n' >&2; exit 1; }
+[[ "${SUDO_COMMAND:-}" == "$EXECUTOR $1" ]] || { printf 'status=failed\nreason=sudo_command_mismatch\n' >&2; exit 1; }
+[[ "$(/usr/bin/hostname -s)" == "$EXPECTED_HOSTNAME" ]] || { printf 'status=failed\nreason=hostname_mismatch\n' >&2; exit 1; }
+[[ -f "$EXECUTOR" && ! -L "$EXECUTOR" && "$($STAT -c '%U:%G:%a' "$EXECUTOR")" == 'root:root:755' ]] || { printf 'status=failed\nreason=executor_invalid\n' >&2; exit 1; }
+[[ -f "$HELPER" && ! -L "$HELPER" && "$($STAT -c '%U:%G:%a' "$HELPER")" == 'root:root:755' ]] || { printf 'status=failed\nreason=helper_invalid\n' >&2; exit 1; }
+
+# 本摘要固定到同一审查提交中的辅助工具；任何内容漂移都拒绝运行。
+readonly HELPER_SHA256="188b2f71cac488fbc74a3cc9aa5105e5a3a9dcf5a927ec82c0ea5d3b0023fd6e"
+[[ "$HELPER_SHA256" != REPLACE_* ]] || { printf 'status=failed\nreason=helper_digest_not_pinned\n' >&2; exit 1; }
+[[ "$($SHA256 "$HELPER" | /usr/bin/awk '{print $1}')" == "$HELPER_SHA256" ]] || { printf 'status=failed\nreason=helper_digest_mismatch\n' >&2; exit 1; }
+
+exec "$PYTHON" "$HELPER" "$1"

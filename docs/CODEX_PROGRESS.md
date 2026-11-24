@@ -7,15 +7,22 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001H` 六镜像顺序拉取与静态身份核验 |
-| 工作包状态 | 阻塞；第一个PostgreSQL固定digest唯一pull在GHCR Blob传输阶段连接重置，后五镜像按门禁未尝试 |
-| 当前分支 | `codex/ops-001h-image-pull-static-identity` |
-| 最后验证基线 | 失败后原始pull进程为0，六个精确引用均未完整缓存；三网零端点、容器健康、18082和Docker空间保持通过 |
-| 工作包提交 | `01c561b`（脱敏失败关闭证据） |
-| PR | [#105](https://github.com/j4meshub/SmartScan/pull/105) |
-| 下一工作包 | 等待用户对固定镜像传输阻塞作出新的独立决策；在六镜像全部本地可用前不得进入受控身份探测、`image-identities.json`或`apply-ownership` |
+| 当前工作包 | `OPS-001I` UAT统一受限控制器与通用离线镜像交付 |
+| 工作包状态 | 进行中；仓库实现和本地专项通过，等待六镜像真实Linux归档/断网导入CI及PR验收 |
+| 当前分支 | `codex/ops-001i-uatctl-offline-images` |
+| 最后验证基线 | 本地专项94通过、5跳过；全量Python 626通过、37跳过、覆盖率87.74%；隔离库漂移通过，旧OPS-001C辅助工具摘要保持不变 |
+| 工作包提交 | 待本工作包中文提交 |
+| PR | 待创建 |
+| 下一工作包 | CI与自审通过后合并；用户人工安装统一控制器并接受发布映射后，方可单独授权离线上传及`resume-basic-uat` |
 
 ## 当前工作包进展
+
+- 用户决定停止服务器直接`docker pull`路线，`OPS-001H`按真实失败证据标记为被替代。当前六个已接受源digest保持不变；新方案不使用Tag、镜像站或代理，也不清理daemon可能保留的部分Layer缓存。
+- 新增审核发布清单、通用离线工具、六个独立OCI归档工作流和源index/manifest→`linux/amd64` manifest→config/layer→归档SHA→image ID→本地不可变Tag映射。Compose改用独立`local-images.env`及`pull_policy: never`，不伪造离线导入后不会保留的Registry RepoDigest。
+- 新增一次性安装的`smartscan-uatctl`状态机和精确sudoers。控制器验证既有loop、OCR和配置结果；固定完成发布接受、导入、无网络UID/GID探测、身份记录、所有权、数据库和核心服务续接，并在不可逆迁移及共享Nginx激活前停止等待单独确认。删除、清理、`prune`、`down -v`和任意shell不在授权范围。
+- 为保持现场信任链，旧`smartscan-uat-config`及其执行器没有修改；离线映射和所有权验证完全由新控制器承担。首次专项发现的旧辅助工具摘要回归已修复，最终UAT/治理专项`94 passed, 5 skipped`。
+- Ruff检查及192个Python文件格式通过；全量Python为`626 passed, 37 skipped`、覆盖率87.74%。迁移漂移首次误用了本机未升级旧SQLite而失败，改用独立空库执行upgrade后drift通过且临时库已删除。Windows本机没有Docker CLI，Compose真实解析、六镜像归档/load和Linux权限证据由PR Runner补齐，不能在本地伪记为通过。
+- 本工作包尚未连接`smartscan-server`，没有重试pull、上传/导入镜像、创建临时容器、改变三张网络、执行所有权、启动数据库/应用、迁移或修改Nginx。
 
 - OPS-001H拉取前通过唯一SSH别名核对可信主机身份、Docker 29.0.2读取权限、三张固定网络契约和零端点、18082空闲及共租户状态。Docker根文件系统约690.2 GiB可用；容器90个、运行57个、无unhealthy或restarting。六个接受的精确引用均未完整存在于本地缓存。
 - 严格按顺序只对第一个PostgreSQL固定digest发起一次`docker pull`。原始SSH执行会话持续保留并轮询，期间只读确认服务器仅有1个匹配pull客户端；没有因为工具yield或长时间无输出发起第二个pull。

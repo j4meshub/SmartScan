@@ -791,8 +791,18 @@
 
 ## D-106：六镜像顺序拉取在首个PostgreSQL Blob传输失败后关闭
 
-- 状态：已确认；OPS-001H阻塞
+- 状态：已确认；OPS-001H直拉路线已由D-107取代，失败证据继续保留
 - 日期：2026-11-24
 - 前置证据：可信主机、Docker读取与空间、三张网络零端点、18082和现有容器健康均通过；六个接受的精确引用均未完整缓存。执行前没有读取Secret、环境文件、管理员密码或无关镜像详情。
 - 执行结果：严格按既定顺序，只对第一个PostgreSQL固定digest调用一次pull，并在同一SSH/客户端进程中持续等待；没有因工具yield或无输出重新调用。多数Layer出现下载或拉取进度后，约12分钟时GHCR Blob传输返回`connection reset by peer`，原始进程以失败退出。API、Worker、AI Gateway、Web与Ops均未尝试。
 - 决策：依照失败关闭门禁停止OPS-001H，不自动重试、切换Tag/来源、登录、代理、创建容器或清理缓存。失败后六个精确引用仍未成像，可能的部分Layer缓存保持原状；三网零端点、容器健康、18082和空间不变。只有用户对固定制品传输作出新的独立决定后才能继续；在六镜像全部本地可用前，不进入受控运行身份探测、`image-identities.json`或`apply-ownership`。
+
+## D-107：UAT镜像采用审核清单离线交付并以统一状态机收口root操作
+
+- 状态：已确认；OPS-001I进行中
+- 日期：2026-11-24
+- 取代范围：D-106的失败证据和“不得继续直接pull”仍有效；其中“等待新的传输决策”已由本决策解除。六个已接受源digest、三张网络、loop、OCR和配置事实均不改变，后续自动制品不得替换候选。
+- 离线完整性：每个服务生成独立OCI归档，并保存用户接受的源index/manifest原始对象、唯一`linux/amd64` manifest、config、全部layer及其媒体类型/长度。离线复核重新计算所有摘要，并形成“源digest→平台manifest→config/layer→归档SHA-256→导入image ID→本地不可变Tag”映射。普通load不能保证保留Registry RepoDigest，因此明确记录`repo_digest_verified=false`，不得伪造；等强度依据是完整内容图、归档摘要和导入后image ID。Compose只使用本地Tag并固定`pull_policy: never`。
+- 自动交付：经审核发布清单只允许`ghcr.io/j4meshub/smartscan-*`、`linux/amd64`和六个完整digest。GitHub Actions按需生成独立归档；本机工具使用现有Git凭据自动下载Artifact，以固定SSH别名断点上传、远端摘要复核和原子改名，不读取私钥或口令。归档、`.part`和服务器内部配置均排除在Git之外。
+- root边界：新增一次性安装的`smartscan-uatctl`和逐命令sudoers，状态文件由root拥有。控制器不接受任意参数、路径、URL、Tag、digest或服务名；不提供shell、`prune`、`down -v`、通配符删除或数据清理。已有loop、部署准备、OCR暂存和OCR安装执行器不删除、不改变摘要，只由控制器验证或复用。
+- 人工门禁：用户接受发布映射和一次性安装后，可授权`resume-basic-uat`连续完成安全可续接步骤并在迁移前停止。不可逆迁移、共享Nginx激活、生产上线、删除和清理仍须单独明确确认。OPS-001I仓库工作不连接或修改服务器。

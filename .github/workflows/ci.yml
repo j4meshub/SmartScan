@@ -120,6 +120,7 @@ jobs:
         run: >-
           docker compose
           --env-file tests/fixtures/uat/deploy.env
+          --env-file tests/fixtures/uat/local-images.env
           -f deploy/compose/docker-compose.uat.yml
           config
         env:
