@@ -7,19 +7,22 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001I` UAT统一受限控制器与通用离线镜像交付 |
-| 工作包状态 | 完成；仓库实现、六镜像真实Linux完全断网导入、全部适用CI与最终自审均已通过，尚未接受发布映射或修改服务器 |
-| 当前分支 | `codex/ops-001i-uatctl-offline-images` |
-| 最后验证基线 | 本地专项94通过、5跳过；全量Python 628通过、37跳过、覆盖率87.74%；隔离库漂移通过；PR六组工作流完成六归档传统daemon断网导入、身份探测、Compose离线解析及全平台回归 |
-| 工作包提交 | `da0f833`起，最终代码验证头`23632cd` |
-| PR | [#106](https://github.com/j4meshub/SmartScan/pull/106)（全部适用CI通过，完成自审后合并） |
-| 下一工作包 | 用户人工安装统一控制器并明确接受本次发布映射后，方可按独立授权下载、校验、上传并运行`resume-basic-uat`；迁移与Nginx激活仍单独确认 |
+| 当前工作包 | `OPS-001I` UAT离线制品准备与下载兼容修复 |
+| 工作包状态 | 进行中；发布映射已获用户接受，按需归档运行成功；首次本机下载在GitHub 302跳转处安全失败，正在修复固定工具的Python 3.11兼容问题 |
+| 当前分支 | `codex/ops-001i-artifact-download-fix` |
+| 最后验证基线 | PR #106全部适用CI通过；按需运行`45354251007`完成六归档、完全断网导入和7组Artifact上传；下载修复专项`11 passed`，全量Python`629 passed, 37 skipped`、覆盖率87.74%，Ruff、格式及隔离库迁移漂移通过 |
+| 工作包提交 | OPS-001I已合并为`d41be181`；下载兼容修复待提交 |
+| PR | 待创建下载兼容修复PR；[#106](https://github.com/j4meshub/SmartScan/pull/106)已合并 |
+| 下一工作包 | 修复PR通过并合并后，从同一运行断点下载、完整复核六归档并按固定工具上传；控制器安装、镜像导入与服务操作仍未授权 |
 
 ## 当前工作包进展
 
+- 用户已明确接受PR #106、主线`d41be181`、发布清单摘要和六个归档的精确大小/摘要；该接受不允许后续构建、Tag或新digest替换。真实main工作树已从干净状态以`--ff-only`同步到该提交，远程仍只有GitHub `origin`，本机可用空间约18.5 GiB。
+- 按需工作流`45354251007`只在`d41be181`上运行，Ubuntu/Windows专项、六归档生成、传统daemon完全断网导入、身份探测、Compose禁止拉取和7组Artifact上传全部成功。Artifact与发布映射仍绑定用户接受的六个归档，没有更换来源或digest。
+- 首次执行固定`download`在第一个Artifact的GitHub 302跳转处失败，未下载归档正文；根因是Python 3.11的`urllib.request.Request`不公开`method`属性，而工具重建受限跳转请求时读取了该属性。修复改用标准`get_method()`，保留跨域移除Authorization和重定向域名白名单，并增加真实302形态的回归测试；没有切换来源或放宽摘要门禁。
 - 用户决定停止服务器直接`docker pull`路线，`OPS-001H`按真实失败证据标记为被替代。当前六个已接受源digest保持不变；新方案不使用Tag、镜像站或代理，也不清理daemon可能保留的部分Layer缓存。
 - 新增审核发布清单、通用离线工具、六个独立Docker image archive工作流和源index/manifest→`linux/amd64` manifest→config/layer→归档SHA→image ID→本地不可变Tag映射。首轮CI证明纯OCI layout只被主Runner的新镜像存储接受、传统独立daemon以缺少`manifest.json`拒绝；归档因此改为兼容Docker load且内嵌原Registry证据的格式。Compose改用独立`local-images.env`及`pull_policy: never`，不伪造离线导入后不会保留的Registry RepoDigest。
-- PR专项最终在无外部接口的独立Docker daemon中逐一导入六个归档，全部本地Tag与预期image ID一致，受限UID/GID探测成功；八个Compose服务均解析为本地不可变Tag和`pull_policy: never`。六归档合计917,084,160字节（874.60 MiB），精确逐件摘要记录在OPS-001I说明，尚未获用户接受、上传或导入服务器。
+- PR专项最终在无外部接口的独立Docker daemon中逐一导入六个归档，全部本地Tag与预期image ID一致，受限UID/GID探测成功；八个Compose服务均解析为本地不可变Tag和`pull_policy: never`。六归档合计917,084,160字节（874.60 MiB），精确逐件摘要已获用户接受，但仍未完整下载、上传或导入服务器。
 - 最终代码头`23632cd`的PR六组工作流全部成功：常规CI完成API全量测试、迁移漂移、Web、Android、固定Xcode iOS和容器门禁；离线交付作业再次完成六归档生成、传统daemon完全断网导入、固定image ID/本地Tag、UID/GID探测及Compose离线解析；PostgreSQL、OCR模型、OCR Layer和五应用镜像供应链检查亦全部通过。
 - PR验证依次暴露并修复三类交付兼容问题：关键root资产新增LF约束并改用规范字节摘要；纯OCI layout被传统daemon拒绝后改为内嵌原Registry证据的Docker image archive；Compose验证改为固定运行夹具和结构化JSON断言。最后一次通用Linux Ruff还发现Windows创建的带shebang工具缺少Git可执行位，现固定为`100755`。所有失败均保留原因，没有放宽digest、完全断网、身份探测或禁止拉取门禁。
 - 新增一次性安装的`smartscan-uatctl`状态机和精确sudoers。控制器验证既有loop、OCR和配置结果；固定完成发布接受、导入、无网络UID/GID探测、身份记录、所有权、数据库和核心服务续接，并在不可逆迁移及共享Nginx激活前停止等待单独确认。删除、清理、`prune`、`down -v`和任意shell不在授权范围。

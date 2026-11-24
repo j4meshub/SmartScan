@@ -207,7 +207,11 @@ def _open_follow(request: urllib.request.Request, *, github: bool, timeout: int 
                 != urllib.parse.urlparse(current.full_url).hostname
             ):
                 headers.pop("Authorization", None)
-            current = urllib.request.Request(location, headers=headers, method=current.method)
+            current = urllib.request.Request(
+                location,
+                headers=headers,
+                method=current.get_method(),
+            )
     raise OfflineImageError("redirect_limit_exceeded")
 
 
