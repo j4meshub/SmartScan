@@ -12,6 +12,7 @@ on:
       - "deploy/sudoers/smartscan-uatctl"
       - "tests/test_smartscan_offline_images.py"
       - "tests/test_smartscan_uatctl.py"
+      - "tools/ci_verify_uat_offline_docker.sh"
       - "tools/smartscan_offline_images.py"
   workflow_dispatch:
 
@@ -58,46 +59,8 @@ jobs:
         run: python tools/smartscan_offline_images.py ci-build
       - name: 离线复核全部归档
         run: python tools/smartscan_offline_images.py verify
-      - name: 在隔离网络命名空间导入并核对本地不可变Tag
-        run: |
-          set -euo pipefail
-          root='.smartscan-offline-transfer/images/smartscan-uat-2026-11-24'
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          value=json.loads(Path('.smartscan-offline-transfer/images/smartscan-uat-2026-11-24/release-map.json').read_text())
-          for image in value['images']:
-              print(image['archive_name'], image['local_tag'], image['image_id'])
-          PY
-          while read -r archive tag image_id; do
-            sudo unshare --net docker load --input "$root/$archive"
-            test "$(docker image inspect --format '{{.Id}}' "$tag")" = "$image_id"
-          done < <(python - <<'PY'
-          import json
-          from pathlib import Path
-          value=json.loads(Path('.smartscan-offline-transfer/images/smartscan-uat-2026-11-24/release-map.json').read_text())
-          for image in value['images']:
-              print(image['archive_name'], image['local_tag'], image['image_id'])
-          PY
-          )
-      - name: 执行无网络、只读、最小权限身份探测
-        run: |
-          set -euo pipefail
-          python - <<'PY' > "$RUNNER_TEMP/tags"
-          import json
-          from pathlib import Path
-          value=json.loads(Path('.smartscan-offline-transfer/images/smartscan-uat-2026-11-24/release-map.json').read_text())
-          for image in value['images']:
-              print(image['service'], image['local_tag'])
-          PY
-          while read -r service tag; do
-            docker run --rm --name "smartscan-uat-ci-${service}" --network none --read-only \
-              --cap-drop ALL --security-opt no-new-privileges:true --cpus 0.10 --memory 32m \
-              --pids-limit 16 --entrypoint /usr/bin/id "$tag" -u
-            docker run --rm --name "smartscan-uat-ci-${service}-gid" --network none --read-only \
-              --cap-drop ALL --security-opt no-new-privileges:true --cpus 0.10 --memory 32m \
-              --pids-limit 16 --entrypoint /usr/bin/id "$tag" -g
-          done < "$RUNNER_TEMP/tags"
+      - name: 使用独立无网络Docker daemon导入并执行身份探测
+        run: bash tools/ci_verify_uat_offline_docker.sh
       - name: 验证Compose完全禁止拉取
         run: |
           set -euo pipefail

@@ -40,6 +40,8 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
     libexec = tmp_path / "usr" / "local" / "libexec" / "smartscan"
     for path in (config, data, upload, libexec):
         path.mkdir(parents=True)
+    if os.name != "nt":
+        upload.chmod(0o700)
     for name in (
         "docker-compose.uat.yml",
         "shared-8077-smartscan-location.conf",
@@ -73,6 +75,13 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
 def _write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
     path.chmod(0o600)
+
+
+def _repository_lf_sha256(path: Path) -> str:
+    """安装摘要绑定仓库的 LF 规范字节，不受 Windows 工作树换行影响。"""
+    value = path.read_bytes().replace(b"\r\n", b"\n")
+    assert b"\r" not in value
+    return hashlib.sha256(value).hexdigest()
 
 
 def test_status_starts_without_state_and_reports_first_step(tmp_path: Path) -> None:
@@ -217,7 +226,7 @@ def test_wrapper_and_sudoers_reject_parameters_shell_prune_and_wildcards() -> No
     helper = root / "deploy/ops/smartscan_uatctl.py"
     sudoers = (root / "deploy/sudoers/smartscan-uatctl").read_text(encoding="utf-8")
     assert '[[ "$#" -eq 1 ]]' in wrapper
-    assert hashlib.sha256(helper.read_bytes()).hexdigest() in wrapper
+    assert _repository_lf_sha256(helper) in wrapper
     assert "sudo bash" not in sudoers and "sudo sh" not in sudoers
     assert "*" not in sudoers
     assert "prune" not in wrapper and "down -v" not in wrapper
@@ -236,7 +245,7 @@ def test_installation_guide_pins_all_controller_assets() -> None:
         "deploy/nginx/shared-8077-smartscan-location.conf.template",
         "deploy/releases/uat-2026-11-24.json",
     ):
-        assert hashlib.sha256((root / relative).read_bytes()).hexdigest() in guide
+        assert _repository_lf_sha256(root / relative) in guide
 
 
 def test_compose_uses_only_local_runtime_images_and_pull_never() -> None:
@@ -253,6 +262,19 @@ def test_compose_uses_only_local_runtime_images_and_pull_never() -> None:
         "OPS",
     ):
         assert f"SMARTSCAN_UAT_{key}_RUNTIME_IMAGE" in compose
+
+
+def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
+    root = Path(__file__).parents[1]
+    workflow = (root / ".github/workflows/uat-offline-images.yml").read_text(encoding="utf-8")
+    script = (root / "tools/ci_verify_uat_offline_docker.sh").read_text(encoding="utf-8")
+    assert "tools/ci_verify_uat_offline_docker.sh" in workflow
+    assert "unshare --net" in script
+    assert "--bridge=none" in script
+    assert "--iptables=false" in script
+    assert "DOCKER_HOST" in script
+    assert "docker load" in script
+    assert "--network none" in script
 
 
 def test_state_file_never_contains_secret_values(tmp_path: Path) -> None:
