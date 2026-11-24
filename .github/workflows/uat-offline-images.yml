@@ -64,12 +64,26 @@ jobs:
       - name: 验证Compose完全禁止拉取
         run: |
           set -euo pipefail
-          docker compose \
+          docker compose --profile '*' \
             --env-file tests/fixtures/uat/deploy.env \
             --env-file tests/fixtures/uat/local-images.env \
-            -f deploy/compose/docker-compose.uat.yml config > "$RUNNER_TEMP/uat-compose.yml"
-          test "$(grep -c 'pull_policy: never' "$RUNNER_TEMP/uat-compose.yml")" -ge 8
-          ! grep -q 'pull_policy: always' "$RUNNER_TEMP/uat-compose.yml"
+            -f deploy/compose/docker-compose.uat.yml config --format json \
+            > "$RUNNER_TEMP/uat-compose.json"
+          python - "$RUNNER_TEMP/uat-compose.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          value = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          services = value["services"]
+          expected = {
+              "postgres", "migrate", "api", "worker-cpu-1", "worker-cpu-2",
+              "worker-ai", "ai-gateway", "nginx",
+          }
+          assert set(services) == expected
+          assert all(item.get("pull_policy") == "never" for item in services.values())
+          assert all(str(item.get("image", "")).startswith("smartscan-uat-") for item in services.values())
+          PY
       - name: 输出中文归档大小摘要
         run: |
           python - <<'PY'

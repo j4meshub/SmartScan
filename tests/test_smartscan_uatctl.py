@@ -277,6 +277,8 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "DOCKER_HOST" in script
     assert "docker load" in script
     assert "--network none" in script
+    assert "config --format json" in workflow
+    assert 'item.get("pull_policy") == "never"' in workflow
 
 
 def test_controller_accepts_docker_archive_with_registry_evidence(tmp_path: Path) -> None:
