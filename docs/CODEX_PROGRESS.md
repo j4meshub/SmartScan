@@ -8,18 +8,20 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001I` UAT离线制品准备与下载兼容修复 |
-| 工作包状态 | 进行中；发布映射已获用户接受，按需归档运行成功；首次本机下载在GitHub 302跳转处安全失败，正在修复固定工具的Python 3.11兼容问题 |
-| 当前分支 | `codex/ops-001i-artifact-download-fix` |
-| 最后验证基线 | PR #106全部适用CI通过；按需运行`45354251007`完成六归档、完全断网导入和7组Artifact上传；下载修复专项`11 passed`，全量Python`629 passed, 37 skipped`、覆盖率87.74%，Ruff、格式及隔离库迁移漂移通过 |
-| 工作包提交 | OPS-001I已合并为`d41be181`；下载兼容修复待提交 |
-| PR | 待创建下载兼容修复PR；[#106](https://github.com/j4meshub/SmartScan/pull/106)已合并 |
-| 下一工作包 | 修复PR通过并合并后，从同一运行断点下载、完整复核六归档并按固定工具上传；控制器安装、镜像导入与服务操作仍未授权 |
+| 工作包状态 | 进行中；302兼容修复已由PR #107合并；真实下载证明无界流式连接会反复停滞，正在增加固定Range分块续传且保留既有.part |
+| 当前分支 | `codex/ops-001i-artifact-chunked-resume` |
+| 最后验证基线 | PR #107四组CI全部通过并合并为`2e6234c`；按需运行`45354251007`保持不变；分块续传专项`13 passed`，全量Python`631 passed, 37 skipped`、覆盖率87.74%，Ruff、格式和隔离库迁移漂移通过 |
+| 工作包提交 | OPS-001I为`d41be181`，302兼容修复为`2e6234c`；分块续传修复待提交 |
+| PR | 待创建分块续传修复PR；[#106](https://github.com/j4meshub/SmartScan/pull/106)与[#107](https://github.com/j4meshub/SmartScan/pull/107)已合并 |
+| 下一工作包 | 分块续传PR通过并合并后，从已保留的API .part继续同一运行，完整复核六归档并按固定工具上传；控制器安装、镜像导入与服务操作仍未授权 |
 
 ## 当前工作包进展
 
 - 用户已明确接受PR #106、主线`d41be181`、发布清单摘要和六个归档的精确大小/摘要；该接受不允许后续构建、Tag或新digest替换。真实main工作树已从干净状态以`--ff-only`同步到该提交，远程仍只有GitHub `origin`，本机可用空间约18.5 GiB。
 - 按需工作流`45354251007`只在`d41be181`上运行，Ubuntu/Windows专项、六归档生成、传统daemon完全断网导入、身份探测、Compose禁止拉取和7组Artifact上传全部成功。Artifact与发布映射仍绑定用户接受的六个归档，没有更换来源或digest。
 - 首次执行固定`download`在第一个Artifact的GitHub 302跳转处失败，未下载归档正文；根因是Python 3.11的`urllib.request.Request`不公开`method`属性，而工具重建受限跳转请求时读取了该属性。修复改用标准`get_method()`，保留跨域移除Authorization和重定向域名白名单，并增加真实302形态的回归测试；没有切换来源或放宽摘要门禁。
+- PR #107全部适用CI通过并合并为`2e6234c`。真实续传从1 MiB增长到约61 MiB，再续传至完成PostgreSQL归档并通过校验；进入API后连接再次停在1 MiB。两次停滞均只中断原客户端并保留`.part`，没有重触发Actions、切换Artifact、覆盖完成归档或删除现场。
+- 分块续传修复把每个Artifact约束为8 MiB固定Range，逐块核对`206`、`Content-Range`、总长度和可选`Content-Length`，精确读取后主动关闭连接；完成前只写`.part`，全部字节到齐才原子改名。已有完成zip或部分文件均按固定大小处理，错误范围、截断、超长或符号链接继续失败关闭。
 - 用户决定停止服务器直接`docker pull`路线，`OPS-001H`按真实失败证据标记为被替代。当前六个已接受源digest保持不变；新方案不使用Tag、镜像站或代理，也不清理daemon可能保留的部分Layer缓存。
 - 新增审核发布清单、通用离线工具、六个独立Docker image archive工作流和源index/manifest→`linux/amd64` manifest→config/layer→归档SHA→image ID→本地不可变Tag映射。首轮CI证明纯OCI layout只被主Runner的新镜像存储接受、传统独立daemon以缺少`manifest.json`拒绝；归档因此改为兼容Docker load且内嵌原Registry证据的格式。Compose改用独立`local-images.env`及`pull_policy: never`，不伪造离线导入后不会保留的Registry RepoDigest。
 - PR专项最终在无外部接口的独立Docker daemon中逐一导入六个归档，全部本地Tag与预期image ID一致，受限UID/GID探测成功；八个Compose服务均解析为本地不可变Tag和`pull_policy: never`。六归档合计917,084,160字节（874.60 MiB），精确逐件摘要已获用户接受，但仍未完整下载、上传或导入服务器。

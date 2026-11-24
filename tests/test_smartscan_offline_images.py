@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import tarfile
 import urllib.error
 import urllib.request
@@ -15,10 +16,10 @@ from tools import smartscan_offline_images as offline
 
 
 class Response:
-    def __init__(self, value: bytes, status: int = 200):
+    def __init__(self, value: bytes, status: int = 200, headers: dict[str, str] | None = None):
         self.value = io.BytesIO(value)
         self.status = status
-        self.headers: dict[str, str] = {}
+        self.headers = headers or {}
 
     def read(self, size: int = -1) -> bytes:
         return self.value.read(size)
@@ -321,6 +322,73 @@ def test_open_follow_preserves_method_and_drops_cross_host_authorization(
     redirected_headers = {key.casefold(): value for key, value in requests[1].header_items()}
     assert "authorization" not in redirected_headers
     assert redirected_headers["accept"] == "application/octet-stream"
+
+
+def test_artifact_download_uses_bounded_ranges_and_resumes_part(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = b"fixed-artifact"
+    target = tmp_path / "artifact.zip"
+    target.with_suffix(".zip.part").write_bytes(value[:3])
+    ranges: list[str] = []
+
+    def open_range(request: urllib.request.Request, *, github: bool, timeout: int):
+        assert github is True
+        assert timeout == 180
+        range_header = request.get_header("Range")
+        assert range_header is not None
+        ranges.append(range_header)
+        match = re.fullmatch(r"bytes=(\d+)-(\d+)", range_header)
+        assert match is not None
+        start, end = (int(item) for item in match.groups())
+        body = value[start : end + 1]
+        return Response(
+            body,
+            206,
+            {
+                "Content-Range": f"bytes {start}-{end}/{len(value)}",
+                "Content-Length": str(len(body)),
+            },
+        )
+
+    monkeypatch.setattr(offline, "ARTIFACT_CHUNK_SIZE", 4)
+    monkeypatch.setattr(offline, "_open_follow", open_range)
+
+    offline._download_github_file(
+        "https://api.github.com/repos/j4meshub/SmartScan/actions/artifacts/1/zip",
+        "secret",
+        target,
+        len(value),
+    )
+
+    assert ranges == ["bytes=3-6", "bytes=7-10", "bytes=11-13"]
+    assert target.read_bytes() == value
+    assert not target.with_suffix(".zip.part").exists()
+
+
+def test_artifact_download_rejects_wrong_content_range(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "artifact.zip"
+
+    def wrong_range(_request: urllib.request.Request, *, github: bool, timeout: int):
+        assert github is True
+        assert timeout == 180
+        return Response(
+            b"data",
+            206,
+            {"Content-Range": "bytes 1-4/4", "Content-Length": "4"},
+        )
+
+    monkeypatch.setattr(offline, "_open_follow", wrong_range)
+
+    with pytest.raises(offline.OfflineImageError, match="artifact_content_range_mismatch"):
+        offline._download_github_file(
+            "https://api.github.com/repos/j4meshub/SmartScan/actions/artifacts/1/zip",
+            "secret",
+            target,
+            4,
+        )
 
 
 def test_ci_build_refuses_non_actions_environment(monkeypatch: pytest.MonkeyPatch) -> None:
