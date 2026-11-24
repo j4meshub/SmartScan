@@ -788,3 +788,11 @@
 - 前置证据：仅通过可信SSH别名重新核对主机身份、loop与OCR受限验证、8077/18082、全部Docker IPAM、主机路由、策略路由、接口网段、当前VPN可见路由及共租户资源。三张仓库外固定`/28`名称与CIDR均不存在，彼此及与全部现场前缀无重叠；资源、磁盘余量和容器健康未触发停止阈值。
 - 决策与执行：按Compose契约逐一创建`smartscan-uat-data`、`smartscan-uat-edge`和`smartscan-uat-egress`三张本地bridge网络。data与edge固定为internal，egress固定为非internal受控出站；三者写入Compose项目/逻辑网络标签及SmartScan UAT归属标签。创建后逐字段核对名称、driver、scope、internal、仓库外IPAM、标签和端点数，全部通过且端点数为0。
 - 安全边界：本次没有修改、连接、断开或删除任何既有网络，没有使用`prune`，没有拉取镜像、创建容器、读取Secret、执行所有权、数据库、迁移、Compose或Nginx操作。创建后容器总数、运行数和健康状态不变，18082仍空闲。下一阶段仍须由用户单独授权六个固定digest拉取与白名单身份核验；网络创建不授权应用启动。
+
+## D-106：六镜像顺序拉取在首个PostgreSQL Blob传输失败后关闭
+
+- 状态：已确认；OPS-001H阻塞
+- 日期：2026-11-24
+- 前置证据：可信主机、Docker读取与空间、三张网络零端点、18082和现有容器健康均通过；六个接受的精确引用均未完整缓存。执行前没有读取Secret、环境文件、管理员密码或无关镜像详情。
+- 执行结果：严格按既定顺序，只对第一个PostgreSQL固定digest调用一次pull，并在同一SSH/客户端进程中持续等待；没有因工具yield或无输出重新调用。多数Layer出现下载或拉取进度后，约12分钟时GHCR Blob传输返回`connection reset by peer`，原始进程以失败退出。API、Worker、AI Gateway、Web与Ops均未尝试。
+- 决策：依照失败关闭门禁停止OPS-001H，不自动重试、切换Tag/来源、登录、代理、创建容器或清理缓存。失败后六个精确引用仍未成像，可能的部分Layer缓存保持原状；三网零端点、容器健康、18082和空间不变。只有用户对固定制品传输作出新的独立决定后才能继续；在六镜像全部本地可用前，不进入受控运行身份探测、`image-identities.json`或`apply-ownership`。
