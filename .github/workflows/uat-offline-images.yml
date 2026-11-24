@@ -64,6 +64,7 @@ jobs:
       - name: 验证Compose完全禁止拉取
         run: |
           set -euo pipefail
+          SMARTSCAN_UAT_RUNTIME_ENV_FILE="$GITHUB_WORKSPACE/tests/fixtures/uat/runtime.env" \
           docker compose --profile '*' \
             --env-file tests/fixtures/uat/deploy.env \
             --env-file tests/fixtures/uat/local-images.env \
