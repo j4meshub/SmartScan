@@ -31,6 +31,7 @@ RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-24.json"
 DOWNLOAD_ROOT = ROOT / ".smartscan-offline-transfer" / "images"
 WORKFLOW_FILE = "uat-offline-images.yml"
 GITHUB_REPOSITORY = "j4meshub/SmartScan"
+ARTIFACT_CHUNK_SIZE = 8 * 1024 * 1024
 ALLOWED_REGISTRY_PREFIX = "ghcr.io/j4meshub/smartscan-"
 ALLOWED_PLATFORM = "linux/amd64"
 SERVER_ALIAS = "smartscan-server"
@@ -658,22 +659,49 @@ def _github_json(path: str, token: str) -> dict[str, Any]:
         return _safe_json(response.read(), "github_response_invalid")
 
 
-def _download_github_file(url: str, token: str, target: Path) -> None:
+def _download_github_file(url: str, token: str, target: Path, expected_size: int) -> None:
+    _require(expected_size > 0, "artifact_size_invalid")
+    if target.exists():
+        _require(target.is_file() and not target.is_symlink(), "artifact_target_invalid")
+        _require(target.stat().st_size == expected_size, "artifact_target_size_mismatch")
+        return
     part = target.with_suffix(target.suffix + ".part")
+    _require(not part.is_symlink(), "artifact_part_invalid")
     offset = part.stat().st_size if part.exists() else 0
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "SmartScan-offline-images",
-    }
-    if offset:
-        headers["Range"] = f"bytes={offset}-"
-    request = urllib.request.Request(url, headers=headers)
-    with _open_follow(request, github=True, timeout=180) as response:
-        if offset:
-            _require(response.getcode() == 206, "artifact_resume_not_supported")
-        with part.open("ab" if offset else "wb") as output:
-            shutil.copyfileobj(response, output, length=1024 * 1024)
+    _require(offset <= expected_size, "artifact_part_size_invalid")
+    while offset < expected_size:
+        end = min(offset + ARTIFACT_CHUNK_SIZE - 1, expected_size - 1)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "SmartScan-offline-images",
+            "Range": f"bytes={offset}-{end}",
+        }
+        request = urllib.request.Request(url, headers=headers)
+        with _open_follow(request, github=True, timeout=180) as response:
+            _require(response.getcode() == 206, "artifact_range_not_supported")
+            content_range = response.headers.get("Content-Range", "")
+            match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", content_range)
+            _require(bool(match), "artifact_content_range_invalid")
+            assert match is not None
+            returned_start, returned_end, returned_total = (int(value) for value in match.groups())
+            _require(
+                (returned_start, returned_end, returned_total) == (offset, end, expected_size),
+                "artifact_content_range_mismatch",
+            )
+            expected_chunk = end - offset + 1
+            content_length = response.headers.get("Content-Length")
+            if content_length is not None:
+                _require(int(content_length) == expected_chunk, "artifact_content_length_mismatch")
+            remaining = expected_chunk
+            with part.open("ab") as output:
+                while remaining:
+                    block = response.read(min(1024 * 1024, remaining))
+                    _require(bool(block), "artifact_chunk_truncated")
+                    output.write(block)
+                    remaining -= len(block)
+        offset = part.stat().st_size
+        _require(offset == end + 1, "artifact_part_size_mismatch")
     os.replace(part, target)
 
 
@@ -701,7 +729,8 @@ def download_artifacts() -> dict[str, Any]:
         item = by_name[name]
         _require(item.get("expired") is False, "offline_artifact_expired")
         zip_path = root / f".{name}.zip"
-        _download_github_file(str(item["archive_download_url"]), token, zip_path)
+        artifact_size = int(item.get("size_in_bytes", 0))
+        _download_github_file(str(item["archive_download_url"]), token, zip_path, artifact_size)
         with zipfile.ZipFile(zip_path) as archive:
             files = [value for value in archive.infolist() if not value.is_dir()]
             _require(
