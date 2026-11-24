@@ -82,7 +82,7 @@ def test_release_rejects_tag_wrong_platform_and_path_injection(tmp_path: Path) -
         offline.load_release(path)
 
     document = _release_document()
-    document["images"][0]["archive_name"] = "../escape.oci.tar"
+    document["images"][0]["archive_name"] = "../escape.docker.tar"
     path.write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(offline.OfflineImageError, match="release_archive_name_invalid"):
         offline.load_release(path)
@@ -126,8 +126,19 @@ def test_blob_download_keeps_truncated_part_and_rejects_tamper(tmp_path: Path) -
 
 
 def _write_archive(path: Path, spec, blobs: dict[str, bytes]) -> tuple[object, dict]:
-    config_digest = f"sha256:{hashlib.sha256(blobs['config']).hexdigest()}"
     layer_digest = f"sha256:{hashlib.sha256(blobs['layer']).hexdigest()}"
+    diff_id = f"sha256:{hashlib.sha256(b'uncompressed-layer').hexdigest()}"
+    config = json.dumps(
+        {
+            "architecture": "amd64",
+            "os": "linux",
+            "config": {"User": "10001:10001"},
+            "rootfs": {"type": "layers", "diff_ids": [diff_id]},
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    config_digest = f"sha256:{hashlib.sha256(config).hexdigest()}"
     manifest = {
         "schemaVersion": 2,
         "mediaType": "application/vnd.oci.image.manifest.v1+json",
@@ -166,15 +177,20 @@ def _write_archive(path: Path, spec, blobs: dict[str, bytes]) -> tuple[object, d
         source=f"{spec.repository}@{source_digest}",
         source_digest=source_digest,
     )
+    config_name = f"{config_digest[7:]}.json"
+    layer_name = f"layers/{layer_digest[7:]}.tar.gz"
+    docker_manifest = [
+        {"Config": config_name, "RepoTags": [spec.local_tag], "Layers": [layer_name]}
+    ]
     with tarfile.open(path, "w") as bundle:
-        offline._add_bytes(bundle, "oci-layout", b'{"imageLayoutVersion":"1.0.0"}\n')
-        offline._add_bytes(bundle, "index.json", offline._tar_bytes(index))
-        offline._add_bytes(bundle, f"blobs/sha256/{source_digest[7:]}", source_raw)
-        offline._add_bytes(bundle, f"blobs/sha256/{manifest_digest[7:]}", manifest_raw)
-        offline._add_bytes(bundle, f"blobs/sha256/{config_digest[7:]}", blobs["config"])
-        offline._add_bytes(bundle, f"blobs/sha256/{layer_digest[7:]}", blobs["layer"])
+        offline._add_bytes(bundle, "manifest.json", offline._tar_bytes(docker_manifest))
+        offline._add_bytes(bundle, config_name, config)
+        offline._add_bytes(bundle, "smartscan-evidence/source.json", source_raw)
+        offline._add_bytes(bundle, "smartscan-evidence/platform-manifest.json", manifest_raw)
+        offline._add_bytes(bundle, layer_name, blobs["layer"])
     record = {
         "service": spec.service,
+        "archive_format": "docker-image-archive-v1",
         "source": spec.source,
         "source_object_media_type": "application/vnd.oci.image.index.v1+json",
         "source_object_size": len(source_raw),
@@ -185,6 +201,7 @@ def _write_archive(path: Path, spec, blobs: dict[str, bytes]) -> tuple[object, d
                 "digest": layer_digest,
                 "size": len(blobs["layer"]),
                 "media_type": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "diff_id": diff_id,
             }
         ],
         "image_id": config_digest,
@@ -226,7 +243,7 @@ def test_archive_rejects_missing_extra_traversal_and_symbolic_members(tmp_path: 
     original_spec = offline.load_release().images[0]
     original = tmp_path / "original.tar"
     spec, record = _write_archive(original, original_spec, {"config": b"{}", "layer": b"layer"})
-    layer_name = f"blobs/sha256/{record['layers'][0]['digest'][7:]}"
+    layer_name = f"layers/{record['layers'][0]['digest'][7:]}.tar.gz"
 
     missing = tmp_path / "missing.tar"
     _rewrite_archive(original, missing, omit=layer_name)

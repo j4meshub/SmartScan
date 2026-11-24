@@ -117,7 +117,7 @@ location ^~ /smartscan/ {
 7. OPS-001E使用固定SSH别名、内存只读快照和标准输入中的仓库外CIDR，在固定用户暂存根原子生成部署输入、预检摘要和loop证据；共同使用人核对SHA-256后独立安装为root拥有，再分别授权`generate-config`与`verify-config`。所有Secret在目标主机随机生成且不回显。
 8. OCR-002已固定真实OCR模型来源、许可、版本、清单和SHA-256；直接Docker拉取路线因Blob/CDN连接重置停止。OCR-002D随后完成同一固定Layer原始字节的本机下载、SCP、安全`stage/verify`和既有`install/verify`；模型当前`installed=true,status=passed`。部分Docker缓存、上传Layer和暂存树保持原状，不清理、不`prune`，真实数据质量验收继续独立保留。
 9. OPS-001G单独授权已创建并验证三张固定网络。OPS-001H随后严格顺序拉取六个已接受digest，但第一个PostgreSQL固定引用唯一pull在GHCR Blob传输阶段连接重置，后五镜像未尝试且部分缓存未清理；直接pull路线停止并由OPS-001I替代。
-10. OPS-001I按审核清单生成六个独立OCI归档，保存源digest到平台manifest/config/layer/归档SHA/image ID/本地不可变Tag的完整映射。用户接受映射、一次性安装统一控制器并上传固定归档后，`resume-basic-uat`完成导入、受控UID/GID探测、身份记录、所有权和PostgreSQL健康；失败即停且不清理。
+10. OPS-001I按审核清单生成六个独立Docker image archive，保存源digest到平台manifest/config/原始layer/归档SHA/image ID/本地不可变Tag的完整映射，并由传统Docker daemon完全断网验证导入。用户接受映射、一次性安装统一控制器并上传固定归档后，`resume-basic-uat`完成导入、受控UID/GID探测、身份记录、所有权和PostgreSQL健康；失败即停且不清理。
 11. 不可逆迁移必须单独授权`run-migrations`。迁移通过后再次执行`resume-basic-uat`，启动API、两个CPU Worker和内层Web，AI关闭，并验证`127.0.0.1:18082`。
 12. 最后分别授权Nginx暂存与激活、测试和reload，经8077基础UAT并观察共租户。
 

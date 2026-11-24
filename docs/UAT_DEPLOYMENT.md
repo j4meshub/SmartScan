@@ -17,7 +17,7 @@
 - 现有共享Nginx 8077使用独立include，将`/smartscan/`去前缀转发到18082；不占用80/443，不覆盖其他location。
 - HTTP只验收登录、项目、上传、处理、预览、导出和Range。实时相机、企业微信及正式移动验收继续等待HTTPS。
 - 基础栈合计5.5 vCPU/8.75 GiB，启用AI后7.5 vCPU/11.75 GiB；整栈不得超过8 vCPU/16 GiB。八个服务根文件系统只读，所有tmpfs都有明确上限；每个服务设置CPU、内存、PID和`10m×3`日志轮转，全部`restart: "no"`。Docker日志位于loop之外，八容器理论上限约240 MiB。
-- 服务器不保存源码、不现场构建、不使用可变tag。用户已接受`2adbf4f`五个应用镜像及`OPS-REG-003B`可审计PostgreSQL镜像为固定UAT源候选。因GHCR Blob链路连接重置，服务器直接pull路线停止；OPS-001I使用同一六个源digest生成独立离线OCI归档和内容映射，后续自动构建不得替换候选。
+- 服务器不保存源码、不现场构建、不使用可变tag。用户已接受`2adbf4f`五个应用镜像及`OPS-REG-003B`可审计PostgreSQL镜像为固定UAT源候选。因GHCR Blob链路连接重置，服务器直接pull路线停止；OPS-001I使用同一六个源digest生成兼容传统Docker load的独立归档和内容映射，归档仍保存原始manifest/config/压缩layer证据，后续自动构建不得替换候选。
 - AI Worker 和 AI Gateway 位于显式 `ai` Profile，默认不启动；运行配置默认关闭真实 Provider。
 - 保留应用健康和带令牌的应用指标，不申请19081。可以复用现有Prometheus/Grafana或记录人工检查能力缺口；不部署Alertmanager、Node Exporter，不挂载宿主机`/`、`/proc`或`/sys`。
 - UAT数据允许丢弃和重建，不要求备份，也不启用没有异机目标的WAL归档。

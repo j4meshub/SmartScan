@@ -2,7 +2,7 @@
 
 ## 目的与边界
 
-目标服务器到 GHCR Blob/CDN 的直接传输已多次出现低速和连接重置，`OPS-001H` 的顺序 `docker pull` 路线停止。`OPS-001I` 保留用户已经接受的六个源 digest，以经审核发布清单、独立 OCI 归档和本地不可变 Tag 完成等强度内容映射，并用一次性安装的 `smartscan-uatctl` 收口后续 UAT 操作。
+目标服务器到 GHCR Blob/CDN 的直接传输已多次出现低速和连接重置，`OPS-001H` 的顺序 `docker pull` 路线停止。`OPS-001I` 保留用户已经接受的六个源 digest，以经审核发布清单、独立 Docker image archive 和本地不可变 Tag 完成等强度内容映射，并用一次性安装的 `smartscan-uatctl` 收口后续 UAT 操作。
 
 本工作包只交付仓库代码、测试、GitHub Actions 和文档，不连接或修改服务器，不导入镜像、不启动容器、不运行迁移，也不修改 Nginx。已有 loop、部署准备、OCR 暂存和 OCR 安装执行器继续保留，统一控制器只验证或复用其结果。
 
@@ -43,12 +43,12 @@ python tools/smartscan_offline_images.py status
 → 源 index/manifest 原始字节及 SHA-256
 → linux/amd64 manifest
 → config 与全部 layer digest/长度/媒体类型
-→ 独立 OCI 归档 SHA-256
+→ 独立 Docker image archive SHA-256
 → 导入后的 image ID（等于 config digest）
 → SmartScan 本地不可变 Tag
 ```
 
-归档内保留源 index/manifest 原始对象；离线 `verify` 会重新计算每个 blob 的 SHA-256，核对源 index 到 `linux/amd64` descriptor、平台 manifest 到 config/layer 的绑定，并拒绝缺层、额外成员、特殊文件、路径穿越、错误平台、错误长度或摘要。服务器导入后每次启动前必须验证本地 Tag 仍指向发布映射中的 image ID。
+归档内保留源 index/manifest 原始对象、config 和原始压缩 layer，并提供传统 Docker daemon 所需的 `manifest.json`；不重新压缩或改写 layer。离线 `verify` 会重新计算每个对象的 SHA-256，核对源 index 到 `linux/amd64` descriptor、平台 manifest 到 config/layer、config 到 diff ID 以及 Docker 清单到本地 Tag 的绑定，并拒绝缺层、额外成员、特殊文件、路径穿越、错误平台、错误长度或摘要。服务器导入后每次启动前必须验证本地 Tag 仍指向发布映射中的 image ID。
 
 UAT Compose 只使用服务器生成的 `local-images.env`，所有服务固定 `pull_policy: never`。`deploy.env` 中的六个 GHCR digest继续作为来源证据，不直接作为离线运行引用。
 
@@ -57,9 +57,9 @@ UAT Compose 只使用服务器生成的 `local-images.env`，所有服务固定 
 `.github/workflows/uat-offline-images.yml` 执行：
 
 1. Windows 和 Ubuntu 单元测试；
-2. 对六个固定源 digest 解析 `linux/amd64` 对象并生成独立 OCI 归档；
+2. 对六个固定源 digest 解析 `linux/amd64` 对象并生成独立 Docker image archive；
 3. 离线复核完整对象图；
-4. 在 Linux Runner 导入归档，核对本地 Tag 与 image ID；
+4. 在没有外部接口的独立 Docker daemon 中导入归档，核对本地 Tag 与 image ID；
 5. 使用无网络、只读根文件系统、零 capability 和资源限制执行 UID/GID 探测；
 6. 验证 Compose 只使用本地不可变 Tag 且 `pull_policy: never`；
 7. 仅在按需运行时上传六个独立归档及中文发布映射。
@@ -92,12 +92,12 @@ Nginx激活不接受命令行路径。共同使用人必须在固定配置根预
 
 | 人工安装资产 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uatctl` | `4db66bd2e96d44eec918aabe455b927972ce56e7f233d0a6faf79d26f8127dcc` |
-| `deploy/ops/smartscan_uatctl.py` | `188b2f71cac488fbc74a3cc9aa5105e5a3a9dcf5a927ec82c0ea5d3b0023fd6e` |
+| `deploy/ops/smartscan-uatctl` | `4b32eaf02872066d538e69bce8123e0582ea604d33960b1882395829e25d9448` |
+| `deploy/ops/smartscan_uatctl.py` | `90a5e4be565e6efaafd08e2ea86f03f462dfcc41c4b32d884262dd47229cb6ac` |
 | `deploy/sudoers/smartscan-uatctl` | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
 | `deploy/compose/docker-compose.uat.yml` | `227af87ba75638c729254d8e78af819b9ab7e88f73c632e79c4c2a8eedc2408c` |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template` | `500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227` |
-| `deploy/releases/uat-2026-11-24.json` | `268dd38f8493a99710975779c8d9e3e8468dd3d60f97a1d723957a8d0da38430` |
+| `deploy/releases/uat-2026-11-24.json` | `2caa6eea6c0f6b11f941dc3301069653015fe41c9e5c515569dfb6cc5c099789` |
 
 ```bash
 sudo install -d -o root -g root -m 0755 /usr/local/libexec/smartscan

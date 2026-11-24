@@ -2,7 +2,7 @@
 """SmartScan UAT 固定镜像的可审计离线交付工具。
 
 普通用户命令只读取仓库内已审核发布清单，不接受 URL、Tag、digest、路径、
-服务器或服务名参数。CI 使用 ``ci-build`` 生成独立 OCI 归档；Windows 使用
+服务器或服务名参数。CI 使用 ``ci-build`` 生成独立 Docker image archive；Windows 使用
 ``download`` 从成功的 GitHub Actions 运行取得归档，随后离线 ``verify``。
 """
 
@@ -38,7 +38,7 @@ SERVER_UPLOAD_ROOT = PurePosixPath("/home/szhzx/smartscan-uat-offline-images")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 LOCAL_TAG = re.compile(r"^smartscan-uat-[a-z0-9-]+:sha256-[0-9a-f]{12}$")
-ARCHIVE_NAME = re.compile(r"^smartscan-[a-z0-9-]+-[0-9a-f]{12}-linux-amd64\.oci\.tar$")
+ARCHIVE_NAME = re.compile(r"^smartscan-[a-z0-9-]+-[0-9a-f]{12}-linux-amd64\.docker\.tar$")
 INDEX_MEDIA_TYPES = {
     "application/vnd.oci.image.index.v1+json",
     "application/vnd.docker.distribution.manifest.list.v2+json",
@@ -103,6 +103,15 @@ def _safe_json(raw: bytes, reason: str) -> dict[str, Any]:
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise OfflineImageError(reason) from exc
     _require(isinstance(value, dict), reason)
+    return value
+
+
+def _safe_json_list(raw: bytes, reason: str) -> list[dict[str, Any]]:
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise OfflineImageError(reason) from exc
+    _require(isinstance(value, list) and all(isinstance(item, dict) for item in value), reason)
     return value
 
 
@@ -381,34 +390,35 @@ def _build_one(client: RegistryClient, release: ReleaseSpec, spec: ImageSpec) ->
     source_path = blobs / spec.source_digest.removeprefix("sha256:")
     if source_path != manifest_path:
         source_path.write_bytes(source_raw)
-    index = {
-        "schemaVersion": 2,
-        "mediaType": "application/vnd.oci.image.index.v1+json",
-        "manifests": [
-            {
-                "mediaType": str(manifest.get("mediaType")),
-                "digest": platform_digest,
-                "size": len(manifest_raw),
-                "platform": {"os": "linux", "architecture": "amd64"},
-                "annotations": {"org.opencontainers.image.ref.name": spec.local_tag},
-            }
-        ],
-    }
+    diff_ids = config_document.get("rootfs", {}).get("diff_ids")
+    _require(
+        isinstance(diff_ids, list)
+        and len(diff_ids) == len(layer_records)
+        and all(
+            isinstance(value, str) and value.startswith("sha256:") and SHA256.fullmatch(value[7:])
+            for value in diff_ids
+        ),
+        "config_diff_ids_invalid",
+    )
+    for record, diff_id in zip(layer_records, diff_ids, strict=True):
+        record["diff_id"] = diff_id
+    config_name = f"{config_digest[7:]}.json"
+    layer_names = [f"layers/{item['digest'][7:]}.tar.gz" for item in layer_records]
+    docker_manifest = [{"Config": config_name, "RepoTags": [spec.local_tag], "Layers": layer_names}]
     archive = DOWNLOAD_ROOT / release.release_id / spec.archive_name
     temporary = archive.with_suffix(archive.suffix + ".part")
     archive.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(temporary, "w") as bundle:
-        _add_bytes(bundle, "oci-layout", b'{"imageLayoutVersion":"1.0.0"}\n')
-        _add_bytes(bundle, "index.json", _tar_bytes(index))
-        _add_file(bundle, f"blobs/sha256/{platform_digest[7:]}", manifest_path)
-        if spec.source_digest != platform_digest:
-            _add_file(bundle, f"blobs/sha256/{spec.source_digest[7:]}", source_path)
-        _add_file(bundle, f"blobs/sha256/{config_digest[7:]}", config_path)
-        for layer in layer_records:
-            _add_file(bundle, f"blobs/sha256/{layer['digest'][7:]}", blobs / layer["digest"][7:])
+        _add_bytes(bundle, "manifest.json", _tar_bytes(docker_manifest))
+        _add_file(bundle, config_name, config_path)
+        _add_file(bundle, "smartscan-evidence/source.json", source_path)
+        _add_file(bundle, "smartscan-evidence/platform-manifest.json", manifest_path)
+        for layer, name in zip(layer_records, layer_names, strict=True):
+            _add_file(bundle, name, blobs / layer["digest"][7:])
     os.replace(temporary, archive)
     return {
         "service": spec.service,
+        "archive_format": "docker-image-archive-v1",
         "source": spec.source,
         "source_object_media_type": source_media_type,
         "source_object_size": len(source_raw),
@@ -465,37 +475,38 @@ def _verify_archive(path: Path, spec: ImageSpec, record: dict[str, Any]) -> None
     _require(path.is_file() and not path.is_symlink(), "archive_file_invalid")
     _require(path.stat().st_size == int(record.get("archive_size", -1)), "archive_size_mismatch")
     _require(_sha256_file(path) == record.get("archive_sha256"), "archive_digest_mismatch")
+    _require(record.get("archive_format") == "docker-image-archive-v1", "archive_format_invalid")
     with tarfile.open(path, "r") as bundle:
         members = _safe_tar_members(bundle)
-        _require({"oci-layout", "index.json"}.issubset(members), "archive_layout_missing")
-        index = _safe_json(
-            bundle.extractfile(members["index.json"]).read(), "archive_index_invalid"
-        )
-        descriptors = index.get("manifests")
+        config_digest = str(record.get("config_digest", ""))
+        config_name = f"{config_digest.removeprefix('sha256:')}.json"
+        recorded_layers = record.get("layers")
         _require(
-            isinstance(descriptors, list) and len(descriptors) == 1,
-            "archive_index_descriptor_invalid",
+            isinstance(recorded_layers, list) and recorded_layers, "archive_layer_records_invalid"
         )
-        descriptor = descriptors[0]
-        _require(
-            descriptor.get("digest") == record.get("platform_manifest"), "archive_manifest_unbound"
+        layer_names = [
+            f"layers/{str(item.get('digest', ''))[7:]}.tar.gz" for item in recorded_layers
+        ]
+        expected = {
+            "manifest.json",
+            config_name,
+            "smartscan-evidence/source.json",
+            "smartscan-evidence/platform-manifest.json",
+            *layer_names,
+        }
+        _require(set(members) == expected, "archive_member_set_invalid")
+        docker_manifest = _safe_json_list(
+            bundle.extractfile(members["manifest.json"]).read(), "archive_docker_manifest_invalid"
         )
         _require(
-            descriptor.get("annotations", {}).get("org.opencontainers.image.ref.name")
-            == spec.local_tag,
-            "archive_local_tag_unbound",
-        )
-        _require(
-            int(descriptor.get("size", -1))
-            == members[
-                f"blobs/sha256/{str(record.get('platform_manifest')).removeprefix('sha256:')}"
-            ].size,
-            "archive_manifest_size_mismatch",
+            len(docker_manifest) == 1
+            and docker_manifest[0].get("Config") == config_name
+            and docker_manifest[0].get("RepoTags") == [spec.local_tag]
+            and docker_manifest[0].get("Layers") == layer_names,
+            "archive_docker_manifest_unbound",
         )
         source_digest = spec.source_digest
-        source_name = f"blobs/sha256/{source_digest[7:]}"
-        _require(source_name in members, "archive_source_object_missing")
-        source_stream = bundle.extractfile(members[source_name])
+        source_stream = bundle.extractfile(members["smartscan-evidence/source.json"])
         _require(source_stream is not None, "archive_source_object_missing")
         source_raw = source_stream.read()
         _require(
@@ -526,20 +537,21 @@ def _verify_archive(path: Path, spec: ImageSpec, record: dict[str, Any]) -> None
             _require(len(platform_descriptors) == 1, "archive_source_platform_unbound")
         else:
             _require(source_media_type in MANIFEST_MEDIA_TYPES, "archive_source_manifest_invalid")
-        platform_name = (
-            f"blobs/sha256/{str(record.get('platform_manifest')).removeprefix('sha256:')}"
-        )
-        platform_stream = bundle.extractfile(members[platform_name])
+        platform_stream = bundle.extractfile(members["smartscan-evidence/platform-manifest.json"])
         _require(platform_stream is not None, "archive_platform_manifest_missing")
-        platform_document = _safe_json(platform_stream.read(), "archive_platform_manifest_invalid")
+        platform_raw = platform_stream.read()
+        _require(
+            hashlib.sha256(platform_raw).hexdigest()
+            == str(record.get("platform_manifest", ""))[7:],
+            "archive_platform_manifest_digest_mismatch",
+        )
+        platform_document = _safe_json(platform_raw, "archive_platform_manifest_invalid")
         _require(
             platform_document.get("config", {}).get("digest") == record.get("config_digest"),
             "archive_config_unbound",
         )
         platform_layers = platform_document.get("layers")
         _require(isinstance(platform_layers, list), "archive_layers_invalid")
-        recorded_layers = record.get("layers")
-        _require(isinstance(recorded_layers, list), "archive_layer_records_invalid")
         _require(
             [
                 (item.get("digest"), item.get("size"), item.get("mediaType"))
@@ -551,19 +563,30 @@ def _verify_archive(path: Path, spec: ImageSpec, record: dict[str, Any]) -> None
             ],
             "archive_layers_unbound",
         )
-        digests = [source_digest, record.get("platform_manifest"), record.get("config_digest")]
-        digests.extend(item.get("digest") for item in record.get("layers", []))
-        expected = {"oci-layout", "index.json"} | {
-            f"blobs/sha256/{str(digest).removeprefix('sha256:')}" for digest in digests
-        }
-        _require(set(members) == expected, "archive_member_set_invalid")
-        for digest in digests:
-            name = f"blobs/sha256/{str(digest).removeprefix('sha256:')}"
+        config_stream = bundle.extractfile(members[config_name])
+        _require(config_stream is not None, "archive_config_missing")
+        config_raw = config_stream.read()
+        _require(
+            hashlib.sha256(config_raw).hexdigest() == config_digest[7:],
+            "archive_config_digest_mismatch",
+        )
+        config_document = _safe_json(config_raw, "archive_config_invalid")
+        _require(
+            config_document.get("os") == "linux" and config_document.get("architecture") == "amd64",
+            "archive_config_platform_invalid",
+        )
+        diff_ids = config_document.get("rootfs", {}).get("diff_ids")
+        _require(
+            diff_ids == [item.get("diff_id") for item in recorded_layers],
+            "archive_diff_ids_unbound",
+        )
+        for item, name in zip(recorded_layers, layer_names, strict=True):
             stream = bundle.extractfile(members[name])
-            _require(stream is not None, "archive_blob_missing")
+            _require(stream is not None, "archive_layer_missing")
+            _require(members[name].size == int(item.get("size", -1)), "archive_layer_size_mismatch")
             _require(
-                hashlib.sha256(stream.read()).hexdigest() == str(digest)[7:],
-                "archive_blob_digest_mismatch",
+                hashlib.sha256(stream.read()).hexdigest() == str(item.get("digest"))[7:],
+                "archive_layer_digest_mismatch",
             )
 
 

@@ -18,7 +18,7 @@
 ## 当前工作包进展
 
 - 用户决定停止服务器直接`docker pull`路线，`OPS-001H`按真实失败证据标记为被替代。当前六个已接受源digest保持不变；新方案不使用Tag、镜像站或代理，也不清理daemon可能保留的部分Layer缓存。
-- 新增审核发布清单、通用离线工具、六个独立OCI归档工作流和源index/manifest→`linux/amd64` manifest→config/layer→归档SHA→image ID→本地不可变Tag映射。Compose改用独立`local-images.env`及`pull_policy: never`，不伪造离线导入后不会保留的Registry RepoDigest。
+- 新增审核发布清单、通用离线工具、六个独立Docker image archive工作流和源index/manifest→`linux/amd64` manifest→config/layer→归档SHA→image ID→本地不可变Tag映射。首轮CI证明纯OCI layout只被主Runner的新镜像存储接受、传统独立daemon以缺少`manifest.json`拒绝；归档因此改为兼容Docker load且内嵌原Registry证据的格式。Compose改用独立`local-images.env`及`pull_policy: never`，不伪造离线导入后不会保留的Registry RepoDigest。
 - 新增一次性安装的`smartscan-uatctl`状态机和精确sudoers。控制器验证既有loop、OCR和配置结果；固定完成发布接受、导入、无网络UID/GID探测、身份记录、所有权、数据库和核心服务续接，并在不可逆迁移及共享Nginx激活前停止等待单独确认。删除、清理、`prune`、`down -v`和任意shell不在授权范围。
 - 为保持现场信任链，旧`smartscan-uat-config`及其执行器没有修改；离线映射和所有权验证完全由新控制器承担。首次专项发现的旧辅助工具摘要回归已修复，最终UAT/治理专项`94 passed, 5 skipped`。
 - Ruff检查及192个Python文件格式通过；全量Python为`626 passed, 37 skipped`、覆盖率87.74%。迁移漂移首次误用了本机未升级旧SQLite而失败，改用独立空库执行upgrade后drift通过且临时库已删除。Windows本机没有Docker CLI，Compose真实解析、六镜像归档/load和Linux权限证据由PR Runner补齐，不能在本地伪记为通过。

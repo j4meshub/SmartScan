@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -275,6 +277,75 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "DOCKER_HOST" in script
     assert "docker load" in script
     assert "--network none" in script
+
+
+def test_controller_accepts_docker_archive_with_registry_evidence(tmp_path: Path) -> None:
+    layer = b"fixed-compressed-layer"
+    layer_digest = f"sha256:{hashlib.sha256(layer).hexdigest()}"
+    diff_id = f"sha256:{hashlib.sha256(b'fixed-uncompressed-layer').hexdigest()}"
+    config = json.dumps(
+        {
+            "architecture": "amd64",
+            "os": "linux",
+            "rootfs": {"type": "layers", "diff_ids": [diff_id]},
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    config_digest = f"sha256:{hashlib.sha256(config).hexdigest()}"
+    platform = json.dumps(
+        {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "config": {"digest": config_digest, "size": len(config)},
+            "layers": [
+                {
+                    "digest": layer_digest,
+                    "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                    "size": len(layer),
+                }
+            ],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    platform_digest = f"sha256:{hashlib.sha256(platform).hexdigest()}"
+    local_tag = "smartscan-uat-api:sha256-0123456789ab"
+    image = {"source": f"ghcr.io/j4meshub/smartscan-api@{platform_digest}", "local_tag": local_tag}
+    record = {
+        "archive_format": "docker-image-archive-v1",
+        "platform_manifest": platform_digest,
+        "config_digest": config_digest,
+        "layers": [
+            {
+                "digest": layer_digest,
+                "diff_id": diff_id,
+                "media_type": "application/vnd.oci.image.layer.v1.tar+gzip",
+                "size": len(layer),
+            }
+        ],
+    }
+    config_name = f"{config_digest[7:]}.json"
+    layer_name = f"layers/{layer_digest[7:]}.tar.gz"
+    docker_manifest = json.dumps(
+        [{"Config": config_name, "RepoTags": [local_tag], "Layers": [layer_name]}],
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    archive = tmp_path / "fixed.docker.tar"
+    with tarfile.open(archive, "w") as bundle:
+        for name, value in (
+            ("manifest.json", docker_manifest),
+            (config_name, config),
+            ("smartscan-evidence/source.json", platform),
+            ("smartscan-evidence/platform-manifest.json", platform),
+            (layer_name, layer),
+        ):
+            member = tarfile.TarInfo(name)
+            member.size = len(value)
+            bundle.addfile(member, io.BytesIO(value))
+
+    uatctl.Controller._verify_uploaded_archive(image, record, archive)
 
 
 def test_state_file_never_contains_secret_values(tmp_path: Path) -> None:

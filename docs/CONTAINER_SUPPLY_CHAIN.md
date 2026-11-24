@@ -71,7 +71,7 @@ GHCR 首次创建的个人 Package 默认可能是私有。首次主线发布后
 
 ## 人工部署与回滚
 
-常规可稳定访问GHCR的环境仍可从 `smartscan-container-release-<提交 SHA>` Artifact取得中文发布清单并按digest拉取。当前共享UAT服务器改走OPS-001I独立OCI归档，不执行以下直接pull示例：
+常规可稳定访问GHCR的环境仍可从 `smartscan-container-release-<提交 SHA>` Artifact取得中文发布清单并按digest拉取。当前共享UAT服务器改走OPS-001I独立Docker image archive，不执行以下直接pull示例：
 
 ```text
 docker pull ghcr.io/j4meshub/smartscan-api@sha256:<digest>
