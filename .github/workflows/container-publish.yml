@@ -61,6 +61,17 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
       - name: 准备证据目录
         run: mkdir -p container-evidence
+      - name: 验证Worker视觉运行库
+        if: matrix.service == 'worker'
+        run: |
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            local/${{ matrix.image }}:${{ github.sha }} \
+            python -c "import cv2; import paddleocr; print('worker_visual_runtime=passed')"
       - name: 生成 SPDX JSON SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:

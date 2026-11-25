@@ -308,6 +308,53 @@ def main() -> None:
     assert repeated["already_complete"] is True
     assert controller._compose("ps", "-a", "-q", "migrate") == migrate_id
 
+    if os.environ.get("SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER") == "1":
+        release, _ = controller._fixed_release()
+        worker = next(item for item in release["images"] if item["service"] == "worker")
+        probe = controller.runner.run_result(
+            [
+                "/usr/bin/docker",
+                "run",
+                "--rm",
+                "--network",
+                "none",
+                "--read-only",
+                "--tmpfs",
+                "/tmp:rw,noexec,nosuid,nodev,size=32m",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                worker["local_tag"],
+                "python",
+                "-c",
+                "import cv2",
+            ],
+            timeout_seconds=60,
+        )
+        assert probe.returncode != 0
+        assert "libGL.so.1" in f"{probe.stdout}\n{probe.stderr}"
+        blocked = controller.status()
+        assert blocked["next_required"] == "core_started"
+        assert "core_started" not in blocked["completed"]
+        print(
+            json.dumps(
+                {
+                    "accepted_worker_runtime": "blocked_missing_libGL.so.1",
+                    "checkpoint": "migration-complete",
+                    "database": "healthy",
+                    "images": 6,
+                    "migration_target": "20261022_0024",
+                    "next_required": "new-worker-release-acceptance",
+                    "registry_access": False,
+                    "status": "passed_with_external_gate",
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+        return
+
     try:
         resumed = controller.resume_basic_uat()
     except uatctl.ControllerError:

@@ -21,6 +21,7 @@ MOUNT_UNIT_TEMPLATE = (
 SHARED_NGINX_TEMPLATE = (
     Path(__file__).parents[1] / "deploy" / "nginx" / "shared-8077-smartscan-location.conf.template"
 )
+WORKER_DOCKERFILE = Path(__file__).parents[1] / "services" / "worker" / "Dockerfile"
 
 
 def _write_changed(source: Path, target: Path, old: str, new: str) -> Path:
@@ -60,6 +61,12 @@ def test_valid_fixture_returns_secret_free_summary(tmp_path: Path) -> None:
     assert summary["secrets_included"] is False
     assert "ci-only-uat-database-password" not in serialized
     assert "SMARTSCAN_SECRET_KEY" not in serialized
+
+
+def test_worker_image_installs_required_headless_visual_runtime_library() -> None:
+    dockerfile = WORKER_DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "apt-get install -y --no-install-recommends libgl1" in dockerfile
 
 
 @pytest.mark.parametrize(

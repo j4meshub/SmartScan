@@ -91,8 +91,11 @@ jobs:
       - name: 使用Docker 29 containerd image store完成相同离线门禁
         env:
           SMARTSCAN_DOCKER29_CONTAINERD: "1"
+          SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER: "1"
         run: bash tools/ci_verify_uat_offline_docker.sh
-      - name: 使用独立无网络传统Docker daemon验证当前断点至迁移前门禁
+      - name: 使用独立无网络传统Docker daemon验证迁移与既知Worker候选阻塞
+        env:
+          SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER: "1"
         run: bash tools/ci_verify_uat_offline_docker.sh
       - name: 验证Compose完全禁止拉取
         run: |

@@ -263,7 +263,7 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl resume-basic-uat
 
 传统daemon仍要求Image ID等于Config digest；containerd模式必须满足“实际Image ID = Descriptor digest = 重算schema2 digest”。因此没有删除Image ID比较，也没有把containerd生成的本地RepoDigest伪装成源Registry RepoDigest。`image-identities.json`使用1.1契约同时记录源内容字段和实际运行时身份，所有权应用前再次验证。
 
-CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containerd image store再执行一次六镜像连续导入、UID/GID探测、身份文件、所有权及PostgreSQL健康。OPS-001M把两条路径继续扩展到空库迁移`20261022_0024`、两个CPU Worker心跳、API/Web/18082健康，并在Nginx激活前停止；Compose仍固定`pull_policy: never`。
+CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containerd image store再执行一次六镜像连续导入、UID/GID探测、身份文件、所有权及PostgreSQL健康。OPS-001M已把两条路径扩展到空库迁移`20261022_0024`；首次完整核心续接发现接受的Worker候选缺少`libGL.so.1`，API与内层Web健康但两个CPU Worker失败关闭。仓库已修复Worker运行库并增加无网络只读启动检查；新固定digest和发布映射经用户接受前，CI明确停在迁移完成门禁，不把当前候选写成核心健康。Compose仍固定`pull_policy: never`。
 
 ## 回滚
 
