@@ -816,3 +816,12 @@
 - 安全边界：命令表不接受路径、用户、动作或额外参数；不得使用`shell=True`、字符串拼接或通用sudo。部署准备配置校验继续直接调用固定Python工具，Docker身份探测继续使用固定无网络容器参数，Nginx继续使用固定绝对命令和显式人工确认，它们不经过旧执行器桥接。
 - 续接：升级控制器不得删除或重写`uatctl-state.json`。现场预期可从`verify-storage`继续，但`completed=[preflight]`仅是源码推断，升级后必须先以真实`status`确认；已完成`preflight`不重复执行，依赖不满足仍失败关闭。
 - 验证：除单元和状态机回归外，GitHub Ubuntu Runner使用真实sudo和非root用户验证两层`SUDO_USER/SUDO_COMMAND`、正确调用、错误用户/命令/参数、缺sudoers、异常退出与固定超时。旧执行器仓库字节由固定SHA-256回归锁定；CI探针不接触真实loop或模型数据。
+
+## D-109：统一控制器日常验证改为进程内结构化契约
+
+- 日期：2026-11-25
+- 状态：已确认；OPS-001K进行中
+- 现场证据：OPS-001J升级后，真实`status`确认`preflight`已完成；原生loop验证随后通过并写入`storage_verified`。旧OCR执行器的`verify`实际成功，但其JSON包含合法空格，统一控制器以固定字符串片段判断而误报失败。`models_verified`没有写入，配置、发布接受、镜像导入、身份、所有权、数据库、迁移和Nginx均未执行。
+- 决策：D-108的失败证据和旧执行器保持不变原则继续有效，但“双层sudo作为正常状态机验证路径”被本决策取代。统一控制器直接调用只读Python验证函数，结果以`passed/reason_code/evidence_summary/next_state`结构传递，不解析stdout、不伪造sudo环境，也不增加格式化、重建、模型安装、Secret轮换或删除能力。
+- 验证边界：存储验证固定loop/ext4/systemd/容量事实；模型验证固定版本、文件集合、逐文件摘要、来源许可和文件安全；配置验证固定证据、六镜像、网络、资源、端口、Secret存在性与外部服务关闭。严格JSON解析拒绝重复键、尾随内容、非UTF-8、超大输入和错误类型，但合法空白、缩进及字段顺序不影响结果；Secret值不进入输出。
+- 兼容与CI：现场状态文件不迁移、不重置，升级后必须以真实`status`从`storage_verified`续接。Linux隔离daemon从该断点真实执行模型/配置验证、六归档导入、本地Tag/image ID、无网络身份探测、身份文件、所有权和PostgreSQL健康，并在不可逆迁移前返回等待确认。旧loop/OCR/部署准备执行器及sudoers继续作为低频初始化或维护工具，摘要回归锁定。

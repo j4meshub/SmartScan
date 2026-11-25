@@ -7,22 +7,23 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001J` 统一控制器复用旧执行器兼容修复 |
-| 工作包状态 | 仓库完成、等待人工升级；PR #111全部适用CI通过，服务器仍是旧控制器，未执行任何自动升级 |
-| 当前分支 | `codex/ops-001j-legacy-executor-compat` |
-| 最后验证基线 | OPS-001I发布映射和六归档已接受、上传并复核；统一控制器已人工安装。现场只确认`preflight`成功与`verify-storage`失败，未把源码推断的状态冒充现场`status` |
-| 工作包提交 | `0af45a5`（功能、测试和文档）；最终证据提交见PR #111 |
-| PR | [#111](https://github.com/j4meshub/SmartScan/pull/111)，代码头首轮六组工作流全部成功；待最终文档提交复核后合并 |
-| 下一工作包 | OPS-001J合并后由共同使用人只替换统一控制器包装器和Python辅助工具；确认旧状态文件未变后，从`verify-storage`继续，仍不自动迁移或激活Nginx |
+| 当前工作包 | `OPS-001K` 统一控制器内聚验证重构 |
+| 工作包状态 | 进行中；仓库实现和CI验证中，PR合并前不连接服务器 |
+| 当前分支 | `codex/ops-001k-native-validation` |
+| 最后验证基线 | 现场真实完成`preflight`与`storage_verified`；旧OCR执行器验证成功但控制器字符串解析误判，后续步骤均未执行 |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | OPS-001K合并后仅人工升级包装器、控制器和内聚验证模块；先读取真实`status`，再从`models_verified`门禁继续，迁移和Nginx仍不自动执行 |
 
 ## 当前工作包进展
 
-- 统一控制器已由共同使用人人工安装，初始脱敏`status`为`completed=[]`、`next_required=preflight`；随后`preflight`成功。首次`verify-storage`返回`command_failed:smartscan-uat-loop-storage`，原因是控制器以root直接调用旧loop执行器，旧执行器看到的`SUDO_COMMAND`仍是外层`smartscan-uatctl`。`verify-models`尚未执行，但具有相同调用契约风险。
-- 失败发生在任何镜像导入、身份探测、所有权、数据库、迁移、核心服务或Nginx操作之前。预期状态为仅记录`preflight`，但未重新读取现场`status`，文档不得将该源码推断写成现场事实。
-- OPS-001J保持旧loop/OCR执行器、sudoers和固定摘要不变；统一控制器改为root先固定切换到原始用户`szhzx`，再由该用户通过旧sudoers执行内层精确命令。调用使用参数数组、固定绝对路径、清空环境、30秒超时和脱敏失败，禁止伪造`SUDO_USER/SUDO_COMMAND`。
-- 本工作包未连接或修改服务器。升级只涉及统一控制器包装器与Python辅助工具；现有状态文件、旧执行器、配置、Secret、网络、归档和OCR模型均不修改。
-- 本地专项`32 passed`，Ruff检查和193个Python文件格式通过；全量Python为`638 passed, 37 skipped`、覆盖率87.74%，独立空SQLite完成全部迁移并通过漂移检查。Windows本机没有bash与Docker，真实sudo双层调用、Compose和离线Docker回归由PR的Ubuntu作业完成，不把本机缺少工具写成门禁通过。
-- PR #111首轮全部六组工作流成功：新增真实sudo作业通过；Ubuntu/Windows专项、六镜像完全断网导入、API/PostgreSQL迁移、Web、Android、iOS、容器、PostgreSQL与OCR供应链均通过。该证据只完成仓库门禁，不代表服务器控制器已经升级。
+- OPS-001J已合并并由共同使用人人工升级。现场随后实际确认`completed`包含`preflight`，并成功执行原生存储验证，状态写入`storage_verified`。旧OCR执行器的验证本身成功，但输出为带合法空格的JSON；统一控制器使用紧耦合字符串片段判断，误报`model_verify_failed`，没有记录`models_verified`。
+- 当前现场状态预计为`completed=[preflight,storage_verified]`且下一项为`models_verified`，但这是基于状态写入顺序的源码推断；OPS-001K升级后仍必须以真实`status`确认，不能把推断冒充现场证据。镜像、身份文件、所有权、PostgreSQL、迁移、核心服务和Nginx均未执行。
+- OPS-001K新增内聚只读验证模块，存储、模型和配置均返回结构化Python结果；正常部署路径不再调用旧loop/OCR/部署准备执行器，也不解析stdout或执行双层sudo。旧执行器和sudoers保持原字节，继续供低频初始化、修复和维护。
+- 严格输入处理拒绝重复JSON键、尾随内容、非UTF-8、超大输入、错误类型、链接、额外文件、摘要和权限漂移；合法JSON空格、缩进和字段顺序不影响结果。Secret只验证存在性、权限及长度/格式，值不输出。
+- Linux隔离daemon CI从当前`preflight+storage_verified`断点续接，要求真实完成模型/配置验证、发布接受、六归档导入、本地不可变Tag/image ID、无网络UID/GID探测、身份文件、所有权和PostgreSQL健康，并在`run-migrations`前停止；同时保留无Registry访问和不影响哨兵网络的断言。
+- 本工作包仓库开发期间不连接或修改`smartscan-server`，不重试`verify-models`，不导入镜像、不改状态、不启动数据库、不迁移也不修改Nginx。
+- 本地专项为`41 passed`；全量Python为`647 passed, 37 skipped`，覆盖率87.74%，Ruff检查和格式检查通过。首次迁移漂移检查命中未升级的本机旧开发库而按预期失败；改用独立空SQLite完成全部迁移后，漂移结果为`No new upgrade operations detected`。Windows没有Docker，Compose解析和六归档隔离daemon完整状态机由PR的Ubuntu作业执行，未把本机缺少Docker记录为通过。
 
 - 用户已明确接受PR #106、主线`d41be181`、发布清单摘要和六个归档的精确大小/摘要；该接受不允许后续构建、Tag或新digest替换。真实main工作树已从干净状态以`--ff-only`同步到该提交，远程仍只有GitHub `origin`，本机可用空间约18.5 GiB。
 - 按需工作流`45354251007`只在`d41be181`上运行，Ubuntu/Windows专项、六归档生成、传统daemon完全断网导入、身份探测、Compose禁止拉取和7组Artifact上传全部成功。Artifact与发布映射仍绑定用户接受的六个归档，没有更换来源或digest。

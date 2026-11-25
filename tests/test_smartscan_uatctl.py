@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from deploy.ops import smartscan_uat_validators as validators
 from deploy.ops import smartscan_uatctl as uatctl
 
 TEST_UID = os.getuid() if hasattr(os, "getuid") else 0
@@ -52,6 +53,24 @@ class FakeRunner:
         return ""
 
 
+class FakeValidator:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def _result(self, name: str) -> validators.ValidationResult:
+        self.calls.append(name)
+        return validators.ValidationResult.success(evidence={"validator": name}, next_state=name)
+
+    def verify_storage(self) -> validators.ValidationResult:
+        return self._result("storage_verified")
+
+    def verify_models(self) -> validators.ValidationResult:
+        return self._result("models_verified")
+
+    def verify_config(self) -> validators.ValidationResult:
+        return self._result("config_verified")
+
+
 def _paths(tmp_path: Path) -> uatctl.Paths:
     config = tmp_path / "etc" / "smartscan" / "uat"
     data = tmp_path / "mnt" / "data" / "smartscan" / "uat"
@@ -64,9 +83,7 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
     for name in (
         "docker-compose.uat.yml",
         "shared-8077-smartscan-location.conf",
-        "smartscan-uat-config",
-        "smartscan-uat-loop-storage",
-        "smartscan-uat-ocr-model",
+        "smartscan_uat_validators.py",
     ):
         (libexec / name).write_text("fixed", encoding="utf-8")
     return uatctl.Paths(
@@ -85,9 +102,7 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
         active_nginx=tmp_path / "etc" / "nginx" / "snippets" / "smartscan-uat-8077.locations.conf",
         compose_file=libexec / "docker-compose.uat.yml",
         nginx_template=libexec / "shared-8077-smartscan-location.conf",
-        config_helper=libexec / "smartscan-uat-config",
-        loop_executor=libexec / "smartscan-uat-loop-storage",
-        model_executor=libexec / "smartscan-uat-ocr-model",
+        validator_module=libexec / "smartscan_uat_validators.py",
     )
 
 
@@ -122,7 +137,7 @@ def test_preflight_is_idempotent_and_rejects_missing_network(
         {
             "docker-compose.uat.yml": fixed_hash,
             "shared-8077-smartscan-location.conf": fixed_hash,
-            "smartscan-uat-config": fixed_hash,
+            "smartscan_uat_validators.py": fixed_hash,
         },
     )
     runner = FakeRunner()
@@ -156,63 +171,47 @@ def test_state_machine_rejects_skipping_release_and_import(tmp_path: Path) -> No
         controller.start_core()
 
 
-def test_legacy_executors_use_fixed_double_sudo_and_minimal_environment(tmp_path: Path) -> None:
+def test_native_validators_are_structured_and_do_not_spawn_legacy_executors(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     runner = FakeRunner()
-    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    validator = FakeValidator()
+    controller = uatctl.Controller(
+        paths,
+        runner,
+        root_uid=TEST_UID,
+        deploy_uid=TEST_UID,
+        validator=validator,
+    )
 
+    controller._record("preflight")
     controller.verify_storage()
     controller.verify_models()
+    controller.verify_config()
 
-    prefix = [
-        "/usr/bin/sudo",
-        "-n",
-        "-u",
-        "szhzx",
-        "--",
-        "/usr/bin/env",
-        "-i",
-        "PATH=/usr/sbin:/usr/bin:/sbin:/bin",
-        "LANG=C",
-        "LC_ALL=C",
-        "/usr/bin/sudo",
-        "-n",
-    ]
-    assert runner.calls == [
-        [*prefix, str(paths.loop_executor), "verify"],
-        [*prefix, str(paths.model_executor), "verify"],
-        [*prefix, str(paths.model_executor), "status"],
-    ]
-    assert all(
-        options
-        == {
-            "check": True,
-            "timeout_seconds": uatctl.LEGACY_EXECUTOR_TIMEOUT_SECONDS,
-            "environment": {
-                "PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
-                "LANG": "C",
-                "LC_ALL": "C",
-            },
-        }
-        for options in runner.call_options
-    )
-    assert not any(
-        "SUDO_USER=" in item or "SUDO_COMMAND=" in item for call in runner.calls for item in call
-    )
-
-
-def test_legacy_executor_rejects_unknown_command(tmp_path: Path) -> None:
-    controller = uatctl.Controller(
-        _paths(tmp_path), FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID
-    )
-    with pytest.raises(uatctl.ControllerError, match="legacy_executor_command_not_allowed"):
-        controller._run_legacy_executor("custom")
+    assert validator.calls == ["storage_verified", "models_verified", "config_verified"]
+    assert runner.calls == []
+    source = Path(uatctl.__file__).read_text(encoding="utf-8")
+    for forbidden in (
+        "smartscan-uat-loop-storage",
+        "smartscan-uat-ocr-model",
+        "smartscan-uat-deployment-preparation",
+        "_run_legacy_executor",
+        "SUDO_COMMAND=",
+        "SUDO_USER=",
+    ):
+        assert forbidden not in source
 
 
 def test_upgrade_continues_after_preflight_without_repeating_it(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     runner = FakeRunner()
-    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller = uatctl.Controller(
+        paths,
+        runner,
+        root_uid=TEST_UID,
+        deploy_uid=TEST_UID,
+        validator=FakeValidator(),
+    )
     controller._record("preflight")
     before_history = list(controller._state()["history"])
 
@@ -226,6 +225,36 @@ def test_upgrade_continues_after_preflight_without_repeating_it(tmp_path: Path) 
     assert all("network" not in item for call in runner.calls for item in call)
     with pytest.raises(uatctl.ControllerError, match="state_prerequisite_missing"):
         controller.accept_release()
+
+
+def test_current_storage_checkpoint_survives_model_failure_and_resumes(tmp_path: Path) -> None:
+    class FailingValidator(FakeValidator):
+        def verify_models(self) -> validators.ValidationResult:
+            raise validators.ValidationError("model_fixture_changed")
+
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(
+        paths,
+        FakeRunner(),
+        root_uid=TEST_UID,
+        deploy_uid=TEST_UID,
+        validator=FailingValidator(),
+    )
+    controller._record("preflight")
+    controller._record("storage_verified")
+
+    with pytest.raises(uatctl.ControllerError, match="model_fixture_changed"):
+        controller.verify_models()
+    assert controller.status()["completed"] == ["preflight", "storage_verified"]
+    assert controller.status()["next_required"] == "models_verified"
+
+    controller.validator = FakeValidator()
+    controller.verify_models()
+    assert controller.status()["completed"] == [
+        "preflight",
+        "storage_verified",
+        "models_verified",
+    ]
 
 
 def test_subprocess_runner_fails_closed_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -320,23 +349,10 @@ def test_identity_probe_uses_no_network_no_mount_no_secret_and_limits(tmp_path: 
     assert not any("env" in item.casefold() or "mount" in item.casefold() for item in command)
 
 
-def test_config_probe_and_nginx_paths_do_not_reuse_legacy_sudo_bridge(tmp_path: Path) -> None:
+def test_identity_probe_and_nginx_paths_do_not_use_legacy_executor_bridge(tmp_path: Path) -> None:
     source = Path(uatctl.__file__).read_text(encoding="utf-8")
     assert "deployment-preparation" not in source
-    assert source.count("_run_legacy_executor(") == 4  # 定义及三个固定调用
-
-    controller = uatctl.Controller(
-        _paths(tmp_path), FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID
-    )
-    controller.runner.outputs[
-        ("/usr/bin/python3", str(controller.paths.config_helper), "verify")
-    ] = '{"status":"passed"}'
-    controller.verify_config()
-    assert controller.runner.calls[-1] == [
-        "/usr/bin/python3",
-        str(controller.paths.config_helper),
-        "verify",
-    ]
+    assert "_run_legacy_executor" not in source
 
     # Docker身份探测和Nginx命令继续由控制器用固定参数列表直接执行。
     assert "shell=True" not in source
@@ -351,6 +367,7 @@ def test_wrapper_and_sudoers_reject_parameters_shell_prune_and_wildcards() -> No
     sudoers = (root / "deploy/sudoers/smartscan-uatctl").read_text(encoding="utf-8")
     assert '[[ "$#" -eq 1 ]]' in wrapper
     assert _repository_lf_sha256(helper) in wrapper
+    assert _repository_lf_sha256(root / "deploy/ops/smartscan_uat_validators.py") in wrapper
     assert "sudo bash" not in sudoers and "sudo sh" not in sudoers
     assert "*" not in sudoers
     assert "prune" not in wrapper and "down -v" not in wrapper
@@ -383,6 +400,7 @@ def test_installation_guide_pins_all_controller_assets() -> None:
     for relative in (
         "deploy/ops/smartscan-uatctl",
         "deploy/ops/smartscan_uatctl.py",
+        "deploy/ops/smartscan_uat_validators.py",
         "deploy/sudoers/smartscan-uatctl",
         "deploy/compose/docker-compose.uat.yml",
         "deploy/nginx/shared-8077-smartscan-location.conf.template",
@@ -416,8 +434,11 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "--bridge=none" in script
     assert "--iptables=false" in script
     assert "DOCKER_HOST" in script
-    assert "docker load" in script
-    assert "--network none" in script
+    assert "ci_verify_uatctl_checkpoint.py" in script
+    assert 'state_machine":"migration_confirmation' in script
+    controller = (root / "deploy/ops/smartscan_uatctl.py").read_text(encoding="utf-8")
+    assert '"load",' in controller
+    assert '"none",' in controller
     assert "config --format json" in workflow
     assert 'item.get("pull_policy") == "never"' in workflow
 
