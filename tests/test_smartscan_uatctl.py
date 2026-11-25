@@ -17,19 +17,36 @@ TEST_UID = os.getuid() if hasattr(os, "getuid") else 0
 class FakeRunner:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
+        self.call_options: list[dict[str, object]] = []
         self.outputs: dict[tuple[str, ...], str] = {}
 
-    def run(self, arguments: list[str], *, check: bool = True) -> str:
+    def run(
+        self,
+        arguments: list[str],
+        *,
+        check: bool = True,
+        timeout_seconds: int | None = None,
+        environment: dict[str, str] | None = None,
+    ) -> str:
         self.calls.append(arguments)
+        self.call_options.append(
+            {
+                "check": check,
+                "timeout_seconds": timeout_seconds,
+                "environment": environment,
+            }
+        )
         key = tuple(arguments)
         if key in self.outputs:
             return self.outputs[key]
         if arguments[:4] == ["/usr/bin/docker", "network", "ls", "--format"]:
             return "smartscan-uat-data\nsmartscan-uat-edge\nsmartscan-uat-egress"
-        if arguments[-1:] == ["verify"] and "loop" in arguments[0]:
+        if arguments[-1:] == ["verify"] and any("loop" in item for item in arguments):
             return "status=passed"
-        if arguments[-1:] == ["verify"] and "ocr" in arguments[0]:
+        if arguments[-1:] == ["verify"] and any("ocr" in item for item in arguments):
             return '{"status":"passed"}'
+        if arguments[-1:] == ["status"] and any("ocr" in item for item in arguments):
+            return '{"installed":true,"status":"passed"}'
         if arguments[-1:] == ["verify"] and "config" in arguments[1]:
             return '{"status":"passed"}'
         return ""
@@ -139,6 +156,87 @@ def test_state_machine_rejects_skipping_release_and_import(tmp_path: Path) -> No
         controller.start_core()
 
 
+def test_legacy_executors_use_fixed_double_sudo_and_minimal_environment(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+
+    controller.verify_storage()
+    controller.verify_models()
+
+    prefix = [
+        "/usr/bin/sudo",
+        "-n",
+        "-u",
+        "szhzx",
+        "--",
+        "/usr/bin/env",
+        "-i",
+        "PATH=/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG=C",
+        "LC_ALL=C",
+        "/usr/bin/sudo",
+        "-n",
+    ]
+    assert runner.calls == [
+        [*prefix, str(paths.loop_executor), "verify"],
+        [*prefix, str(paths.model_executor), "verify"],
+        [*prefix, str(paths.model_executor), "status"],
+    ]
+    assert all(
+        options
+        == {
+            "check": True,
+            "timeout_seconds": uatctl.LEGACY_EXECUTOR_TIMEOUT_SECONDS,
+            "environment": {
+                "PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
+                "LANG": "C",
+                "LC_ALL": "C",
+            },
+        }
+        for options in runner.call_options
+    )
+    assert not any(
+        "SUDO_USER=" in item or "SUDO_COMMAND=" in item for call in runner.calls for item in call
+    )
+
+
+def test_legacy_executor_rejects_unknown_command(tmp_path: Path) -> None:
+    controller = uatctl.Controller(
+        _paths(tmp_path), FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID
+    )
+    with pytest.raises(uatctl.ControllerError, match="legacy_executor_command_not_allowed"):
+        controller._run_legacy_executor("custom")
+
+
+def test_upgrade_continues_after_preflight_without_repeating_it(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller._record("preflight")
+    before_history = list(controller._state()["history"])
+
+    assert controller.status()["completed"] == ["preflight"]
+    assert controller.status()["next_required"] == "storage_verified"
+    controller.verify_storage()
+
+    state = controller._state()
+    assert state["completed"] == ["preflight", "storage_verified"]
+    assert state["history"][0] == before_history[0]
+    assert all("network" not in item for call in runner.calls for item in call)
+    with pytest.raises(uatctl.ControllerError, match="state_prerequisite_missing"):
+        controller.accept_release()
+
+
+def test_subprocess_runner_fails_closed_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def timeout(*args, **kwargs):
+        raise uatctl.subprocess.TimeoutExpired(args[0], kwargs.get("timeout"))
+
+    monkeypatch.setattr(uatctl.subprocess, "run", timeout)
+    with pytest.raises(uatctl.ControllerError, match="command_timeout:sudo"):
+        uatctl.SubprocessRunner().run(["/usr/bin/sudo", "-n"], timeout_seconds=1)
+
+
 def test_resume_stops_at_irreversible_migration_confirmation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -222,6 +320,30 @@ def test_identity_probe_uses_no_network_no_mount_no_secret_and_limits(tmp_path: 
     assert not any("env" in item.casefold() or "mount" in item.casefold() for item in command)
 
 
+def test_config_probe_and_nginx_paths_do_not_reuse_legacy_sudo_bridge(tmp_path: Path) -> None:
+    source = Path(uatctl.__file__).read_text(encoding="utf-8")
+    assert "deployment-preparation" not in source
+    assert source.count("_run_legacy_executor(") == 4  # 定义及三个固定调用
+
+    controller = uatctl.Controller(
+        _paths(tmp_path), FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID
+    )
+    controller.runner.outputs[
+        ("/usr/bin/python3", str(controller.paths.config_helper), "verify")
+    ] = '{"status":"passed"}'
+    controller.verify_config()
+    assert controller.runner.calls[-1] == [
+        "/usr/bin/python3",
+        str(controller.paths.config_helper),
+        "verify",
+    ]
+
+    # Docker身份探测和Nginx命令继续由控制器用固定参数列表直接执行。
+    assert "shell=True" not in source
+    assert '["/usr/sbin/nginx", "-t"]' in source
+    assert '["/usr/sbin/nginx", "-s", "reload"]' in source
+
+
 def test_wrapper_and_sudoers_reject_parameters_shell_prune_and_wildcards() -> None:
     root = Path(__file__).parents[1]
     wrapper = (root / "deploy/ops/smartscan-uatctl").read_text(encoding="utf-8")
@@ -234,6 +356,25 @@ def test_wrapper_and_sudoers_reject_parameters_shell_prune_and_wildcards() -> No
     assert "prune" not in wrapper and "down -v" not in wrapper
     for command in uatctl.COMMANDS:
         assert f"smartscan-uatctl {command}" in sudoers
+
+
+def test_legacy_executors_and_sudoers_remain_byte_for_byte_unchanged() -> None:
+    root = Path(__file__).parents[1]
+    expected = {
+        "deploy/ops/smartscan-uat-loop-storage": (
+            "cce1e8040cae9d6ca0a43ed077b878820ae72aeab2a9285c44a129857f85f6a7"
+        ),
+        "deploy/sudoers/smartscan-uat-loop-storage": (
+            "486f13e2aba23e0c4d48a5ba853d824d0afdfb7faf623f5eff79b33fcabde550"
+        ),
+        "deploy/ops/smartscan-uat-ocr-model": (
+            "8623dfe1bdee24f143e1cc7ee2eee5b12ed17ee16873c374c887a4e2d3e914e2"
+        ),
+        "deploy/ops/smartscan-uat-ocr-model.sudoers": (
+            "e9604f687f6eb5fc336e369036ad010e2fa28a2a5f7d906bc6d52d2c70e3d282"
+        ),
+    }
+    assert {name: _repository_lf_sha256(root / name) for name in expected} == expected
 
 
 def test_installation_guide_pins_all_controller_assets() -> None:

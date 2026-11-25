@@ -12,6 +12,8 @@ on:
       - "deploy/sudoers/smartscan-uatctl"
       - "tests/test_smartscan_offline_images.py"
       - "tests/test_smartscan_uatctl.py"
+      - "tests/fixtures/uatctl/**"
+      - "tools/ci_verify_uatctl_nested_sudo.sh"
       - "tools/ci_verify_uat_offline_docker.sh"
       - "tools/smartscan_offline_images.py"
   workflow_dispatch:
@@ -155,3 +157,13 @@ jobs:
       - name: 清理Runner临时归档
         if: always()
         run: rm -rf .smartscan-offline-transfer
+
+  nested-sudo:
+    name: 统一控制器真实sudo兼容验证
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 验证双层受限sudo与失败关闭
+        run: sudo bash tools/ci_verify_uatctl_nested_sudo.sh "$GITHUB_WORKSPACE"

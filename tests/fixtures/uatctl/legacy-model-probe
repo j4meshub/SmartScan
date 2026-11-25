@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$EUID" -eq 0 ]] || exit 91
+[[ "${SUDO_USER:-}" == "szhzx" ]] || exit 92
+[[ "$#" -eq 1 ]] || exit 93
+[[ "${SUDO_COMMAND:-}" == "/usr/local/libexec/smartscan/smartscan-uat-ocr-model $1" ]] || exit 94
+case "$1" in
+  verify) printf '{"status":"passed"}\n' ;;
+  status) printf '{"installed":true,"status":"passed"}\n' ;;
+  *) exit 95 ;;
+esac

@@ -1,0 +1,1 @@
+szhzx ALL=(root) NOPASSWD: /usr/local/libexec/smartscan/smartscan-uatctl verify-storage, /usr/local/libexec/smartscan/smartscan-uatctl verify-models, /usr/local/libexec/smartscan/smartscan-uatctl status

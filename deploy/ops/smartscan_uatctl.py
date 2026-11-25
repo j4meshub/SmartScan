@@ -66,6 +66,15 @@ INSTALLED_ASSET_SHA256 = {
     "shared-8077-smartscan-location.conf": "500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227",
     "smartscan-uat-config": "58e750bd3217bf1c3fae6ac30c5d6cc50829b72d563016c580e2ad9d229787ab",
 }
+DEPLOY_USER = "szhzx"
+SUDO_BIN = "/usr/bin/sudo"
+ENV_BIN = "/usr/bin/env"
+LEGACY_EXECUTOR_TIMEOUT_SECONDS = 30
+LEGACY_MINIMAL_ENV = (
+    "PATH=/usr/sbin:/usr/bin:/sbin:/bin",
+    "LANG=C",
+    "LC_ALL=C",
+)
 
 
 class ControllerError(RuntimeError):
@@ -97,12 +106,36 @@ class Paths:
 
 
 class Runner(Protocol):
-    def run(self, arguments: list[str], *, check: bool = True) -> str: ...
+    def run(
+        self,
+        arguments: list[str],
+        *,
+        check: bool = True,
+        timeout_seconds: int | None = None,
+        environment: dict[str, str] | None = None,
+    ) -> str: ...
 
 
 class SubprocessRunner:
-    def run(self, arguments: list[str], *, check: bool = True) -> str:
-        process = subprocess.run(arguments, text=True, capture_output=True, check=False)
+    def run(
+        self,
+        arguments: list[str],
+        *,
+        check: bool = True,
+        timeout_seconds: int | None = None,
+        environment: dict[str, str] | None = None,
+    ) -> str:
+        try:
+            process = subprocess.run(
+                arguments,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=timeout_seconds,
+                env=environment,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ControllerError(f"command_timeout:{Path(arguments[0]).name}") from exc
         if check and process.returncode != 0:
             raise ControllerError(f"command_failed:{Path(arguments[0]).name}")
         return process.stdout.strip()
@@ -262,6 +295,35 @@ class Controller:
     def _require_steps(self, *names: str) -> None:
         completed = set(self._state().get("completed", []))
         _require(set(names).issubset(completed), f"state_prerequisite_missing:{','.join(names)}")
+
+    def _run_legacy_executor(self, command: str) -> str:
+        """通过固定原始用户和内层sudo保留旧执行器的授权语义。"""
+        commands = {
+            "storage_verify": (str(self.paths.loop_executor), "verify"),
+            "models_verify": (str(self.paths.model_executor), "verify"),
+            "models_status": (str(self.paths.model_executor), "status"),
+        }
+        _require(command in commands, "legacy_executor_command_not_allowed")
+        executable, action = commands[command]
+        arguments = [
+            SUDO_BIN,
+            "-n",
+            "-u",
+            DEPLOY_USER,
+            "--",
+            ENV_BIN,
+            "-i",
+            *LEGACY_MINIMAL_ENV,
+            SUDO_BIN,
+            "-n",
+            executable,
+            action,
+        ]
+        return self.runner.run(
+            arguments,
+            timeout_seconds=LEGACY_EXECUTOR_TIMEOUT_SECONDS,
+            environment={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C", "LC_ALL": "C"},
+        )
 
     def _fixed_release(self, *, uploaded: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
         metadata_root = self.paths.upload_root if uploaded else self.paths.config_root
@@ -535,15 +597,24 @@ class Controller:
         return self._record("preflight")
 
     def verify_storage(self) -> dict[str, Any]:
-        output = self.runner.run([str(self.paths.loop_executor), "verify"])
+        output = self._run_legacy_executor("storage_verify")
         _require(
             "status=passed" in output or '"status":"passed"' in output, "storage_verify_failed"
         )
         return self._record("storage_verified")
 
     def verify_models(self) -> dict[str, Any]:
-        output = self.runner.run([str(self.paths.model_executor), "verify"])
+        output = self._run_legacy_executor("models_verify")
         _require("status=passed" in output or '"status":"passed"' in output, "model_verify_failed")
+        status = self._run_legacy_executor("models_status")
+        try:
+            document = json.loads(status)
+        except json.JSONDecodeError as exc:
+            raise ControllerError("model_status_invalid") from exc
+        _require(
+            document.get("installed") is True and document.get("status") == "passed",
+            "model_status_failed",
+        )
         return self._record("models_verified")
 
     def verify_config(self) -> dict[str, Any]:

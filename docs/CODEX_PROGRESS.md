@@ -1,21 +1,28 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-24
+更新时间：2026-11-25
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001I` UAT离线制品准备与控制器人工安装门禁 |
-| 工作包状态 | 等待人工验收；六归档与两份映射已在服务器固定目录完成普通用户上传和摘要复核，六个控制器安装资产已按规范LF字节暂存，尚未执行任何sudo安装或控制器命令 |
-| 当前分支 | `codex/ops-001i-artifact-preparation-evidence` |
-| 最后验证基线 | 按需运行`45354251007`成功；本机六归档`download/verify/status`通过；服务器八个离线文件和六个安装资产均为固定普通文件、摘要一致且无`.part`；PR #109共22项检查全部通过 |
-| 工作包提交 | OPS-001I为`d41be181`；下载兼容修复为`2e6234c`、`69b6f05`；Windows SSH上传修复由PR #109合并为`14bb724` |
-| PR | [#106](https://github.com/j4meshub/SmartScan/pull/106)、[#107](https://github.com/j4meshub/SmartScan/pull/107)、[#108](https://github.com/j4meshub/SmartScan/pull/108)与[#109](https://github.com/j4meshub/SmartScan/pull/109)已合并；本次仅提交脱敏现场证据 |
-| 下一工作包 | 由共同使用人一次性安装统一控制器五个运行资产和sudoers，执行`status`；之后须单独授权`accept-release`与迁移前停止的首次`resume-basic-uat`，本轮未导入镜像或启动服务 |
+| 当前工作包 | `OPS-001J` 统一控制器复用旧执行器兼容修复 |
+| 工作包状态 | 仓库完成、等待人工升级；PR #111全部适用CI通过，服务器仍是旧控制器，未执行任何自动升级 |
+| 当前分支 | `codex/ops-001j-legacy-executor-compat` |
+| 最后验证基线 | OPS-001I发布映射和六归档已接受、上传并复核；统一控制器已人工安装。现场只确认`preflight`成功与`verify-storage`失败，未把源码推断的状态冒充现场`status` |
+| 工作包提交 | `0af45a5`（功能、测试和文档）；最终证据提交见PR #111 |
+| PR | [#111](https://github.com/j4meshub/SmartScan/pull/111)，代码头首轮六组工作流全部成功；待最终文档提交复核后合并 |
+| 下一工作包 | OPS-001J合并后由共同使用人只替换统一控制器包装器和Python辅助工具；确认旧状态文件未变后，从`verify-storage`继续，仍不自动迁移或激活Nginx |
 
 ## 当前工作包进展
+
+- 统一控制器已由共同使用人人工安装，初始脱敏`status`为`completed=[]`、`next_required=preflight`；随后`preflight`成功。首次`verify-storage`返回`command_failed:smartscan-uat-loop-storage`，原因是控制器以root直接调用旧loop执行器，旧执行器看到的`SUDO_COMMAND`仍是外层`smartscan-uatctl`。`verify-models`尚未执行，但具有相同调用契约风险。
+- 失败发生在任何镜像导入、身份探测、所有权、数据库、迁移、核心服务或Nginx操作之前。预期状态为仅记录`preflight`，但未重新读取现场`status`，文档不得将该源码推断写成现场事实。
+- OPS-001J保持旧loop/OCR执行器、sudoers和固定摘要不变；统一控制器改为root先固定切换到原始用户`szhzx`，再由该用户通过旧sudoers执行内层精确命令。调用使用参数数组、固定绝对路径、清空环境、30秒超时和脱敏失败，禁止伪造`SUDO_USER/SUDO_COMMAND`。
+- 本工作包未连接或修改服务器。升级只涉及统一控制器包装器与Python辅助工具；现有状态文件、旧执行器、配置、Secret、网络、归档和OCR模型均不修改。
+- 本地专项`32 passed`，Ruff检查和193个Python文件格式通过；全量Python为`638 passed, 37 skipped`、覆盖率87.74%，独立空SQLite完成全部迁移并通过漂移检查。Windows本机没有bash与Docker，真实sudo双层调用、Compose和离线Docker回归由PR的Ubuntu作业完成，不把本机缺少工具写成门禁通过。
+- PR #111首轮全部六组工作流成功：新增真实sudo作业通过；Ubuntu/Windows专项、六镜像完全断网导入、API/PostgreSQL迁移、Web、Android、iOS、容器、PostgreSQL与OCR供应链均通过。该证据只完成仓库门禁，不代表服务器控制器已经升级。
 
 - 用户已明确接受PR #106、主线`d41be181`、发布清单摘要和六个归档的精确大小/摘要；该接受不允许后续构建、Tag或新digest替换。真实main工作树已从干净状态以`--ff-only`同步到该提交，远程仍只有GitHub `origin`，本机可用空间约18.5 GiB。
 - 按需工作流`45354251007`只在`d41be181`上运行，Ubuntu/Windows专项、六归档生成、传统daemon完全断网导入、身份探测、Compose禁止拉取和7组Artifact上传全部成功。Artifact与发布映射仍绑定用户接受的六个归档，没有更换来源或digest。
@@ -25,16 +32,16 @@
 - PR #108全部适用CI通过并合并为`69b6f05`。同一固定下载会话从既有断点续接，最终六个归档、发布清单和映射均完成；独立`verify/status`通过，六归档合计917,084,160字节，目录无`.part`，Git工作区保持干净。
 - 首次执行固定`upload`在服务器写入前返回脱敏`command_failed:ssh`。只读复核确认可信主机身份不变且固定上传目录仍不存在；根因是Windows OpenSSH会重新拼接`ssh host sh -c <脚本>`的远端参数，导致脚本未作为一个`-c`参数传递。修复把每个受限远端操作作为单一OpenSSH远端命令参数，继续固定服务器、路径、摘要和原子改名，不增加自定义命令能力。
 - PR #109共22项检查全部通过并合并为`14bb724`。合并后的固定工具只连接唯一SSH别名，成功上传六归档和两份发布元数据；服务器侧逐文件大小及SHA-256与接受映射一致，固定目录为部署用户所有、0700，八个文件均为普通文件、0600、硬链接数1，未遗留`.part`或异常文件。
-- 统一控制器安装资产从接受提交`d41be181`的Git对象直接导出，避免Windows工作树换行改变摘要。包装器、Python辅助工具、sudoers、UAT Compose、共享Nginx模板和发布清单共六个文件已进入固定普通用户暂存目录；目录0700、文件0600、硬链接数1，摘要与PR #106文档一致且无`.part`。本轮没有使用sudo安装、执行控制器、导入镜像、身份探测、生成镜像身份、启动数据库/应用、迁移或修改Nginx。
+- OPS-001I制品准备阶段从接受提交`d41be181`的Git对象导出六个安装资产，避免Windows换行改变摘要；随后共同使用人已人工安装并验证统一控制器。该次安装没有导入镜像、生成身份、启动数据库/应用、迁移或修改Nginx。
 - 用户决定停止服务器直接`docker pull`路线，`OPS-001H`按真实失败证据标记为被替代。当前六个已接受源digest保持不变；新方案不使用Tag、镜像站或代理，也不清理daemon可能保留的部分Layer缓存。
 - 新增审核发布清单、通用离线工具、六个独立Docker image archive工作流和源index/manifest→`linux/amd64` manifest→config/layer→归档SHA→image ID→本地不可变Tag映射。首轮CI证明纯OCI layout只被主Runner的新镜像存储接受、传统独立daemon以缺少`manifest.json`拒绝；归档因此改为兼容Docker load且内嵌原Registry证据的格式。Compose改用独立`local-images.env`及`pull_policy: never`，不伪造离线导入后不会保留的Registry RepoDigest。
-- PR专项最终在无外部接口的独立Docker daemon中逐一导入六个归档，全部本地Tag与预期image ID一致，受限UID/GID探测成功；八个Compose服务均解析为本地不可变Tag和`pull_policy: never`。六归档合计917,084,160字节（874.60 MiB），精确逐件摘要已获用户接受，但仍未完整下载、上传或导入服务器。
+- PR专项最终在无外部接口的独立Docker daemon中逐一导入六个归档，全部本地Tag与预期image ID一致，受限UID/GID探测成功；八个Compose服务均解析为本地不可变Tag和`pull_policy: never`。六归档合计917,084,160字节（874.60 MiB），精确逐件摘要已获用户接受并完成本机下载、服务器普通用户上传和摘要复核；尚未执行服务器`docker load`。
 - 最终代码头`23632cd`的PR六组工作流全部成功：常规CI完成API全量测试、迁移漂移、Web、Android、固定Xcode iOS和容器门禁；离线交付作业再次完成六归档生成、传统daemon完全断网导入、固定image ID/本地Tag、UID/GID探测及Compose离线解析；PostgreSQL、OCR模型、OCR Layer和五应用镜像供应链检查亦全部通过。
 - PR验证依次暴露并修复三类交付兼容问题：关键root资产新增LF约束并改用规范字节摘要；纯OCI layout被传统daemon拒绝后改为内嵌原Registry证据的Docker image archive；Compose验证改为固定运行夹具和结构化JSON断言。最后一次通用Linux Ruff还发现Windows创建的带shebang工具缺少Git可执行位，现固定为`100755`。所有失败均保留原因，没有放宽digest、完全断网、身份探测或禁止拉取门禁。
 - 新增一次性安装的`smartscan-uatctl`状态机和精确sudoers。控制器验证既有loop、OCR和配置结果；固定完成发布接受、导入、无网络UID/GID探测、身份记录、所有权、数据库和核心服务续接，并在不可逆迁移及共享Nginx激活前停止等待单独确认。删除、清理、`prune`、`down -v`和任意shell不在授权范围。
 - 为保持现场信任链，旧`smartscan-uat-config`及其执行器没有修改；离线映射和所有权验证完全由新控制器承担。首次专项发现的旧辅助工具摘要回归已修复，最终UAT/治理专项`94 passed, 5 skipped`。
 - Ruff检查及192个Python文件格式通过；最终全量Python为`628 passed, 37 skipped`、覆盖率87.74%。迁移漂移首次误用了本机未升级旧SQLite而失败，改用独立空库执行upgrade后drift通过且临时库已删除。Windows本机没有Docker CLI，Compose真实解析、六镜像归档/load和Linux权限证据由PR Runner补齐，不能在本地伪记为通过。
-- 本工作包尚未连接`smartscan-server`，没有重试pull、上传/导入镜像、创建临时容器、改变三张网络、执行所有权、启动数据库/应用、迁移或修改Nginx。
+- OPS-001J本轮不连接`smartscan-server`，不重试pull、不导入镜像、不创建临时容器、不改变三张网络、不执行所有权、不启动数据库/应用、不迁移也不修改Nginx。
 
 - OPS-001H拉取前通过唯一SSH别名核对可信主机身份、Docker 29.0.2读取权限、三张固定网络契约和零端点、18082空闲及共租户状态。Docker根文件系统约690.2 GiB可用；容器90个、运行57个、无unhealthy或restarting。六个接受的精确引用均未完整存在于本地缓存。
 - 严格按顺序只对第一个PostgreSQL固定digest发起一次`docker pull`。原始SSH执行会话持续保留并轮询，期间只读确认服务器仅有1个匹配pull客户端；没有因为工具yield或长时间无输出发起第二个pull。

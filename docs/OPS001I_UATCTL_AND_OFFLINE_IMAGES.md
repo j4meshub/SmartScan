@@ -94,6 +94,8 @@ PR #106 的Linux实证候选如下。六个归档均在没有外部接口、关�
 
 控制器只接受 sudoers 中逐条列出的固定无参数命令：状态、预检、存储/模型/配置验证、发布接受、镜像导入和验证、身份探测、所有权、数据库、迁移、核心服务、Nginx 分阶段操作、基础 UAT、精确停止和镜像回滚。它不接受路径、URL、digest、Tag、服务名或任意命令，不提供 shell、`prune`、`down -v`、通配符删除或数据清理。
 
+OPS-001J修复旧执行器复用契约：`verify-storage`和`verify-models`不直接以控制器root进程调用旧脚本，而是以固定绝对路径切回原始用户`szhzx`，清空环境后执行旧sudoers已经允许的内层精确命令。内层sudo自然设置真实`SUDO_USER/SUDO_COMMAND`，控制器不得伪造这两个变量。命令表只有loop `verify`、OCR `verify/status`，固定30秒超时，既不接受参数也不修改旧执行器或其sudoers。
+
 root 拥有的 `/etc/smartscan/uat/uatctl-state.json` 只记录脱敏状态和证据。每一步验证前置状态；已完成步骤只复核，失败立即停止并保留现场。`resume-basic-uat` 可从断点继续到 PostgreSQL 健康，但在不可逆迁移前返回 `waiting_confirmation`；迁移获得单独授权并完成后，可继续启动并验证18082核心服务。Nginx `activate-nginx` 仍需固定 root 确认文件和单独授权。
 
 静态 `Config.User` 只有同时给出数字 UID:GID 时才直接采用；否则控制器对单个固定本地镜像执行 `--network none`、只读根、无挂载/端口/Secret、`cap-drop ALL`、`no-new-privileges` 和 CPU/内存/PID 限制的固定 `id -u/-g` 探测，并生成 root 拥有的 `image-identities.json`。
@@ -106,8 +108,8 @@ Nginx激活不接受命令行路径。共同使用人必须在固定配置根预
 
 | 人工安装资产 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uatctl` | `4b32eaf02872066d538e69bce8123e0582ea604d33960b1882395829e25d9448` |
-| `deploy/ops/smartscan_uatctl.py` | `90a5e4be565e6efaafd08e2ea86f03f462dfcc41c4b32d884262dd47229cb6ac` |
+| `deploy/ops/smartscan-uatctl` | `55f65cc6630d41d646cfdc6c7deb32ac6eb1eee73e53a4bc1b8190df71d66bac` |
+| `deploy/ops/smartscan_uatctl.py` | `8cd7ac4c34adb20095e43805ec238f76b8897d79593782c358452ffdb1ae91a7` |
 | `deploy/sudoers/smartscan-uatctl` | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
 | `deploy/compose/docker-compose.uat.yml` | `227af87ba75638c729254d8e78af819b9ab7e88f73c632e79c4c2a8eedc2408c` |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template` | `500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227` |
@@ -127,6 +129,38 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
 ```
 
 安装不会导入镜像、改变网络、启动容器或修改 Nginx。旧执行器不得删除或覆盖。
+
+### OPS-001J仅升级控制器两文件
+
+已安装OPS-001I的主机不重新安装sudoers、Compose、Nginx模板或旧执行器。共同使用人先核对旧摘要并保存固定备份，再从经过审核的LF暂存目录安装两文件：
+
+```bash
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py
+# 预期旧摘要依次为4b32eaf0...d9448和90a5e4be...b6ac
+sudo install -d -o root -g root -m 0700 /usr/local/libexec/smartscan/.ops001j-backup
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/.ops001j-backup/smartscan-uatctl
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/.ops001j-backup/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 <OPS001J_REVIEWED_DIR>/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 <OPS001J_REVIEWED_DIR>/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo visudo -cf /etc/sudoers.d/smartscan-uatctl
+sudo visudo -cf /etc/sudoers
+sudo -k
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+新摘要必须与上表一致。`deploy/sudoers/smartscan-uatctl`仍为`081caf34...fcefef3`，无需替换。升级不运行`preflight`、旧执行器、镜像导入或状态迁移；`status`必须保留原`completed`列表。
+
+若新文件摘要、wrapper自校验或`status`失败，只回滚这两文件，先恢复辅助工具再恢复包装器：
+
+```bash
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001j-backup/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001j-backup/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo -k
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+备份删除不属于升级授权，保留到后续单独清理决定。
 
 ## 授权与恢复顺序
 
@@ -159,4 +193,4 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl resume-basic-uat
 
 ## 当前状态
 
-截至本工作包仓库交付，服务器上的loop、OCR模型、配置和三张固定网络事实保持不变；六个应用/数据库镜像只在GitHub Runner完成离线导入实证，尚未上传或导入UAT服务器。`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。
+截至OPS-001J仓库修复，六归档及发布映射已接受并上传，统一控制器已安装且`preflight`现场通过；`verify-storage`因旧执行器嵌套sudo语义失败，尚未升级修复。没有导入镜像，`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。本工作包不连接或修改服务器。
