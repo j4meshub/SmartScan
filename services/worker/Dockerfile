@@ -3,6 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 RUN apt-get update \
     && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0t64 \
     && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml ./
 COPY services ./services

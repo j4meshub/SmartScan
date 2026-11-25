@@ -426,15 +426,25 @@ def validate_compose_contract(
         _require(_memory_bytes(service.get("mem_limit", 0)) > 0, f"{name} 缺少内存限制")
         _require(int(service.get("pids_limit", 0)) > 0, f"{name} 缺少 PID 限制")
         logging = service.get("logging")
-        _require(
-            isinstance(logging, dict) and logging.get("driver") == "json-file",
-            f"{name} 日志驱动无效",
-        )
-        options = logging.get("options", {})
-        _require(
-            options == {"max-size": "10m", "max-file": "3"},
-            f"{name} 日志必须精确限制为10m×3",
-        )
+        if name == "migrate":
+            _require(logging == {"driver": "none"}, "migrate 必须禁止持久化原始日志")
+            environment = service.get("environment")
+            _require(
+                isinstance(environment, dict)
+                and environment.get("SMARTSCAN_STORAGE_ROOT") == "/tmp/smartscan-data",
+                "migrate 临时storage root无效",
+            )
+            _require(not service.get("volumes"), "migrate 禁止挂载真实业务目录")
+        else:
+            _require(
+                isinstance(logging, dict) and logging.get("driver") == "json-file",
+                f"{name} 日志驱动无效",
+            )
+            options = logging.get("options", {})
+            _require(
+                options == {"max-size": "10m", "max-file": "3"},
+                f"{name} 日志必须精确限制为10m×3",
+            )
         cpu_total += float(service["cpus"])
         memory_total += _memory_bytes(service["mem_limit"])
         if not service.get("profiles"):

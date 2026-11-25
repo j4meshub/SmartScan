@@ -16,7 +16,7 @@
 - `data`、`edge`、`egress`三张网络使用部署当天现场无冲突结果确定的固定CIDR和网关；Compose不允许自动分配。
 - 现有共享Nginx 8077使用独立include，将`/smartscan/`去前缀转发到18082；不占用80/443，不覆盖其他location。
 - HTTP只验收登录、项目、上传、处理、预览、导出和Range。实时相机、企业微信及正式移动验收继续等待HTTPS。
-- 基础栈合计5.5 vCPU/8.75 GiB，启用AI后7.5 vCPU/11.75 GiB；整栈不得超过8 vCPU/16 GiB。八个服务根文件系统只读，所有tmpfs都有明确上限；每个服务设置CPU、内存、PID和`10m×3`日志轮转，全部`restart: "no"`。Docker日志位于loop之外，八容器理论上限约240 MiB。
+- 基础栈合计5.5 vCPU/8.75 GiB，启用AI后7.5 vCPU/11.75 GiB；整栈不得超过8 vCPU/16 GiB。八个服务根文件系统只读，所有tmpfs都有明确上限；常驻服务设置CPU、内存、PID和`10m×3`日志轮转，全部`restart: "no"`。迁移服务不持久化原始容器日志，由控制器保存脱敏失败证据。Docker日志位于loop之外，八容器理论上限不超过240 MiB。
 - 服务器不保存源码、不现场构建、不使用可变tag。用户已接受`2adbf4f`五个应用镜像及`OPS-REG-003B`可审计PostgreSQL镜像为固定UAT源候选。因GHCR Blob链路连接重置，服务器直接pull路线停止；OPS-001I使用同一六个源digest生成兼容传统Docker load的独立归档和内容映射，归档仍保存原始manifest/config/压缩layer证据，后续自动构建不得替换候选。
 - AI Worker 和 AI Gateway 位于显式 `ai` Profile，默认不启动；运行配置默认关闭真实 Provider。
 - 保留应用健康和带令牌的应用指标，不申请19081。可以复用现有Prometheus/Grafana或记录人工检查能力缺口；不部署Alertmanager、Node Exporter，不挂载宿主机`/`、`/proc`或`/sys`。
@@ -102,7 +102,7 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验。服务器直接pull路线已经停止；按OPS-001I从按需GitHub Actions取得六个独立归档，核对源对象、平台manifest、config/layer、归档SHA、image ID及本地不可变Tag，不使用`main`、`latest`或替代digest。
 5. OPS-001C受限执行器、固定配置工具和sudoers已人工安装，`prepare-directories`已成功。OPS-001E三份仓库外证据已由共同使用人核对SHA-256并独立安装为root拥有；OPS-001F已一次执行`generate-config`并由独立`verify-config`确认配置、Secret长度、固定镜像和OCR契约通过，所有Secret均未回显。
 6. 固定真实OCR模型已按来源、许可、版本和完整SHA-256清单完成受限安装，模型状态为`installed=true,status=passed`；三张固定网络、统一控制器和发布映射也已安装/接受。现场五项前置状态均已通过。首次导入PostgreSQL归档后，Docker 29 containerd以schema2 Descriptor digest作为Image ID，旧的Config digest单字段判断失败关闭；OPS-001L改用源内容链、归档摘要、可重算Descriptor和唯一本地Tag联合校验。
-7. `resume-basic-uat`校验既有门禁并启动PostgreSQL至健康后，在不可逆迁移前停止；用户单独确认`run-migrations`后才能继续启动API、两个CPU Worker与Web。AI Profile另行授权。
+7. `resume-basic-uat`校验既有门禁并启动PostgreSQL至健康后，在不可逆迁移前停止。`run-migrations`只允许固定`migrate`服务使用32 MiB `/tmp`内的`/tmp/smartscan-data`，不挂载真实业务目录；成功核对`20261022_0024`后才能再次续接API、两个CPU Worker与Web。AI Profile另行授权。
 8. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
 9. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
 
@@ -110,7 +110,13 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-25，loop、OCR模型、配置、三张网络、发布映射、六归档上传和统一控制器安装均已完成；`preflight`、存储、模型、配置和发布接受已写入现场状态。第一次续接只导入PostgreSQL后因Docker 29 containerd运行时身份表示差异停止，内容摘要均未漂移。`image-identities.json`仍不存在，数据库和应用未启动；实际部署还缺OPS-001L人工升级、从`images_imported`续接后五镜像与身份、目录所有权、PostgreSQL/迁移、核心服务和Nginx增量。
+截至2026-11-25，loop、OCR模型、配置、三张网络、六镜像离线导入、身份文件、所有权及PostgreSQL健康均已完成。首次`run-migrations`在连接数据库前因只读根目录创建失败；OPS-001M的Docker 29真实CI已证明有界临时目录可让空库完整达到`20261022_0024`。同一CI随后确认当前已接受Worker候选缺少`libGL.so.1`，因此核心启动仍失败关闭；实际部署还缺新Worker固定digest和发布映射接受、OPS-001M人工升级、重新授权迁移、核心服务、Nginx增量和HTTP基础UAT。
+
+### 迁移只读根边界
+
+`migrate`继承生产运行配置，但只在该服务内覆盖`SMARTSCAN_STORAGE_ROOT=/tmp/smartscan-data`。根文件系统保持只读，唯一可写目录是现有32 MiB `/tmp` tmpfs；服务没有真实data挂载，迁移结束后临时内容随容器销毁。API与Worker的storage root和业务挂载不变。失败时`migrations_completed`不写入，控制器只保存0600脱敏错误证据，不保存原始日志或Secret。
+
+当前接受的Worker离线归档只可用于保留历史和迁移前内容链验证，不可继续启动两个CPU Worker。仓库已为新构建显式加入`libgl1`和`libglib2.0-0t64`，并把PaddleX运行时`HOME`限制到Worker现有的有界`/tmp`；供应链增加无网络、只读根运行时导入测试。主线新digest未经用户接受前不得替换现有发布映射，也不得在服务器通过挂载宿主机库或联网安装绕过。
 
 ### Docker 29 containerd离线身份
 

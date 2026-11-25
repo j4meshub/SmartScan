@@ -110,11 +110,11 @@ Nginx激活不接受命令行路径。共同使用人必须在固定配置根预
 
 | 人工安装资产 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uatctl` | `080035668109ca42fb2a774fcfddc78dbc3fdd0e9c8f7262b4297a8a8577861e` |
-| `deploy/ops/smartscan_uatctl.py` | `476f5656dfe71260729f90e97151fec5784d9ed3ee25c0c16ed618293937c823` |
+| `deploy/ops/smartscan-uatctl` | `d0b5bcdc95b2b2e81119b71eb00f082fc3dbebdb608c5bd0b993472235402153` |
+| `deploy/ops/smartscan_uatctl.py` | `85c6adbb1c3e91a65326b75047025e01a9dd9f29b19578ce3d00f480c1ce3b89` |
 | `deploy/ops/smartscan_uat_validators.py` | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
 | `deploy/sudoers/smartscan-uatctl` | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
-| `deploy/compose/docker-compose.uat.yml` | `227af87ba75638c729254d8e78af819b9ab7e88f73c632e79c4c2a8eedc2408c` |
+| `deploy/compose/docker-compose.uat.yml` | `4d1a236a3303bbd70bc3b138265ca4587240b109ca4f6a1cb7b0df3ac28d43bf` |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template` | `500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227` |
 | `deploy/releases/uat-2026-11-24.json` | `2caa6eea6c0f6b11f941dc3301069653015fe41c9e5c515569dfb6cc5c099789` |
 
@@ -200,6 +200,40 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
 
 备份和暂存目录的删除不属于升级授权。
 
+### OPS-001M升级控制器与迁移Compose
+
+OPS-001M只替换包装器、控制器和UAT Compose，不修改验证模块、sudoers、Nginx模板或旧执行器。迁移服务继续使用只读根，只在现有32 MiB `/tmp` tmpfs中设置`SMARTSCAN_STORAGE_ROOT=/tmp/smartscan-data`，没有真实data挂载；API和Worker仍使用`/srv/smartscan/data`。迁移失败时Docker不保存原始日志，控制器只把固定错误码、异常类型和退出码写入`/etc/smartscan/uat/migration-failure.json`，不包含原始输出、连接串或Secret。
+
+人工升级目录固定为`/home/szhzx/smartscan-uatctl-upgrade-ops001m`。升级前现场预期包装器、控制器和Compose摘要依次为`08003566…7861e`、`476f5656…c823`和`227af87b…408c`；应以现场人工核验为准。安装顺序固定为辅助工具、Compose、包装器，确保包装器最后才切换摘要门禁：
+
+```bash
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/docker-compose.uat.yml
+sudo install -d -o root -g root -m 0700 /usr/local/libexec/smartscan/.ops001m-backup
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/.ops001m-backup/smartscan-uatctl
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/.ops001m-backup/smartscan_uatctl.py
+sudo install -o root -g root -m 0644 /usr/local/libexec/smartscan/docker-compose.uat.yml /usr/local/libexec/smartscan/.ops001m-backup/docker-compose.uat.yml
+sudo install -o root -g root -m 0755 /home/szhzx/smartscan-uatctl-upgrade-ops001m/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0644 /home/szhzx/smartscan-uatctl-upgrade-ops001m/docker-compose.uat.yml /usr/local/libexec/smartscan/docker-compose.uat.yml
+sudo install -o root -g root -m 0755 /home/szhzx/smartscan-uatctl-upgrade-ops001m/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/docker-compose.uat.yml
+sudo visudo -cf /etc/sudoers.d/smartscan-uatctl
+sudo visudo -cf /etc/sudoers
+sudo -k
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+升级后第一条控制器命令只能是`status`，必须保留现场已完成状态并继续显示`next_required=migrations_completed`；本步骤不授权再次运行迁移。若摘要、包装器自检或`status`失败，按辅助工具、Compose、包装器顺序恢复备份：
+
+```bash
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001m-backup/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0644 /usr/local/libexec/smartscan/.ops001m-backup/docker-compose.uat.yml /usr/local/libexec/smartscan/docker-compose.uat.yml
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001m-backup/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo -k
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+备份与暂存目录的删除仍不属于升级授权；sudoers摘要保持`081caf34…fcefef3`，无需替换。
+
 ## 授权与恢复顺序
 
 在用户接受发布映射、归档已校验并上传且控制器安装通过后，可以单独授权：
@@ -229,7 +263,7 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl resume-basic-uat
 
 传统daemon仍要求Image ID等于Config digest；containerd模式必须满足“实际Image ID = Descriptor digest = 重算schema2 digest”。因此没有删除Image ID比较，也没有把containerd生成的本地RepoDigest伪装成源Registry RepoDigest。`image-identities.json`使用1.1契约同时记录源内容字段和实际运行时身份，所有权应用前再次验证。
 
-CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containerd image store再执行一次六镜像连续导入、UID/GID探测、身份文件、所有权及PostgreSQL健康。两条路径均在迁移前返回`waiting_confirmation`，Compose仍固定`pull_policy: never`。
+CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containerd image store再执行一次六镜像连续导入、UID/GID探测、身份文件、所有权及PostgreSQL健康。OPS-001M已把两条路径扩展到空库迁移`20261022_0024`；首次完整核心续接发现接受的Worker候选缺少`libGL.so.1`，API与内层Web健康但两个CPU Worker失败关闭。仓库已修复Worker运行库并增加无网络只读启动检查；新固定digest和发布映射经用户接受前，CI明确停在迁移完成门禁，不把当前候选写成核心健康。Compose仍固定`pull_policy: never`。
 
 ## 回滚
 
@@ -244,4 +278,4 @@ CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containe
 
 ## 当前状态
 
-截至OPS-001L开始，六归档及发布映射已接受并上传，统一控制器已安装；现场五项前置状态均已通过。第一次续接只导入PostgreSQL后因Docker 29 containerd身份字段差异停止，后五镜像、`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。只读诊断没有改变服务器。OPS-001L合并后只暂存变化资产，实际替换仍由共同使用人人工完成，随后从`images_imported`继续。
+截至OPS-001M开始，六镜像、身份文件、所有权和PostgreSQL健康均已完成。首次迁移在Python模块导入阶段命中只读根目录创建错误，数据库仍为空且没有部分revision；核心服务和Nginx未启动。OPS-001M合并后只暂存变化资产，实际替换仍由共同使用人人工完成，随后从`migrations_completed`门禁重新取得单次迁移授权。

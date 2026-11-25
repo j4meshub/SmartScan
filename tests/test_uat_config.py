@@ -21,6 +21,7 @@ MOUNT_UNIT_TEMPLATE = (
 SHARED_NGINX_TEMPLATE = (
     Path(__file__).parents[1] / "deploy" / "nginx" / "shared-8077-smartscan-location.conf.template"
 )
+WORKER_DOCKERFILE = Path(__file__).parents[1] / "services" / "worker" / "Dockerfile"
 
 
 def _write_changed(source: Path, target: Path, old: str, new: str) -> Path:
@@ -60,6 +61,24 @@ def test_valid_fixture_returns_secret_free_summary(tmp_path: Path) -> None:
     assert summary["secrets_included"] is False
     assert "ci-only-uat-database-password" not in serialized
     assert "SMARTSCAN_SECRET_KEY" not in serialized
+
+
+def test_worker_image_installs_required_headless_visual_runtime_library() -> None:
+    dockerfile = WORKER_DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "apt-get install -y --no-install-recommends libgl1 libglib2.0-0t64" in dockerfile
+
+
+def test_worker_runtime_cache_is_bounded_by_existing_tmpfs() -> None:
+    root = Path(__file__).parents[1]
+    compose = DEFAULT_COMPOSE_FILE.read_text(encoding="utf-8")
+    workflow = (root / ".github" / "workflows" / "container-publish.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "HOME: /tmp/smartscan-home" in compose
+    assert "--env HOME=/tmp/smartscan-home" in workflow
+    assert "/tmp:rw,noexec,nosuid,nodev,size=512m" in compose
 
 
 @pytest.mark.parametrize(
@@ -294,6 +313,26 @@ def test_compose_rejects_source_build_and_host_root_mount(tmp_path: Path) -> Non
     ],
 )
 def test_compose_rejects_unbounded_writable_layers(
+    tmp_path: Path, old: str, new: str, message: str
+) -> None:
+    compose = _write_changed(DEFAULT_COMPOSE_FILE, tmp_path / "compose.yml", old, new)
+
+    with pytest.raises(UatConfigError, match=message):
+        _validate(tmp_path, compose=compose)
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        (
+            "SMARTSCAN_STORAGE_ROOT: /tmp/smartscan-data",
+            "SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data",
+            "migrate 临时storage root无效",
+        ),
+        ("    logging:\n      driver: none", "    logging:\n      driver: json-file", "禁止持久化"),
+    ],
+)
+def test_migrate_service_rejects_real_storage_or_persistent_logs(
     tmp_path: Path, old: str, new: str, message: str
 ) -> None:
     compose = _write_changed(DEFAULT_COMPOSE_FILE, tmp_path / "compose.yml", old, new)

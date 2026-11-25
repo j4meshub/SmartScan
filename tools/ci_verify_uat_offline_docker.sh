@@ -8,6 +8,9 @@ set -euo pipefail
 readonly CONTAINERD29_MODE="${SMARTSCAN_DOCKER29_CONTAINERD:-0}"
 [[ "$CONTAINERD29_MODE" == "0" || "$CONTAINERD29_MODE" == "1" ]] \
     || { echo "Docker存储模式无效" >&2; exit 64; }
+readonly ACCEPTED_WORKER_BLOCKER="${SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER:-0}"
+[[ "$ACCEPTED_WORKER_BLOCKER" == "0" || "$ACCEPTED_WORKER_BLOCKER" == "1" ]] \
+    || { echo "Worker候选阻塞模式无效" >&2; exit 64; }
 readonly DOCKERD_BIN="${SMARTSCAN_DOCKERD_BIN:-$(command -v dockerd)}"
 [[ -x "$DOCKERD_BIN" ]] || { echo "dockerd不可执行" >&2; exit 64; }
 if [[ "${SMARTSCAN_OFFLINE_NETNS:-}" != "1" ]]; then
@@ -19,20 +22,22 @@ if [[ "${SMARTSCAN_OFFLINE_NETNS:-}" != "1" ]]; then
         readonly setup_docker_host="$(/usr/bin/docker context inspect --format '{{.Endpoints.docker.Host}}')"
         [[ "$setup_docker_host" == unix://* ]] \
             || { echo "Docker 29 socket不是本机Unix socket" >&2; exit 64; }
-        exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT \
+        exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT,SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER \
             env SMARTSCAN_OFFLINE_NETNS=1 SMARTSCAN_EXTERNAL_DOCKER=1 \
             SMARTSCAN_DOCKER29_CONTAINERD=1 DOCKER_HOST="$setup_docker_host" \
+            SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER="$ACCEPTED_WORKER_BLOCKER" \
             GITHUB_WORKSPACE="$GITHUB_WORKSPACE" RUNNER_TEMP="$RUNNER_TEMP" \
             GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" bash "$0"
     fi
     export SMARTSCAN_DOCKERD_BIN="$DOCKERD_BIN" SMARTSCAN_DOCKER29_CONTAINERD="$CONTAINERD29_MODE"
-    exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT,SMARTSCAN_DOCKERD_BIN,SMARTSCAN_DOCKER29_CONTAINERD \
+    exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT,SMARTSCAN_DOCKERD_BIN,SMARTSCAN_DOCKER29_CONTAINERD,SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER \
         unshare --net --mount-proc \
         env SMARTSCAN_OFFLINE_NETNS=1 GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
         RUNNER_TEMP="$RUNNER_TEMP" GITHUB_ACTIONS="$GITHUB_ACTIONS" \
         RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
         SMARTSCAN_DOCKERD_BIN="$DOCKERD_BIN" \
-        SMARTSCAN_DOCKER29_CONTAINERD="$CONTAINERD29_MODE" bash "$0"
+        SMARTSCAN_DOCKER29_CONTAINERD="$CONTAINERD29_MODE" \
+        SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER="$ACCEPTED_WORKER_BLOCKER" bash "$0"
 fi
 
 readonly ARCHIVE_ROOT="$GITHUB_WORKSPACE/.smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
@@ -69,7 +74,7 @@ cleanup() {
         --env-file /etc/smartscan/uat/deploy.env \
         --env-file /etc/smartscan/uat/local-images.env \
         -f "$GITHUB_WORKSPACE/deploy/compose/docker-compose.uat.yml" \
-        stop postgres >/dev/null 2>&1 || true
+        stop nginx worker-cpu-2 worker-cpu-1 api migrate postgres >/dev/null 2>&1 || true
     for network in smartscan-uat-data smartscan-uat-edge smartscan-uat-egress smartscan-ci-sentinel; do
         /usr/bin/docker network rm "$network" >/dev/null 2>&1 || true
     done
@@ -147,7 +152,28 @@ mapfile -t migrate_ids < <(
         --filter label=com.docker.compose.project=smartscan-uat \
         --filter label=com.docker.compose.service=migrate
 )
-[[ "${#migrate_ids[@]}" -eq 0 ]] \
-    || { printf '迁移确认前不应创建迁移容器\n' >&2; exit 1; }
-printf '{"containerd_image_store":%s,"daemon_network":"isolated","images":6,"state_machine":"migration_confirmation","status":"passed"}\n' \
+[[ "${#migrate_ids[@]}" -eq 1 ]] \
+    || { printf '迁移服务容器数量异常：%s\n' "${#migrate_ids[@]}" >&2; exit 1; }
+[[ "$(/usr/bin/docker inspect --format '{{.State.Status}}:{{.State.ExitCode}}' "${migrate_ids[0]}")" == "exited:0" ]] \
+    || { printf '迁移服务未以成功状态保留诊断对象\n' >&2; exit 1; }
+if [[ "$ACCEPTED_WORKER_BLOCKER" == "1" ]]; then
+    mapfile -t blocker_services < <(
+        /usr/bin/docker ps --format '{{.Label "com.docker.compose.service"}}' \
+            --filter label=com.docker.compose.project=smartscan-uat
+    )
+    [[ "$(printf '%s\n' "${blocker_services[@]}" | /usr/bin/sort | /usr/bin/tr '\n' ' ')" == \
+        "postgres " ]] \
+        || { printf '既知Worker阻塞门禁前不应启动核心服务\n' >&2; exit 1; }
+    printf '{"containerd_image_store":%s,"images":6,"migration":"20261022_0024","next_required":"new-worker-release-acceptance","status":"passed_with_external_gate"}\n' \
+        "$([[ "$CONTAINERD29_MODE" == "1" ]] && printf true || printf false)"
+    exit 0
+fi
+mapfile -t core_services < <(
+    /usr/bin/docker ps --format '{{.Label "com.docker.compose.service"}}' \
+        --filter label=com.docker.compose.project=smartscan-uat
+)
+[[ "$(printf '%s\n' "${core_services[@]}" | /usr/bin/sort | /usr/bin/tr '\n' ' ')" == \
+    "api nginx postgres worker-cpu-1 worker-cpu-2 " ]] \
+    || { printf '核心服务集合异常\n' >&2; exit 1; }
+printf '{"containerd_image_store":%s,"daemon_network":"isolated","images":6,"migration":"20261022_0024","state_machine":"nginx_activation_confirmation","status":"passed"}\n' \
     "$([[ "$CONTAINERD29_MODE" == "1" ]] && printf true || printf false)"

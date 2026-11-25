@@ -14,9 +14,15 @@ on:
       - "tests/test_smartscan_offline_images.py"
       - "tests/test_smartscan_uatctl.py"
       - "tests/test_smartscan_uat_validators.py"
+      - "tests/test_uat_config.py"
       - "tools/ci_verify_uatctl_checkpoint.py"
       - "tools/ci_verify_uat_offline_docker.sh"
+      - "tools/ocr_offline_layer.py"
       - "tools/smartscan_offline_images.py"
+      - "tools/validate_uat_config.py"
+      - "deploy/ops/smartscan_ocr_layer_contract.py"
+      - "deploy/ops/smartscan_uat_ocr_model.py"
+      - "deploy/ops/smartscan_uat_ocr_stage.py"
   workflow_dispatch:
 
 permissions:
@@ -62,6 +68,10 @@ jobs:
         run: python tools/smartscan_offline_images.py ci-build
       - name: 离线复核全部归档
         run: python tools/smartscan_offline_images.py verify
+      - name: 下载并验证固定真实OCR模型Layer
+        run: |
+          python tools/ocr_offline_layer.py download
+          python tools/ocr_offline_layer.py verify
       - name: 安装固定Docker 29.0.2
         uses: docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5 # v5.6.0
         with:
@@ -81,8 +91,11 @@ jobs:
       - name: 使用Docker 29 containerd image store完成相同离线门禁
         env:
           SMARTSCAN_DOCKER29_CONTAINERD: "1"
+          SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER: "1"
         run: bash tools/ci_verify_uat_offline_docker.sh
-      - name: 使用独立无网络传统Docker daemon验证当前断点至迁移前门禁
+      - name: 使用独立无网络传统Docker daemon验证迁移与既知Worker候选阻塞
+        env:
+          SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER: "1"
         run: bash tools/ci_verify_uat_offline_docker.sh
       - name: 验证Compose完全禁止拉取
         run: |

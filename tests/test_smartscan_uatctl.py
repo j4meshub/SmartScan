@@ -20,6 +20,7 @@ class FakeRunner:
         self.calls: list[list[str]] = []
         self.call_options: list[dict[str, object]] = []
         self.outputs: dict[tuple[str, ...], str] = {}
+        self.results: dict[tuple[str, ...], uatctl.CommandResult] = {}
 
     def run(
         self,
@@ -51,6 +52,23 @@ class FakeRunner:
         if arguments[-1:] == ["verify"] and "config" in arguments[1]:
             return '{"status":"passed"}'
         return ""
+
+    def run_result(
+        self,
+        arguments: list[str],
+        *,
+        timeout_seconds: int | None = None,
+        environment: dict[str, str] | None = None,
+    ) -> uatctl.CommandResult:
+        self.calls.append(arguments)
+        self.call_options.append(
+            {
+                "check": False,
+                "timeout_seconds": timeout_seconds,
+                "environment": environment,
+            }
+        )
+        return self.results.get(tuple(arguments), uatctl.CommandResult(0, "", ""))
 
 
 class FakeValidator:
@@ -125,6 +143,7 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
         local_images_env=config / "local-images.env",
         image_identities=config / "image-identities.json",
         state_file=config / "uatctl-state.json",
+        migration_failure=config / "migration-failure.json",
         deploy_env=config / "deploy.env",
         runtime_env=config / "runtime.env",
         activation_plan=config / "nginx-activation.json",
@@ -639,7 +658,7 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "--iptables=false" in script
     assert "DOCKER_HOST" in script
     assert "ci_verify_uatctl_checkpoint.py" in script
-    assert 'state_machine":"migration_confirmation' in script
+    assert 'state_machine":"nginx_activation_confirmation' in script
     assert "docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5" in workflow
     assert "version: v29.0.2" in workflow
     assert 'SMARTSCAN_DOCKER29_CONTAINERD: "1"' in workflow
@@ -747,3 +766,200 @@ def test_completed_migration_is_verified_but_not_run_again(tmp_path: Path) -> No
     flattened = [item for command in runner.calls for item in command]
     assert "migrate" not in flattened
     assert "pg_isready" in flattened
+
+
+def test_migration_uses_fixed_read_only_service_and_records_exact_target(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller._record("database_started")
+    controller._record("database_verified")
+    prefix = controller._compose_command()
+    runner.outputs[
+        tuple(
+            prefix
+            + [
+                "exec",
+                "-T",
+                "postgres",
+                "psql",
+                "-U",
+                "smartscan",
+                "-d",
+                "smartscan",
+                "-Atqc",
+                "SELECT version_num FROM alembic_version",
+            ]
+        )
+    ] = uatctl.MIGRATION_TARGET
+    runner.outputs[
+        tuple(
+            prefix
+            + [
+                "exec",
+                "-T",
+                "postgres",
+                "psql",
+                "-U",
+                "smartscan",
+                "-d",
+                "smartscan",
+                "-Atqc",
+                "SELECT to_regclass('public.ai_media_grants')::text",
+            ]
+        )
+    ] = "ai_media_grants"
+
+    result = controller.run_migrations()
+
+    assert result["status"] == "passed"
+    migrate = next(command for command in runner.calls if "--exit-code-from" in command)
+    assert migrate[-6:] == [
+        "up",
+        "--no-deps",
+        "--abort-on-container-exit",
+        "--exit-code-from",
+        "migrate",
+        "migrate",
+    ]
+    assert "--rm" not in migrate
+    state = json.loads(paths.state_file.read_text(encoding="utf-8"))
+    assert state["evidence"]["migrations_completed"] == {
+        "target_revision": "20261022_0024",
+        "storage_root": "/tmp/smartscan-data",
+        "real_business_storage_mounted": False,
+        "raw_output_retained": False,
+    }
+    assert not paths.migration_failure.exists()
+
+
+def test_migration_failure_is_redacted_and_does_not_advance_state(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller._record("database_started")
+    controller._record("database_verified")
+    command = tuple(
+        controller._compose_command(
+            "up",
+            "--no-deps",
+            "--abort-on-container-exit",
+            "--exit-code-from",
+            "migrate",
+            "migrate",
+        )
+    )
+    secret = "postgresql://smartscan:never-store-this@postgres/smartscan"
+    runner.results[command] = uatctl.CommandResult(
+        1,
+        "",
+        f"OSError: [Errno 30] Read-only file system: data {secret}",
+    )
+
+    with pytest.raises(
+        uatctl.ControllerError,
+        match="migration_failed:migration_storage_read_only:OSError",
+    ):
+        controller.run_migrations()
+
+    assert "migrations_completed" not in controller.status()["completed"]
+    evidence_text = paths.migration_failure.read_text(encoding="utf-8")
+    assert secret not in evidence_text
+    evidence = json.loads(evidence_text)
+    assert evidence["reason_code"] == "migration_storage_read_only"
+    assert evidence["exception_type"] == "OSError"
+    assert evidence["exit_code"] == 1
+    assert evidence["raw_output_retained"] is False
+    assert evidence["secrets_included"] is False
+    if os.name != "nt":
+        assert paths.migration_failure.stat().st_mode & 0o777 == 0o600
+
+
+def test_migration_partial_revision_failure_closes_without_state_progress(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller._record("database_started")
+    controller._record("database_verified", {"observed_revision": "20261022_0023"})
+    command = tuple(
+        controller._compose_command(
+            "up",
+            "--no-deps",
+            "--abort-on-container-exit",
+            "--exit-code-from",
+            "migrate",
+            "migrate",
+        )
+    )
+    runner.results[command] = uatctl.CommandResult(
+        2,
+        "",
+        "alembic.util.exc.CommandError: Can't locate revision identified by 'invalid'",
+    )
+
+    with pytest.raises(uatctl.ControllerError, match="migration_revision_error:CommandError"):
+        controller.run_migrations()
+
+    state = controller.status()
+    assert "migrations_completed" not in state["completed"]
+
+
+def test_uat_compose_scopes_bounded_storage_override_to_migrate_only() -> None:
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "deploy/compose/docker-compose.uat.yml").read_text(encoding="utf-8")
+    migrate = text.split("\n  migrate:\n", 1)[1].split("\n  api:\n", 1)[0]
+    assert "read_only: true" in text.split("x-common: &common", 1)[1].split("services:", 1)[0]
+    assert "SMARTSCAN_STORAGE_ROOT: /tmp/smartscan-data" in migrate
+    assert "/tmp:rw,noexec,nosuid,nodev,size=32m" in migrate
+    assert "volumes:" not in migrate
+    assert "driver: none" in migrate
+    assert "SMARTSCAN_STORAGE_ROOT: /tmp/smartscan-data" not in text.split("\n  api:\n", 1)[1]
+
+
+def test_core_verification_requires_two_workers_and_keeps_ai_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller._record("core_started")
+    prefix = controller._compose_command()
+    runner.outputs[tuple(prefix + ["ps", "--status", "running", "--services"])] = (
+        "postgres\napi\nworker-cpu-1\nworker-cpu-2\nnginx"
+    )
+    runner.outputs[
+        tuple(
+            prefix
+            + [
+                "exec",
+                "-T",
+                "postgres",
+                "psql",
+                "-U",
+                "smartscan",
+                "-d",
+                "smartscan",
+                "-Atqc",
+                (
+                    "SELECT count(*) FROM worker_heartbeats "
+                    "WHERE heartbeat_at >= CURRENT_TIMESTAMP - INTERVAL '120 seconds'"
+                ),
+            ]
+        )
+    ] = "2"
+
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(uatctl.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+
+    result = controller.verify_core()
+
+    assert result["status"] == "passed"
+    assert "core_verified" in controller.status()["completed"]
