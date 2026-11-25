@@ -3,18 +3,20 @@ set -euo pipefail
 
 # 只供 GitHub-hosted Linux Runner 使用。外层创建没有外部接口的网络命名空间，
 # 内层启动独立 Docker daemon；导入、inspect 和身份探测始终使用同一 socket。
+[[ "${GITHUB_ACTIONS:-}" == "true" && "${RUNNER_ENVIRONMENT:-}" == "github-hosted" ]] \
+    || { echo "仅允许在GitHub-hosted Runner执行" >&2; exit 64; }
 if [[ "${SMARTSCAN_OFFLINE_NETNS:-}" != "1" ]]; then
-    exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP \
+    exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT \
         unshare --net --mount-proc \
         env SMARTSCAN_OFFLINE_NETNS=1 GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
-        RUNNER_TEMP="$RUNNER_TEMP" bash "$0"
+        RUNNER_TEMP="$RUNNER_TEMP" GITHUB_ACTIONS="$GITHUB_ACTIONS" \
+        RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" bash "$0"
 fi
 
 readonly ARCHIVE_ROOT="$GITHUB_WORKSPACE/.smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
 readonly RUNTIME_ROOT="$RUNNER_TEMP/smartscan-offline-docker"
 readonly DOCKER_SOCKET="$RUNTIME_ROOT/docker.sock"
 readonly DOCKER_HOST_VALUE="unix://$DOCKER_SOCKET"
-readonly MAP_FILE="$ARCHIVE_ROOT/release-map.json"
 
 /usr/sbin/ip link set lo up
 /usr/bin/mkdir -p "$RUNTIME_ROOT/data" "$RUNTIME_ROOT/exec"
@@ -35,8 +37,14 @@ readonly MAP_FILE="$ARCHIVE_ROOT/release-map.json"
 readonly DOCKERD_PID=$!
 
 cleanup() {
+    /usr/bin/docker compose --project-name smartscan-uat \
+        --env-file /etc/smartscan/uat/deploy.env \
+        --env-file /etc/smartscan/uat/local-images.env \
+        -f "$GITHUB_WORKSPACE/deploy/compose/docker-compose.uat.yml" \
+        stop postgres >/dev/null 2>&1 || true
     /bin/kill "$DOCKERD_PID" 2>/dev/null || true
     wait "$DOCKERD_PID" 2>/dev/null || true
+    /bin/rm -rf /etc/smartscan/uat /mnt/data/smartscan/uat
     /bin/rm -rf "$RUNTIME_ROOT"
 }
 trap cleanup EXIT
@@ -54,37 +62,52 @@ for _ in $(seq 1 60); do
 done
 /usr/bin/docker info >/dev/null
 
-while read -r archive tag image_id; do
-    /usr/bin/docker load --input "$ARCHIVE_ROOT/$archive"
-    [[ "$(/usr/bin/docker image inspect --format '{{.Id}}' "$tag")" == "$image_id" ]]
-done < <(/usr/bin/python3 - "$MAP_FILE" <<'PY'
-import json
-import sys
-from pathlib import Path
+/usr/bin/docker network create --driver bridge --subnet 172.31.250.0/28 smartscan-ci-sentinel >/dev/null
+/usr/bin/docker network create --driver bridge --internal \
+    --subnet 172.30.10.0/24 --gateway 172.30.10.1 \
+    --label com.docker.compose.project=smartscan-uat \
+    --label com.docker.compose.network=data \
+    --label com.smartscan.environment=uat smartscan-uat-data >/dev/null
+/usr/bin/docker network create --driver bridge --internal \
+    --subnet 172.30.11.0/24 --gateway 172.30.11.1 \
+    --label com.docker.compose.project=smartscan-uat \
+    --label com.docker.compose.network=edge \
+    --label com.smartscan.environment=uat smartscan-uat-edge >/dev/null
+/usr/bin/docker network create --driver bridge \
+    --subnet 172.30.12.0/24 --gateway 172.30.12.1 \
+    --label com.docker.compose.project=smartscan-uat \
+    --label com.docker.compose.network=egress \
+    --label com.smartscan.environment=uat smartscan-uat-egress >/dev/null
 
-value = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-for image in value["images"]:
-    print(image["archive_name"], image["local_tag"], image["image_id"])
-PY
+export PYTHONPATH="$GITHUB_WORKSPACE"
+/usr/bin/python3 "$GITHUB_WORKSPACE/tools/ci_verify_uatctl_checkpoint.py"
+
+[[ "$(/usr/bin/docker network inspect --format '{{.Name}}' smartscan-ci-sentinel)" == "smartscan-ci-sentinel" ]] \
+    || { printf '隔离Docker哨兵网络丢失\n' >&2; exit 1; }
+mapfile -t postgres_ids < <(
+    /usr/bin/docker ps -q \
+        --filter label=com.docker.compose.project=smartscan-uat \
+        --filter label=com.docker.compose.service=postgres
 )
-
-while read -r service tag; do
-    common=(
-        --rm --network none --read-only --cap-drop ALL
-        --security-opt no-new-privileges:true --cpus 0.10 --memory 32m
-        --pids-limit 16 --entrypoint /usr/bin/id
-    )
-    /usr/bin/docker run --name "smartscan-uat-ci-${service}-uid" "${common[@]}" "$tag" -u
-    /usr/bin/docker run --name "smartscan-uat-ci-${service}-gid" "${common[@]}" "$tag" -g
-done < <(/usr/bin/python3 - "$MAP_FILE" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-value = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-for image in value["images"]:
-    print(image["service"], image["local_tag"])
-PY
+[[ "${#postgres_ids[@]}" -eq 1 ]] \
+    || { printf 'PostgreSQL容器数量异常：%s\n' "${#postgres_ids[@]}" >&2; exit 1; }
+postgres_health="starting"
+for _ in $(seq 1 30); do
+    postgres_health="$(
+        /usr/bin/docker inspect \
+            --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+            "${postgres_ids[0]}"
+    )"
+    [[ "$postgres_health" == "healthy" ]] && break
+    /usr/bin/sleep 2
+done
+[[ "$postgres_health" == "healthy" ]] \
+    || { printf 'PostgreSQL健康状态异常：%s\n' "$postgres_health" >&2; exit 1; }
+mapfile -t migrate_ids < <(
+    /usr/bin/docker ps -a -q \
+        --filter label=com.docker.compose.project=smartscan-uat \
+        --filter label=com.docker.compose.service=migrate
 )
-
-printf '{"daemon_network":"isolated","images":6,"status":"passed"}\n'
+[[ "${#migrate_ids[@]}" -eq 0 ]] \
+    || { printf '迁移确认前不应创建迁移容器\n' >&2; exit 1; }
+printf '{"daemon_network":"isolated","images":6,"state_machine":"migration_confirmation","status":"passed"}\n'

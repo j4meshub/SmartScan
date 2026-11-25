@@ -9,11 +9,12 @@ on:
       - "deploy/compose/docker-compose.uat.yml"
       - "deploy/ops/smartscan-uatctl"
       - "deploy/ops/smartscan_uatctl.py"
+      - "deploy/ops/smartscan_uat_validators.py"
       - "deploy/sudoers/smartscan-uatctl"
       - "tests/test_smartscan_offline_images.py"
       - "tests/test_smartscan_uatctl.py"
-      - "tests/fixtures/uatctl/**"
-      - "tools/ci_verify_uatctl_nested_sudo.sh"
+      - "tests/test_smartscan_uat_validators.py"
+      - "tools/ci_verify_uatctl_checkpoint.py"
       - "tools/ci_verify_uat_offline_docker.sh"
       - "tools/smartscan_offline_images.py"
   workflow_dispatch:
@@ -44,7 +45,7 @@ jobs:
       - name: 安装测试依赖
         run: python -m pip install --disable-pip-version-check -e ".[dev]"
       - name: 执行专项测试
-        run: python -m pytest tests/test_smartscan_offline_images.py tests/test_smartscan_uatctl.py -q
+        run: python -m pytest tests/test_smartscan_offline_images.py tests/test_smartscan_uatctl.py tests/test_smartscan_uat_validators.py -q
 
   archive:
     name: 六镜像独立归档与完全离线导入
@@ -61,7 +62,7 @@ jobs:
         run: python tools/smartscan_offline_images.py ci-build
       - name: 离线复核全部归档
         run: python tools/smartscan_offline_images.py verify
-      - name: 使用独立无网络Docker daemon导入并执行身份探测
+      - name: 使用独立无网络Docker daemon验证当前断点至迁移前门禁
         run: bash tools/ci_verify_uat_offline_docker.sh
       - name: 验证Compose完全禁止拉取
         run: |
@@ -157,13 +158,3 @@ jobs:
       - name: 清理Runner临时归档
         if: always()
         run: rm -rf .smartscan-offline-transfer
-
-  nested-sudo:
-    name: 统一控制器真实sudo兼容验证
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: 验证双层受限sudo与失败关闭
-        run: sudo bash tools/ci_verify_uatctl_nested_sudo.sh "$GITHUB_WORKSPACE"

@@ -101,7 +101,7 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 3. 复核已验收的50 GiB非稀疏loop、ext4、systemd mount、实际可用空间与autoclear仍正常；不得重新格式化、扩大或影响现有loop挂载。
 4. 五个`2adbf4f` SmartScan固定digest与可审计PostgreSQL固定digest均已获接受并完成服务器匿名manifest核验。服务器直接pull路线已经停止；按OPS-001I从按需GitHub Actions取得六个独立归档，核对源对象、平台manifest、config/layer、归档SHA、image ID及本地不可变Tag，不使用`main`、`latest`或替代digest。
 5. OPS-001C受限执行器、固定配置工具和sudoers已人工安装，`prepare-directories`已成功。OPS-001E三份仓库外证据已由共同使用人核对SHA-256并独立安装为root拥有；OPS-001F已一次执行`generate-config`并由独立`verify-config`确认配置、Secret长度、固定镜像和OCR契约通过，所有Secret均未回显。
-6. 固定真实OCR模型已按来源、许可、版本和完整SHA-256清单完成受限安装，模型状态为`installed=true,status=passed`；三张固定网络已创建并验证为零端点，统一控制器和发布映射也已安装/接受。现场`preflight`通过后，旧loop验证因嵌套sudo语义失败；OPS-001J只升级统一控制器两文件，以真实内层sudo复用旧执行器，不重装或放宽旧执行器。
+6. 固定真实OCR模型已按来源、许可、版本和完整SHA-256清单完成受限安装，模型状态为`installed=true,status=passed`；三张固定网络已创建并验证为零端点，统一控制器和发布映射也已安装/接受。现场`preflight`与`storage_verified`已通过；旧OCR执行器验证成功但控制器字符串解析误判。OPS-001K改为内聚结构化只读验证，旧执行器及sudoers不重装、不放宽，正常状态机也不再调用它们。
 7. `resume-basic-uat`校验既有门禁并启动PostgreSQL至健康后，在不可逆迁移前停止；用户单独确认`run-migrations`后才能继续启动API、两个CPU Worker与Web。AI Profile另行授权。
 8. 通过8077 `/smartscan/` 完成基础UAT、Compose及mount停止/重启持久化和digest回滚；实时相机及企微保持未通过。
 9. 验收结束后停止UAT。默认保留后备文件取证；卸载后必须确认autoclear释放loop。任何清理都需独立授权，禁止通配符或把UAT目录转为生产。
@@ -110,4 +110,4 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-25，loop、OCR模型、配置、三张网络、发布映射、六归档上传和统一控制器安装均已完成。控制器`preflight`现场通过，但`verify-storage`暴露旧执行器嵌套sudo集成缺陷；该缺陷由OPS-001J修复，未说明存储故障。`image-identities.json`仍不存在，应用未启动；实际部署还缺控制器两文件人工升级、真实`status`续接确认、镜像导入与身份、目录所有权、PostgreSQL/迁移、核心服务和Nginx增量。
+截至2026-11-25，loop、OCR模型、配置、三张网络、发布映射、六归档上传和统一控制器安装均已完成。控制器现场已完成`preflight`与`storage_verified`，随后在OCR旧执行器成功后因stdout字符串解析误判而停止；这属于控制器集成缺陷，不是模型或存储故障。`image-identities.json`仍不存在，应用未启动；实际部署还缺OPS-001K三文件人工升级、真实`status`续接确认、镜像导入与身份、目录所有权、PostgreSQL/迁移、核心服务和Nginx增量。

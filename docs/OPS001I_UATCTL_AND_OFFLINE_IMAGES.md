@@ -94,7 +94,9 @@ PR #106 的Linux实证候选如下。六个归档均在没有外部接口、关�
 
 控制器只接受 sudoers 中逐条列出的固定无参数命令：状态、预检、存储/模型/配置验证、发布接受、镜像导入和验证、身份探测、所有权、数据库、迁移、核心服务、Nginx 分阶段操作、基础 UAT、精确停止和镜像回滚。它不接受路径、URL、digest、Tag、服务名或任意命令，不提供 shell、`prune`、`down -v`、通配符删除或数据清理。
 
-OPS-001J修复旧执行器复用契约：`verify-storage`和`verify-models`不直接以控制器root进程调用旧脚本，而是以固定绝对路径切回原始用户`szhzx`，清空环境后执行旧sudoers已经允许的内层精确命令。内层sudo自然设置真实`SUDO_USER/SUDO_COMMAND`，控制器不得伪造这两个变量。命令表只有loop `verify`、OCR `verify/status`，固定30秒超时，既不接受参数也不修改旧执行器或其sudoers。
+OPS-001K取代OPS-001J的正常部署调用链：`verify-storage`、`verify-models`和`verify-config`直接调用`smartscan_uat_validators.py`中的只读结构化函数，不再启动旧执行器、双层sudo或解析stdout。旧loop、OCR和部署准备执行器及其sudoers保持原样，只供低频初始化、修复或维护；统一控制器不新增格式化、重建、模型安装、Secret轮换或删除能力。
+
+内聚验证返回`passed`、`reason_code`、`evidence_summary`和`next_state`。严格JSON解析拒绝重复键、尾随内容、非UTF-8、超大输入和错误类型，但允许合法空白、缩进和字段顺序变化。所有输出均脱敏，配置验证只报告Secret字段存在、权限及长度/格式，不打印管理员密码或其他Secret。
 
 root 拥有的 `/etc/smartscan/uat/uatctl-state.json` 只记录脱敏状态和证据。每一步验证前置状态；已完成步骤只复核，失败立即停止并保留现场。`resume-basic-uat` 可从断点继续到 PostgreSQL 健康，但在不可逆迁移前返回 `waiting_confirmation`；迁移获得单独授权并完成后，可继续启动并验证18082核心服务。Nginx `activate-nginx` 仍需固定 root 确认文件和单独授权。
 
@@ -108,8 +110,9 @@ Nginx激活不接受命令行路径。共同使用人必须在固定配置根预
 
 | 人工安装资产 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uatctl` | `55f65cc6630d41d646cfdc6c7deb32ac6eb1eee73e53a4bc1b8190df71d66bac` |
-| `deploy/ops/smartscan_uatctl.py` | `8cd7ac4c34adb20095e43805ec238f76b8897d79593782c358452ffdb1ae91a7` |
+| `deploy/ops/smartscan-uatctl` | `d18bdf2babbe5423102997f21a4d96cbc09562bdb62fd3c0b242ed1e7be49a6c` |
+| `deploy/ops/smartscan_uatctl.py` | `4ead9ee486f78a93dbd9e872ebe99b455419fc56f878ac7d500e9f0edd21104a` |
+| `deploy/ops/smartscan_uat_validators.py` | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
 | `deploy/sudoers/smartscan-uatctl` | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
 | `deploy/compose/docker-compose.uat.yml` | `227af87ba75638c729254d8e78af819b9ab7e88f73c632e79c4c2a8eedc2408c` |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template` | `500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227` |
@@ -119,6 +122,7 @@ Nginx激活不接受命令行路径。共同使用人必须在固定配置根预
 sudo install -d -o root -g root -m 0755 /usr/local/libexec/smartscan
 sudo install -o root -g root -m 0755 deploy/ops/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
 sudo install -o root -g root -m 0755 deploy/ops/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0644 deploy/ops/smartscan_uat_validators.py /usr/local/libexec/smartscan/smartscan_uat_validators.py
 sudo install -o root -g root -m 0644 deploy/compose/docker-compose.uat.yml /usr/local/libexec/smartscan/docker-compose.uat.yml
 sudo install -o root -g root -m 0644 deploy/nginx/shared-8077-smartscan-location.conf.template /usr/local/libexec/smartscan/shared-8077-smartscan-location.conf
 sudo install -o root -g root -m 0440 deploy/sudoers/smartscan-uatctl /etc/sudoers.d/smartscan-uatctl
@@ -130,19 +134,21 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
 
 安装不会导入镜像、改变网络、启动容器或修改 Nginx。旧执行器不得删除或覆盖。
 
-### OPS-001J仅升级控制器两文件
+### OPS-001K仅升级控制器三文件
 
-已安装OPS-001I的主机不重新安装sudoers、Compose、Nginx模板或旧执行器。共同使用人先核对旧摘要并保存固定备份，再从经过审核的LF暂存目录安装两文件：
+已安装OPS-001I/OPS-001J的主机不重新安装sudoers、Compose、Nginx模板或旧执行器。共同使用人先核对旧摘要并保存固定备份，再从经过审核的LF暂存目录安装包装器、控制器和内聚验证模块。三者摘要以OPS-001K合并提交和暂存报告为准，验证模块固定安装为`root:root 0644`，其余两文件为`root:root 0755`。
 
 ```bash
 sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py
-# 预期旧摘要依次为4b32eaf0...d9448和90a5e4be...b6ac
-sudo install -d -o root -g root -m 0700 /usr/local/libexec/smartscan/.ops001j-backup
-sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/.ops001j-backup/smartscan-uatctl
-sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/.ops001j-backup/smartscan_uatctl.py
-sudo install -o root -g root -m 0755 <OPS001J_REVIEWED_DIR>/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
-sudo install -o root -g root -m 0755 <OPS001J_REVIEWED_DIR>/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
-sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py
+# 预期旧摘要依次为55f65cc6...d66bac和8cd7ac4c...e91a7
+sudo test ! -e /usr/local/libexec/smartscan/smartscan_uat_validators.py
+sudo install -d -o root -g root -m 0700 /usr/local/libexec/smartscan/.ops001k-backup
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/.ops001k-backup/smartscan-uatctl
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/.ops001k-backup/smartscan_uatctl.py
+sudo install -o root -g root -m 0644 <OPS001K_REVIEWED_DIR>/smartscan_uat_validators.py /usr/local/libexec/smartscan/smartscan_uat_validators.py
+sudo install -o root -g root -m 0755 <OPS001K_REVIEWED_DIR>/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 <OPS001K_REVIEWED_DIR>/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uat_validators.py
 sudo visudo -cf /etc/sudoers.d/smartscan-uatctl
 sudo visudo -cf /etc/sudoers
 sudo -k
@@ -151,11 +157,12 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
 
 新摘要必须与上表一致。`deploy/sudoers/smartscan-uatctl`仍为`081caf34...fcefef3`，无需替换。升级不运行`preflight`、旧执行器、镜像导入或状态迁移；`status`必须保留原`completed`列表。
 
-若新文件摘要、wrapper自校验或`status`失败，只回滚这两文件，先恢复辅助工具再恢复包装器：
+若新文件摘要、wrapper自校验或`status`失败，只回滚本次三文件，先恢复辅助工具和包装器，再移除本次新增验证模块：
 
 ```bash
-sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001j-backup/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
-sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001j-backup/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001k-backup/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001k-backup/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo rm -- /usr/local/libexec/smartscan/smartscan_uat_validators.py
 sudo -k
 sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
 ```
@@ -193,4 +200,4 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl resume-basic-uat
 
 ## 当前状态
 
-截至OPS-001J仓库修复，六归档及发布映射已接受并上传，统一控制器已安装且`preflight`现场通过；`verify-storage`因旧执行器嵌套sudo语义失败，尚未升级修复。没有导入镜像，`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。本工作包不连接或修改服务器。
+截至OPS-001K仓库修复，六归档及发布映射已接受并上传，统一控制器已安装，现场`preflight`与`storage_verified`已实际通过。旧OCR执行器验证成功，但旧控制器因脆弱字符串匹配误判失败；`models_verified`未写入。没有导入镜像，`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。仓库开发及PR期间不连接或修改服务器；合并后只暂存三项升级资产，实际替换仍由共同使用人人工完成。

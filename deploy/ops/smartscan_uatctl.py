@@ -23,6 +23,11 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
+try:
+    from . import smartscan_uat_validators as native_validators
+except ImportError:  # pragma: no cover - 服务器以固定脚本路径执行
+    import smartscan_uat_validators as native_validators
+
 COMMANDS = (
     "status",
     "preflight",
@@ -64,17 +69,8 @@ MANIFEST_MEDIA_TYPES = {
 INSTALLED_ASSET_SHA256 = {
     "docker-compose.uat.yml": "227af87ba75638c729254d8e78af819b9ab7e88f73c632e79c4c2a8eedc2408c",
     "shared-8077-smartscan-location.conf": "500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227",
-    "smartscan-uat-config": "58e750bd3217bf1c3fae6ac30c5d6cc50829b72d563016c580e2ad9d229787ab",
+    "smartscan_uat_validators.py": "27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b",
 }
-DEPLOY_USER = "szhzx"
-SUDO_BIN = "/usr/bin/sudo"
-ENV_BIN = "/usr/bin/env"
-LEGACY_EXECUTOR_TIMEOUT_SECONDS = 30
-LEGACY_MINIMAL_ENV = (
-    "PATH=/usr/sbin:/usr/bin:/sbin:/bin",
-    "LANG=C",
-    "LC_ALL=C",
-)
 
 
 class ControllerError(RuntimeError):
@@ -100,9 +96,7 @@ class Paths:
     active_nginx: Path = Path("/etc/nginx/snippets/smartscan-uat-8077.locations.conf")
     compose_file: Path = Path("/usr/local/libexec/smartscan/docker-compose.uat.yml")
     nginx_template: Path = Path("/usr/local/libexec/smartscan/shared-8077-smartscan-location.conf")
-    config_helper: Path = Path("/usr/local/libexec/smartscan/smartscan-uat-config")
-    loop_executor: Path = Path("/usr/local/libexec/smartscan/smartscan-uat-loop-storage")
-    model_executor: Path = Path("/usr/local/libexec/smartscan/smartscan-uat-ocr-model")
+    validator_module: Path = Path("/usr/local/libexec/smartscan/smartscan_uat_validators.py")
 
 
 class Runner(Protocol):
@@ -261,11 +255,29 @@ class Controller:
         *,
         root_uid: int = 0,
         deploy_uid: int = 1000,
+        validator: native_validators.NativeValidators | None = None,
     ) -> None:
         self.paths = paths
         self.runner = runner or SubprocessRunner()
         self.root_uid = root_uid
         self.deploy_uid = deploy_uid
+        self.validator = validator or native_validators.NativeValidators(
+            self.runner,
+            native_validators.Paths(
+                config_root=self.paths.config_root,
+                mount_point=self.paths.data_root,
+                model_root=self.paths.data_root / "models" / "ocr",
+                deployment_input=self.paths.config_root / "deployment-input.json",
+                preflight_summary=self.paths.config_root / "preflight-summary.json",
+                loop_evidence=self.paths.config_root / "loop-storage-evidence.json",
+                deploy_env=self.paths.deploy_env,
+                runtime_env=self.paths.runtime_env,
+                allocation=self.paths.config_root / "shared-host-allocation.json",
+                bootstrap_password=self.paths.config_root / "bootstrap-admin-password",
+            ),
+            root_uid=root_uid,
+            deploy_uid=deploy_uid,
+        )
 
     def _state(self) -> dict[str, Any]:
         if not self.paths.state_file.exists():
@@ -296,34 +308,19 @@ class Controller:
         completed = set(self._state().get("completed", []))
         _require(set(names).issubset(completed), f"state_prerequisite_missing:{','.join(names)}")
 
-    def _run_legacy_executor(self, command: str) -> str:
-        """通过固定原始用户和内层sudo保留旧执行器的授权语义。"""
-        commands = {
-            "storage_verify": (str(self.paths.loop_executor), "verify"),
-            "models_verify": (str(self.paths.model_executor), "verify"),
-            "models_status": (str(self.paths.model_executor), "status"),
-        }
-        _require(command in commands, "legacy_executor_command_not_allowed")
-        executable, action = commands[command]
-        arguments = [
-            SUDO_BIN,
-            "-n",
-            "-u",
-            DEPLOY_USER,
-            "--",
-            ENV_BIN,
-            "-i",
-            *LEGACY_MINIMAL_ENV,
-            SUDO_BIN,
-            "-n",
-            executable,
-            action,
-        ]
-        return self.runner.run(
-            arguments,
-            timeout_seconds=LEGACY_EXECUTOR_TIMEOUT_SECONDS,
-            environment={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C", "LC_ALL": "C"},
-        )
+    def _record_validation(
+        self, result: native_validators.ValidationResult, expected_state: str
+    ) -> dict[str, Any]:
+        _require(result.passed, f"native_validation_failed:{result.reason_code}")
+        _require(result.next_state == expected_state, "native_validation_state_mismatch")
+        return self._record(expected_state, result.evidence_summary)
+
+    def _run_native_validation(self, action, expected_state: str) -> dict[str, Any]:
+        try:
+            result = action()
+        except native_validators.ValidationError as exc:
+            raise ControllerError(f"native_validation_failed:{exc}") from exc
+        return self._record_validation(result, expected_state)
 
     def _fixed_release(self, *, uploaded: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
         metadata_root = self.paths.upload_root if uploaded else self.paths.config_root
@@ -581,7 +578,11 @@ class Controller:
                 upload.st_uid == self.deploy_uid and stat.S_IMODE(upload.st_mode) == 0o700,
                 "upload_directory_permissions_invalid",
             )
-        for path in (self.paths.compose_file, self.paths.nginx_template, self.paths.config_helper):
+        for path in (
+            self.paths.compose_file,
+            self.paths.nginx_template,
+            self.paths.validator_module,
+        ):
             _require(
                 path.is_file() and not path.is_symlink(), f"installed_asset_invalid:{path.name}"
             )
@@ -597,31 +598,16 @@ class Controller:
         return self._record("preflight")
 
     def verify_storage(self) -> dict[str, Any]:
-        output = self._run_legacy_executor("storage_verify")
-        _require(
-            "status=passed" in output or '"status":"passed"' in output, "storage_verify_failed"
-        )
-        return self._record("storage_verified")
+        self._require_steps("preflight")
+        return self._run_native_validation(self.validator.verify_storage, "storage_verified")
 
     def verify_models(self) -> dict[str, Any]:
-        output = self._run_legacy_executor("models_verify")
-        _require("status=passed" in output or '"status":"passed"' in output, "model_verify_failed")
-        status = self._run_legacy_executor("models_status")
-        try:
-            document = json.loads(status)
-        except json.JSONDecodeError as exc:
-            raise ControllerError("model_status_invalid") from exc
-        _require(
-            document.get("installed") is True and document.get("status") == "passed",
-            "model_status_failed",
-        )
-        return self._record("models_verified")
+        self._require_steps("storage_verified")
+        return self._run_native_validation(self.validator.verify_models, "models_verified")
 
     def verify_config(self) -> dict[str, Any]:
-        output = self.runner.run(["/usr/bin/python3", str(self.paths.config_helper), "verify"])
-        document = json.loads(output)
-        _require(document.get("status") == "passed", "config_verify_failed")
-        return self._record("config_verified")
+        self._require_steps("models_verified")
+        return self._run_native_validation(self.validator.verify_config, "config_verified")
 
     def accept_release(self) -> dict[str, Any]:
         self._require_steps("preflight", "storage_verified", "models_verified", "config_verified")
@@ -710,7 +696,9 @@ class Controller:
             )
             lines.append(f"{runtime_key}={tag}")
         _atomic_text(self.paths.local_images_env, "\n".join(lines) + "\n")
-        config = self._compose("config", "--images")
+        # AI Profile 在基础 UAT 中保持关闭，但离线发布映射必须覆盖已接受的六个镜像。
+        # 显式包含固定 Profile 只解析配置，不会创建或启动 AI 容器。
+        config = self._compose("--profile", "ai", "config", "--images")
         _require(
             all(image["local_tag"] in config.splitlines() for image in release["images"]),
             "compose_offline_mapping_invalid",
@@ -873,7 +861,19 @@ class Controller:
 
     def verify_database(self) -> dict[str, Any]:
         self._require_steps("database_started")
-        self._compose("exec", "-T", "postgres", "pg_isready", "-U", "smartscan", "-d", "smartscan")
+        last_error: ControllerError | None = None
+        for _ in range(30):
+            try:
+                self._compose(
+                    "exec", "-T", "postgres", "pg_isready", "-U", "smartscan", "-d", "smartscan"
+                )
+                last_error = None
+                break
+            except ControllerError as exc:
+                last_error = exc
+                time.sleep(2)
+        if last_error is not None:
+            raise ControllerError("database_health_timeout") from last_error
         return self._record("database_verified")
 
     def run_migrations(self) -> dict[str, Any]:
