@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""在隔离 Linux Docker daemon 中验证 OPS-001K 当前断点至迁移前门禁。"""
+"""在隔离 Linux Docker daemon 中验证OPS-001M迁移与核心启动状态机。"""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
 
 from deploy.ops import smartscan_uat_config as config
+from deploy.ops import smartscan_uat_ocr_stage as ocr_stage
 from deploy.ops import smartscan_uat_validators as validators
 from deploy.ops import smartscan_uatctl as uatctl
 
@@ -17,6 +17,7 @@ ROOT = Path(os.environ["GITHUB_WORKSPACE"])
 ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
 CONFIG = Path("/etc/smartscan/uat")
 DATA = Path("/mnt/data/smartscan/uat")
+OCR_LAYER = ROOT / ".smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz"
 
 
 def write_json(path: Path, value: object) -> None:
@@ -25,52 +26,14 @@ def write_json(path: Path, value: object) -> None:
 
 
 def prepare_model(root: Path) -> None:
-    payloads: dict[str, bytes] = {}
-    for directory in ("PP-OCRv6_small_det", "PP-OCRv6_small_rec"):
-        (root / directory).mkdir(parents=True, exist_ok=True)
-        for name in ("inference.json", "inference.pdiparams", "inference.yml"):
-            relative = f"{directory}/{name}"
-            payloads[relative] = f"ops-001k-ci:{relative}".encode()
-    for relative in validators.EXPECTED_EVIDENCE_FILES:
-        payloads[relative] = f"ops-001k-ci-evidence:{relative}".encode()
-    metadata = {
-        relative: {"sha256": hashlib.sha256(value).hexdigest(), "size": len(value)}
-        for relative, value in payloads.items()
-        if relative in validators.EXPECTED_MODEL_FILES
-    }
-    evidence = {
-        relative: {"sha256": hashlib.sha256(value).hexdigest(), "size": len(value)}
-        for relative, value in payloads.items()
-        if relative in validators.EXPECTED_EVIDENCE_FILES
-    }
-    for relative, value in payloads.items():
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(value)
-        target.chmod(0o444)
-    manifest = {
-        "schema_version": 1,
-        "artifact_kind": "smartscan-offline-ocr-models",
-        "artifact_version": validators.EXPECTED_MODEL_VERSION,
-        "backend": "paddle_static",
-        "paddleocr_version": "3.7.0",
-        "paddlepaddle_version": "3.3.1",
-        "model_version": validators.EXPECTED_MODEL_VERSION,
-        "license": "Apache-2.0",
-        "text_detection_dir": "PP-OCRv6_small_det",
-        "text_recognition_dir": "PP-OCRv6_small_rec",
-        "conversion": {"performed": False, "description": "仅规范化目录名，模型字节未修改"},
-        "source": "OPS-001K CI固定模型契约",
-        "source_commit": "9be7b7c366f568d82a19341e072a3144ddd025a2",
-        "files": {name: item["sha256"] for name, item in metadata.items()},
-        "file_metadata": metadata,
-        "evidence_files": evidence,
-        "total_model_bytes": sum(item["size"] for item in metadata.values()),
-    }
-    (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
-    (root / "manifest.json").chmod(0o444)
-    for directory in (root, root / "PP-OCRv6_small_det", root / "PP-OCRv6_small_rec"):
-        directory.chmod(0o755)
+    assert OCR_LAYER.is_file(), "真实OCR Layer缺失"
+    result = ocr_stage.stage_fixed(
+        OCR_LAYER,
+        root,
+        enforce_upload_permissions=False,
+        root_uid=0,
+    )
+    assert result["status"] == "passed"
 
 
 def prepare_config(deploy_uid: int) -> tuple[config.Paths, validators.NativeValidators]:
@@ -78,7 +41,7 @@ def prepare_config(deploy_uid: int) -> tuple[config.Paths, validators.NativeVali
     for path, mode in (
         (DATA / "postgres", 0o700),
         (DATA / "data", 0o750),
-        (DATA / "models" / "ocr", 0o755),
+        (DATA / "models", 0o755),
     ):
         path.mkdir(parents=True, exist_ok=True)
         path.chmod(mode)
@@ -199,6 +162,7 @@ def main() -> None:
         runtime_env=CONFIG / "runtime.env",
         activation_plan=CONFIG / "nginx-activation.json",
         staged_nginx=CONFIG / "nginx-smartscan-8077.locations.conf",
+        active_nginx=CONFIG / "active-nginx-must-remain-absent.conf",
         compose_file=ROOT / "deploy/compose/docker-compose.uat.yml",
         nginx_template=ROOT / "deploy/nginx/shared-8077-smartscan-location.conf.template",
         validator_module=ROOT / "deploy/ops/smartscan_uat_validators.py",
@@ -225,13 +189,121 @@ def main() -> None:
     assert "database_verified" in status["completed"]
     assert "migrations_completed" not in status["completed"]
     assert paths.image_identities.is_file()
+    before_migration_running = set(
+        controller._compose("ps", "--status", "running", "--services").splitlines()
+    )
+    assert before_migration_running == {"postgres"}
+
+    migration = controller.run_migrations()
+    assert migration["status"] == "passed"
+    after_migration = controller.status()
+    assert after_migration["next_required"] == "core_started"
+    assert "migrations_completed" in after_migration["completed"]
+    assert not paths.migration_failure.exists()
+    current = controller._compose(
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "smartscan",
+        "-d",
+        "smartscan",
+        "-Atqc",
+        "SELECT version_num FROM alembic_version",
+    )
+    assert current == "20261022_0024"
+    schema_evidence = controller._compose(
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "smartscan",
+        "-d",
+        "smartscan",
+        "-Atqc",
+        "SELECT (SELECT count(*) FROM information_schema.tables "
+        "WHERE table_schema='public') || ':' || "
+        "(SELECT count(*) FROM pg_indexes WHERE schemaname='public' "
+        "AND tablename='ai_media_grants') || ':' || "
+        "(SELECT count(*) FROM pg_constraint WHERE conrelid='public.ai_media_grants'::regclass)",
+    )
+    table_count, index_count, constraint_count = (int(item) for item in schema_evidence.split(":"))
+    assert table_count >= 30
+    assert index_count == 9
+    assert constraint_count >= 9
+    after_migration_running = set(
+        controller._compose("ps", "--status", "running", "--services").splitlines()
+    )
+    assert after_migration_running == {"postgres"}
+
+    migrate_id = controller._compose("ps", "-a", "-q", "migrate")
+    assert migrate_id
+    migrate_runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", migrate_id]))[
+        0
+    ]
+    assert migrate_runtime["HostConfig"]["ReadonlyRootfs"] is True
+    tmpfs = migrate_runtime["HostConfig"]["Tmpfs"]
+    assert set(tmpfs) == {"/tmp"}
+    tmpfs_options = set(tmpfs["/tmp"].split(","))
+    assert {"rw", "noexec", "nosuid", "nodev", "mode=1777", "uid=10001", "gid=10001"}.issubset(
+        tmpfs_options
+    )
+    assert tmpfs_options.intersection({"size=32m", "size=33554432"})
+    assert migrate_runtime["Mounts"] == []
+    storage_values = [
+        item
+        for item in migrate_runtime["Config"]["Env"]
+        if item.startswith("SMARTSCAN_STORAGE_ROOT=")
+    ]
+    assert storage_values == ["SMARTSCAN_STORAGE_ROOT=/tmp/smartscan-data"]
+    assert migrate_runtime["State"]["ExitCode"] == 0
+
+    repeated = controller.run_migrations()
+    assert repeated["already_complete"] is True
+    assert controller._compose("ps", "-a", "-q", "migrate") == migrate_id
+
+    resumed = controller.resume_basic_uat()
+    assert resumed == {
+        "status": "passed",
+        "next_required": "stage-nginx",
+        "secrets_included": False,
+    }
+    final = controller.status()
+    assert final["next_required"] == "nginx_staged"
+    assert {"core_started", "core_verified"}.issubset(final["completed"])
+    assert not paths.active_nginx.exists()
+    running = set(controller._compose("ps", "--status", "running", "--services").splitlines())
+    assert running == {"postgres", "api", "worker-cpu-1", "worker-cpu-2", "nginx"}
+    worker_heartbeats = "0"
+    for _ in range(30):
+        worker_heartbeats = controller._compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "smartscan",
+            "-d",
+            "smartscan",
+            "-Atqc",
+            "SELECT count(*) FROM worker_heartbeats",
+        )
+        if int(worker_heartbeats) >= 2:
+            break
+        __import__("time").sleep(2)
+    assert int(worker_heartbeats) >= 2
     print(
         json.dumps(
             {
-                "checkpoint": "preflight+storage_verified",
+                "checkpoint": "migration-and-core-complete",
                 "database": "healthy",
                 "images": 6,
-                "next_required": "run-migrations",
+                "migration_target": "20261022_0024",
+                "next_required": "stage-nginx",
+                "core_services": 5,
+                "shared_nginx_touched": False,
                 "registry_access": False,
                 "status": "passed",
             },

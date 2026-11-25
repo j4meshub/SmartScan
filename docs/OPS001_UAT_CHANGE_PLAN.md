@@ -119,9 +119,9 @@ location ^~ /smartscan/ {
 9. OPS-001G单独授权已创建并验证三张固定网络。OPS-001H随后严格顺序拉取六个已接受digest，但第一个PostgreSQL固定引用唯一pull在GHCR Blob传输阶段连接重置，后五镜像未尝试且部分缓存未清理；直接pull路线停止并由OPS-001I替代。
 10. OPS-001I按审核清单生成六个独立Docker image archive，保存源digest到平台manifest/config/原始layer/归档SHA/image ID/本地不可变Tag的完整映射，并由传统Docker daemon完全断网验证导入。用户接受映射、一次性安装统一控制器并上传固定归档后，`resume-basic-uat`完成导入、受控UID/GID探测、身份记录、所有权和PostgreSQL健康；失败即停且不清理。
 11. 统一控制器已人工安装并经OPS-001J升级，现场`preflight`和`storage_verified`成功；旧OCR执行器验证成功后，控制器因stdout字符串解析误判而停止，未导入任何镜像。OPS-001K保持旧loop/OCR/部署准备执行器及sudoers不变，正常状态机改用内聚结构化只读验证。升级不得重置状态文件或重复创建既有对象。
-12. OPS-001K升级后，模型、配置和发布接受均通过。首次续接只导入PostgreSQL归档，Docker 29 containerd使用schema2 Descriptor digest作为本地Image ID，旧Config digest单字段门禁失败关闭。OPS-001L保留源digest、平台manifest、Config、全部Layer、归档摘要和RootFS验证，并增加可重算Descriptor与实际运行时身份联合契约；后五镜像及数据库仍未执行。
-11. 不可逆迁移必须单独授权`run-migrations`。迁移通过后再次执行`resume-basic-uat`，启动API、两个CPU Worker和内层Web，AI关闭，并验证`127.0.0.1:18082`。
-12. 最后分别授权Nginx暂存与激活、测试和reload，经8077基础UAT并观察共租户。
+12. OPS-001L升级后，六镜像、身份文件、所有权和PostgreSQL健康均已完成。首次迁移在连接数据库前因`get_settings()`导入阶段创建storage root命中只读根而失败，空库无表、无`alembic_version`且无部分revision。
+13. OPS-001M保持只读根，只给固定`migrate`服务现有32 MiB `/tmp`提供`/tmp/smartscan-data`；不挂载业务data。共同使用人人工升级后，必须重新单独授权一次`run-migrations`，成功达到`20261022_0024`后才可再次执行`resume-basic-uat`启动API、两个CPU Worker和内层Web。
+14. 最后分别授权Nginx暂存与激活、测试和reload，经8077基础UAT并观察共租户。
 
 OPS-001A/OPS-001B只解决loop存储阶段。共同使用人人工升级执行器和sudoers后，AI仍只能运行以下五条命令：
 
@@ -192,6 +192,6 @@ HTTP IP入口不能通过`getUserMedia`实时相机、企业微信、Android/iOS
 
 ## 9. 最终授权点
 
-OPS-001C执行器/配置工具/sudoers、统一控制器、发布映射接受、六归档上传和`prepare-directories`已经完成，不得再列为待办。实际部署仍必须取得：OPS-001L变化资产人工升级及真实`status`确认；从`images_imported`门禁续接到PostgreSQL健康的连续授权；不可逆迁移确认；核心服务续接；Nginx暂存/激活；受限停止、回滚及最终保留或清理。OPS-001E三证据、配置、Docker三网、loop、六源镜像和OCR模型均已完成，不应重复执行。任何制品或模型接受都不替代应用部署授权。
+OPS-001C执行器/配置工具/sudoers、发布映射、六归档、六镜像导入、身份、所有权和PostgreSQL健康均已完成，不得再列为待办。实际部署仍必须取得：OPS-001M三项变化资产人工升级及真实`status`确认；重新授权一次不可逆迁移；迁移成功后的核心服务续接；Nginx暂存/激活；受限停止、回滚及最终保留或清理。既有证据、网络、loop、镜像和OCR模型不应重复执行。
 
 未获相应授权前，不得创建目录、后备文件、文件系统、挂载、Secret、网络或容器，不得拉取镜像、迁移或修改/reload Nginx。

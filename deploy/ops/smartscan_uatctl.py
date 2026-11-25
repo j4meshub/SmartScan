@@ -54,6 +54,8 @@ COMMANDS = (
 ALLOWED_PREFIX = "ghcr.io/j4meshub/smartscan-"
 PLATFORM = "linux/amd64"
 PROJECT = "smartscan-uat"
+MIGRATION_TARGET = "20261022_0024"
+MIGRATION_STORAGE_ROOT = "/tmp/smartscan-data"
 EXPECTED_SERVICES = {"postgres", "api", "worker", "ai-gateway", "web", "ops"}
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 LOCAL_TAG = re.compile(r"^smartscan-uat-[a-z0-9-]+:sha256-[0-9a-f]{12}$")
@@ -67,7 +69,7 @@ MANIFEST_MEDIA_TYPES = {
     "application/vnd.docker.distribution.manifest.v2+json",
 }
 INSTALLED_ASSET_SHA256 = {
-    "docker-compose.uat.yml": "227af87ba75638c729254d8e78af819b9ab7e88f73c632e79c4c2a8eedc2408c",
+    "docker-compose.uat.yml": "620bb0cc8d5afc5afbc257316b6a1ed8f10da06d44ff14b95030e25365d6aac3",
     "shared-8077-smartscan-location.conf": "500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227",
     "smartscan_uat_validators.py": "27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b",
 }
@@ -75,6 +77,15 @@ INSTALLED_ASSET_SHA256 = {
 
 class ControllerError(RuntimeError):
     """状态或固定对象不满足失败关闭条件。"""
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    """只在控制器内部使用的子进程结果，原始输出不得直接持久化。"""
+
+    returncode: int
+    stdout: str
+    stderr: str
 
 
 @dataclass(frozen=True)
@@ -109,6 +120,7 @@ class Paths:
     local_images_env: Path = Path("/etc/smartscan/uat/local-images.env")
     image_identities: Path = Path("/etc/smartscan/uat/image-identities.json")
     state_file: Path = Path("/etc/smartscan/uat/uatctl-state.json")
+    migration_failure: Path = Path("/etc/smartscan/uat/migration-failure.json")
     deploy_env: Path = Path("/etc/smartscan/uat/deploy.env")
     runtime_env: Path = Path("/etc/smartscan/uat/runtime.env")
     activation_plan: Path = Path("/etc/smartscan/uat/nginx-activation.json")
@@ -131,16 +143,23 @@ class Runner(Protocol):
         environment: dict[str, str] | None = None,
     ) -> str: ...
 
-
-class SubprocessRunner:
-    def run(
+    def run_result(
         self,
         arguments: list[str],
         *,
-        check: bool = True,
         timeout_seconds: int | None = None,
         environment: dict[str, str] | None = None,
-    ) -> str:
+    ) -> CommandResult: ...
+
+
+class SubprocessRunner:
+    def run_result(
+        self,
+        arguments: list[str],
+        *,
+        timeout_seconds: int | None = None,
+        environment: dict[str, str] | None = None,
+    ) -> CommandResult:
         try:
             process = subprocess.run(
                 arguments,
@@ -152,9 +171,24 @@ class SubprocessRunner:
             )
         except subprocess.TimeoutExpired as exc:
             raise ControllerError(f"command_timeout:{Path(arguments[0]).name}") from exc
-        if check and process.returncode != 0:
+        return CommandResult(process.returncode, process.stdout.strip(), process.stderr.strip())
+
+    def run(
+        self,
+        arguments: list[str],
+        *,
+        check: bool = True,
+        timeout_seconds: int | None = None,
+        environment: dict[str, str] | None = None,
+    ) -> str:
+        result = self.run_result(
+            arguments,
+            timeout_seconds=timeout_seconds,
+            environment=environment,
+        )
+        if check and result.returncode != 0:
             raise ControllerError(f"command_failed:{Path(arguments[0]).name}")
-        return process.stdout.strip()
+        return result.stdout
 
 
 def _require(condition: bool, reason: str) -> None:
@@ -673,21 +707,85 @@ class Controller:
         )
 
     def _compose(self, *arguments: str) -> str:
-        return self.runner.run(
-            [
-                "/usr/bin/docker",
-                "compose",
-                "--project-name",
-                PROJECT,
-                "--env-file",
-                str(self.paths.deploy_env),
-                "--env-file",
-                str(self.paths.local_images_env),
-                "-f",
-                str(self.paths.compose_file),
-                *arguments,
-            ]
+        return self.runner.run(self._compose_command(*arguments))
+
+    def _compose_command(self, *arguments: str) -> list[str]:
+        return [
+            "/usr/bin/docker",
+            "compose",
+            "--project-name",
+            PROJECT,
+            "--env-file",
+            str(self.paths.deploy_env),
+            "--env-file",
+            str(self.paths.local_images_env),
+            "-f",
+            str(self.paths.compose_file),
+            *arguments,
+        ]
+
+    @staticmethod
+    def _migration_failure_summary(result: CommandResult) -> tuple[str, str]:
+        """从内存中的有限输出提取白名单错误类别，不返回原始文本。"""
+
+        combined = f"{result.stdout[-32768:]}\n{result.stderr[-32768:]}"
+        exception_type = "UnknownError"
+        allowed_types = (
+            "ModuleNotFoundError",
+            "ImportError",
+            "PermissionError",
+            "OSError",
+            "OperationalError",
+            "ProgrammingError",
+            "IntegrityError",
+            "CommandError",
+            "ResolutionError",
+            "RuntimeError",
         )
+        for candidate in allowed_types:
+            if re.search(rf"(?:^|[.: ]){re.escape(candidate)}(?:$|[: ])", combined, re.MULTILINE):
+                exception_type = candidate
+                break
+        lowered = combined.casefold()
+        if "read-only file system" in lowered:
+            reason = "migration_storage_read_only"
+        elif "modulenotfounderror" in lowered or "importerror" in lowered:
+            reason = "migration_module_import_failed"
+        elif any(
+            marker in lowered
+            for marker in ("connection refused", "could not connect", "operationalerror")
+        ):
+            reason = "migration_database_unavailable"
+        elif any(
+            marker in lowered
+            for marker in (
+                "can't locate revision",
+                "resolutionerror",
+                "alembic.util.exc.commanderror",
+            )
+        ):
+            reason = "migration_revision_error"
+        else:
+            reason = "migration_process_failed"
+        return reason, exception_type
+
+    def _record_migration_failure(self, result: CommandResult) -> tuple[str, str]:
+        reason, exception_type = self._migration_failure_summary(result)
+        _atomic_json(
+            self.paths.migration_failure,
+            {
+                "schema_version": "1.0",
+                "status": "failed",
+                "reason_code": reason,
+                "exception_type": exception_type,
+                "exit_code": max(1, min(int(result.returncode), 255)),
+                "target_revision": MIGRATION_TARGET,
+                "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "raw_output_retained": False,
+                "secrets_included": False,
+            },
+        )
+        return reason, exception_type
 
     @staticmethod
     def _expected_runtime_descriptor(record: dict[str, Any], archive: Path) -> tuple[str, int]:
@@ -1099,8 +1197,56 @@ class Controller:
         if self._completed("migrations_completed"):
             self.verify_database()
             return self._record("migrations_completed")
-        self._compose("run", "--rm", "--no-deps", "migrate")
-        return self._record("migrations_completed")
+        result = self.runner.run_result(
+            self._compose_command(
+                "up",
+                "--no-deps",
+                "--abort-on-container-exit",
+                "--exit-code-from",
+                "migrate",
+                "migrate",
+            ),
+            timeout_seconds=1800,
+        )
+        if result.returncode != 0:
+            reason, exception_type = self._record_migration_failure(result)
+            raise ControllerError(f"migration_failed:{reason}:{exception_type}")
+        current = self._compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "smartscan",
+            "-d",
+            "smartscan",
+            "-Atqc",
+            "SELECT version_num FROM alembic_version",
+        ).strip()
+        _require(current == MIGRATION_TARGET, "migration_target_mismatch")
+        latest_object = self._compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "smartscan",
+            "-d",
+            "smartscan",
+            "-Atqc",
+            "SELECT to_regclass('public.ai_media_grants')::text",
+        ).strip()
+        _require(latest_object == "ai_media_grants", "migration_latest_object_missing")
+        self.verify_database()
+        return self._record(
+            "migrations_completed",
+            {
+                "target_revision": MIGRATION_TARGET,
+                "storage_root": MIGRATION_STORAGE_ROOT,
+                "real_business_storage_mounted": False,
+                "raw_output_retained": False,
+            },
+        )
 
     def start_core(self) -> dict[str, Any]:
         self._require_steps("migrations_completed")
@@ -1111,9 +1257,38 @@ class Controller:
 
     def verify_core(self) -> dict[str, Any]:
         self._require_steps("core_started")
-        self._compose("ps", "--status", "running", "--services")
-        with urllib.request.urlopen("http://127.0.0.1:18082/", timeout=5) as response:
-            _require(response.status < 500, "core_http_failed")
+        required = {"postgres", "api", "worker-cpu-1", "worker-cpu-2", "nginx"}
+        last_reason = "core_services_not_running"
+        for _ in range(90):
+            try:
+                running = set(self._compose("ps", "--status", "running", "--services").splitlines())
+                _require(required.issubset(running), "core_services_not_running")
+                _require(
+                    "worker-ai" not in running and "ai-gateway" not in running,
+                    "ai_profile_started",
+                )
+                worker_count = self._compose(
+                    "exec",
+                    "-T",
+                    "postgres",
+                    "psql",
+                    "-U",
+                    "smartscan",
+                    "-d",
+                    "smartscan",
+                    "-Atqc",
+                    "SELECT count(*) FROM worker_heartbeats "
+                    "WHERE heartbeat_at >= CURRENT_TIMESTAMP - INTERVAL '120 seconds'",
+                ).strip()
+                _require(worker_count.isdigit() and int(worker_count) >= 2, "worker_health_pending")
+                with urllib.request.urlopen("http://127.0.0.1:18082/", timeout=5) as response:
+                    _require(response.status < 500, "core_http_failed")
+                last_reason = ""
+                break
+            except (ControllerError, OSError) as exc:
+                last_reason = str(exc) if isinstance(exc, ControllerError) else "core_http_pending"
+                time.sleep(2)
+        _require(not last_reason, f"core_health_timeout:{last_reason}")
         return self._record("core_verified")
 
     def stage_nginx(self) -> dict[str, Any]:

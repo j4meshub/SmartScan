@@ -7,15 +7,20 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001L` Docker 29 containerd离线镜像身份兼容诊断与修复 |
-| 工作包状态 | 等待合并；B类根因、结构化身份契约和Docker 29/传统daemon双路径CI已验收 |
-| 当前分支 | `codex/ops-001l-containerd-image-identity` |
-| 最后验证基线 | 现场真实完成`preflight`、`storage_verified`、`models_verified`、`config_verified`和`release_accepted`；首次续接只导入PostgreSQL后因运行时Image ID差异停止 |
-| 工作包提交 | `ae9e3ec`、`35e9d3f` |
-| PR | [#113](https://github.com/j4meshub/SmartScan/pull/113)，技术验证头22项检查全部成功或按条件跳过，失败0 |
-| 下一工作包 | OPS-001L合并后只人工升级变化的统一控制器资产并确认`status`仍停在`images_imported`；再单独授权一次状态机续接到迁移前门禁 |
+| 当前工作包 | `OPS-001M` 迁移容器只读根兼容修复 |
+| 工作包状态 | 进行中；仓库修复、脱敏诊断与Docker 29完整状态机CI待验收 |
+| 当前分支 | `codex/ops-001m-migration-readonly-root` |
+| 最后验证基线 | 现场已完成六镜像、身份、所有权和PostgreSQL健康；首次迁移在连接数据库前因只读根目录创建失败，空库无表、无`alembic_version`、无部分revision |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | OPS-001M合并后只人工升级变化资产并确认状态仍停在`migrations_completed`门禁；再单独授权一次`run-migrations` |
 
 ## 当前工作包进展
+
+- OPS-001L已通过PR #113合并并完成服务器人工升级。统一控制器真实续接完成六镜像离线导入、Docker 29/containerd结构化身份、无网络UID/GID探测、`image-identities.json`、目录所有权、PostgreSQL启动和健康验证，随后在不可逆迁移门禁停止。
+- 用户明确接受新建空UAT无备份及迁移失败保留现场的风险后，首次且唯一一次`run-migrations`失败。诊断确认失败发生在Python模块导入阶段：`get_settings()`尝试创建storage root并命中只读根；迁移尚未连接数据库，`public`表为0、`alembic_version`不存在、没有任何revision提交，PostgreSQL保持健康，API、Worker、Web和Nginx均未启动。
+- OPS-001M只在固定`migrate`服务的现有32 MiB `/tmp` tmpfs内设置`SMARTSCAN_STORAGE_ROOT=/tmp/smartscan-data`，继续保持只读根、不挂载真实业务data、不扩大tmpfs且不改变其他服务。迁移容器不持久化原始日志；控制器保存不含原始输出和Secret的固定错误码、异常类型及退出码，失败不推进状态。
+- Docker 29/containerd专项CI扩展为：真实OCR模型、迁移前等待门禁、空库完整升级至`20261022_0024`、schema/0024对象验证、重复调用幂等、第二次续接启动API/两个CPU Worker/Web、18082健康，并在共享Nginx激活前停止。仓库开发期间不连接或修改`smartscan-server`。
 
 - OPS-001K三项资产已由共同使用人人工升级并核验；原生模型、配置和发布接受随后全部通过。现场真实状态为`completed=[preflight,storage_verified,models_verified,config_verified,release_accepted]`、`next_required=images_imported`。
 - 第一次且唯一一次`resume-basic-uat`在导入首个PostgreSQL归档后返回`imported_image_id_mismatch:postgres`。后五镜像、UID/GID探测、`image-identities.json`、所有权、PostgreSQL启动、迁移、核心服务和Nginx均未执行；现场没有重试、清理、改Tag或编辑状态文件。

@@ -835,3 +835,12 @@
 - 决策：不删除Image ID门禁，也不把本地RepoDigest伪装成原GHCR digest。固定身份链升级为“接受的源digest→平台manifest→Config→压缩Layer与RootFS diff IDs→归档SHA-256→重算运行时Descriptor→实际Docker Image ID→唯一本地不可变Tag”。摘要统一正规化为`sha256:<64位小写十六进制>`；传统daemon要求Image ID等于Config digest，containerd模式要求Image ID、Descriptor digest与重算schema2 digest三者相等。
 - 续接：已存在Tag只有在完整结构化身份通过时才跳过重复导入；否则按碰撞失败关闭。`image-identities.json`记录源内容身份和实际运行时身份，所有权应用前再次核验。现场状态文件不迁移、不重置，升级后从`images_imported`继续，PostgreSQL已验证对象不重复`docker load`。
 - CI与边界：保留传统daemon完全离线测试，并增加固定Docker 29.0.2、containerd image store的真实隔离daemon路径，连续验证六归档、唯一Tag、UID/GID、身份文件、所有权和PostgreSQL健康，仍在不可逆迁移前停止。Compose继续固定`pull_policy: never`。本决策不授权服务器升级、重试导入、数据库、迁移、应用或Nginx。
+
+## D-111：迁移使用有界临时storage root并保留脱敏失败证据
+
+- 日期：2026-11-25
+- 状态：已确认根因；OPS-001M实施中
+- 现场证据：OPS-001L升级后，六镜像、身份、所有权和PostgreSQL健康均通过。首次`run-migrations`在Python模块导入阶段因`get_settings()`尝试在只读根创建storage root而失败；尚未连接数据库，`public`表数为0、`alembic_version`不存在且没有revision提交。PostgreSQL继续健康，核心服务和Nginx未启动。
+- 决策：固定`migrate`服务继续使用只读根和现有32 MiB `/tmp` tmpfs，只为该服务覆盖`SMARTSCAN_STORAGE_ROOT=/tmp/smartscan-data`。迁移不挂载或访问真实业务data目录，不扩大tmpfs，也不改变API、Worker或其他服务的storage root。临时目录随一次性迁移容器生命周期结束。
+- 诊断边界：迁移服务不持久化Docker原始日志；控制器只从内存输出提取白名单错误码、异常类型和退出码，写入root拥有的0600脱敏证据。失败不记录`migrations_completed`，不自动重试、降级、删除或清理；成功必须核对精确revision `20261022_0024`、0024代表对象及PostgreSQL健康后才推进状态。
+- 技术债：`get_settings()`在导入阶段创建目录不是长期设计。后续独立工作包应把目录创建移动到明确的应用/存储初始化阶段；本次有界兼容修复不表示保留该副作用。

@@ -24,7 +24,7 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 | 可选 AI | 通用文档、复杂 OCR、本机试用、三端接入与主动上传代码完成 | Provider、安全、可靠性、项目授权、版本候选、专用 Worker 与安全媒体已实现；AI 网关默认内部取图并使用 data URL、multipart 或 Files API 主动上传，签名 URL 降为兼容模式。H5、Android、iOS 和默认 Mock 使用同一候选语义；试卷、扫书与公司真实模型验收尚未完成，M8 总体仍为进行中 |
 | Android | M5 无外部 AI 核心与 M8 AI 接入自动化门禁完成；正式分发延期 | 已实现分层 API、登录/Keystore/Room、CameraX、离线续传、编辑分享、账号删除、签名更新，以及 AI 项目授权、任务进度、候选对比/决定和来源基础版本预览；PR #67 代码头 API/Web/Android/iOS/容器五项 CI 通过，客户端不保存部署连接配置。开发期使用本地或 CI 测试 APK；正式渠道、密钥、系统安装器、TalkBack、网络切换和真机升级在稳定版本后验收 |
 | iOS | M6 无外部 AI 核心、REL-002 仓库门禁与 M8 通用 AI 接入自动门禁完成 | 已实现可复现工程、身份/Keychain、AVFoundation、后台续传、编辑导出分享、账号删除、双语元数据与隐私清单；外部 AI 项目授权、双类型任务、候选对比/决定和来源版本预览已通过固定 Xcode 16.4 Simulator 编译与 XCTest。真实 Apple 参数、签名、真机与审核仍未通过 |
-| CI 与部署 | OPS-000、OPS-001B～OPS-001G、OPS-001I～OPS-001K、OPS-REG-003B、OCR-002及OCR-002D仓库门禁完成；OPS-001L进行中 | 50 GiB loop、OCR、配置、三网、离线发布与五项控制器前置状态已通过。首个PostgreSQL归档在Docker 29 containerd中内容一致但本地Image ID采用schema2 Descriptor digest，传统CI仅按Config digest判断而失败关闭。OPS-001L增加双重内容/运行时身份契约与Docker 29真实CI；后五镜像、身份、所有权、数据库、迁移和服务仍未执行 |
+| CI 与部署 | OPS-000、OPS-001B～OPS-001L、OPS-REG-003B、OCR-002及OCR-002D完成；OPS-001M进行中 | 50 GiB loop、OCR、配置、三网、六镜像离线导入、身份文件、目录所有权和PostgreSQL健康均已通过。首次迁移在模块导入阶段因只读根上的storage root副作用失败，尚未连接数据库且无部分revision；OPS-001M以32 MiB `/tmp`内的固定临时目录修复并增加Docker 29迁移至核心健康CI |
 | 数据库迁移 | 已实现 | Alembic 初始基线、空库升级、旧基线无损接管、版本门禁和 Compose 一次性迁移服务 |
 | API 分层 | 已实现 | 应用装配、认证路由、扫描路由、管理路由、领域服务和存储访问已分离，并由公开契约测试保护 |
 | 测试与 CI 基线 | 已实现 | 测试会话使用临时数据库/存储，保存完整 OpenAPI 快照，GitHub Actions 对应用代码执行 77% 覆盖率门禁 |
@@ -52,7 +52,7 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 - Android 与 iOS 后台队列均已实现，但网络类型切换、进程强杀、锁屏和真实 4G/5G 中断恢复仍待真机与 staging 验收。
 - OCR固定模型已安装，但真实授权数据集上的方向、准确率和容量验收仍未完成；模板试卷产品化、书籍双页与页码完整性的真实数据指标，以及生产大文件下载吞吐也待验收。
 - iOS 正式 Bundle ID、Apple Team、签名、公开隐私/支持地址、真实截图、审核账号、Archive、TestFlight 和 App Store 审核。
-- 共享生产宿主机的loop、六镜像接受、匿名manifest、CIDR/8077/18082、资源、OCR、证据、配置、三网和离线发布上传均已通过。统一控制器现场已完成五项前置状态；首次导入PostgreSQL后因Docker 29 containerd本地身份字段不同于传统daemon而停止。只读诊断证明Config和全部Layer未变，OPS-001L正在补充可重算Descriptor的等强度身份契约及Docker 29 CI。仍缺升级后续接、后五镜像、UID/GID、身份文件、所有权、迁移、Compose、Nginx增量及16用户共租户验收。
+- 共享生产宿主机的loop、六镜像、CIDR/8077/18082、资源、OCR、证据、配置、三网、离线导入、UID/GID、身份文件、所有权和PostgreSQL健康均已通过。首次`run-migrations`在Python模块导入阶段因只读根目录创建失败，数据库仍为空且健康；当前缺OPS-001M升级后重新授权迁移、核心服务、Nginx增量、HTTP基础UAT及16用户共租户验收。
 - 模型数据集、验收指标、真机矩阵、企业微信验证、Android 签名分发、TestFlight/App Store 材料和审核。
 
 ## 建议的后续里程碑
@@ -60,5 +60,5 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 1. 准备正式参数和目标设备后，用真机、签名和 TestFlight 完成 M6 人工门禁；这些外部条件不阻塞 M7 代码工作。
 2. 执行 M7：在授权固定数据集上产品化试卷与扫书能力，低置信结果始终保留原图并回退复核。
 3. 继续执行 M8：AI-006～AI-009、`H5-AI-001`、`DEVX-002`、Android/iOS 接入与 AI-013 仓库实现已完成；下一阶段是受固定数据集约束的 AI-010/AI-011，以及包含真实公司 Provider 主动上传的 AI-012 门禁。
-4. `OPS-001B`存储、`OPS-001C`应用准备工具、`OPS-REG-003B`PostgreSQL供应链、`OPS-001D`最终只读预检、`OPS-001E`仓库外证据、`OPS-001F`配置验证、`OPS-001G`固定网络、`OCR-002`模型安装和`OPS-001I`离线制品上传均已完成；`OPS-001L`正在修复Docker 29 containerd导入身份兼容，当前只有PostgreSQL归档已导入，数据库和应用均未启动。
+4. `OPS-001B`至`OPS-001L`的存储、模型、配置、网络、离线镜像、身份、所有权和数据库门禁均已完成；`OPS-001M`正在修复迁移容器只读根兼容，数据库迁移、API、两个CPU Worker、Web和Nginx均未完成。
 

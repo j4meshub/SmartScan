@@ -302,6 +302,26 @@ def test_compose_rejects_unbounded_writable_layers(
         _validate(tmp_path, compose=compose)
 
 
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        (
+            "SMARTSCAN_STORAGE_ROOT: /tmp/smartscan-data",
+            "SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data",
+            "migrate 临时storage root无效",
+        ),
+        ("    logging:\n      driver: none", "    logging:\n      driver: json-file", "禁止持久化"),
+    ],
+)
+def test_migrate_service_rejects_real_storage_or_persistent_logs(
+    tmp_path: Path, old: str, new: str, message: str
+) -> None:
+    compose = _write_changed(DEFAULT_COMPOSE_FILE, tmp_path / "compose.yml", old, new)
+
+    with pytest.raises(UatConfigError, match=message):
+        _validate(tmp_path, compose=compose)
+
+
 def test_compose_rejects_postgres_socket_named_volume(tmp_path: Path) -> None:
     source = DEFAULT_COMPOSE_FILE.read_text(encoding="utf-8")
     source += "\nvolumes:\n  postgres-socket:\n"
