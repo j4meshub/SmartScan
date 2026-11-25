@@ -78,6 +78,28 @@ class ControllerError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class RuntimeImageIdentity:
+    """Docker 本地对象与已审核离线内容链的结构化绑定。"""
+
+    runtime_image_id: str
+    runtime_descriptor_digest: str
+    runtime_descriptor_size: int
+    runtime_identity_kind: str
+    repo_digests: tuple[str, ...]
+    rootfs_diff_ids: tuple[str, ...]
+
+    def evidence(self) -> dict[str, Any]:
+        return {
+            "runtime_image_id": self.runtime_image_id,
+            "runtime_descriptor_digest": self.runtime_descriptor_digest,
+            "runtime_descriptor_size": self.runtime_descriptor_size,
+            "runtime_identity_kind": self.runtime_identity_kind,
+            "repo_digests": list(self.repo_digests),
+            "rootfs_diff_ids": list(self.rootfs_diff_ids),
+        }
+
+
+@dataclass(frozen=True)
 class Paths:
     config_root: Path = Path("/etc/smartscan/uat")
     data_root: Path = Path("/mnt/data/smartscan/uat")
@@ -138,6 +160,19 @@ class SubprocessRunner:
 def _require(condition: bool, reason: str) -> None:
     if not condition:
         raise ControllerError(reason)
+
+
+def _normalize_sha256(value: object, reason: str) -> str:
+    text = str(value).strip().lower().removeprefix("sha256:")
+    _require(SHA256.fullmatch(text) is not None, reason)
+    return f"sha256:{text}"
+
+
+def _json_command_output(value: str, reason: str) -> Any:
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ControllerError(reason) from exc
 
 
 def _sha256(path: Path) -> str:
@@ -654,46 +689,212 @@ class Controller:
             ]
         )
 
+    @staticmethod
+    def _expected_runtime_descriptor(record: dict[str, Any], archive: Path) -> tuple[str, int]:
+        """重算 Docker load 在 containerd image store 中生成的 schema2 manifest。"""
+
+        config_digest = _normalize_sha256(
+            record.get("config_digest"), "runtime_config_digest_invalid"
+        )
+        layers = record.get("layers")
+        _require(isinstance(layers, list) and layers, "runtime_layers_invalid")
+        with tarfile.open(archive, "r") as bundle:
+            config_name = f"{config_digest[7:]}.json"
+            try:
+                config_size = bundle.getmember(config_name).size
+            except KeyError as exc:
+                raise ControllerError("runtime_archive_config_missing") from exc
+        document = {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+            "config": {
+                "mediaType": "application/vnd.docker.container.image.v1+json",
+                "digest": config_digest,
+                "size": config_size,
+            },
+            "layers": [
+                {
+                    "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                    "digest": _normalize_sha256(item.get("digest"), "runtime_layer_digest_invalid"),
+                    "size": int(item.get("size", -1)),
+                }
+                for item in layers
+                if isinstance(item, dict)
+            ],
+        }
+        _require(len(document["layers"]) == len(layers), "runtime_layers_invalid")
+        _require(
+            all(item["size"] >= 0 for item in document["layers"]),
+            "runtime_layer_size_invalid",
+        )
+        raw = json.dumps(document, separators=(",", ":")).encode("utf-8")
+        return f"sha256:{hashlib.sha256(raw).hexdigest()}", len(raw)
+
+    def _inspect_runtime_image(
+        self,
+        image: dict[str, Any],
+        record: dict[str, Any],
+    ) -> RuntimeImageIdentity:
+        service, tag = str(image["service"]), str(image["local_tag"])
+
+        def field(template: str) -> str:
+            return self.runner.run(
+                ["/usr/bin/docker", "image", "inspect", "--format", template, tag]
+            )
+
+        runtime_image_id = _normalize_sha256(
+            field("{{.Id}}"), f"runtime_image_id_invalid:{service}"
+        )
+        repo_tags = _json_command_output(
+            field("{{json .RepoTags}}"), f"runtime_repo_tags_invalid:{service}"
+        )
+        _require(
+            isinstance(repo_tags, list)
+            and all(isinstance(item, str) for item in repo_tags)
+            and [item for item in repo_tags if item.startswith("smartscan-uat-")] == [tag],
+            f"runtime_local_tag_not_unique:{service}",
+        )
+        repo_digests_value = _json_command_output(
+            field("{{json .RepoDigests}}"), f"runtime_repo_digests_invalid:{service}"
+        )
+        _require(
+            repo_digests_value is None
+            or (
+                isinstance(repo_digests_value, list)
+                and all(isinstance(item, str) for item in repo_digests_value)
+            ),
+            f"runtime_repo_digests_invalid:{service}",
+        )
+        repo_digests = tuple(repo_digests_value or [])
+        _require(field("{{.Os}}") == "linux", f"runtime_os_invalid:{service}")
+        _require(field("{{.Architecture}}") == "amd64", f"runtime_architecture_invalid:{service}")
+        config_user = _json_command_output(
+            field("{{json .Config.User}}"), f"runtime_config_user_invalid:{service}"
+        )
+        _require(
+            isinstance(config_user, str) and config_user == str(record.get("config_user", "")),
+            f"runtime_config_user_mismatch:{service}",
+        )
+        revision = field(
+            '{{with .Config.Labels}}{{index . "org.opencontainers.image.revision"}}{{end}}'
+        )
+        version = field(
+            '{{with .Config.Labels}}{{index . "org.opencontainers.image.version"}}{{end}}'
+        )
+        _require(
+            revision == str(record.get("revision", "")), f"runtime_revision_mismatch:{service}"
+        )
+        _require(version == str(record.get("version", "")), f"runtime_version_mismatch:{service}")
+        rootfs_value = _json_command_output(
+            field("{{json .RootFS.Layers}}"), f"runtime_rootfs_invalid:{service}"
+        )
+        _require(isinstance(rootfs_value, list), f"runtime_rootfs_invalid:{service}")
+        rootfs_diff_ids = tuple(
+            _normalize_sha256(value, f"runtime_diff_id_invalid:{service}") for value in rootfs_value
+        )
+        expected_diff_ids = tuple(
+            _normalize_sha256(item.get("diff_id"), "release_diff_id_invalid")
+            for item in record.get("layers", [])
+            if isinstance(item, dict)
+        )
+        _require(
+            rootfs_diff_ids == expected_diff_ids and len(rootfs_diff_ids) > 0,
+            f"runtime_rootfs_mismatch:{service}",
+        )
+
+        config_digest = _normalize_sha256(
+            record.get("config_digest"), "release_config_digest_invalid"
+        )
+        descriptor_output = self.runner.run(
+            [
+                "/usr/bin/docker",
+                "image",
+                "inspect",
+                "--format",
+                "{{json .Descriptor}}",
+                tag,
+            ],
+            check=False,
+        )
+        descriptor_value = (
+            _json_command_output(descriptor_output, f"runtime_descriptor_invalid:{service}")
+            if descriptor_output
+            else None
+        )
+        if runtime_image_id == config_digest:
+            # 传统 image store 以配置摘要作为 Image ID；Descriptor 可能为空。
+            descriptor_digest = config_digest
+            descriptor_size = 0
+            identity_kind = "legacy_config_digest"
+            if descriptor_value is not None:
+                _require(
+                    isinstance(descriptor_value, dict), f"runtime_descriptor_invalid:{service}"
+                )
+        else:
+            _require(isinstance(descriptor_value, dict), f"runtime_descriptor_required:{service}")
+            expected_digest, expected_size = self._expected_runtime_descriptor(
+                record, self.paths.upload_root / str(image["archive_name"])
+            )
+            descriptor_digest = _normalize_sha256(
+                descriptor_value.get("digest"), f"runtime_descriptor_digest_invalid:{service}"
+            )
+            descriptor_size = descriptor_value.get("size")
+            _require(
+                descriptor_value.get("mediaType")
+                == "application/vnd.docker.distribution.manifest.v2+json",
+                f"runtime_descriptor_media_type_invalid:{service}",
+            )
+            _require(
+                descriptor_digest == runtime_image_id == expected_digest,
+                f"runtime_descriptor_digest_mismatch:{service}",
+            )
+            _require(
+                isinstance(descriptor_size, int) and descriptor_size == expected_size,
+                f"runtime_descriptor_size_mismatch:{service}",
+            )
+            identity_kind = "containerd_schema2_descriptor"
+        return RuntimeImageIdentity(
+            runtime_image_id=runtime_image_id,
+            runtime_descriptor_digest=descriptor_digest,
+            runtime_descriptor_size=descriptor_size,
+            runtime_identity_kind=identity_kind,
+            repo_digests=repo_digests,
+            rootfs_diff_ids=rootfs_diff_ids,
+        )
+
     def import_images(self) -> dict[str, Any]:
         self._require_steps("release_accepted")
         release, mapping = self._fixed_release()
         by_service = {item["service"]: item for item in mapping["images"]}
+        identities: dict[str, Any] = {}
         for image in release["images"]:
             service, tag = image["service"], image["local_tag"]
-            expected = by_service[service]["image_id"]
             current = self.runner.run(
                 ["/usr/bin/docker", "image", "inspect", "--format", "{{.Id}}", tag], check=False
             )
-            if current:
-                _require(current == expected, f"local_tag_collision:{service}")
-                continue
-            self.runner.run(
-                [
-                    "/usr/bin/docker",
-                    "load",
-                    "--input",
-                    str(self.paths.upload_root / image["archive_name"]),
-                ]
-            )
-            actual = self.runner.run(
-                ["/usr/bin/docker", "image", "inspect", "--format", "{{.Id}}", tag]
-            )
-            _require(actual == expected, f"imported_image_id_mismatch:{service}")
-        return self._record("images_imported")
+            if not current:
+                self.runner.run(
+                    [
+                        "/usr/bin/docker",
+                        "load",
+                        "--input",
+                        str(self.paths.upload_root / image["archive_name"]),
+                    ]
+                )
+            identity = self._inspect_runtime_image(image, by_service[service])
+            identities[service] = identity.evidence()
+        return self._record("images_imported", {"runtime_identities": identities})
 
     def verify_images(self) -> dict[str, Any]:
         self._require_steps("images_imported")
         release, mapping = self._fixed_release()
         by_service = {item["service"]: item for item in mapping["images"]}
         lines: list[str] = []
+        identities: dict[str, Any] = {}
         for image in release["images"]:
             service, tag, runtime_key = image["service"], image["local_tag"], image["runtime_key"]
-            actual = self.runner.run(
-                ["/usr/bin/docker", "image", "inspect", "--format", "{{.Id}}", tag]
-            )
-            _require(
-                actual == by_service[service]["image_id"], f"local_tag_image_id_mismatch:{service}"
-            )
+            identity = self._inspect_runtime_image(image, by_service[service])
+            identities[service] = identity.evidence()
             lines.append(f"{runtime_key}={tag}")
         _atomic_text(self.paths.local_images_env, "\n".join(lines) + "\n")
         # AI Profile 在基础 UAT 中保持关闭，但离线发布映射必须覆盖已接受的六个镜像。
@@ -703,7 +904,7 @@ class Controller:
             all(image["local_tag"] in config.splitlines() for image in release["images"]),
             "compose_offline_mapping_invalid",
         )
-        return self._record("images_verified")
+        return self._record("images_verified", {"runtime_identities": identities})
 
     def _probe(self, service: str, tag: str, selector: str) -> int:
         output = self.runner.run(
@@ -740,7 +941,7 @@ class Controller:
         if self._completed("identities_verified"):
             document = _load_json(self.paths.image_identities, expected_root_uid=self.root_uid)
             _require(
-                document.get("schema_version") == "1.0" and document.get("platform") == PLATFORM,
+                document.get("schema_version") == "1.1" and document.get("platform") == PLATFORM,
                 "identity_evidence_changed",
             )
             return self._record("identities_verified")
@@ -749,6 +950,7 @@ class Controller:
         images: dict[str, Any] = {}
         for image in release["images"]:
             service, record = image["service"], by_service[image["service"]]
+            runtime_identity = self._inspect_runtime_image(image, record)
             user = str(record.get("config_user", ""))
             match = re.fullmatch(r"([0-9]+):([0-9]+)", user)
             if match:
@@ -763,16 +965,20 @@ class Controller:
                 "source_digest_verified": True,
                 "offline_mapping_verified": True,
                 "source_digest": image["source"],
+                "platform_manifest": record["platform_manifest"],
+                "config_digest": record["config_digest"],
+                "layer_digests": [item["digest"] for item in record["layers"]],
+                "rootfs_diff_ids": [item["diff_id"] for item in record["layers"]],
                 "local_tag": image["local_tag"],
-                "image_id": record["image_id"],
                 "archive_sha256": record["archive_sha256"],
+                **runtime_identity.evidence(),
                 "config_user": user,
                 "runtime_uid": uid,
                 "runtime_gid": gid,
                 "identity_method": method,
             }
         document = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "platform": PLATFORM,
             "images": images,
@@ -784,7 +990,7 @@ class Controller:
     def apply_ownership(self) -> dict[str, Any]:
         self._require_steps("identities_verified")
         document = _load_json(self.paths.image_identities, expected_root_uid=self.root_uid)
-        _require(document.get("schema_version") == "1.0", "identity_schema_invalid")
+        _require(document.get("schema_version") == "1.1", "identity_schema_invalid")
         _require(document.get("platform") == PLATFORM, "identity_platform_invalid")
         images = document.get("images")
         release, mapping = self._fixed_release()
@@ -795,6 +1001,7 @@ class Controller:
             key, service = image["deploy_key"], image["service"]
             record = images.get(key)
             expected = by_service[service]
+            runtime_identity = self._inspect_runtime_image(image, expected)
             valid_mapping = (
                 isinstance(record, dict)
                 and record.get("reference") == image["source"]
@@ -802,7 +1009,18 @@ class Controller:
                 and record.get("source_digest_verified") is True
                 and record.get("offline_mapping_verified") is True
                 and record.get("archive_sha256") == expected["archive_sha256"]
-                and record.get("image_id") == expected["image_id"]
+                and record.get("platform_manifest") == expected["platform_manifest"]
+                and record.get("config_digest") == expected["config_digest"]
+                and record.get("layer_digests") == [item["digest"] for item in expected["layers"]]
+                and record.get("rootfs_diff_ids")
+                == [item["diff_id"] for item in expected["layers"]]
+                and record.get("runtime_image_id") == runtime_identity.runtime_image_id
+                and record.get("runtime_descriptor_digest")
+                == runtime_identity.runtime_descriptor_digest
+                and record.get("runtime_descriptor_size")
+                == runtime_identity.runtime_descriptor_size
+                and record.get("runtime_identity_kind") == runtime_identity.runtime_identity_kind
+                and record.get("repo_digests") == list(runtime_identity.repo_digests)
                 and record.get("local_tag") == image["local_tag"]
             )
             _require(valid_mapping, f"identity_mapping_invalid:{service}")

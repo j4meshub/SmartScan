@@ -110,8 +110,8 @@ Nginx激活不接受命令行路径。共同使用人必须在固定配置根预
 
 | 人工安装资产 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uatctl` | `d18bdf2babbe5423102997f21a4d96cbc09562bdb62fd3c0b242ed1e7be49a6c` |
-| `deploy/ops/smartscan_uatctl.py` | `4ead9ee486f78a93dbd9e872ebe99b455419fc56f878ac7d500e9f0edd21104a` |
+| `deploy/ops/smartscan-uatctl` | `080035668109ca42fb2a774fcfddc78dbc3fdd0e9c8f7262b4297a8a8577861e` |
+| `deploy/ops/smartscan_uatctl.py` | `476f5656dfe71260729f90e97151fec5784d9ed3ee25c0c16ed618293937c823` |
 | `deploy/ops/smartscan_uat_validators.py` | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
 | `deploy/sudoers/smartscan-uatctl` | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
 | `deploy/compose/docker-compose.uat.yml` | `227af87ba75638c729254d8e78af819b9ab7e88f73c632e79c4c2a8eedc2408c` |
@@ -169,6 +169,37 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
 
 备份删除不属于升级授权，保留到后续单独清理决定。
 
+### OPS-001L仅升级控制器两文件
+
+OPS-001K三文件已经安装且内聚验证模块未变化。OPS-001L只需要从合并提交Git对象导出的LF包装器和控制器，不替换`smartscan_uat_validators.py`、sudoers、Compose、Nginx模板或旧执行器。人工命令中的暂存目录固定为`/home/szhzx/smartscan-uatctl-upgrade-ops001l`：
+
+```bash
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uat_validators.py
+# 升级前预期依次为d18bdf2b...9a6c、4ead9ee4...104a、27916a63...467b
+sudo install -d -o root -g root -m 0700 /usr/local/libexec/smartscan/.ops001l-backup
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/.ops001l-backup/smartscan-uatctl
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/.ops001l-backup/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 /home/szhzx/smartscan-uatctl-upgrade-ops001l/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 /home/szhzx/smartscan-uatctl-upgrade-ops001l/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py
+# 升级后摘要以本节固定资产表和合并提交导出报告为准
+sudo visudo -cf /etc/sudoers.d/smartscan-uatctl
+sudo visudo -cf /etc/sudoers
+sudo -k
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+`status`必须保留五个已经完成的前置状态并返回`next_required=images_imported`。本步骤不授权`resume-basic-uat`。若包装器自校验、摘要或`status`失败，只回滚本次两文件：
+
+```bash
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001l-backup/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001l-backup/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo -k
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+备份和暂存目录的删除不属于升级授权。
+
 ## 授权与恢复顺序
 
 在用户接受发布映射、归档已校验并上传且控制器安装通过后，可以单独授权：
@@ -187,6 +218,19 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl resume-basic-uat
 
 `stop-core` 只停止固定核心服务并保留数据库、网络、镜像和数据。`rollback-images` 只允许切换到预先安装并验证的上一发布映射；它不删除当前镜像或数据。任何异常对象、Tag/image ID漂移、部分状态或摘要不一致都会失败关闭。
 
+## OPS-001L Docker 29 containerd身份兼容
+
+现场Docker 29.0.2启用了containerd image store。首个PostgreSQL归档导入后，归档、Config和全部Layer均与发布映射一致，但本地Image ID不再等于Config digest，而是Docker为导入内容生成的schema2 manifest digest。该差异归类为运行时身份字段变化，不是镜像内容变化。
+
+统一控制器现在同时验证两层身份：
+
+1. 源内容层：接受的GHCR源digest、`linux/amd64`平台manifest、Config digest、全部压缩Layer digest/大小、RootFS diff IDs和归档SHA-256；
+2. 运行时层：用已验证Config和Layer重算Docker schema2 manifest，核对`Descriptor.digest/size`、实际Image ID、平台、用户、revision/version及唯一本地不可变Tag。
+
+传统daemon仍要求Image ID等于Config digest；containerd模式必须满足“实际Image ID = Descriptor digest = 重算schema2 digest”。因此没有删除Image ID比较，也没有把containerd生成的本地RepoDigest伪装成源Registry RepoDigest。`image-identities.json`使用1.1契约同时记录源内容字段和实际运行时身份，所有权应用前再次验证。
+
+CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containerd image store再执行一次六镜像连续导入、UID/GID探测、身份文件、所有权及PostgreSQL健康。两条路径均在迁移前返回`waiting_confirmation`，Compose仍固定`pull_policy: never`。
+
 ## 回滚
 
 - 下载或上传失败：保留 `.part`，下次从固定偏移续传；不改用Tag或其他digest。
@@ -200,4 +244,4 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl resume-basic-uat
 
 ## 当前状态
 
-截至OPS-001K仓库修复，六归档及发布映射已接受并上传，统一控制器已安装，现场`preflight`与`storage_verified`已实际通过。旧OCR执行器验证成功，但旧控制器因脆弱字符串匹配误判失败；`models_verified`未写入。没有导入镜像，`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。仓库开发及PR期间不连接或修改服务器；合并后只暂存三项升级资产，实际替换仍由共同使用人人工完成。
+截至OPS-001L开始，六归档及发布映射已接受并上传，统一控制器已安装；现场五项前置状态均已通过。第一次续接只导入PostgreSQL后因Docker 29 containerd身份字段差异停止，后五镜像、`image-identities.json`、所有权、数据库、迁移、核心服务和Nginx均未执行。只读诊断没有改变服务器。OPS-001L合并后只暂存变化资产，实际替换仍由共同使用人人工完成，随后从`images_imported`继续。

@@ -825,3 +825,13 @@
 - 决策：D-108的失败证据和旧执行器保持不变原则继续有效，但“双层sudo作为正常状态机验证路径”被本决策取代。统一控制器直接调用只读Python验证函数，结果以`passed/reason_code/evidence_summary/next_state`结构传递，不解析stdout、不伪造sudo环境，也不增加格式化、重建、模型安装、Secret轮换或删除能力。
 - 验证边界：存储验证固定loop/ext4/systemd/容量事实；模型验证固定版本、文件集合、逐文件摘要、来源许可和文件安全；配置验证固定证据、六镜像、网络、资源、端口、Secret存在性与外部服务关闭。严格JSON解析拒绝重复键、尾随内容、非UTF-8、超大输入和错误类型，但合法空白、缩进及字段顺序不影响结果；Secret值不进入输出。
 - 兼容与CI：现场状态文件不迁移、不重置，升级后必须以真实`status`从`storage_verified`续接。Linux隔离daemon从该断点真实执行模型/配置验证、六归档导入、本地Tag/image ID、无网络身份探测、身份文件、所有权和PostgreSQL健康，并在不可逆迁移前返回等待确认。旧loop/OCR/部署准备执行器及sudoers继续作为低频初始化或维护工具，摘要回归锁定。
+
+## D-110：离线镜像身份采用源内容链与运行时Descriptor联合契约
+
+- 日期：2026-11-25
+- 状态：已确认根因；OPS-001L实施中
+- 现场证据：OPS-001K升级后，模型、配置和发布接受均通过。首次`resume-basic-uat`只导入PostgreSQL归档，随后以`imported_image_id_mismatch:postgres`停止。Docker Engine 29.0.2使用containerd image store；归档SHA-256、接受的源digest、`linux/amd64`manifest、Config、十个压缩Layer、RootFS diff IDs、平台、运行用户和revision均逐字一致，本地不可变Tag唯一。后五镜像、身份文件、所有权、数据库和迁移均未执行。
+- 根因分类：归入B。传统Docker image store以Config digest作为Image ID；Docker 29 containerd image store为同一归档生成Docker schema2 manifest，并以该manifest digest作为本地Image ID和Descriptor digest。根据已接受Config digest/大小及全部Layer digest/大小重算的schema2文档为1883字节，摘要与现场运行时Descriptor逐字一致。因此不是归档篡改、Tag错绑或单纯删除前缀问题。
+- 决策：不删除Image ID门禁，也不把本地RepoDigest伪装成原GHCR digest。固定身份链升级为“接受的源digest→平台manifest→Config→压缩Layer与RootFS diff IDs→归档SHA-256→重算运行时Descriptor→实际Docker Image ID→唯一本地不可变Tag”。摘要统一正规化为`sha256:<64位小写十六进制>`；传统daemon要求Image ID等于Config digest，containerd模式要求Image ID、Descriptor digest与重算schema2 digest三者相等。
+- 续接：已存在Tag只有在完整结构化身份通过时才跳过重复导入；否则按碰撞失败关闭。`image-identities.json`记录源内容身份和实际运行时身份，所有权应用前再次核验。现场状态文件不迁移、不重置，升级后从`images_imported`继续，PostgreSQL已验证对象不重复`docker load`。
+- CI与边界：保留传统daemon完全离线测试，并增加固定Docker 29.0.2、containerd image store的真实隔离daemon路径，连续验证六归档、唯一Tag、UID/GID、身份文件、所有权和PostgreSQL健康，仍在不可逆迁移前停止。Compose继续固定`pull_policy: never`。本决策不授权服务器升级、重试导入、数据库、迁移、应用或Nginx。

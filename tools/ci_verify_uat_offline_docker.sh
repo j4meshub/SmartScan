@@ -5,12 +5,20 @@ set -euo pipefail
 # 内层启动独立 Docker daemon；导入、inspect 和身份探测始终使用同一 socket。
 [[ "${GITHUB_ACTIONS:-}" == "true" && "${RUNNER_ENVIRONMENT:-}" == "github-hosted" ]] \
     || { echo "仅允许在GitHub-hosted Runner执行" >&2; exit 64; }
+readonly CONTAINERD29_MODE="${SMARTSCAN_DOCKER29_CONTAINERD:-0}"
+[[ "$CONTAINERD29_MODE" == "0" || "$CONTAINERD29_MODE" == "1" ]] \
+    || { echo "Docker存储模式无效" >&2; exit 64; }
+readonly DOCKERD_BIN="${SMARTSCAN_DOCKERD_BIN:-$(command -v dockerd)}"
+[[ -x "$DOCKERD_BIN" ]] || { echo "dockerd不可执行" >&2; exit 64; }
 if [[ "${SMARTSCAN_OFFLINE_NETNS:-}" != "1" ]]; then
-    exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT \
+    export SMARTSCAN_DOCKERD_BIN="$DOCKERD_BIN" SMARTSCAN_DOCKER29_CONTAINERD="$CONTAINERD29_MODE"
+    exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT,SMARTSCAN_DOCKERD_BIN,SMARTSCAN_DOCKER29_CONTAINERD \
         unshare --net --mount-proc \
         env SMARTSCAN_OFFLINE_NETNS=1 GITHUB_WORKSPACE="$GITHUB_WORKSPACE" \
         RUNNER_TEMP="$RUNNER_TEMP" GITHUB_ACTIONS="$GITHUB_ACTIONS" \
-        RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" bash "$0"
+        RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+        SMARTSCAN_DOCKERD_BIN="$DOCKERD_BIN" \
+        SMARTSCAN_DOCKER29_CONTAINERD="$CONTAINERD29_MODE" bash "$0"
 fi
 
 readonly ARCHIVE_ROOT="$GITHUB_WORKSPACE/.smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
@@ -21,7 +29,15 @@ readonly DOCKER_HOST_VALUE="unix://$DOCKER_SOCKET"
 /usr/sbin/ip link set lo up
 /usr/bin/mkdir -p "$RUNTIME_ROOT/data" "$RUNTIME_ROOT/exec"
 
-/usr/bin/dockerd \
+daemon_storage_arguments=(--storage-driver=vfs)
+if [[ "$CONTAINERD29_MODE" == "1" ]]; then
+    cat >"$RUNTIME_ROOT/daemon.json" <<'JSON'
+{"features":{"containerd-snapshotter":true,"lazy-pull":false}}
+JSON
+    daemon_storage_arguments=(--config-file="$RUNTIME_ROOT/daemon.json")
+fi
+
+"$DOCKERD_BIN" \
     --host="$DOCKER_HOST_VALUE" \
     --data-root="$RUNTIME_ROOT/data" \
     --exec-root="$RUNTIME_ROOT/exec" \
@@ -32,7 +48,7 @@ readonly DOCKER_HOST_VALUE="unix://$DOCKER_SOCKET"
     --ip-forward=false \
     --ip-masq=false \
     --userland-proxy=false \
-    --storage-driver=vfs \
+    "${daemon_storage_arguments[@]}" \
     >"$RUNTIME_ROOT/dockerd.log" 2>&1 &
 readonly DOCKERD_PID=$!
 
@@ -61,6 +77,13 @@ for _ in $(seq 1 60); do
     /usr/bin/sleep 1
 done
 /usr/bin/docker info >/dev/null
+if [[ "$CONTAINERD29_MODE" == "1" ]]; then
+    [[ "$(/usr/bin/docker version --format '{{.Server.Version}}')" == "29.0.2" ]] \
+        || { printf 'Docker Server版本不是29.0.2\n' >&2; exit 1; }
+    /usr/bin/docker info --format '{{json .DriverStatus}}' \
+        | /bin/grep -F 'io.containerd.snapshotter.v1' >/dev/null \
+        || { printf '未启用containerd image store\n' >&2; exit 1; }
+fi
 
 /usr/bin/docker network create --driver bridge --subnet 172.31.250.0/28 smartscan-ci-sentinel >/dev/null
 /usr/bin/docker network create --driver bridge --internal \
@@ -110,4 +133,5 @@ mapfile -t migrate_ids < <(
 )
 [[ "${#migrate_ids[@]}" -eq 0 ]] \
     || { printf '迁移确认前不应创建迁移容器\n' >&2; exit 1; }
-printf '{"daemon_network":"isolated","images":6,"state_machine":"migration_confirmation","status":"passed"}\n'
+printf '{"containerd_image_store":%s,"daemon_network":"isolated","images":6,"state_machine":"migration_confirmation","status":"passed"}\n' \
+    "$([[ "$CONTAINERD29_MODE" == "1" ]] && printf true || printf false)"
