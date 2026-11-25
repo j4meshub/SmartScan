@@ -7,15 +7,25 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001K` 统一控制器内聚验证重构 |
-| 工作包状态 | 完成；仓库实现、完整CI与自审通过，PR #112合并后等待共同使用人人工升级三项固定资产 |
-| 当前分支 | `codex/ops-001k-native-validation` |
-| 最后验证基线 | 现场真实完成`preflight`与`storage_verified`；旧OCR执行器验证成功但控制器字符串解析误判，后续步骤均未执行 |
-| 工作包提交 | `1ff43e9`起的OPS-001K提交序列；技术验证头`d050443` |
-| PR | [#112](https://github.com/j4meshub/SmartScan/pull/112)，全部27项检查完成且失败为0，待合并 |
-| 下一工作包 | OPS-001K合并后仅人工升级包装器、控制器和内聚验证模块；先读取真实`status`，再从`models_verified`门禁继续，迁移和Nginx仍不自动执行 |
+| 当前工作包 | `OPS-001L` Docker 29 containerd离线镜像身份兼容诊断与修复 |
+| 工作包状态 | 等待合并；B类根因、结构化身份契约和Docker 29/传统daemon双路径CI已验收 |
+| 当前分支 | `codex/ops-001l-containerd-image-identity` |
+| 最后验证基线 | 现场真实完成`preflight`、`storage_verified`、`models_verified`、`config_verified`和`release_accepted`；首次续接只导入PostgreSQL后因运行时Image ID差异停止 |
+| 工作包提交 | `ae9e3ec`、`35e9d3f` |
+| PR | [#113](https://github.com/j4meshub/SmartScan/pull/113)，技术验证头22项检查全部成功或按条件跳过，失败0 |
+| 下一工作包 | OPS-001L合并后只人工升级变化的统一控制器资产并确认`status`仍停在`images_imported`；再单独授权一次状态机续接到迁移前门禁 |
 
 ## 当前工作包进展
+
+- OPS-001K三项资产已由共同使用人人工升级并核验；原生模型、配置和发布接受随后全部通过。现场真实状态为`completed=[preflight,storage_verified,models_verified,config_verified,release_accepted]`、`next_required=images_imported`。
+- 第一次且唯一一次`resume-basic-uat`在导入首个PostgreSQL归档后返回`imported_image_id_mismatch:postgres`。后五镜像、UID/GID探测、`image-identities.json`、所有权、PostgreSQL启动、迁移、核心服务和Nginx均未执行；现场没有重试、清理、改Tag或编辑状态文件。
+- 只读诊断确认Docker Engine 29.0.2/API 1.52使用`overlayfs`和`io.containerd.snapshotter.v1`。PostgreSQL归档大小与SHA-256、接受的源digest、`linux/amd64`平台manifest、Config digest、十个压缩Layer及RootFS diff IDs全部一致，本地不可变Tag唯一且平台、用户、revision均符合发布映射。
+- 传统daemon把Config digest作为Image ID；Docker 29 containerd image store把同一归档转换为Docker schema2 manifest并以其digest作为本地Image ID/Descriptor。按固定字段顺序重算所得descriptor摘要和1883字节大小与现场逐字一致，根因归类为B，不属于Tag错绑、归档篡改或证据不足。
+- OPS-001L保留完整源内容链验证，并新增运行时Descriptor重算、摘要正规化、唯一Tag、RootFS、平台、Config.User及OCI标签联合校验。已存在且内容完全一致的PostgreSQL Tag可安全续接，不重复`docker load`；任何Config、Layer、Descriptor或Tag差异仍失败关闭。
+- GitHub离线工作流同时运行传统全断网独立daemon和固定Docker 29.0.2 containerd image store。Docker 29路径使用不可用本机代理失败关闭Registry访问，身份探测仍为`--network none`；传统daemon使用独立containerd namespace避免两条路径交叉命中缓存。
+- PR #113首轮Docker 29 CI已完成六镜像导入和联合身份验证，但因测试内层dockerd与containerd位于不同网络命名空间，在UID/GID探测时失败。追加修正仅调整CI运行时编排，不改控制器、镜像契约或服务器状态。
+- 修正后的PR #113技术验证头共22项检查：失败0。Docker 29/containerd与传统全断网daemon均真实完成六归档导入、Tag/身份、无网络UID/GID探测、身份文件、所有权和PostgreSQL健康，返回`next_required=run-migrations`。本地全量Python为`650 passed, 37 skipped`，覆盖率87.74%；Ruff检查与格式检查通过。
+- 本工作包现场阶段只执行了固定对象的只读诊断，没有再次导入镜像、创建容器、修改Tag、清理缓存、改变状态、读取Secret、启动数据库、迁移或修改Nginx。
 
 - OPS-001J已合并并由共同使用人人工升级。现场随后实际确认`completed`包含`preflight`，并成功执行原生存储验证，状态写入`storage_verified`。旧OCR执行器的验证本身成功，但输出为带合法空格的JSON；统一控制器使用紧耦合字符串片段判断，误报`model_verify_failed`，没有记录`models_verified`。
 - 当前现场状态预计为`completed=[preflight,storage_verified]`且下一项为`models_verified`，但这是基于状态写入顺序的源码推断；OPS-001K升级后仍必须以真实`status`确认，不能把推断冒充现场证据。镜像、身份文件、所有权、PostgreSQL、迁移、核心服务和Nginx均未执行。

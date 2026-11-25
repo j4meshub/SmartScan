@@ -71,6 +71,36 @@ class FakeValidator:
         return self._result("config_verified")
 
 
+def _set_runtime_inspect(
+    runner: FakeRunner,
+    image: dict[str, str],
+    record: dict,
+    *,
+    runtime_image_id: str | None = None,
+    descriptor: dict | None = None,
+) -> None:
+    tag = image["local_tag"]
+    runtime_image_id = runtime_image_id or record["config_digest"]
+    values = {
+        "{{.Id}}": runtime_image_id,
+        "{{json .RepoTags}}": json.dumps([tag]),
+        "{{json .RepoDigests}}": json.dumps([f"{tag.split(':', 1)[0]}@{runtime_image_id}"]),
+        "{{.Os}}": "linux",
+        "{{.Architecture}}": "amd64",
+        "{{json .Config.User}}": json.dumps(record.get("config_user", "")),
+        '{{with .Config.Labels}}{{index . "org.opencontainers.image.revision"}}{{end}}': record.get(
+            "revision", ""
+        ),
+        '{{with .Config.Labels}}{{index . "org.opencontainers.image.version"}}{{end}}': record.get(
+            "version", ""
+        ),
+        "{{json .RootFS.Layers}}": json.dumps([item["diff_id"] for item in record["layers"]]),
+        "{{json .Descriptor}}": json.dumps(descriptor),
+    }
+    for template, value in values.items():
+        runner.outputs[("/usr/bin/docker", "image", "inspect", "--format", template, tag)] = value
+
+
 def _paths(tmp_path: Path) -> uatctl.Paths:
     config = tmp_path / "etc" / "smartscan" / "uat"
     data = tmp_path / "mnt" / "data" / "smartscan" / "uat"
@@ -361,28 +391,34 @@ def test_offline_image_mapping_includes_disabled_ai_profile(
             "service": service,
             "local_tag": f"smartscan-uat-{service}:sha256-{'a' * 12}",
             "runtime_key": f"SMARTSCAN_UAT_{service.upper().replace('-', '_')}_RUNTIME_IMAGE",
+            "archive_name": f"smartscan-{service}-{'a' * 12}-linux-amd64.docker.tar",
         }
         for service in services
     ]
     mapping = {
         "images": [
-            {"service": image["service"], "image_id": f"sha256:{index:064x}"}
+            {
+                "service": image["service"],
+                "image_id": f"sha256:{index:064x}",
+                "config_digest": f"sha256:{index:064x}",
+                "config_user": "10001:10001",
+                "revision": "fixed-revision",
+                "version": "fixed-version",
+                "layers": [
+                    {
+                        "digest": f"sha256:{index + 10:064x}",
+                        "diff_id": f"sha256:{index + 20:064x}",
+                        "size": 10,
+                    }
+                ],
+            }
             for index, image in enumerate(images, start=1)
         ]
     }
     monkeypatch.setattr(controller, "_fixed_release", lambda: ({"images": images}, mapping))
     controller._record("images_imported")
     for image, record in zip(images, mapping["images"], strict=True):
-        runner.outputs[
-            (
-                "/usr/bin/docker",
-                "image",
-                "inspect",
-                "--format",
-                "{{.Id}}",
-                image["local_tag"],
-            )
-        ] = record["image_id"]
+        _set_runtime_inspect(runner, image, record)
     compose_call = (
         "/usr/bin/docker",
         "compose",
@@ -405,6 +441,116 @@ def test_offline_image_mapping_includes_disabled_ai_profile(
 
     assert list(runner.calls[-1]) == list(compose_call)
     assert "smartscan-uat-ai-gateway" in paths.local_images_env.read_text(encoding="utf-8")
+
+
+def test_containerd_runtime_descriptor_binds_archive_config_layers_and_existing_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    config_digest = f"sha256:{'1' * 64}"
+    layer_digest = f"sha256:{'2' * 64}"
+    diff_id = f"sha256:{'3' * 64}"
+    image = {
+        "service": "postgres",
+        "local_tag": "smartscan-uat-postgres:sha256-94758173bbe1",
+        "archive_name": "smartscan-postgres-94758173bbe1-linux-amd64.docker.tar",
+    }
+    record = {
+        "service": "postgres",
+        "config_digest": config_digest,
+        "config_user": "70:70",
+        "revision": "fixed-revision",
+        "version": "17.7",
+        "layers": [{"digest": layer_digest, "diff_id": diff_id, "size": 19}],
+    }
+    archive = paths.upload_root / image["archive_name"]
+    with tarfile.open(archive, "w") as bundle:
+        config = tarfile.TarInfo(f"{config_digest[7:]}.json")
+        config.size = 23
+        bundle.addfile(config, io.BytesIO(b"x" * 23))
+    expected_digest, expected_size = controller._expected_runtime_descriptor(record, archive)
+    descriptor = {
+        "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+        "digest": expected_digest,
+        "size": expected_size,
+    }
+    _set_runtime_inspect(
+        runner,
+        image,
+        record,
+        runtime_image_id=expected_digest.removeprefix("sha256:"),
+        descriptor=descriptor,
+    )
+    monkeypatch.setattr(
+        controller,
+        "_fixed_release",
+        lambda: ({"images": [image]}, {"images": [record]}),
+    )
+    controller._record("release_accepted")
+
+    controller.import_images()
+
+    assert "images_imported" in controller.status()["completed"]
+    assert not any(call[:3] == ["/usr/bin/docker", "load", "--input"] for call in runner.calls)
+    evidence = controller._state()["evidence"]["images_imported"]["runtime_identities"]
+    assert evidence["postgres"]["runtime_identity_kind"] == "containerd_schema2_descriptor"
+    assert evidence["postgres"]["runtime_image_id"] == expected_digest
+
+
+def test_containerd_runtime_descriptor_mismatch_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    image = {
+        "service": "postgres",
+        "local_tag": "smartscan-uat-postgres:sha256-94758173bbe1",
+        "archive_name": "smartscan-postgres-94758173bbe1-linux-amd64.docker.tar",
+    }
+    record = {
+        "service": "postgres",
+        "config_digest": f"sha256:{'1' * 64}",
+        "config_user": "70:70",
+        "revision": "fixed-revision",
+        "version": "17.7",
+        "layers": [
+            {
+                "digest": f"sha256:{'2' * 64}",
+                "diff_id": f"sha256:{'3' * 64}",
+                "size": 19,
+            }
+        ],
+    }
+    archive = paths.upload_root / image["archive_name"]
+    with tarfile.open(archive, "w") as bundle:
+        config = tarfile.TarInfo(f"{'1' * 64}.json")
+        config.size = 23
+        bundle.addfile(config, io.BytesIO(b"x" * 23))
+    wrong = f"sha256:{'4' * 64}"
+    _set_runtime_inspect(
+        runner,
+        image,
+        record,
+        runtime_image_id=wrong,
+        descriptor={
+            "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+            "digest": wrong,
+            "size": 1,
+        },
+    )
+    monkeypatch.setattr(
+        controller,
+        "_fixed_release",
+        lambda: ({"images": [image]}, {"images": [record]}),
+    )
+    controller._record("release_accepted")
+
+    with pytest.raises(uatctl.ControllerError, match="runtime_descriptor_digest_mismatch"):
+        controller.import_images()
+    assert "images_imported" not in controller.status()["completed"]
 
 
 def test_identity_probe_and_nginx_paths_do_not_use_legacy_executor_bridge(tmp_path: Path) -> None:
@@ -494,6 +640,14 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "DOCKER_HOST" in script
     assert "ci_verify_uatctl_checkpoint.py" in script
     assert 'state_machine":"migration_confirmation' in script
+    assert "docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5" in workflow
+    assert "version: v29.0.2" in workflow
+    assert 'SMARTSCAN_DOCKER29_CONTAINERD: "1"' in workflow
+    assert "containerd-snapshotter" in workflow
+    assert "SMARTSCAN_EXTERNAL_DOCKER=1" in script
+    assert "--containerd-namespace=smartscan-ci-legacy" in script
+    assert '"https-proxy": "http://127.0.0.1:9"' in workflow
+    assert "io.containerd.snapshotter.v1" in script
     controller = (root / "deploy/ops/smartscan_uatctl.py").read_text(encoding="utf-8")
     assert '"load",' in controller
     assert '"none",' in controller

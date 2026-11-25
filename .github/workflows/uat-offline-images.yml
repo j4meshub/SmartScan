@@ -62,7 +62,27 @@ jobs:
         run: python tools/smartscan_offline_images.py ci-build
       - name: 离线复核全部归档
         run: python tools/smartscan_offline_images.py verify
-      - name: 使用独立无网络Docker daemon验证当前断点至迁移前门禁
+      - name: 安装固定Docker 29.0.2
+        uses: docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5 # v5.6.0
+        with:
+          version: v29.0.2
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true,
+                "lazy-pull": false
+              },
+              "proxies": {
+                "http-proxy": "http://127.0.0.1:9",
+                "https-proxy": "http://127.0.0.1:9",
+                "no-proxy": "localhost,127.0.0.1"
+              }
+            }
+      - name: 使用Docker 29 containerd image store完成相同离线门禁
+        env:
+          SMARTSCAN_DOCKER29_CONTAINERD: "1"
+        run: bash tools/ci_verify_uat_offline_docker.sh
+      - name: 使用独立无网络传统Docker daemon验证当前断点至迁移前门禁
         run: bash tools/ci_verify_uat_offline_docker.sh
       - name: 验证Compose完全禁止拉取
         run: |
