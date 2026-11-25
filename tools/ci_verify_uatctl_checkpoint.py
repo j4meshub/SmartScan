@@ -73,7 +73,7 @@ def prepare_model(root: Path) -> None:
         directory.chmod(0o755)
 
 
-def prepare_config() -> tuple[config.Paths, validators.NativeValidators]:
+def prepare_config(deploy_uid: int) -> tuple[config.Paths, validators.NativeValidators]:
     CONFIG.mkdir(parents=True, mode=0o700)
     for path, mode in (
         (DATA / "postgres", 0o700),
@@ -155,7 +155,7 @@ def prepare_config() -> tuple[config.Paths, validators.NativeValidators]:
             "contains_sensitive_data": False,
         },
     )
-    config.generate(paths, deploy_uid=0, root_uid=0)
+    config.generate(paths, deploy_uid=deploy_uid, root_uid=0)
     native = validators.NativeValidators(
         uatctl.SubprocessRunner(),
         validators.Paths(
@@ -171,16 +171,21 @@ def prepare_config() -> tuple[config.Paths, validators.NativeValidators]:
             bootstrap_password=paths.bootstrap_password,
         ),
         root_uid=0,
-        deploy_uid=0,
+        deploy_uid=deploy_uid,
     )
     return paths, native
 
 
 def main() -> None:
-    _, native = prepare_config()
+    archive_root = ARCHIVES.stat()
+    assert archive_root.st_uid != 0, "CI发布归档应模拟普通部署用户上传"
+    deploy_uid = archive_root.st_uid
+    ARCHIVES.chmod(0o700)
     for path in ARCHIVES.iterdir():
         if path.is_file():
+            assert path.stat().st_uid == deploy_uid, f"归档所有者不一致：{path.name}"
             path.chmod(0o600)
+    _, native = prepare_config(deploy_uid)
     paths = uatctl.Paths(
         config_root=CONFIG,
         data_root=DATA,
@@ -198,7 +203,12 @@ def main() -> None:
         nginx_template=ROOT / "deploy/nginx/shared-8077-smartscan-location.conf.template",
         validator_module=ROOT / "deploy/ops/smartscan_uat_validators.py",
     )
-    controller = uatctl.Controller(paths, root_uid=0, deploy_uid=0, validator=native)
+    controller = uatctl.Controller(
+        paths,
+        root_uid=0,
+        deploy_uid=deploy_uid,
+        validator=native,
+    )
     controller._record("preflight", {"ci_upgrade_checkpoint": True})
     controller._record("storage_verified", {"ci_upgrade_checkpoint": True})
     before = controller.status()
