@@ -82,7 +82,26 @@ done
 export PYTHONPATH="$GITHUB_WORKSPACE"
 /usr/bin/python3 "$GITHUB_WORKSPACE/tools/ci_verify_uatctl_checkpoint.py"
 
-[[ "$(/usr/bin/docker network inspect --format '{{.Name}}' smartscan-ci-sentinel)" == "smartscan-ci-sentinel" ]]
-[[ "$(/usr/bin/docker ps --filter name=smartscan-uat-postgres --format '{{.Status}}')" == *"healthy"* ]]
-[[ "$(/usr/bin/docker ps -a --filter name=smartscan-uat-migrate --format '{{.Names}}' | /usr/bin/wc -l)" -eq 0 ]]
+[[ "$(/usr/bin/docker network inspect --format '{{.Name}}' smartscan-ci-sentinel)" == "smartscan-ci-sentinel" ]] \
+    || { printf '隔离Docker哨兵网络丢失\n' >&2; exit 1; }
+mapfile -t postgres_ids < <(
+    /usr/bin/docker ps -q \
+        --filter label=com.docker.compose.project=smartscan-uat \
+        --filter label=com.docker.compose.service=postgres
+)
+[[ "${#postgres_ids[@]}" -eq 1 ]] \
+    || { printf 'PostgreSQL容器数量异常：%s\n' "${#postgres_ids[@]}" >&2; exit 1; }
+postgres_health="$(
+    /usr/bin/docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+        "${postgres_ids[0]}"
+)"
+[[ "$postgres_health" == "healthy" ]] \
+    || { printf 'PostgreSQL健康状态异常：%s\n' "$postgres_health" >&2; exit 1; }
+mapfile -t migrate_ids < <(
+    /usr/bin/docker ps -a -q \
+        --filter label=com.docker.compose.project=smartscan-uat \
+        --filter label=com.docker.compose.service=migrate
+)
+[[ "${#migrate_ids[@]}" -eq 0 ]] \
+    || { printf '迁移确认前不应创建迁移容器\n' >&2; exit 1; }
 printf '{"daemon_network":"isolated","images":6,"state_machine":"migration_confirmation","status":"passed"}\n'
