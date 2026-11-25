@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from deploy.ops import smartscan_uat_config as config
@@ -18,6 +19,49 @@ ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
 CONFIG = Path("/etc/smartscan/uat")
 DATA = Path("/mnt/data/smartscan/uat")
 OCR_LAYER = ROOT / ".smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz"
+
+
+def report_core_failure(controller: uatctl.Controller) -> None:
+    """CI失败时只输出固定服务的脱敏状态与异常摘要。"""
+
+    secret_pattern = re.compile(
+        r"(?i)(password|secret|token|api[_-]?key|postgresql(?:\+\w+)?://)\s*[:=]?\s*\S+"
+    )
+    error_pattern = re.compile(
+        r"(?i)(error|exception|traceback|permission denied|read-only|no such file|failed)"
+    )
+    for service in ("api", "worker-cpu-1", "worker-cpu-2", "nginx"):
+        container_id = controller._compose("ps", "-a", "-q", service).strip()
+        if not container_id:
+            print(json.dumps({"service": service, "status": "missing"}, sort_keys=True))
+            continue
+        state_raw = controller.runner.run(
+            [
+                "/usr/bin/docker",
+                "inspect",
+                "--format",
+                "{{json .State}}",
+                container_id,
+            ]
+        )
+        state = json.loads(state_raw)
+        evidence = {
+            "service": service,
+            "status": state.get("Status"),
+            "exit_code": state.get("ExitCode"),
+            "oom_killed": state.get("OOMKilled"),
+            "runtime_error": bool(state.get("Error")),
+            "health": (state.get("Health") or {}).get("Status"),
+        }
+        logs = controller.runner.run_result(
+            ["/usr/bin/docker", "logs", "--tail", "60", container_id],
+            timeout_seconds=10,
+        )
+        combined = f"{logs.stdout}\n{logs.stderr}"
+        candidates = [line.strip() for line in combined.splitlines() if error_pattern.search(line)]
+        if candidates:
+            evidence["error_summary"] = secret_pattern.sub(r"\1=<redacted>", candidates[-1])[:500]
+        print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
 
 
 def write_json(path: Path, value: object) -> None:
@@ -264,7 +308,11 @@ def main() -> None:
     assert repeated["already_complete"] is True
     assert controller._compose("ps", "-a", "-q", "migrate") == migrate_id
 
-    resumed = controller.resume_basic_uat()
+    try:
+        resumed = controller.resume_basic_uat()
+    except uatctl.ControllerError:
+        report_core_failure(controller)
+        raise
     assert resumed == {
         "status": "passed",
         "next_required": "stage-nginx",
