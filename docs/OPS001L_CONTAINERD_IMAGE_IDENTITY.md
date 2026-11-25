@@ -44,9 +44,11 @@ Docker官方说明Docker Engine 29的新安装默认使用containerd image store
 离线工作流执行两条Linux路径：
 
 - 传统独立daemon：继续验证Config digest形式的Image ID；
-- 固定Docker 29.0.2：启用containerd image store和`overlayfs` snapshotter，在没有外部网络接口的独立daemon内执行相同完整状态机。
+- 固定Docker 29.0.2：启用containerd image store和`overlayfs` snapshotter，使用与containerd相同主机命名空间的真实daemon执行相同完整状态机。该daemon的HTTP/HTTPS代理固定指向不可用的本机端口，所有容器探测仍使用`--network none`；任何Registry请求都会失败关闭。
 
-两条路径都必须完成六个归档连续导入、Tag/身份验证、无网络UID/GID探测、`image-identities.json`、所有权、PostgreSQL健康和迁移前等待确认。Docker 29由官方`docker/setup-docker-action`固定到不可变提交和版本，启用方式遵循其官方`daemon-config`说明：[setup-docker-action](https://github.com/docker/setup-docker-action)。
+两条路径都必须完成六个归档连续导入、Tag/身份验证、无网络UID/GID探测、`image-identities.json`、所有权、PostgreSQL健康和迁移前等待确认。传统daemon使用独立containerd namespace，防止两条CI路径共享镜像元数据而误跳过导入。Docker 29由官方`docker/setup-docker-action`固定到不可变提交和版本，启用方式遵循其官方`daemon-config`说明：[setup-docker-action](https://github.com/docker/setup-docker-action)。
+
+首次Docker 29 CI的镜像导入和身份验证均成功，但因dockerd与docker调用位于不同网络命名空间，containerd在启动第一个UID/GID探测容器时失败。这是CI运行时编排问题，不是镜像内容或服务器故障；修复不改变生产控制器的安全探测参数。
 
 ## 服务器升级边界
 

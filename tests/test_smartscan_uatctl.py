@@ -643,7 +643,10 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5" in workflow
     assert "version: v29.0.2" in workflow
     assert 'SMARTSCAN_DOCKER29_CONTAINERD: "1"' in workflow
-    assert "containerd-snapshotter" in script
+    assert "containerd-snapshotter" in workflow
+    assert "SMARTSCAN_EXTERNAL_DOCKER=1" in script
+    assert "--containerd-namespace=smartscan-ci-legacy" in script
+    assert '"https-proxy": "http://127.0.0.1:9"' in workflow
     assert "io.containerd.snapshotter.v1" in script
     controller = (root / "deploy/ops/smartscan_uatctl.py").read_text(encoding="utf-8")
     assert '"load",' in controller

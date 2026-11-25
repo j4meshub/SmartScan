@@ -11,6 +11,20 @@ readonly CONTAINERD29_MODE="${SMARTSCAN_DOCKER29_CONTAINERD:-0}"
 readonly DOCKERD_BIN="${SMARTSCAN_DOCKERD_BIN:-$(command -v dockerd)}"
 [[ -x "$DOCKERD_BIN" ]] || { echo "dockerd不可执行" >&2; exit 64; }
 if [[ "${SMARTSCAN_OFFLINE_NETNS:-}" != "1" ]]; then
+    if [[ "$CONTAINERD29_MODE" == "1" ]]; then
+        # setup-docker-action 创建的Docker 29 daemon和containerd必须处于同一
+        # 主机网络命名空间，否则containerd无法启动受控探测容器。
+        # daemon已由workflow配置为仅能连接本机失败代理，任何
+        # Registry访问都会失败关闭；全断网导入仍由传统daemon路径验证。
+        readonly setup_docker_host="$(/usr/bin/docker context inspect --format '{{.Endpoints.docker.Host}}')"
+        [[ "$setup_docker_host" == unix://* ]] \
+            || { echo "Docker 29 socket不是本机Unix socket" >&2; exit 64; }
+        exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT \
+            env SMARTSCAN_OFFLINE_NETNS=1 SMARTSCAN_EXTERNAL_DOCKER=1 \
+            SMARTSCAN_DOCKER29_CONTAINERD=1 DOCKER_HOST="$setup_docker_host" \
+            GITHUB_WORKSPACE="$GITHUB_WORKSPACE" RUNNER_TEMP="$RUNNER_TEMP" \
+            GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" bash "$0"
+    fi
     export SMARTSCAN_DOCKERD_BIN="$DOCKERD_BIN" SMARTSCAN_DOCKER29_CONTAINERD="$CONTAINERD29_MODE"
     exec sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP,GITHUB_ACTIONS,RUNNER_ENVIRONMENT,SMARTSCAN_DOCKERD_BIN,SMARTSCAN_DOCKER29_CONTAINERD \
         unshare --net --mount-proc \
@@ -26,31 +40,29 @@ readonly RUNTIME_ROOT="$RUNNER_TEMP/smartscan-offline-docker"
 readonly DOCKER_SOCKET="$RUNTIME_ROOT/docker.sock"
 readonly DOCKER_HOST_VALUE="unix://$DOCKER_SOCKET"
 
-/usr/sbin/ip link set lo up
-/usr/bin/mkdir -p "$RUNTIME_ROOT/data" "$RUNTIME_ROOT/exec"
-
-daemon_storage_arguments=(--storage-driver=vfs)
-if [[ "$CONTAINERD29_MODE" == "1" ]]; then
-    cat >"$RUNTIME_ROOT/daemon.json" <<'JSON'
-{"features":{"containerd-snapshotter":true,"lazy-pull":false}}
-JSON
-    daemon_storage_arguments=(--config-file="$RUNTIME_ROOT/daemon.json")
+readonly EXTERNAL_DOCKER="${SMARTSCAN_EXTERNAL_DOCKER:-0}"
+DOCKERD_PID=""
+if [[ "$EXTERNAL_DOCKER" == "0" ]]; then
+    /usr/sbin/ip link set lo up
+    /usr/bin/mkdir -p "$RUNTIME_ROOT/data" "$RUNTIME_ROOT/exec"
+    "$DOCKERD_BIN" \
+        --host="$DOCKER_HOST_VALUE" \
+        --data-root="$RUNTIME_ROOT/data" \
+        --exec-root="$RUNTIME_ROOT/exec" \
+        --pidfile="$RUNTIME_ROOT/docker.pid" \
+        --bridge=none \
+        --iptables=false \
+        --ip6tables=false \
+        --ip-forward=false \
+        --ip-masq=false \
+        --userland-proxy=false \
+        --containerd-namespace=smartscan-ci-legacy \
+        --containerd-plugins-namespace=smartscan-ci-legacy-plugins \
+        --storage-driver=vfs \
+        >"$RUNTIME_ROOT/dockerd.log" 2>&1 &
+    DOCKERD_PID=$!
+    export DOCKER_HOST="$DOCKER_HOST_VALUE"
 fi
-
-"$DOCKERD_BIN" \
-    --host="$DOCKER_HOST_VALUE" \
-    --data-root="$RUNTIME_ROOT/data" \
-    --exec-root="$RUNTIME_ROOT/exec" \
-    --pidfile="$RUNTIME_ROOT/docker.pid" \
-    --bridge=none \
-    --iptables=false \
-    --ip6tables=false \
-    --ip-forward=false \
-    --ip-masq=false \
-    --userland-proxy=false \
-    "${daemon_storage_arguments[@]}" \
-    >"$RUNTIME_ROOT/dockerd.log" 2>&1 &
-readonly DOCKERD_PID=$!
 
 cleanup() {
     /usr/bin/docker compose --project-name smartscan-uat \
@@ -58,19 +70,23 @@ cleanup() {
         --env-file /etc/smartscan/uat/local-images.env \
         -f "$GITHUB_WORKSPACE/deploy/compose/docker-compose.uat.yml" \
         stop postgres >/dev/null 2>&1 || true
-    /bin/kill "$DOCKERD_PID" 2>/dev/null || true
-    wait "$DOCKERD_PID" 2>/dev/null || true
+    for network in smartscan-uat-data smartscan-uat-edge smartscan-uat-egress smartscan-ci-sentinel; do
+        /usr/bin/docker network rm "$network" >/dev/null 2>&1 || true
+    done
+    if [[ -n "$DOCKERD_PID" ]]; then
+        /bin/kill "$DOCKERD_PID" 2>/dev/null || true
+        wait "$DOCKERD_PID" 2>/dev/null || true
+    fi
     /bin/rm -rf /etc/smartscan/uat /mnt/data/smartscan/uat
     /bin/rm -rf "$RUNTIME_ROOT"
 }
 trap cleanup EXIT
 
-export DOCKER_HOST="$DOCKER_HOST_VALUE"
 for _ in $(seq 1 60); do
     if /usr/bin/docker info >/dev/null 2>&1; then
         break
     fi
-    if ! /bin/kill -0 "$DOCKERD_PID" 2>/dev/null; then
+    if [[ -n "$DOCKERD_PID" ]] && ! /bin/kill -0 "$DOCKERD_PID" 2>/dev/null; then
         /usr/bin/tail -n 80 "$RUNTIME_ROOT/dockerd.log" >&2
         exit 1
     fi
