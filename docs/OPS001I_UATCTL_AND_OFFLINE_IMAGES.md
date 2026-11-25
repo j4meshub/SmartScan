@@ -114,7 +114,7 @@ Nginx激活不接受命令行路径。共同使用人必须在固定配置根预
 | `deploy/ops/smartscan_uatctl.py` | `ac7a20fc1ddf3f8fe060461f5d83685a0bf6643d46ac2f2fb63b72b55adea43a` |
 | `deploy/ops/smartscan_uat_validators.py` | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
 | `deploy/sudoers/smartscan-uatctl` | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
-| `deploy/compose/docker-compose.uat.yml` | `620bb0cc8d5afc5afbc257316b6a1ed8f10da06d44ff14b95030e25365d6aac3` |
+| `deploy/compose/docker-compose.uat.yml` | `4d1a236a3303bbd70bc3b138265ca4587240b109ca4f6a1cb7b0df3ac28d43bf` |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template` | `500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227` |
 | `deploy/releases/uat-2026-11-24.json` | `2caa6eea6c0f6b11f941dc3301069653015fe41c9e5c515569dfb6cc5c099789` |
 
