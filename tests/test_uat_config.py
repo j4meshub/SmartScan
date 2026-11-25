@@ -66,7 +66,7 @@ def test_valid_fixture_returns_secret_free_summary(tmp_path: Path) -> None:
 def test_worker_image_installs_required_headless_visual_runtime_library() -> None:
     dockerfile = WORKER_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "apt-get install -y --no-install-recommends libgl1" in dockerfile
+    assert "apt-get install -y --no-install-recommends libgl1 libglib2.0-0t64" in dockerfile
 
 
 @pytest.mark.parametrize(

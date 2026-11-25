@@ -22,7 +22,7 @@
 - OPS-001M只在固定`migrate`服务的现有32 MiB `/tmp` tmpfs内设置`SMARTSCAN_STORAGE_ROOT=/tmp/smartscan-data`，继续保持只读根、不挂载真实业务data、不扩大tmpfs且不改变其他服务。迁移容器不持久化原始日志；控制器保存不含原始输出和Secret的固定错误码、异常类型及退出码，失败不推进状态。
 - Docker 29/containerd专项CI扩展为：真实OCR模型、迁移前等待门禁、空库完整升级至`20261022_0024`、schema/0024对象验证、重复调用幂等、第二次续接启动API/两个CPU Worker/Web、18082健康，并在共享Nginx激活前停止。仓库开发期间不连接或修改`smartscan-server`。
 - PR #114首次Docker 29真实运行已证明迁移容器保持只读根、仅使用32 MiB `/tmp`、没有业务文件挂载，空库完整达到`20261022_0024`且PostgreSQL健康；第二次续接中API和内部Web健康，但两个CPU Worker均以`ImportError: libGL.so.1`退出。该结果属于已接受Worker镜像的运行依赖缺失，不是迁移或服务器现场故障；旧候选保持未通过核心启动门禁，禁止通过宿主机库挂载或放宽健康检查绕过。
-- Worker镜像构建现显式安装最小`libgl1`运行库，并在无网络、只读根、32 MiB `/tmp`、零capability条件下实际导入`cv2`和`paddleocr`。主线产生新digest前，CI只把旧候选验证到迁移完成并固定复现运行库阻塞；不得把仓库修复冒充为当前UAT候选已可启动。
+- Worker镜像构建现显式安装`libgl1`和提供`libgthread-2.0.so.0`的`libglib2.0-0t64`运行库，并在无网络、只读根、32 MiB `/tmp`、零capability条件下实际导入`cv2`和`paddleocr`。主线产生新digest前，CI只把旧候选验证到迁移完成并固定复现运行库阻塞；不得把仓库修复冒充为当前UAT候选已可启动。
 - 本地验证已通过：Ruff检查与格式检查、全量Python `657 passed, 37 skipped`（覆盖率87.74%）、独立空SQLite完整升级和迁移漂移检查；Windows本机没有Docker，Docker 29/containerd和传统daemon完整状态机结果以PR #114的Linux CI为准，未把本机条件缺失记录为通过。
 
 - OPS-001K三项资产已由共同使用人人工升级并核验；原生模型、配置和发布接受随后全部通过。现场真实状态为`completed=[preflight,storage_verified,models_verified,config_verified,release_accepted]`、`next_required=images_imported`。

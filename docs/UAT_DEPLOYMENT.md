@@ -116,7 +116,7 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 `migrate`继承生产运行配置，但只在该服务内覆盖`SMARTSCAN_STORAGE_ROOT=/tmp/smartscan-data`。根文件系统保持只读，唯一可写目录是现有32 MiB `/tmp` tmpfs；服务没有真实data挂载，迁移结束后临时内容随容器销毁。API与Worker的storage root和业务挂载不变。失败时`migrations_completed`不写入，控制器只保存0600脱敏错误证据，不保存原始日志或Secret。
 
-当前接受的Worker离线归档只可用于保留历史和迁移前内容链验证，不可继续启动两个CPU Worker。仓库已为新构建显式加入`libgl1`并增加无网络、只读根运行时导入测试；主线新digest未经用户接受前不得替换现有发布映射，也不得在服务器通过挂载宿主机库或联网安装绕过。
+当前接受的Worker离线归档只可用于保留历史和迁移前内容链验证，不可继续启动两个CPU Worker。仓库已为新构建显式加入`libgl1`和`libglib2.0-0t64`并增加无网络、只读根运行时导入测试；主线新digest未经用户接受前不得替换现有发布映射，也不得在服务器通过挂载宿主机库或联网安装绕过。
 
 ### Docker 29 containerd离线身份
 

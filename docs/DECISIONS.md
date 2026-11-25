@@ -850,4 +850,4 @@
 - 日期：2026-11-25
 - 状态：已确认运行时根因；等待新Worker候选及用户接受
 - 证据：OPS-001M的Docker 29/containerd真实CI已使用接受的六镜像、真实OCR模型和空PostgreSQL完成迁移到`20261022_0024`。迁移后API与内部Web健康，两个CPU Worker均在导入`cv2`时以`ImportError: libGL.so.1`退出；没有接触共享Nginx。该失败与迁移临时storage root无关，也不是目标服务器现场故障。
-- 决策：不得挂载宿主机动态库、联网安装、放宽Worker健康门禁或把API健康冒充核心完成。Worker镜像显式安装Debian最小`libgl1`运行库，并在无网络、只读根、有界`/tmp`、零capability条件下导入`cv2`和`paddleocr`。既有Worker固定digest继续保留为拒绝核心启动的证据；主线产生的新digest不得自动写入UAT，只有用户明确接受更新发布映射且完整离线状态机通过后，才能继续服务器核心启动。
+- 决策：不得挂载宿主机动态库、联网安装、放宽Worker健康门禁或把API健康冒充核心完成。Worker镜像显式安装Debian `libgl1`和`libglib2.0-0t64`运行库，并在无网络、只读根、有界`/tmp`、零capability条件下导入`cv2`和`paddleocr`。既有Worker固定digest继续保留为拒绝核心启动的证据；主线产生的新digest不得自动写入UAT，只有用户明确接受更新发布映射且完整离线状态机通过后，才能继续服务器核心启动。
