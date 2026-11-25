@@ -124,6 +124,8 @@ services:
       SMARTSCAN_AUTO_MIGRATE: "false"
       SMARTSCAN_STORAGE_ROOT: /srv/smartscan/data
       SMARTSCAN_OCR_MODEL_ROOT: /opt/smartscan/models/ocr
+      # PaddleX导入时需要创建缓存目录；只允许写入现有有界/tmp，不写只读根或联网下载模型。
+      HOME: /tmp/smartscan-home
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777,uid=10001,gid=10001
     volumes:

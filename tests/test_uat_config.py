@@ -69,6 +69,18 @@ def test_worker_image_installs_required_headless_visual_runtime_library() -> Non
     assert "apt-get install -y --no-install-recommends libgl1 libglib2.0-0t64" in dockerfile
 
 
+def test_worker_runtime_cache_is_bounded_by_existing_tmpfs() -> None:
+    root = Path(__file__).parents[1]
+    compose = DEFAULT_COMPOSE_FILE.read_text(encoding="utf-8")
+    workflow = (root / ".github" / "workflows" / "container-publish.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "HOME: /tmp/smartscan-home" in compose
+    assert "--env HOME=/tmp/smartscan-home" in workflow
+    assert "/tmp:rw,noexec,nosuid,nodev,size=512m" in compose
+
+
 @pytest.mark.parametrize(
     ("old", "new", "message"),
     [
