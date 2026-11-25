@@ -806,3 +806,13 @@
 - 自动交付：经审核发布清单只允许`ghcr.io/j4meshub/smartscan-*`、`linux/amd64`和六个完整digest。GitHub Actions按需生成独立归档；本机工具使用现有Git凭据自动下载Artifact，以固定SSH别名断点上传、远端摘要复核和原子改名，不读取私钥或口令。归档、`.part`和服务器内部配置均排除在Git之外。
 - root边界：新增一次性安装的`smartscan-uatctl`和逐命令sudoers，状态文件由root拥有。控制器不接受任意参数、路径、URL、Tag、digest或服务名；不提供shell、`prune`、`down -v`、通配符删除或数据清理。已有loop、部署准备、OCR暂存和OCR安装执行器不删除、不改变摘要，只由控制器验证或复用。
 - 人工门禁：用户接受发布映射和一次性安装后，可授权`resume-basic-uat`连续完成安全可续接步骤并在迁移前停止。不可逆迁移、共享Nginx激活、生产上线、删除和清理仍须单独明确确认。OPS-001I仓库工作不连接或修改服务器。
+
+## D-108：统一控制器通过固定双层sudo复用旧执行器
+
+- 日期：2026-11-25
+- 状态：已确认；OPS-001J进行中
+- 现场证据：统一控制器安装后`preflight`成功，首次`verify-storage`以`command_failed:smartscan-uat-loop-storage`失败。旧loop执行器要求`SUDO_USER=szhzx`且`SUDO_COMMAND`精确等于旧执行器及单一动作；控制器原实现以root直接调用，使旧执行器仍看到外层控制器命令。该失败发生在镜像导入、所有权、数据库、迁移和Nginx之前，是集成缺陷，不是loop存储异常。`verify-models`未执行，不能写成现场失败。
+- 决策：旧loop/OCR执行器、sudoers、摘要和身份检查均保持不变，不设置或伪造`SUDO_USER/SUDO_COMMAND`。控制器只为三条固定验证动作构造参数数组：root通过绝对路径`sudo -n -u szhzx -- env -i ...`切回固定原始用户，再由该用户执行内层旧sudoers已允许的精确`sudo -n <执行器> <动作>`。环境仅保留固定`PATH/LANG/LC_ALL`，超时固定30秒，失败输出不透传子进程敏感内容。
+- 安全边界：命令表不接受路径、用户、动作或额外参数；不得使用`shell=True`、字符串拼接或通用sudo。部署准备配置校验继续直接调用固定Python工具，Docker身份探测继续使用固定无网络容器参数，Nginx继续使用固定绝对命令和显式人工确认，它们不经过旧执行器桥接。
+- 续接：升级控制器不得删除或重写`uatctl-state.json`。现场预期可从`verify-storage`继续，但`completed=[preflight]`仅是源码推断，升级后必须先以真实`status`确认；已完成`preflight`不重复执行，依赖不满足仍失败关闭。
+- 验证：除单元和状态机回归外，GitHub Ubuntu Runner使用真实sudo和非root用户验证两层`SUDO_USER/SUDO_COMMAND`、正确调用、错误用户/命令/参数、缺sudoers、异常退出与固定超时。旧执行器仓库字节由固定SHA-256回归锁定；CI探针不接触真实loop或模型数据。

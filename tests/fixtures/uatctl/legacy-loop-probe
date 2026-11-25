@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$EUID" -eq 0 ]] || exit 81
+[[ "${SUDO_USER:-}" == "szhzx" ]] || exit 82
+[[ "${SUDO_COMMAND:-}" == "/usr/local/libexec/smartscan/smartscan-uat-loop-storage verify" ]] || exit 83
+[[ "$#" -eq 1 && "$1" == "verify" ]] || exit 84
+case "$(cat /run/smartscan-uatctl-ci-mode 2>/dev/null || true)" in
+  loop-fail) exit 85 ;;
+  loop-timeout) sleep 35 ;;
+esac
+printf 'status=passed\n'
