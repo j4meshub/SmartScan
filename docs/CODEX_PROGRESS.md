@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001M` 迁移容器只读根兼容修复 |
-| 工作包状态 | 进行中；仓库修复、脱敏诊断与Docker 29完整状态机CI待验收 |
+| 工作包状态 | 等待CI与合并；仓库修复、本地验证和PR自审已完成 |
 | 当前分支 | `codex/ops-001m-migration-readonly-root` |
 | 最后验证基线 | 现场已完成六镜像、身份、所有权和PostgreSQL健康；首次迁移在连接数据库前因只读根目录创建失败，空库无表、无`alembic_version`、无部分revision |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `631fa70` |
+| PR | [#114](https://github.com/j4meshub/SmartScan/pull/114) |
 | 下一工作包 | OPS-001M合并后只人工升级变化资产并确认状态仍停在`migrations_completed`门禁；再单独授权一次`run-migrations` |
 
 ## 当前工作包进展
@@ -21,6 +21,7 @@
 - 用户明确接受新建空UAT无备份及迁移失败保留现场的风险后，首次且唯一一次`run-migrations`失败。诊断确认失败发生在Python模块导入阶段：`get_settings()`尝试创建storage root并命中只读根；迁移尚未连接数据库，`public`表为0、`alembic_version`不存在、没有任何revision提交，PostgreSQL保持健康，API、Worker、Web和Nginx均未启动。
 - OPS-001M只在固定`migrate`服务的现有32 MiB `/tmp` tmpfs内设置`SMARTSCAN_STORAGE_ROOT=/tmp/smartscan-data`，继续保持只读根、不挂载真实业务data、不扩大tmpfs且不改变其他服务。迁移容器不持久化原始日志；控制器保存不含原始输出和Secret的固定错误码、异常类型及退出码，失败不推进状态。
 - Docker 29/containerd专项CI扩展为：真实OCR模型、迁移前等待门禁、空库完整升级至`20261022_0024`、schema/0024对象验证、重复调用幂等、第二次续接启动API/两个CPU Worker/Web、18082健康，并在共享Nginx激活前停止。仓库开发期间不连接或修改`smartscan-server`。
+- 本地验证已通过：Ruff检查与格式检查、全量Python `657 passed, 37 skipped`（覆盖率87.74%）、独立空SQLite完整升级和迁移漂移检查；Windows本机没有Docker，Docker 29/containerd和传统daemon完整状态机结果以PR #114的Linux CI为准，未把本机条件缺失记录为通过。
 
 - OPS-001K三项资产已由共同使用人人工升级并核验；原生模型、配置和发布接受随后全部通过。现场真实状态为`completed=[preflight,storage_verified,models_verified,config_verified,release_accepted]`、`next_required=images_imported`。
 - 第一次且唯一一次`resume-basic-uat`在导入首个PostgreSQL归档后返回`imported_image_id_mismatch:postgres`。后五镜像、UID/GID探测、`image-identities.json`、所有权、PostgreSQL启动、迁移、核心服务和Nginx均未执行；现场没有重试、清理、改Tag或编辑状态文件。
