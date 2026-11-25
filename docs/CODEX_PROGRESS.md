@@ -8,10 +8,10 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001M` 迁移容器只读根兼容修复 |
-| 工作包状态 | 进行中；迁移真实CI已通过，既有Worker候选运行库缺失，等待修复镜像供应链与重新接受 |
+| 工作包状态 | 等待人工验收；迁移与新Worker供应链CI均通过，等待主线新digest及用户重新接受发布映射 |
 | 当前分支 | `codex/ops-001m-migration-readonly-root` |
 | 最后验证基线 | 现场已完成六镜像、身份、所有权和PostgreSQL健康；首次迁移在连接数据库前因只读根目录创建失败，空库无表、无`alembic_version`、无部分revision |
-| 工作包提交 | `631fa70` |
+| 工作包提交 | `43fb16e`（最终技术验证头） |
 | PR | [#114](https://github.com/j4meshub/SmartScan/pull/114) |
 | 下一工作包 | 合并运行库修复并取得新Worker固定digest；用户接受更新后的离线发布映射后，重新执行迁移至核心健康的完整状态机CI |
 
@@ -23,7 +23,8 @@
 - Docker 29/containerd专项CI扩展为：真实OCR模型、迁移前等待门禁、空库完整升级至`20261022_0024`、schema/0024对象验证、重复调用幂等、第二次续接启动API/两个CPU Worker/Web、18082健康，并在共享Nginx激活前停止。仓库开发期间不连接或修改`smartscan-server`。
 - PR #114首次Docker 29真实运行已证明迁移容器保持只读根、仅使用32 MiB `/tmp`、没有业务文件挂载，空库完整达到`20261022_0024`且PostgreSQL健康；第二次续接中API和内部Web健康，但两个CPU Worker均以`ImportError: libGL.so.1`退出。该结果属于已接受Worker镜像的运行依赖缺失，不是迁移或服务器现场故障；旧候选保持未通过核心启动门禁，禁止通过宿主机库挂载或放宽健康检查绕过。
 - Worker镜像构建现显式安装`libgl1`和提供`libgthread-2.0.so.0`的`libglib2.0-0t64`运行库；PaddleX的`HOME`只定向到Worker现有有界`/tmp`。供应链CI在无网络、只读根、32 MiB `/tmp`、零capability条件下实际导入`cv2`和`paddleocr`。主线产生新digest前，CI只把旧候选验证到迁移完成并固定复现运行库阻塞；不得把仓库修复冒充为当前UAT候选已可启动。
-- 本地验证已通过：Ruff检查与格式检查、全量Python `657 passed, 37 skipped`（覆盖率87.74%）、独立空SQLite完整升级和迁移漂移检查；Windows本机没有Docker，Docker 29/containerd和传统daemon完整状态机结果以PR #114的Linux CI为准，未把本机条件缺失记录为通过。
+- 本地验证已通过：Ruff检查与格式检查、全量Python `659 passed, 37 skipped`（覆盖率87.74%）、独立空SQLite完整升级和迁移漂移检查；Windows本机没有Docker，未把本机条件缺失记录为通过。
+- PR #114最终技术验证头`43fb16e`的四组流水线全部通过：CI #813、UAT六镜像离线交付 #33、容器镜像供应链 #155、可审计PostgreSQL #110。Docker 29/containerd与传统daemon均真实完成空库迁移到`20261022_0024`并验证最新对象、PostgreSQL健康和既有Worker候选阻塞；新Worker构建在无网络、只读根、有界`/tmp`、零capability下导入`cv2`与`paddleocr`，SBOM和漏洞门禁同步通过。由于新Worker尚未形成并获用户接受固定digest，当前服务器仍不得启动核心服务。
 
 - OPS-001K三项资产已由共同使用人人工升级并核验；原生模型、配置和发布接受随后全部通过。现场真实状态为`completed=[preflight,storage_verified,models_verified,config_verified,release_accepted]`、`next_required=images_imported`。
 - 第一次且唯一一次`resume-basic-uat`在导入首个PostgreSQL归档后返回`imported_image_id_mismatch:postgres`。后五镜像、UID/GID探测、`image-identities.json`、所有权、PostgreSQL启动、迁移、核心服务和Nginx均未执行；现场没有重试、清理、改Tag或编辑状态文件。
