@@ -810,7 +810,7 @@
 ## D-108：统一控制器通过固定双层sudo复用旧执行器
 
 - 日期：2026-11-25
-- 状态：已确认；OPS-001J进行中
+- 状态：已确认；OPS-001J仓库完成，等待服务器人工升级
 - 现场证据：统一控制器安装后`preflight`成功，首次`verify-storage`以`command_failed:smartscan-uat-loop-storage`失败。旧loop执行器要求`SUDO_USER=szhzx`且`SUDO_COMMAND`精确等于旧执行器及单一动作；控制器原实现以root直接调用，使旧执行器仍看到外层控制器命令。该失败发生在镜像导入、所有权、数据库、迁移和Nginx之前，是集成缺陷，不是loop存储异常。`verify-models`未执行，不能写成现场失败。
 - 决策：旧loop/OCR执行器、sudoers、摘要和身份检查均保持不变，不设置或伪造`SUDO_USER/SUDO_COMMAND`。控制器只为三条固定验证动作构造参数数组：root通过绝对路径`sudo -n -u szhzx -- env -i ...`切回固定原始用户，再由该用户执行内层旧sudoers已允许的精确`sudo -n <执行器> <动作>`。环境仅保留固定`PATH/LANG/LC_ALL`，超时固定30秒，失败输出不透传子进程敏感内容。
 - 安全边界：命令表不接受路径、用户、动作或额外参数；不得使用`shell=True`、字符串拼接或通用sudo。部署准备配置校验继续直接调用固定Python工具，Docker身份探测继续使用固定无网络容器参数，Nginx继续使用固定绝对命令和显式人工确认，它们不经过旧执行器桥接。

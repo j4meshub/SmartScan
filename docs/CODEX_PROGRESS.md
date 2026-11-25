@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001J` 统一控制器复用旧执行器兼容修复 |
-| 工作包状态 | 进行中；现场`preflight`已通过，`verify-storage`因统一控制器未保留旧执行器的sudo调用语义而失败，仓库正在修复，服务器未升级 |
+| 工作包状态 | 仓库完成、等待人工升级；PR #111全部适用CI通过，服务器仍是旧控制器，未执行任何自动升级 |
 | 当前分支 | `codex/ops-001j-legacy-executor-compat` |
 | 最后验证基线 | OPS-001I发布映射和六归档已接受、上传并复核；统一控制器已人工安装。现场只确认`preflight`成功与`verify-storage`失败，未把源码推断的状态冒充现场`status` |
-| 工作包提交 | 待本工作包中文提交与PR |
-| PR | 待创建；OPS-001I及制品准备历史PR #106～#109已合并 |
+| 工作包提交 | `0af45a5`（功能、测试和文档）；最终证据提交见PR #111 |
+| PR | [#111](https://github.com/j4meshub/SmartScan/pull/111)，代码头首轮六组工作流全部成功；待最终文档提交复核后合并 |
 | 下一工作包 | OPS-001J合并后由共同使用人只替换统一控制器包装器和Python辅助工具；确认旧状态文件未变后，从`verify-storage`继续，仍不自动迁移或激活Nginx |
 
 ## 当前工作包进展
@@ -22,6 +22,7 @@
 - OPS-001J保持旧loop/OCR执行器、sudoers和固定摘要不变；统一控制器改为root先固定切换到原始用户`szhzx`，再由该用户通过旧sudoers执行内层精确命令。调用使用参数数组、固定绝对路径、清空环境、30秒超时和脱敏失败，禁止伪造`SUDO_USER/SUDO_COMMAND`。
 - 本工作包未连接或修改服务器。升级只涉及统一控制器包装器与Python辅助工具；现有状态文件、旧执行器、配置、Secret、网络、归档和OCR模型均不修改。
 - 本地专项`32 passed`，Ruff检查和193个Python文件格式通过；全量Python为`638 passed, 37 skipped`、覆盖率87.74%，独立空SQLite完成全部迁移并通过漂移检查。Windows本机没有bash与Docker，真实sudo双层调用、Compose和离线Docker回归由PR的Ubuntu作业完成，不把本机缺少工具写成门禁通过。
+- PR #111首轮全部六组工作流成功：新增真实sudo作业通过；Ubuntu/Windows专项、六镜像完全断网导入、API/PostgreSQL迁移、Web、Android、iOS、容器、PostgreSQL与OCR供应链均通过。该证据只完成仓库门禁，不代表服务器控制器已经升级。
 
 - 用户已明确接受PR #106、主线`d41be181`、发布清单摘要和六个归档的精确大小/摘要；该接受不允许后续构建、Tag或新digest替换。真实main工作树已从干净状态以`--ff-only`同步到该提交，远程仍只有GitHub `origin`，本机可用空间约18.5 GiB。
 - 按需工作流`45354251007`只在`d41be181`上运行，Ubuntu/Windows专项、六归档生成、传统daemon完全断网导入、身份探测、Compose禁止拉取和7组Artifact上传全部成功。Artifact与发布映射仍绑定用户接受的六个归档，没有更换来源或digest。
