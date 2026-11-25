@@ -349,6 +349,64 @@ def test_identity_probe_uses_no_network_no_mount_no_secret_and_limits(tmp_path: 
     assert not any("env" in item.casefold() or "mount" in item.casefold() for item in command)
 
 
+def test_offline_image_mapping_includes_disabled_ai_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    services = ("postgres", "api", "worker", "ai-gateway", "web", "ops")
+    images = [
+        {
+            "service": service,
+            "local_tag": f"smartscan-uat-{service}:sha256-{'a' * 12}",
+            "runtime_key": f"SMARTSCAN_UAT_{service.upper().replace('-', '_')}_RUNTIME_IMAGE",
+        }
+        for service in services
+    ]
+    mapping = {
+        "images": [
+            {"service": image["service"], "image_id": f"sha256:{index:064x}"}
+            for index, image in enumerate(images, start=1)
+        ]
+    }
+    monkeypatch.setattr(controller, "_fixed_release", lambda: ({"images": images}, mapping))
+    controller._record("images_imported")
+    for image, record in zip(images, mapping["images"], strict=True):
+        runner.outputs[
+            (
+                "/usr/bin/docker",
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                image["local_tag"],
+            )
+        ] = record["image_id"]
+    compose_call = (
+        "/usr/bin/docker",
+        "compose",
+        "--project-name",
+        "smartscan-uat",
+        "--env-file",
+        str(paths.deploy_env),
+        "--env-file",
+        str(paths.local_images_env),
+        "-f",
+        str(paths.compose_file),
+        "--profile",
+        "ai",
+        "config",
+        "--images",
+    )
+    runner.outputs[compose_call] = "\n".join(image["local_tag"] for image in images)
+
+    controller.verify_images()
+
+    assert list(runner.calls[-1]) == list(compose_call)
+    assert "smartscan-uat-ai-gateway" in paths.local_images_env.read_text(encoding="utf-8")
+
+
 def test_identity_probe_and_nginx_paths_do_not_use_legacy_executor_bridge(tmp_path: Path) -> None:
     source = Path(uatctl.__file__).read_text(encoding="utf-8")
     assert "deployment-preparation" not in source

@@ -696,7 +696,9 @@ class Controller:
             )
             lines.append(f"{runtime_key}={tag}")
         _atomic_text(self.paths.local_images_env, "\n".join(lines) + "\n")
-        config = self._compose("config", "--images")
+        # AI Profile 在基础 UAT 中保持关闭，但离线发布映射必须覆盖已接受的六个镜像。
+        # 显式包含固定 Profile 只解析配置，不会创建或启动 AI 容器。
+        config = self._compose("--profile", "ai", "config", "--images")
         _require(
             all(image["local_tag"] in config.splitlines() for image in release["images"]),
             "compose_offline_mapping_invalid",

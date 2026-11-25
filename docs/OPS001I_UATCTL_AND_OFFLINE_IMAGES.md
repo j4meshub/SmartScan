@@ -110,8 +110,8 @@ Nginx激活不接受命令行路径。共同使用人必须在固定配置根预
 
 | 人工安装资产 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uatctl` | `c55378d6a071c336096a2e26cbda7f12b5eabe6669294af63eafb9cc3faf2ed9` |
-| `deploy/ops/smartscan_uatctl.py` | `ba4875362624c4bf985bafc9bbe6073886815a84e4d8b3b016ea69b70e63e472` |
+| `deploy/ops/smartscan-uatctl` | `d18bdf2babbe5423102997f21a4d96cbc09562bdb62fd3c0b242ed1e7be49a6c` |
+| `deploy/ops/smartscan_uatctl.py` | `4ead9ee486f78a93dbd9e872ebe99b455419fc56f878ac7d500e9f0edd21104a` |
 | `deploy/ops/smartscan_uat_validators.py` | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
 | `deploy/sudoers/smartscan-uatctl` | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
 | `deploy/compose/docker-compose.uat.yml` | `227af87ba75638c729254d8e78af819b9ab7e88f73c632e79c4c2a8eedc2408c` |
