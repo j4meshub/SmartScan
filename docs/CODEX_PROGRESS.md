@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001K` 统一控制器内聚验证重构 |
-| 工作包状态 | 进行中；仓库实现和CI验证中，PR合并前不连接服务器 |
+| 工作包状态 | 完成；仓库实现、完整CI与自审通过，PR #112合并后等待共同使用人人工升级三项固定资产 |
 | 当前分支 | `codex/ops-001k-native-validation` |
 | 最后验证基线 | 现场真实完成`preflight`与`storage_verified`；旧OCR执行器验证成功但控制器字符串解析误判，后续步骤均未执行 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `1ff43e9`起的OPS-001K提交序列；技术验证头`d050443` |
+| PR | [#112](https://github.com/j4meshub/SmartScan/pull/112)，全部27项检查完成且失败为0，待合并 |
 | 下一工作包 | OPS-001K合并后仅人工升级包装器、控制器和内聚验证模块；先读取真实`status`，再从`models_verified`门禁继续，迁移和Nginx仍不自动执行 |
 
 ## 当前工作包进展
@@ -23,7 +23,9 @@
 - 严格输入处理拒绝重复JSON键、尾随内容、非UTF-8、超大输入、错误类型、链接、额外文件、摘要和权限漂移；合法JSON空格、缩进和字段顺序不影响结果。Secret只验证存在性、权限及长度/格式，值不输出。
 - Linux隔离daemon CI从当前`preflight+storage_verified`断点续接，要求真实完成模型/配置验证、发布接受、六归档导入、本地不可变Tag/image ID、无网络UID/GID探测、身份文件、所有权和PostgreSQL健康，并在`run-migrations`前停止；同时保留无Registry访问和不影响哨兵网络的断言。
 - 本工作包仓库开发期间不连接或修改`smartscan-server`，不重试`verify-models`，不导入镜像、不改状态、不启动数据库、不迁移也不修改Nginx。
-- 本地专项为`41 passed`；全量Python为`647 passed, 37 skipped`，覆盖率87.74%，Ruff检查和格式检查通过。首次迁移漂移检查命中未升级的本机旧开发库而按预期失败；改用独立空SQLite完成全部迁移后，漂移结果为`No new upgrade operations detected`。Windows没有Docker，Compose解析和六归档隔离daemon完整状态机由PR的Ubuntu作业执行，未把本机缺少Docker记录为通过。
+- 本地专项最终为`50 passed`；全量Python为`648 passed, 37 skipped`，覆盖率87.74%，Ruff检查和格式检查通过。首次迁移漂移检查命中未升级的本机旧开发库而按预期失败；改用独立空SQLite完成全部迁移后，漂移结果为`No new upgrade operations detected`。Windows没有Docker，未把本机缺少Docker记录为通过。
+- PR #112技术验证头`d050443`共27项检查：22项直接成功、4项按工作流条件跳过、汇总门禁成功，失败为0。Ubuntu作业在无外部接口的独立daemon中从`completed=[preflight,storage_verified]`续接，真实完成六归档导入、固定Tag/image ID、无网络UID/GID探测、身份文件、所有权及PostgreSQL健康，并在`run-migrations`前返回`waiting_confirmation`；iOS Simulator、Android、Web、API、迁移和容器门禁同步通过。
+- CI迭代保留了三项真实修复证据：上传归档夹具改为普通部署用户所有；静态Compose映射显式包含仍默认关闭的固定`ai` profile以覆盖全部六镜像；PostgreSQL已经通过`pg_isready`后，后置证据有限等待Docker健康状态从`starting`收敛到`healthy`。三项均未放宽生产摘要、身份、离线、AI关闭或迁移确认门禁。
 
 - 用户已明确接受PR #106、主线`d41be181`、发布清单摘要和六个归档的精确大小/摘要；该接受不允许后续构建、Tag或新digest替换。真实main工作树已从干净状态以`--ff-only`同步到该提交，远程仍只有GitHub `origin`，本机可用空间约18.5 GiB。
 - 按需工作流`45354251007`只在`d41be181`上运行，Ubuntu/Windows专项、六归档生成、传统daemon完全断网导入、身份探测、Compose禁止拉取和7组Artifact上传全部成功。Artifact与发布映射仍绑定用户接受的六个归档，没有更换来源或digest。
