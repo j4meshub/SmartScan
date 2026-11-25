@@ -91,10 +91,16 @@ mapfile -t postgres_ids < <(
 )
 [[ "${#postgres_ids[@]}" -eq 1 ]] \
     || { printf 'PostgreSQL容器数量异常：%s\n' "${#postgres_ids[@]}" >&2; exit 1; }
-postgres_health="$(
-    /usr/bin/docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
-        "${postgres_ids[0]}"
-)"
+postgres_health="starting"
+for _ in $(seq 1 30); do
+    postgres_health="$(
+        /usr/bin/docker inspect \
+            --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' \
+            "${postgres_ids[0]}"
+    )"
+    [[ "$postgres_health" == "healthy" ]] && break
+    /usr/bin/sleep 2
+done
 [[ "$postgres_health" == "healthy" ]] \
     || { printf 'PostgreSQL健康状态异常：%s\n' "$postgres_health" >&2; exit 1; }
 mapfile -t migrate_ids < <(
