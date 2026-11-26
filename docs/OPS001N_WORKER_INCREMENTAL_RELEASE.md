@@ -20,6 +20,10 @@
 
 Config 绑定十二个压缩 Layer 及十二个 RootFS diff ID；完整列表由中文离线发布映射保存并由归档、控制器和 Docker 29/containerd CI 逐项复算，不依赖 Tag。主线容器供应链运行 `45750089308` 已生成 SPDX SBOM 和 GitHub SLSA 来源证明（attestation `72482193`），并通过“全部 Critical，包含不可修复项”和“可修复 High/Critical”两类门禁；本工作包还会对最终离线归档重复执行同一门禁。
 
+## 用户接受记录
+
+2026-11-26，服务器共同使用人明确接受上表Worker固定源digest、离线归档大小和SHA-256、候选清单SHA-256以及只替换Worker的六镜像映射。该接受使OPS-001N产品制品门禁完成，但不授权下载Artifact、本机落盘、服务器上传、统一控制器升级、Docker导入、原子激活、核心服务启动或Nginx变更；所有状态改变仍须单独授权。
+
 ## 单服务增量范围
 
 新六镜像集合固定为：
