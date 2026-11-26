@@ -17,6 +17,7 @@ on:
       - "tests/test_smartscan_uat_validators.py"
       - "tests/test_uat_config.py"
       - "tools/ci_verify_uatctl_checkpoint.py"
+      - "tools/ci_verify_uatctl_permissions.sh"
       - "tools/ci_verify_uat_offline_docker.sh"
       - "tools/ocr_offline_layer.py"
       - "tools/smartscan_offline_images.py"
@@ -53,6 +54,9 @@ jobs:
         run: python -m pip install --disable-pip-version-check -e ".[dev]"
       - name: 执行专项测试
         run: python -m pytest tests/test_smartscan_offline_images.py tests/test_smartscan_uatctl.py tests/test_smartscan_uat_validators.py -q
+      - name: 验证真实root所有权、sudo和固定权限契约
+        if: runner.os == 'Linux'
+        run: sudo unshare --uts --fork env "GITHUB_WORKSPACE=$GITHUB_WORKSPACE" bash -c 'hostname ctiecaiserver && exec bash "$GITHUB_WORKSPACE/tools/ci_verify_uatctl_permissions.sh"'
 
   archive:
     name: 六镜像独立归档与完全离线导入

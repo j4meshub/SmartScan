@@ -20,6 +20,7 @@ import tempfile
 import time
 import urllib.request
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
@@ -78,6 +79,38 @@ INSTALLED_ASSET_SHA256 = {
 
 class ControllerError(RuntimeError):
     """状态或固定对象不满足失败关闭条件。"""
+
+
+class FixedFilePolicy(Enum):
+    """控制器固定文件的有限权限策略；调用方不能传入任意模式或所有者。"""
+
+    PUBLIC_ROOT_ASSET_0644 = "public_root_asset_0644"
+    CANDIDATE_RELEASE_PUBLIC_ROOT_0644 = "candidate_release_public_root_0644"
+    INTERNAL_STATE_ROOT_0600 = "internal_state_root_0600"
+    UPLOADED_RELEASE_DEPLOY_0600 = "uploaded_release_deploy_0600"
+
+
+@dataclass(frozen=True)
+class FixedFilePermissionContract:
+    owner_role: str
+    mode: int
+    sensitive: bool
+
+
+FIXED_FILE_PERMISSION_CONTRACTS = {
+    FixedFilePolicy.PUBLIC_ROOT_ASSET_0644: FixedFilePermissionContract(
+        owner_role="root", mode=0o644, sensitive=False
+    ),
+    FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644: FixedFilePermissionContract(
+        owner_role="root", mode=0o644, sensitive=False
+    ),
+    FixedFilePolicy.INTERNAL_STATE_ROOT_0600: FixedFilePermissionContract(
+        owner_role="root", mode=0o600, sensitive=True
+    ),
+    FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600: FixedFilePermissionContract(
+        owner_role="deploy", mode=0o600, sensitive=True
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -254,19 +287,44 @@ def _tar_json_list(
     return value
 
 
-def _load_json(
-    path: Path, *, root_owned: bool = True, expected_root_uid: int = 0
-) -> dict[str, Any]:
+def _verify_fixed_file(
+    path: Path,
+    policy: FixedFilePolicy,
+    *,
+    expected_root_uid: int = 0,
+    expected_deploy_uid: int = 1000,
+) -> None:
+    """按命名策略验证固定普通文件，拒绝链接、宽松模式和所有者漂移。"""
+
     _require(path.is_file() and not path.is_symlink(), f"fixed_json_invalid:{path.name}")
     if os.name != "nt":
         info = path.stat()
-        if root_owned:
-            _require(
-                info.st_uid == expected_root_uid and info.st_gid == expected_root_uid,
-                f"fixed_json_owner_invalid:{path.name}",
-            )
-        _require(stat.S_IMODE(info.st_mode) == 0o600, f"fixed_json_mode_invalid:{path.name}")
+        contract = FIXED_FILE_PERMISSION_CONTRACTS[policy]
+        expected_uid = expected_root_uid if contract.owner_role == "root" else expected_deploy_uid
+        _require(
+            info.st_uid == expected_uid and info.st_gid == expected_uid,
+            f"fixed_json_owner_invalid:{path.name}",
+        )
+        _require(
+            stat.S_IMODE(info.st_mode) == contract.mode,
+            f"fixed_json_mode_invalid:{path.name}",
+        )
         _require(info.st_nlink == 1, f"fixed_json_links_invalid:{path.name}")
+
+
+def _load_json(
+    path: Path,
+    *,
+    policy: FixedFilePolicy,
+    expected_root_uid: int = 0,
+    expected_deploy_uid: int = 1000,
+) -> dict[str, Any]:
+    _verify_fixed_file(
+        path,
+        policy,
+        expected_root_uid=expected_root_uid,
+        expected_deploy_uid=expected_deploy_uid,
+    )
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -357,7 +415,11 @@ class Controller:
     def _state(self) -> dict[str, Any]:
         if not self.paths.state_file.exists():
             return _initial_state()
-        return _load_json(self.paths.state_file, expected_root_uid=self.root_uid)
+        return _load_json(
+            self.paths.state_file,
+            policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=self.root_uid,
+        )
 
     def _completed(self, name: str) -> bool:
         return name in self._state().get("completed", [])
@@ -399,22 +461,23 @@ class Controller:
 
     def _fixed_release(self, *, uploaded: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
         metadata_root = self.paths.upload_root if uploaded else self.paths.config_root
+        policy = (
+            FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600
+            if uploaded
+            else FixedFilePolicy.INTERNAL_STATE_ROOT_0600
+        )
         release = _load_json(
             metadata_root / "release-manifest.json",
-            root_owned=not uploaded,
+            policy=policy,
             expected_root_uid=self.root_uid,
+            expected_deploy_uid=self.deploy_uid,
         )
         mapping = _load_json(
             metadata_root / "release-map.json",
-            root_owned=not uploaded,
+            policy=policy,
             expected_root_uid=self.root_uid,
+            expected_deploy_uid=self.deploy_uid,
         )
-        if uploaded and os.name != "nt":
-            for name in ("release-manifest.json", "release-map.json"):
-                _require(
-                    (metadata_root / name).stat().st_uid == self.deploy_uid,
-                    f"uploaded_metadata_owner_invalid:{name}",
-                )
         _require(release.get("schema_version") in {"1.0", "1.1"}, "release_schema_invalid")
         _require(release.get("platform") == PLATFORM, "release_platform_invalid")
         _require(release.get("registry_prefix") == ALLOWED_PREFIX, "release_registry_invalid")
@@ -484,7 +547,11 @@ class Controller:
     def _candidate_release(self) -> tuple[dict[str, Any], dict[str, Any]]:
         """验证固定单Worker候选，不改变当前已激活发布。"""
 
-        candidate = _load_json(self.paths.candidate_release, expected_root_uid=self.root_uid)
+        candidate = _load_json(
+            self.paths.candidate_release,
+            policy=FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
+            expected_root_uid=self.root_uid,
+        )
         _require(candidate.get("schema_version") == "1.1", "incremental_release_schema_invalid")
         _require(candidate.get("changed_services") == ["worker"], "incremental_scope_invalid")
         active, active_map = self._fixed_release(uploaded=False)
@@ -522,7 +589,11 @@ class Controller:
         )
         # 候选映射属于部署用户上传证据；上方已经固定校验所有者、0600、
         # 单硬链接和候选目录边界。活动映射仍必须由root安装并按默认门禁读取。
-        mapping = _load_json(uploaded_map, root_owned=False)
+        mapping = _load_json(
+            uploaded_map,
+            policy=FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600,
+            expected_deploy_uid=self.deploy_uid,
+        )
         _require(
             mapping.get("release_id") == candidate.get("release_id")
             and mapping.get("release_manifest_sha256") == _sha256(self.paths.candidate_release),
@@ -753,14 +824,25 @@ class Controller:
                 upload.st_uid == self.deploy_uid and stat.S_IMODE(upload.st_mode) == 0o700,
                 "upload_directory_permissions_invalid",
             )
-        for path in (
-            self.paths.compose_file,
-            self.paths.nginx_template,
-            self.paths.validator_module,
-            self.paths.candidate_release,
-        ):
+        installed_assets = {
+            self.paths.compose_file: FixedFilePolicy.PUBLIC_ROOT_ASSET_0644,
+            self.paths.nginx_template: FixedFilePolicy.PUBLIC_ROOT_ASSET_0644,
+            self.paths.validator_module: FixedFilePolicy.PUBLIC_ROOT_ASSET_0644,
+            self.paths.candidate_release: FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
+        }
+        for path, policy in installed_assets.items():
+            try:
+                _verify_fixed_file(
+                    path,
+                    policy,
+                    expected_root_uid=self.root_uid,
+                    expected_deploy_uid=self.deploy_uid,
+                )
+            except ControllerError as exc:
+                raise ControllerError(f"installed_asset_invalid:{path.name}:{exc}") from exc
             _require(
-                path.is_file() and not path.is_symlink(), f"installed_asset_invalid:{path.name}"
+                path.name in INSTALLED_ASSET_SHA256,
+                f"installed_asset_digest_unpinned:{path.name}",
             )
             expected = INSTALLED_ASSET_SHA256[path.name]
             _require(
@@ -1179,7 +1261,11 @@ class Controller:
     def probe_identities(self) -> dict[str, Any]:
         self._require_steps("images_verified")
         if self._completed("identities_verified"):
-            document = _load_json(self.paths.image_identities, expected_root_uid=self.root_uid)
+            document = _load_json(
+                self.paths.image_identities,
+                policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+                expected_root_uid=self.root_uid,
+            )
             _require(
                 document.get("schema_version") == "1.1" and document.get("platform") == PLATFORM,
                 "identity_evidence_changed",
@@ -1231,7 +1317,11 @@ class Controller:
 
     def apply_ownership(self) -> dict[str, Any]:
         self._require_steps("identities_verified")
-        document = _load_json(self.paths.image_identities, expected_root_uid=self.root_uid)
+        document = _load_json(
+            self.paths.image_identities,
+            policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=self.root_uid,
+        )
         _require(document.get("schema_version") == "1.1", "identity_schema_invalid")
         _require(document.get("platform") == PLATFORM, "identity_platform_invalid")
         images = document.get("images")
@@ -1363,7 +1453,11 @@ class Controller:
             gid = self._probe("worker-update", worker["local_tag"], "g")
             method = "networkless_controlled_probe"
         _require((uid, gid) == (10001, 10001), "incremental_worker_identity_changed")
-        identities = _load_json(self.paths.image_identities, expected_root_uid=self.root_uid)
+        identities = _load_json(
+            self.paths.image_identities,
+            policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=self.root_uid,
+        )
         images = identities.get("images")
         _require(isinstance(images, dict), "identity_images_invalid")
         old_worker = images.get("SMARTSCAN_UAT_WORKER_IMAGE")
@@ -1543,7 +1637,11 @@ class Controller:
 
     def start_core(self) -> dict[str, Any]:
         self._require_steps("migrations_completed")
-        candidate = _load_json(self.paths.candidate_release, expected_root_uid=self.root_uid)
+        candidate = _load_json(
+            self.paths.candidate_release,
+            policy=FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
+            expected_root_uid=self.root_uid,
+        )
         active, _ = self._fixed_release()
         expected_worker = next(item for item in candidate["images"] if item["service"] == "worker")
         active_worker = next(item for item in active["images"] if item["service"] == "worker")
@@ -1607,7 +1705,11 @@ class Controller:
 
     def activate_nginx(self) -> dict[str, Any]:
         self._require_steps("nginx_staged")
-        plan = _load_json(self.paths.activation_plan, expected_root_uid=self.root_uid)
+        plan = _load_json(
+            self.paths.activation_plan,
+            policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=self.root_uid,
+        )
         _require(plan.get("confirmed") is True, "nginx_confirmation_missing")
         target = Path(str(plan.get("server_config", "")))
         _require(
@@ -1717,10 +1819,20 @@ class Controller:
 
     def rollback_images(self) -> dict[str, Any]:
         self._require_steps("core_stopped")
-        previous_release = _load_json(self.paths.previous_release, expected_root_uid=self.root_uid)
-        previous_map = _load_json(self.paths.previous_map, expected_root_uid=self.root_uid)
+        previous_release = _load_json(
+            self.paths.previous_release,
+            policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=self.root_uid,
+        )
+        previous_map = _load_json(
+            self.paths.previous_map,
+            policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=self.root_uid,
+        )
         previous_identities = _load_json(
-            self.paths.previous_identities, expected_root_uid=self.root_uid
+            self.paths.previous_identities,
+            policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=self.root_uid,
         )
         _require(previous_release.get("platform") == PLATFORM, "previous_release_platform_invalid")
         _require(previous_map.get("platform") == PLATFORM, "previous_release_map_platform_invalid")

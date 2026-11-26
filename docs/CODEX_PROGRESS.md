@@ -7,15 +7,20 @@
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001N` 修复版Worker制品与增量UAT发布更新 |
-| 工作包状态 | 进行中；修复版Worker和单服务增量映射已获接受，固定Artifact已完成本机校验、服务器普通用户上传及控制器升级资产暂存，尚未安装控制器或激活候选 |
-| 当前分支 | `codex/ops-001n-artifact-preparation-evidence` |
-| 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；状态停在`next_required=core_started`。新Worker归档已上传但未导入，API/Worker/Web/AI/Nginx均未启动 |
-| 工作包提交 | `af2bf76`（PR #115中文squash合并）；用户接受记录`0f930955` |
-| PR | [#115](https://github.com/j4meshub/SmartScan/pull/115)与接受记录[#118](https://github.com/j4meshub/SmartScan/pull/118)已合并；制品准备脱敏证据PR待创建 |
-| 下一工作包 | 继续`OPS-001N`：由用户人工备份并安装四项固定控制器资产，首条命令只运行`status`；随后另行授权`accept-release`和一次增量`resume-basic-uat`，不得自动扩大到Nginx |
+| 当前工作包 | `OPS-001O` 候选发布清单权限契约修复 |
+| 工作包状态 | 仓库实现完成；首次增量`accept-release`失败证据保留，PR #120代码与真实Linux权限、双Docker状态机门禁已通过；等待人工升级控制器，升级前不得服务器重试 |
+| 当前分支 | `codex/ops-001o-release-permission-contract` |
+| 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；`completed`仍截至`migrations_completed`、`next_required=core_started`。候选清单为正确的`root:root 0644`且摘要正确，新Worker未导入、活动映射未切换，API/Worker/Web/AI/Nginx均未启动 |
+| 工作包提交 | `dd0e019`（权限策略、真实Linux权限测试、完整状态机回归和中文文档） |
+| PR | #120；首个代码头CI #863、UAT离线交付 #50、容器供应链 #183、PostgreSQL #138全部通过，最终文档头等待同等门禁复核后合并 |
+| 下一工作包 | OPS-001O合并后由用户人工仅升级包装器和Python控制器，首条命令只运行`status`；随后再单独授权一次`accept-release`，成功后才允许一次增量`resume-basic-uat`，不得自动扩大到Nginx |
 
 ## 当前工作包进展
+
+- OPS-001N控制器、Compose与候选清单已由共同使用人人工安装，候选清单真实状态为`root:root 0644`且SHA-256正确。用户授权的首次且唯一一次增量`accept-release`返回`fixed_json_mode_invalid:uat-2026-11-26-worker-fix.json`；状态机未前进，新Worker未导入、活动发布未切换、核心服务未启动，PostgreSQL继续健康。
+- 根因是包装器固定要求候选清单`0644`，而Python `_load_json()`把所有JSON无条件当作内部`0600`文件。OPS-001O将权限改为有限命名策略：公开root资产`0644`、候选清单专用root`0644`、内部root状态`0600`和部署用户上传证据`0600`；调用方不能传入任意模式或所有者。
+- 新权限表覆盖包装器、控制器、validators、Compose、Nginx模板、候选/活动/历史发布、镜像身份、状态、部署证据、env、管理员密码、模型和数据目录。候选清单只接受精确`0644`，内部敏感JSON仍严格拒绝`0644`。PR #120真实Linux作业已用root文件和实际sudo环境验证正确/错误权限、所有者、链接、类型及摘要；Docker 29/containerd与传统daemon均完成增量接受、Worker导入、身份、原子激活、核心健康、18082、AI关闭和Nginx前停止。
+- 本地专项为`56 passed, 6 skipped`，跳过项仅为Windows不具备的POSIX真实权限语义；全量Python为`667 passed, 43 skipped`、覆盖率`87.74%`，Ruff检查与200个Python文件格式检查通过。默认迁移漂移首次命中未升级的本机旧SQLite而失败；改用独立空SQLite完成全链升级后返回`No new upgrade operations detected`并已删除临时库。本机没有Docker CLI；PR #120首个代码头已由Ubuntu Runner补齐真实root/sudo、Compose及双Docker运行时证据，四组流水线全部通过。
 
 - OPS-001M控制器与Compose人工升级后，用户单独授权的`run-migrations`已成功完成：空SmartScan UAT数据库完整达到`20261022_0024`，`alembic_version`、`public.ai_media_grants`和PostgreSQL健康均通过，没有生产数据或唯一副本数据。现场状态已记录`migrations_completed`，下一门禁为`core_started`；本工作包不重跑迁移。
 - 主线`13022cfa`产生的首个运行库修复Worker `sha256:4e1e7532…`被PR #115新增的严格全Critical门禁检出Debian `libxml2`的`CVE-2026-6653`，因此该digest及原候选清单SHA-256只保留为拒绝证据，不得提交用户接受或进入UAT。
@@ -27,7 +32,7 @@
 - 增量发布清单只允许Worker变化；PostgreSQL、API、AI Gateway、Web和Ops的源digest、本地不可变Tag及既有归档大小/SHA-256逐项锁定不变。六归档exact mixed release总大小为`991539200`字节。用户于2026-11-26明确接受Worker源digest`sha256:9957b279…3a742`、`573480960`字节归档及其SHA-256`33bc7ed9…b2e7`、候选清单SHA-256`8debb3d8…f6003`和对应六镜像映射；该决定不授权本机下载、服务器上传、控制器升级、镜像导入、活动映射切换、核心服务或Nginx。
 - 接受记录合并后，按需工作流`45764657887`在主线接受提交`0f930955`上重新生成同一固定映射，Ubuntu/Windows离线工具、严格漏洞门禁、Docker 29/containerd与传统daemon exact mixed release均通过。通用工具以`.part`续传并独立`verify`确认六镜像映射、十二个Worker Layer与十二个RootFS diff ID、`linux/amd64`、来源提交、Config和`10001:10001`身份契约全部一致；本次增量目录只下载变化的Worker归档，没有选择后续digest或可变Tag。
 - 新Worker归档在本机和服务器均为`573480960`字节、SHA-256 `33bc7ed9…b2e7`。固定候选目录只含Worker归档、`release-map.json`和候选清单，三文件均为部署用户所有、0600、普通文件、单硬链接且无`.part`；服务器端摘要与本机逐字一致。本阶段没有执行Docker导入、Tag、容器、状态机、迁移、应用或Nginx操作。
-- OPS-001N四项控制器升级资产已从接受提交Git对象按LF原始字节导出，并以普通用户暂存到固定升级目录。目录为部署用户所有、0700且只含包装器、控制器、UAT Compose和候选清单；四文件均为0600、普通文件、单硬链接、摘要匹配且无`.part`。没有使用sudo、替换已安装资产或安装候选清单；validators与sudoers保持不变。下一步仍是用户人工备份和一次性安装，升级后首条命令只能为`status`。
+- OPS-001N四项控制器升级资产曾从接受提交Git对象按LF原始字节导出，并以普通用户暂存到固定升级目录。目录为部署用户所有、0700且只含包装器、控制器、UAT Compose和候选清单；四文件均为0600、普通文件、单硬链接、摘要匹配且无`.part`。该阶段没有使用sudo或替换已安装资产；随后四项资产已由用户人工安装并核验，validators与sudoers保持不变。
 - 通用离线工具只为变化的Worker下载、校验和上传Artifact；CI额外重建旧Worker以真实模拟“旧六镜像完成迁移→接受单Worker候选→只导入新Worker→原子激活→启动核心”的现场断点。新Worker归档和发布映射在用户接受前不会下载到本机、上传服务器或导入UAT。
 - 统一控制器保留旧发布、旧Worker Tag、旧映射、旧`local-images.env`和旧身份文件。只有新归档、内容链、Docker 29/containerd运行时身份及`10001:10001`全部通过，且data目录所有权仍兼容时才切换活动发布；失败恢复旧活动文件且不重置存储、模型、网络、数据库、迁移和已完成状态。核心已启动时拒绝增量接受。
 - exact mixed release CI固定使用旧PostgreSQL/API/AI Gateway/Web/Ops与新Worker，要求完全离线、`pull_policy: never`、已在0024的数据库不重复迁移、两CPU Worker、真实OCR上传任务、18082健康和AI Profile关闭；共享Nginx不参与。仓库开发期间没有连接或修改`smartscan-server`。

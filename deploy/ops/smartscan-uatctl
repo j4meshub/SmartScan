@@ -16,6 +16,9 @@ readonly EXPECTED_USER="szhzx"
 readonly STAT="/usr/bin/stat"
 readonly SHA256="/usr/bin/sha256sum"
 readonly PYTHON="/usr/bin/python3"
+readonly EXECUTABLE_ROOT_MODE="755"
+readonly PUBLIC_ROOT_ASSET_MODE="644"
+readonly CANDIDATE_RELEASE_MODE="644"
 
 usage() {
     printf '用法：sudo -n %s {%s}\n' "$EXECUTOR" "status|preflight|verify-storage|verify-models|verify-config|accept-release|import-images|verify-images|probe-identities|apply-ownership|start-database|verify-database|run-migrations|start-core|verify-core|stage-nginx|activate-nginx|verify-uat|stop-core|rollback-images|resume-basic-uat" >&2
@@ -31,13 +34,13 @@ esac
 [[ "${SUDO_USER:-}" == "$EXPECTED_USER" ]] || { printf 'status=failed\nreason=sudo_user_mismatch\n' >&2; exit 1; }
 [[ "${SUDO_COMMAND:-}" == "$EXECUTOR $1" ]] || { printf 'status=failed\nreason=sudo_command_mismatch\n' >&2; exit 1; }
 [[ "$(/usr/bin/hostname -s)" == "$EXPECTED_HOSTNAME" ]] || { printf 'status=failed\nreason=hostname_mismatch\n' >&2; exit 1; }
-[[ -f "$EXECUTOR" && ! -L "$EXECUTOR" && "$($STAT -c '%U:%G:%a' "$EXECUTOR")" == 'root:root:755' ]] || { printf 'status=failed\nreason=executor_invalid\n' >&2; exit 1; }
-[[ -f "$HELPER" && ! -L "$HELPER" && "$($STAT -c '%U:%G:%a' "$HELPER")" == 'root:root:755' ]] || { printf 'status=failed\nreason=helper_invalid\n' >&2; exit 1; }
-[[ -f "$VALIDATORS" && ! -L "$VALIDATORS" && "$($STAT -c '%U:%G:%a' "$VALIDATORS")" == 'root:root:644' ]] || { printf 'status=failed\nreason=validators_invalid\n' >&2; exit 1; }
-[[ -f "$CANDIDATE_RELEASE" && ! -L "$CANDIDATE_RELEASE" && "$($STAT -c '%U:%G:%a' "$CANDIDATE_RELEASE")" == 'root:root:644' ]] || { printf 'status=failed\nreason=candidate_release_invalid\n' >&2; exit 1; }
+[[ -f "$EXECUTOR" && ! -L "$EXECUTOR" && "$($STAT -c '%U:%G:%a:%h' "$EXECUTOR")" == "root:root:${EXECUTABLE_ROOT_MODE}:1" ]] || { printf 'status=failed\nreason=executor_invalid\n' >&2; exit 1; }
+[[ -f "$HELPER" && ! -L "$HELPER" && "$($STAT -c '%U:%G:%a:%h' "$HELPER")" == "root:root:${EXECUTABLE_ROOT_MODE}:1" ]] || { printf 'status=failed\nreason=helper_invalid\n' >&2; exit 1; }
+[[ -f "$VALIDATORS" && ! -L "$VALIDATORS" && "$($STAT -c '%U:%G:%a:%h' "$VALIDATORS")" == "root:root:${PUBLIC_ROOT_ASSET_MODE}:1" ]] || { printf 'status=failed\nreason=validators_invalid\n' >&2; exit 1; }
+[[ -f "$CANDIDATE_RELEASE" && ! -L "$CANDIDATE_RELEASE" && "$($STAT -c '%U:%G:%a:%h' "$CANDIDATE_RELEASE")" == "root:root:${CANDIDATE_RELEASE_MODE}:1" ]] || { printf 'status=failed\nreason=candidate_release_invalid\n' >&2; exit 1; }
 
 # 本摘要固定到同一审查提交中的辅助工具；任何内容漂移都拒绝运行。
-readonly HELPER_SHA256="9edb1f9af6bbcb4a441c3cf570ade20dae8f0079ca98b1b3c4d1454fb7589968"
+readonly HELPER_SHA256="5f89d63559fcafd8af4d5421403195767b34042d397d62709023d1192659abe0"
 readonly VALIDATORS_SHA256="27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b"
 readonly CANDIDATE_RELEASE_SHA256="8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003"
 [[ "$HELPER_SHA256" != REPLACE_* ]] || { printf 'status=failed\nreason=helper_digest_not_pinned\n' >&2; exit 1; }
