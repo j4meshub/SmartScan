@@ -857,5 +857,5 @@
 - 日期：2026-11-26
 - 状态：已确认；首个运行库修复候选被安全门禁拒绝
 - 证据：包含libGL/GLib修复的首个固定Worker候选通过既有视觉导入与可修复High/Critical扫描，但离线归档的`ignore-unfixed=false`全Critical扫描检出Debian `libxml2`的`CVE-2026-6653`。Debian官方跟踪表明稳定版当前无修复；该结果不得以严重度改写、忽略规则或自动VEX绕过。同期API、AI Gateway和Ops因BuildKit复用旧apt层而包含已有修复的`libzstd1` High漏洞。
-- 决策：首个候选及其失败日志作为拒绝证据保留，不提交用户接受。Worker运行镜像移除实际推理不需要的系统`libxml2`，并继续以无网络、只读根、有界`/tmp`、零capability方式验证`cv2`、libGL、GLib及PaddleOCR；安全验证与main发布构建均禁用旧BuildKit缓存。新候选必须重新生成SBOM、SLSA并达到全部Critical为0、可修复High/Critical为0后，才能进入增量映射。
+- 决策：首个候选及其失败日志作为拒绝证据保留，不提交用户接受。Worker从Debian图形栈中只复制OpenCV实际需要的最小GLVND共享库并保留相应版权文件，再清除Mesa/LLVM及其引入的`libxml2`；随后继续以无网络、只读根、有界`/tmp`、零capability方式验证`cv2`、libGL、GLib及PaddleOCR。安全验证与main发布构建均禁用旧BuildKit缓存。新候选必须重新生成SBOM、SLSA并达到全部Critical为0、可修复High/Critical为0后，才能进入增量映射。
 - 发布边界：该安全修正会产生新的main Worker digest，但不得自动替换当前UAT。只有新的完整内容链和exact mixed release通过且用户明确接受后，统一控制器才能记录并激活候选。

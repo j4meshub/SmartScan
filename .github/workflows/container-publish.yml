@@ -65,9 +65,17 @@ jobs:
       - name: 验证Worker视觉运行库
         if: matrix.service == 'worker'
         run: |
-          ! docker run --rm --entrypoint dpkg-query \
+          test "$(docker run --rm --entrypoint dpkg-query \
             local/${{ matrix.image }}:${{ github.sha }} \
-            -W libxml2
+            -W -f='${db:Status-Status}' libxml2 2>/dev/null || true)" != installed
+          docker run --rm --entrypoint sh \
+            local/${{ matrix.image }}:${{ github.sha }} \
+            -c 'test -s /usr/local/lib/libGL.so.1 \
+              && test -s /usr/local/lib/libGLX.so.0 \
+              && test -s /usr/local/lib/libGLdispatch.so.0 \
+              && test -s /usr/share/doc/smartscan-gl-runtime/libgl1.copyright \
+              && test -s /usr/share/doc/smartscan-gl-runtime/libglx0.copyright \
+              && test -s /usr/share/doc/smartscan-gl-runtime/libglvnd0.copyright'
           docker run --rm \
             --network none \
             --read-only \

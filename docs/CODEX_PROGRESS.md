@@ -19,7 +19,7 @@
 
 - OPS-001M服务器迁移已成功达到`20261022_0024`，`public.ai_media_grants`和PostgreSQL健康均通过；现场下一门禁为`core_started`，本工作包不重跑迁移。
 - 主线`13022cfa`曾产生包含libGL/GLib修复的Worker候选`sha256:4e1e7532…`。PR #115新增的严格全Critical扫描发现该制品仍含Debian `libxml2`的`CVE-2026-6653`且无可用修复版本，因此候选保持拒绝，不提交用户接受，也不下载、上传或导入UAT。
-- 同轮容器供应链发现API、AI Gateway和Ops的BuildKit缓存复用了含可修复`libzstd1` High漏洞的旧apt层。供应链修正为安全验证和main发布均禁用旧构建缓存；Worker显式移除真实运行不需要的系统`libxml2`，并在无网络视觉运行测试后执行全Critical扫描。该修正必须先在独立最小PR通过并由main产生新固定digest。
+- 同轮容器供应链发现API、AI Gateway和Ops的BuildKit缓存复用了含可修复`libzstd1` High漏洞的旧apt层。供应链修正为安全验证和main发布均禁用旧构建缓存；Worker只保留OpenCV实际需要的最小GLVND共享库及许可证证据，再清除把`libxml2`带入运行镜像的Mesa/LLVM包链，并在无网络视觉运行测试后执行全Critical扫描。该修正必须先在独立最小PR通过并由main产生新固定digest。
 - 增量控制器与离线工具PR #115保留但不合并无效候选；安全基础合并后再把新Worker的源digest、平台manifest、Config、Layer、SBOM、SLSA、漏洞结果、归档和运行时身份固定到同一PR。该拆分是安全门禁的正常失败关闭，不是自动替换候选或降低门禁。
 
 - OPS-001L已通过PR #113合并并完成服务器人工升级。统一控制器真实续接完成六镜像离线导入、Docker 29/containerd结构化身份、无网络UID/GID探测、`image-identities.json`、目录所有权、PostgreSQL启动和健康验证，随后在不可逆迁移门禁停止。
