@@ -54,4 +54,3 @@
 - Ubuntu 单元作业使用真实 root 文件和真实 `sudo -u szhzx sudo -n` 调用包装器，验证候选 `0644`通过，`0600`、`0640`、`0664`、`0777`、非 root 所有者、符号链接、硬链接、目录和摘要漂移均拒绝。
 - Python 加载器使用相同命名策略验证候选 `0644`和内部 JSON `0600`；内部 JSON `0644`拒绝。
 - Docker 29/containerd 与传统 daemon 的完整断点测试以 root 安装的 `0644`候选清单，从`migrations_completed`执行增量接受、单 Worker 导入、身份核验、原子激活、API/双 CPU Worker/Web 健康和 18082 内部闭环，并在共享 Nginx 门禁前停止；AI Profile 保持关闭。
-
