@@ -128,10 +128,10 @@ def prepare_root_owned_candidate() -> Path:
     return candidate
 
 
-def verify_real_worker_task(password_path: Path, sample: Path) -> None:
+def verify_real_worker_task(password_path: Path, sample: Path, *, origin: str) -> None:
     """通过内部HTTP闭环提交真实图片，并确认由CPU Worker生成非空OCR。"""
 
-    base = "http://127.0.0.1:18082/api"
+    base = f"{origin}/api"
     device_headers = {
         "X-Device-ID": "ci:ops-001n",
         "X-Device-Name": "OPS-001N-CI",
@@ -468,11 +468,29 @@ def main() -> None:
     assert json.loads(paths.installed_release.read_text(encoding="utf-8")) == base_release
     assert base_worker["local_tag"] in paths.local_images_env.read_text(encoding="utf-8")
 
+    original_urlopen = uatctl.urllib.request.urlopen
+
+    def containerd_internal_urlopen(url, *args, **kwargs):
+        """Docker 29 action的daemon网络隔离时，通过固定nginx容器地址验证同一HTTP入口。"""
+
+        if url != "http://127.0.0.1:18082/":
+            return original_urlopen(url, *args, **kwargs)
+        nginx_id = controller._compose("ps", "-q", "nginx").strip()
+        assert nginx_id
+        runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", nginx_id]))[0]
+        address = runtime["NetworkSettings"]["Networks"]["smartscan-uat-edge"]["IPAddress"]
+        assert address.startswith("172.30.11.")
+        return original_urlopen(f"http://{address}/", *args, **kwargs)
+
+    if os.environ.get("SMARTSCAN_DOCKER29_CONTAINERD") == "1":
+        uatctl.urllib.request.urlopen = containerd_internal_urlopen
     try:
         resumed = controller.resume_basic_uat()
     except uatctl.ControllerError:
         report_core_failure(controller)
         raise
+    finally:
+        uatctl.urllib.request.urlopen = original_urlopen
     assert resumed == {
         "status": "passed",
         "next_required": "stage-nginx",
@@ -493,6 +511,13 @@ def main() -> None:
     )
     running = set(controller._compose("ps", "--status", "running", "--services").splitlines())
     assert running == {"postgres", "api", "worker-cpu-1", "worker-cpu-2", "nginx"}
+    nginx_id = controller._compose("ps", "-q", "nginx").strip()
+    nginx_runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", nginx_id]))[0]
+    assert nginx_runtime["HostConfig"]["PortBindings"]["80/tcp"] == [
+        {"HostIp": "127.0.0.1", "HostPort": "18082"}
+    ]
+    nginx_address = nginx_runtime["NetworkSettings"]["Networks"]["smartscan-uat-edge"]["IPAddress"]
+    assert nginx_address.startswith("172.30.11.")
     worker_id = controller._compose("ps", "-q", "worker-cpu-1").strip()
     worker_runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", worker_id]))[0]
     assert worker_runtime["HostConfig"]["ReadonlyRootfs"] is True
@@ -521,6 +546,7 @@ def main() -> None:
         (
             "import ctypes,cv2; "
             "ctypes.CDLL('libGL.so.1'); ctypes.CDLL('libgthread-2.0.so.0'); "
+            "ctypes.CDLL('libgomp.so.1'); "
             "print('worker_libraries=passed')"
         ),
     )
@@ -545,7 +571,12 @@ def main() -> None:
     assert int(worker_heartbeats) >= 2
     samples = Path(os.environ["SMARTSCAN_REAL_OCR_SAMPLES"])
     sample = next(path for path in sorted(samples.iterdir()) if path.name.startswith("zh-cn"))
-    verify_real_worker_task(paths.bootstrap_password, sample)
+    http_origin = (
+        f"http://{nginx_address}"
+        if os.environ.get("SMARTSCAN_DOCKER29_CONTAINERD") == "1"
+        else "http://127.0.0.1:18082"
+    )
+    verify_real_worker_task(paths.bootstrap_password, sample, origin=http_origin)
     print(
         json.dumps(
             {
