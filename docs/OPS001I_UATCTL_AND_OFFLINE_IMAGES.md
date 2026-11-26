@@ -282,7 +282,7 @@ CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containe
 
 统一控制器新增的增量路径不重置既有`completed`：`accept-release`只登记等待候选，后续`resume-basic-uat`才验证并导入新Worker、确认`10001:10001`和data所有权、保存旧活动文件并切换发布。新Tag不覆盖旧Tag；任何失败恢复旧活动文件并保持核心停止。旧Worker已知不可启动，因此`rollback-images`恢复旧证据后不会自动重启核心。
 
-本次需人工安装的资产为包装器、控制器、UAT Compose和候选清单；`smartscan_uat_validators.py`、Nginx模板及sudoers未改变。精确摘要在OPS-001N合并提交确定后更新到本节，安装顺序必须为控制器、Compose、候选清单、包装器，确保包装器最后切换摘要门禁。详见[OPS-001N修复版Worker与增量UAT发布](OPS001N_WORKER_INCREMENTAL_RELEASE.md)。
+本次需人工安装的资产为包装器、控制器、UAT Compose和候选清单；`smartscan_uat_validators.py`、Nginx模板及sudoers未改变。下表摘要已由OPS-001N技术验证头的Git对象固定；最终人工升级仍须从PR合并提交导出并复核相同摘要。安装顺序必须为控制器、Compose、候选清单、包装器，确保包装器最后切换摘要门禁。详见[OPS-001N修复版Worker与增量UAT发布](OPS001N_WORKER_INCREMENTAL_RELEASE.md)。
 
 仓库LF规范字节摘要如下；合并后必须从合并提交Git对象导出，不能直接使用可能被Windows换行转换的工作树文件：
 
@@ -297,7 +297,7 @@ CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containe
 | `deploy/nginx/shared-8077-smartscan-location.conf.template`（不变） | `500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227` |
 | `deploy/releases/uat-2026-11-24.json`（不变） | `2caa6eea6c0f6b11f941dc3301069653015fe41c9e5c515569dfb6cc5c099789` |
 
-本工作包不修改sudoers。用户接受候选并完成普通用户资产暂存后，人工升级仍须先备份现有包装器、控制器和Compose，再按“控制器→Compose→候选清单→包装器”安装，运行`visudo -cf /etc/sudoers.d/smartscan-uatctl`，最后只执行`status`。新摘要获最终合并提交确认前不得用于服务器安装。
+本工作包不修改sudoers。用户接受候选并完成普通用户资产暂存后，人工升级仍须先备份现有包装器、控制器和Compose，再按“控制器→Compose→候选清单→包装器”安装，运行`visudo -cf /etc/sudoers.d/smartscan-uatctl`，最后只执行`status`。合并提交的Git对象摘要未再次核对前不得用于服务器安装。
 
 ```bash
 sudo install -d -o root -g root -m 0700 /usr/local/libexec/smartscan/.ops001n-backup
@@ -317,4 +317,4 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
 
 ## 当前状态
 
-截至OPS-001N开始，六镜像旧发布、身份文件、所有权、PostgreSQL健康及迁移`20261022_0024`均已完成；API、Worker、Web、AI和共享Nginx未启动。新Worker和新发布映射经用户明确接受前，不下载、不上传、不导入，也不修改服务器活动发布。
+六镜像旧发布、身份文件、所有权、PostgreSQL健康及迁移`20261022_0024`均已完成；API、Worker、Web、AI和共享Nginx未启动。新Worker和单服务增量映射已通过两类Docker运行时的exact mixed release，但在用户明确接受前仍不下载、不上传、不导入，也不修改服务器活动发布。

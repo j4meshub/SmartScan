@@ -15,6 +15,7 @@ deploy/sudoers/smartscan-uatctl text eol=lf
 deploy/compose/docker-compose.uat.yml text eol=lf
 deploy/nginx/shared-8077-smartscan-location.conf.template text eol=lf
 deploy/releases/uat-2026-11-24.json text eol=lf
+deploy/releases/uat-2026-11-26-worker-fix.json text eol=lf
 tools/ci_verify_uat_offline_docker.sh text eol=lf
 tools/ci_verify_uatctl_checkpoint.py text eol=lf
 tests/fixtures/uatctl/legacy-loop-probe text eol=lf

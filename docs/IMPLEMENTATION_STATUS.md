@@ -24,7 +24,7 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 | 可选 AI | 通用文档、复杂 OCR、本机试用、三端接入与主动上传代码完成 | Provider、安全、可靠性、项目授权、版本候选、专用 Worker 与安全媒体已实现；AI 网关默认内部取图并使用 data URL、multipart 或 Files API 主动上传，签名 URL 降为兼容模式。H5、Android、iOS 和默认 Mock 使用同一候选语义；试卷、扫书与公司真实模型验收尚未完成，M8 总体仍为进行中 |
 | Android | M5 无外部 AI 核心与 M8 AI 接入自动化门禁完成；正式分发延期 | 已实现分层 API、登录/Keystore/Room、CameraX、离线续传、编辑分享、账号删除、签名更新，以及 AI 项目授权、任务进度、候选对比/决定和来源基础版本预览；PR #67 代码头 API/Web/Android/iOS/容器五项 CI 通过，客户端不保存部署连接配置。开发期使用本地或 CI 测试 APK；正式渠道、密钥、系统安装器、TalkBack、网络切换和真机升级在稳定版本后验收 |
 | iOS | M6 无外部 AI 核心、REL-002 仓库门禁与 M8 通用 AI 接入自动门禁完成 | 已实现可复现工程、身份/Keychain、AVFoundation、后台续传、编辑导出分享、账号删除、双语元数据与隐私清单；外部 AI 项目授权、双类型任务、候选对比/决定和来源版本预览已通过固定 Xcode 16.4 Simulator 编译与 XCTest。真实 Apple 参数、签名、真机与审核仍未通过 |
-| CI 与部署 | OPS-000、OPS-001B～OPS-001M、OPS-REG-003B、OCR-002及OCR-002D完成；OPS-001N进行中 | 50 GiB loop、OCR、配置、三网、六镜像离线导入、身份、所有权、PostgreSQL及迁移`20261022_0024`均已通过。旧Worker缺视觉运行库而禁止启动；首个修复候选被严格全Critical门禁拒绝，第二个候选在exact mixed release检出缺少OpenMP运行库。主线`cb6599bf`现已加入`libgomp1`并完成容器供应链；新Worker在首轮Docker 29路径已保持双进程运行，随后暴露旧API空库多进程启动竞态，基础UAT暂固定单API进程并继续完整门禁。用户接受前不改变UAT。 |
+| CI 与部署 | OPS-000、OPS-001B～OPS-001M、OPS-REG-003B、OCR-002及OCR-002D完成；OPS-001N等待人工验收 | 50 GiB loop、OCR、配置、三网、六镜像离线导入、身份、所有权、PostgreSQL及迁移`20261022_0024`均已通过。旧Worker缺视觉运行库而禁止启动；前两版修复候选分别因Critical漏洞和缺少OpenMP运行库被拒绝。主线`cb6599bf`候选已在Docker 29/containerd与传统daemon完成单API、双CPU Worker、真实OCR、18082绑定、AI关闭和无Registry exact mixed release；用户接受前不下载、上传或改变UAT。 |
 | 数据库迁移 | 已实现 | Alembic 初始基线、空库升级、旧基线无损接管、版本门禁和 Compose 一次性迁移服务 |
 | API 分层 | 已实现 | 应用装配、认证路由、扫描路由、管理路由、领域服务和存储访问已分离，并由公开契约测试保护 |
 | 测试与 CI 基线 | 已实现 | 测试会话使用临时数据库/存储，保存完整 OpenAPI 快照，GitHub Actions 对应用代码执行 77% 覆盖率门禁 |
@@ -52,7 +52,7 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 - Android 与 iOS 后台队列均已实现，但网络类型切换、进程强杀、锁屏和真实 4G/5G 中断恢复仍待真机与 staging 验收。
 - OCR固定模型已安装，但真实授权数据集上的方向、准确率和容量验收仍未完成；模板试卷产品化、书籍双页与页码完整性的真实数据指标，以及生产大文件下载吞吐也待验收。
 - iOS 正式 Bundle ID、Apple Team、签名、公开隐私/支持地址、真实截图、审核账号、Archive、TestFlight 和 App Store 审核。
-- 共享生产宿主机的loop、六镜像、CIDR/8077/18082、资源、OCR、证据、配置、三网、离线导入、UID/GID、身份文件、所有权、PostgreSQL健康和迁移`20261022_0024`均已通过。当前缺修复版Worker及增量发布映射验收与用户接受、控制器资产人工升级、候选离线交付和激活、核心服务、Nginx增量、HTTP基础UAT及16用户共租户验收。
+- 共享生产宿主机的loop、六镜像、CIDR/8077/18082、资源、OCR、证据、配置、三网、离线导入、UID/GID、身份文件、所有权、PostgreSQL健康和迁移`20261022_0024`均已通过。修复版Worker及增量发布映射已通过仓库和exact mixed release门禁；当前仍缺用户明确接受、控制器资产人工升级、候选离线交付和激活、核心服务、Nginx增量、HTTP基础UAT及16用户共租户验收。
 - 模型数据集、验收指标、真机矩阵、企业微信验证、Android 签名分发、TestFlight/App Store 材料和审核。
 
 ## 建议的后续里程碑
@@ -60,5 +60,5 @@ v1.4 实施方案描述的是一个多阶段产品项目，依赖外部凭据、
 1. 准备正式参数和目标设备后，用真机、签名和 TestFlight 完成 M6 人工门禁；这些外部条件不阻塞 M7 代码工作。
 2. 执行 M7：在授权固定数据集上产品化试卷与扫书能力，低置信结果始终保留原图并回退复核。
 3. 继续执行 M8：AI-006～AI-009、`H5-AI-001`、`DEVX-002`、Android/iOS 接入与 AI-013 仓库实现已完成；下一阶段是受固定数据集约束的 AI-010/AI-011，以及包含真实公司 Provider 主动上传的 AI-012 门禁。
-4. `OPS-001B`至`OPS-001M`的存储、模型、配置、网络、离线镜像、身份、所有权、数据库及迁移门禁均已完成；现因既有Worker候选缺少运行库，等待OPS-001N新digest和发布映射通过并由用户接受。API、两个CPU Worker、Web和Nginx仍未启动。
+4. `OPS-001B`至`OPS-001M`的存储、模型、配置、网络、离线镜像、身份、所有权、数据库及迁移门禁均已完成；OPS-001N新Worker和单服务增量映射也已通过exact mixed release，现等待用户明确接受并进入离线交付和原子激活。API、两个CPU Worker、Web和Nginx仍未启动。
 

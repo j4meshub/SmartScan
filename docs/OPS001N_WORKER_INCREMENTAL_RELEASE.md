@@ -12,8 +12,11 @@
 | Config | `sha256:59616bcf09ea5d7b7538c521471ad393847a320781e1d18892bf92bf0ba8130f` |
 | OCI revision | `cb6599bf75da44f5f9b1a0e4e48f866b8db501b1` |
 | 本地不可变 Tag | `smartscan-uat-worker:sha256-9957b27924b0` |
+| Worker 离线归档 | `smartscan-worker-9957b27924b0-linux-amd64.docker.tar` |
+| Worker 归档大小 | `573480960` 字节 |
+| Worker 归档 SHA-256 | `33bc7ed9ba28811f8abe12ff4edad7f4634834df8a452a8b56bd9325c0d8b2e7` |
 | 候选发布清单 | `deploy/releases/uat-2026-11-26-worker-fix.json` |
-| 候选清单 SHA-256 | `8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003` |
+| 候选清单 LF 原始字节 SHA-256 | `8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003` |
 
 Config 绑定十二个压缩 Layer 及十二个 RootFS diff ID；完整列表由中文离线发布映射保存并由归档、控制器和 Docker 29/containerd CI 逐项复算，不依赖 Tag。主线容器供应链运行 `45750089308` 已生成 SPDX SBOM 和 GitHub SLSA 来源证明（attestation `72482193`），并通过“全部 Critical，包含不可修复项”和“可修复 High/Critical”两类门禁；本工作包还会对最终离线归档重复执行同一门禁。
 
@@ -26,7 +29,7 @@ Config 绑定十二个压缩 Layer 及十二个 RootFS diff ID；完整列表由
 
 清单的 `base_release_manifest_sha256`、`changed_services=["worker"]` 和五项 `unchanged_archives` 构成机器校验边界。工具拒绝非 Worker 变化、旧归档大小或摘要漂移、复用旧 Worker Tag、可变 Tag、非 `linux/amd64` 平台或非 SmartScan GHCR 仓库。
 
-按需 Actions 只上传新 Worker 归档和新发布映射。CI 为证明升级路径会额外重建已接受的旧 Worker 归档，但该旧制品不会作为新 Artifact 重复交付。新 Worker 归档的精确大小和 SHA-256 以本 PR 的成功工作流为准，用户接受前不得在本机下载或上传服务器。
+按需 Actions 只上传新 Worker 归档和新发布映射。CI 为证明升级路径会额外重建已接受的旧 Worker 归档，但该旧制品不会作为新 Artifact 重复交付。新 Worker 归档的精确大小和 SHA-256 已由成功工作流固定在上表；用户接受前不得在本机下载或上传服务器。
 
 ## 控制器状态机
 
@@ -66,6 +69,8 @@ Docker 29/containerd 和传统独立 daemon 都使用 exact mixed release：旧 
 - 两个 CPU Worker 同时心跳；
 - 通过内部 HTTP 上传固定真实图片，任务最终产生非空 OCR 文本；
 - 18082 核心健康，AI Profile 关闭，共享 Nginx 不参与。两种CI daemon均在独立网络边界中禁用iptables，因此同时核对`127.0.0.1:18082`固定端口绑定，并通过同一nginx容器的固定edge地址完成HTTP与真实OCR闭环；生产控制器仍直接验证回环18082。
+
+最终技术验证头为`903a7d9e20651a17becac4f632a24982b9b0306f`，GitHub Actions运行`45759198125`、作业`139704933686`。Docker 29/containerd与传统隔离daemon都返回`migration-and-core-complete`，六归档总大小为`991539200`字节；两条路径均确认数据库保持`20261022_0024`、核心服务数为5、`registry_access=false`、`shared_nginx_touched=false`，严格全Critical和可修复High/Critical门禁通过。
 
 ## 用户接受后的自动流程
 

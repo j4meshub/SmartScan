@@ -863,7 +863,7 @@
 ## D-114：迁移后采用单Worker原子增量发布
 
 - 日期：2026-11-26
-- 状态：实施中；等待PR证据和用户接受候选
+- 状态：技术门禁已通过；等待用户接受候选
 - 现场前提：OPS-001M已在空UAT数据库完成`20261022_0024`并验证PostgreSQL健康，状态停在`core_started`前。旧Worker没有启动，API、Web、AI和共享Nginx也未启动，因此无需滚动替换运行中服务或重置数据库状态。
 - 候选绑定：首个运行库修复Worker已被D-113安全门禁拒绝。有效候选只能来自后续主线零Critical发布，并在本工作包中固定源digest、平台manifest、Config、全部Layer、SBOM、SLSA、离线归档和运行时身份。候选发布清单只允许Worker变化，其余五个源digest、本地不可变Tag和离线归档证据必须与已接受发布逐项相同；新Worker使用新的不可变Tag，禁止覆盖旧Tag。
 - 激活事务：`accept-release`只记录待处理候选，不改变活动发布。后续续接先验证新归档、源内容链、Docker 29/containerd运行时Descriptor、UID/GID `10001:10001`和现有data所有权；验证成功后保存root只读回滚证据，再切换发布清单、映射、本地镜像环境和身份文件，最后提交状态。任一步失败恢复旧活动文件并保留新镜像及诊断现场，不删除、`prune`或重置已完成状态。
@@ -873,15 +873,16 @@
 ## D-115：Worker运行库候选必须经过exact mixed release再定版
 
 - 日期：2026-11-26
-- 状态：实施中；等待新候选exact mixed release最终证据
+- 状态：exact mixed release已通过；等待用户接受候选
 - 新证据：主线`ed832ccd`产生的零Critical候选虽通过`cv2`、libGL、GLib和PaddleOCR导入门禁，但在六镜像exact mixed release中，两个CPU Worker均因缺少`libgomp.so.1`退出。该失败发生在真实Worker启动路径，证明仅验证Python导入不足以代表Paddle运行时完整；API未被冒充为核心健康，候选没有提交用户接受。
 - 修复：主线`cb6599bf75da44f5f9b1a0e4e48f866b8db501b1`显式安装`libgomp1`，供应链在无网络、只读根、有界`/tmp`、零capability和`no-new-privileges`约束下显式加载libGL、GLib与libgomp后再导入`cv2`和`paddleocr`。其Worker源digest固定为`sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742`；SBOM、SLSA和两类漏洞门禁已通过。
-- 发布边界：候选仍须用旧PostgreSQL/API/AI Gateway/Web/Ops组成exact mixed release，完成双Worker、真实OCR、18082、离线和AI关闭门禁后才可提交用户接受。该新digest、离线归档和发布映射在接受前不得下载到本机、上传服务器、导入或激活；失败候选和旧Worker继续作为历史证据保留。
+- exact mixed release：技术验证头`903a7d9e20651a17becac4f632a24982b9b0306f`在Docker 29/containerd和传统隔离daemon均完成旧五镜像加新Worker的六镜像闭环；两个CPU Worker、真实OCR非空结果、`127.0.0.1:18082`绑定、AI关闭、无Registry访问和Nginx未接触全部通过。新Worker归档大小为`573480960`字节、SHA-256为`33bc7ed9ba28811f8abe12ff4edad7f4634834df8a452a8b56bd9325c0d8b2e7`，候选清单LF摘要为`8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003`。
+- 发布边界：该候选现在可以提交用户接受，但接受前仍不得下载到本机、上传服务器、导入或激活；失败候选和旧Worker继续作为历史证据保留。
 
 ## D-116：基础UAT的API先使用单进程启动
 
 - 日期：2026-11-26
-- 状态：实施中；等待exact mixed release复核
+- 状态：基础UAT exact mixed release已通过；显式并发安全初始化仍为后续技术债
 - 证据：新Worker已能在Docker 29/containerd路径保持两个CPU进程运行，但固定旧API镜像以四个Uvicorn子进程启动空UAT时，父进程报告子进程启动失败并退出，控制器没有记录`core_started`。该API镜像的lifespan会执行`ensure_superadmin()`，当前实现是“先查询、再插入”的启动副作用，尚未形成跨进程原子初始化契约；继续以四进程启动会让基础UAT依赖未证明安全的竞态。
 - 决策：不更换已接受API digest，也不把API故障归咎于新Worker。基础HTTP UAT的Compose暂固定一个API进程，仍保留1.5 CPU、2 GiB、512 PID及全部只读根、tmpfs和健康门禁；两个CPU Worker数量不变。后续独立业务工作包须把超级管理员初始化改为显式、幂等且并发安全的数据库操作，再由OPS-005容量测试决定API进程数。
 - 诊断：exact mixed release失败时只读取固定SmartScan服务最近300行日志，筛选错误类行、屏蔽Secret/令牌/数据库URL并最多输出八条去重摘要；不保存原始容器日志。该增强不读取服务器Secret，也不改变生产日志策略。
