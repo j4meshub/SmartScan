@@ -660,6 +660,7 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     root = Path(__file__).parents[1]
     workflow = (root / ".github/workflows/uat-offline-images.yml").read_text(encoding="utf-8")
     script = (root / "tools/ci_verify_uat_offline_docker.sh").read_text(encoding="utf-8")
+    checkpoint = (root / "tools/ci_verify_uatctl_checkpoint.py").read_text(encoding="utf-8")
     assert "tools/ci_verify_uat_offline_docker.sh" in workflow
     assert "unshare --net" in script
     assert "--bridge=none" in script
@@ -684,6 +685,8 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert 'worker["archive_name"]' in workflow
     assert "steps.worker_archive.outputs.name" in workflow
     assert "smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar" not in workflow
+    assert "prepare_root_owned_candidate" in checkpoint
+    assert "os.chown(candidate, 0, 0)" in checkpoint
 
 
 def test_controller_accepts_docker_archive_with_registry_evidence(tmp_path: Path) -> None:

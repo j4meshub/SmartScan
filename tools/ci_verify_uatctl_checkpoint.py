@@ -25,6 +25,7 @@ ARCHIVES = Path(os.environ["RUNNER_TEMP"]) / "smartscan-uat-incremental-upload"
 CONFIG = Path("/etc/smartscan/uat")
 DATA = Path("/mnt/data/smartscan/uat")
 OCR_LAYER = ROOT / ".smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz"
+CONTROLLER_ASSETS = Path(os.environ["RUNNER_TEMP"]) / "smartscan-offline-docker/controller-assets"
 
 
 def report_core_failure(controller: uatctl.Controller) -> None:
@@ -106,6 +107,20 @@ def prepare_incremental_upload(deploy_uid: int) -> None:
         if path.is_file():
             os.chown(path, deploy_uid, deploy_uid)
             path.chmod(0o600)
+
+
+def prepare_root_owned_candidate() -> Path:
+    """模拟服务器上由root安装的固定候选清单，不放宽控制器所有权门禁。"""
+
+    CONTROLLER_ASSETS.mkdir(mode=0o700)
+    candidate = CONTROLLER_ASSETS / "uat-2026-11-26-worker-fix.json"
+    shutil.copyfile(ROOT / "deploy/releases/uat-2026-11-26-worker-fix.json", candidate)
+    os.chown(CONTROLLER_ASSETS, 0, 0)
+    os.chown(candidate, 0, 0)
+    candidate.chmod(0o600)
+    info = candidate.stat()
+    assert info.st_uid == 0 and info.st_gid == 0 and info.st_nlink == 1
+    return candidate
 
 
 def verify_real_worker_task(password_path: Path, sample: Path) -> None:
@@ -320,6 +335,7 @@ def main() -> None:
         if path.is_file():
             assert path.stat().st_uid == deploy_uid, f"归档所有者不一致：{path.name}"
             path.chmod(0o600)
+    candidate_release = prepare_root_owned_candidate()
     _, native = prepare_config(deploy_uid)
     paths = uatctl.Paths(
         config_root=CONFIG,
@@ -338,7 +354,7 @@ def main() -> None:
         compose_file=ROOT / "deploy/compose/docker-compose.uat.yml",
         nginx_template=ROOT / "deploy/nginx/shared-8077-smartscan-location.conf.template",
         validator_module=ROOT / "deploy/ops/smartscan_uat_validators.py",
-        candidate_release=ROOT / "deploy/releases/uat-2026-11-26-worker-fix.json",
+        candidate_release=candidate_release,
         previous_release=CONFIG / "previous-release-manifest.json",
         previous_map=CONFIG / "previous-release-map.json",
         previous_local_images=CONFIG / "previous-local-images.env",
