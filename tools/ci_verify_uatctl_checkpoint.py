@@ -471,8 +471,8 @@ def main() -> None:
 
     original_urlopen = uatctl.urllib.request.urlopen
 
-    def containerd_internal_urlopen(url, *args, **kwargs):
-        """Docker 29 action的daemon网络隔离时，通过固定nginx容器地址验证同一HTTP入口。"""
+    def isolated_daemon_internal_urlopen(url, *args, **kwargs):
+        """隔离daemon禁用iptables时，通过固定nginx容器地址验证同一HTTP入口。"""
 
         if url != "http://127.0.0.1:18082/":
             return original_urlopen(url, *args, **kwargs)
@@ -483,8 +483,7 @@ def main() -> None:
         assert address.startswith("172.30.11.")
         return original_urlopen(f"http://{address}/", *args, **kwargs)
 
-    if os.environ.get("SMARTSCAN_DOCKER29_CONTAINERD") == "1":
-        uatctl.urllib.request.urlopen = containerd_internal_urlopen
+    uatctl.urllib.request.urlopen = isolated_daemon_internal_urlopen
     try:
         resumed = controller.resume_basic_uat()
     except uatctl.ControllerError:
@@ -572,11 +571,7 @@ def main() -> None:
     assert int(worker_heartbeats) >= 2
     samples = Path(os.environ["SMARTSCAN_REAL_OCR_SAMPLES"])
     sample = next(path for path in sorted(samples.iterdir()) if path.name.startswith("zh-cn"))
-    http_origin = (
-        f"http://{nginx_address}"
-        if os.environ.get("SMARTSCAN_DOCKER29_CONTAINERD") == "1"
-        else "http://127.0.0.1:18082"
-    )
+    http_origin = f"http://{nginx_address}"
     verify_real_worker_task(
         paths.config_root / "bootstrap-admin-password",
         sample,

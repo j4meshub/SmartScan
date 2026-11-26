@@ -665,8 +665,7 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "unshare --net" in script
     assert "--bridge=none" in script
     assert "--iptables=false" in script
-    assert "--userland-proxy=true" in script
-    assert "--userland-proxy=false" not in script
+    assert "--userland-proxy=false" in script
     assert "DOCKER_HOST" in script
     assert "ci_verify_uatctl_checkpoint.py" in script
     assert 'state_machine":"nginx_activation_confirmation' in script
@@ -688,6 +687,7 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "steps.worker_archive.outputs.name" in workflow
     assert "smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar" not in workflow
     assert "prepare_root_owned_candidate" in checkpoint
+    assert "isolated_daemon_internal_urlopen" in checkpoint
     assert "CONTROLLER_ASSETS.mkdir(mode=0o700, parents=True)" in checkpoint
     assert '"containerd29"' in checkpoint
     assert '"legacy"' in checkpoint

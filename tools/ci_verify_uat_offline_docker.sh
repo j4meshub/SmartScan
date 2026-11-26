@@ -59,7 +59,7 @@ if [[ "$EXTERNAL_DOCKER" == "0" ]]; then
         --ip6tables=false \
         --ip-forward=false \
         --ip-masq=false \
-        --userland-proxy=true \
+        --userland-proxy=false \
         --containerd-namespace=smartscan-ci-legacy \
         --containerd-plugins-namespace=smartscan-ci-legacy-plugins \
         --storage-driver=vfs \

@@ -65,7 +65,7 @@ Docker 29/containerd 和传统独立 daemon 都使用 exact mixed release：旧 
 - PaddleOCR/PaddleX 使用固定模型初始化，不联网下载；
 - 两个 CPU Worker 同时心跳；
 - 通过内部 HTTP 上传固定真实图片，任务最终产生非空 OCR 文本；
-- 18082 核心健康，AI Profile 关闭，共享 Nginx 不参与。Docker 29 action的daemon位于隔离网络边界时，CI同时核对`127.0.0.1:18082`固定端口绑定，并通过同一nginx容器的固定edge地址完成HTTP与真实OCR闭环；传统全断网daemon仍直接验证回环18082。
+- 18082 核心健康，AI Profile 关闭，共享 Nginx 不参与。两种CI daemon均在独立网络边界中禁用iptables，因此同时核对`127.0.0.1:18082`固定端口绑定，并通过同一nginx容器的固定edge地址完成HTTP与真实OCR闭环；生产控制器仍直接验证回环18082。
 
 ## 用户接受后的自动流程
 
