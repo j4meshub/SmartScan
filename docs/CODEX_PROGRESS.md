@@ -8,19 +8,19 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001O` 候选发布清单权限契约修复 |
-| 工作包状态 | 进行中；首次增量`accept-release`因包装器与Python加载器权限契约冲突而失败关闭，正在仓库修复，修复前不得服务器重试 |
+| 工作包状态 | 仓库实现完成；首次增量`accept-release`失败证据保留，PR #120代码与真实Linux权限、双Docker状态机门禁已通过；等待人工升级控制器，升级前不得服务器重试 |
 | 当前分支 | `codex/ops-001o-release-permission-contract` |
 | 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；`completed`仍截至`migrations_completed`、`next_required=core_started`。候选清单为正确的`root:root 0644`且摘要正确，新Worker未导入、活动映射未切换，API/Worker/Web/AI/Nginx均未启动 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包提交 | `dd0e019`（权限策略、真实Linux权限测试、完整状态机回归和中文文档） |
+| PR | #120；首个代码头CI #863、UAT离线交付 #50、容器供应链 #183、PostgreSQL #138全部通过，最终文档头等待同等门禁复核后合并 |
 | 下一工作包 | OPS-001O合并后由用户人工仅升级包装器和Python控制器，首条命令只运行`status`；随后再单独授权一次`accept-release`，成功后才允许一次增量`resume-basic-uat`，不得自动扩大到Nginx |
 
 ## 当前工作包进展
 
 - OPS-001N控制器、Compose与候选清单已由共同使用人人工安装，候选清单真实状态为`root:root 0644`且SHA-256正确。用户授权的首次且唯一一次增量`accept-release`返回`fixed_json_mode_invalid:uat-2026-11-26-worker-fix.json`；状态机未前进，新Worker未导入、活动发布未切换、核心服务未启动，PostgreSQL继续健康。
 - 根因是包装器固定要求候选清单`0644`，而Python `_load_json()`把所有JSON无条件当作内部`0600`文件。OPS-001O将权限改为有限命名策略：公开root资产`0644`、候选清单专用root`0644`、内部root状态`0600`和部署用户上传证据`0600`；调用方不能传入任意模式或所有者。
-- 新权限表覆盖包装器、控制器、validators、Compose、Nginx模板、候选/活动/历史发布、镜像身份、状态、部署证据、env、管理员密码、模型和数据目录。候选清单只接受精确`0644`，内部敏感JSON仍严格拒绝`0644`。真实Linux CI须使用root文件和实际sudo环境，并继续完成双Docker运行时的增量接受、Worker导入、身份、原子激活、核心健康、18082、AI关闭和Nginx前停止。
-- 本地专项为`56 passed, 6 skipped`，跳过项仅为Windows不具备的POSIX真实权限语义；全量Python为`667 passed, 43 skipped`、覆盖率`87.74%`，Ruff检查与200个Python文件格式检查通过。默认迁移漂移首次命中未升级的本机旧SQLite而失败；改用独立空SQLite完成全链升级后返回`No new upgrade operations detected`并已删除临时库。本机没有Docker CLI，真实root/sudo、Compose及双Docker运行时完整状态机须由PR Ubuntu Runner补证，不能在本地冒充通过。
+- 新权限表覆盖包装器、控制器、validators、Compose、Nginx模板、候选/活动/历史发布、镜像身份、状态、部署证据、env、管理员密码、模型和数据目录。候选清单只接受精确`0644`，内部敏感JSON仍严格拒绝`0644`。PR #120真实Linux作业已用root文件和实际sudo环境验证正确/错误权限、所有者、链接、类型及摘要；Docker 29/containerd与传统daemon均完成增量接受、Worker导入、身份、原子激活、核心健康、18082、AI关闭和Nginx前停止。
+- 本地专项为`56 passed, 6 skipped`，跳过项仅为Windows不具备的POSIX真实权限语义；全量Python为`667 passed, 43 skipped`、覆盖率`87.74%`，Ruff检查与200个Python文件格式检查通过。默认迁移漂移首次命中未升级的本机旧SQLite而失败；改用独立空SQLite完成全链升级后返回`No new upgrade operations detected`并已删除临时库。本机没有Docker CLI；PR #120首个代码头已由Ubuntu Runner补齐真实root/sudo、Compose及双Docker运行时证据，四组流水线全部通过。
 
 - OPS-001M控制器与Compose人工升级后，用户单独授权的`run-migrations`已成功完成：空SmartScan UAT数据库完整达到`20261022_0024`，`alembic_version`、`public.ai_media_grants`和PostgreSQL健康均通过，没有生产数据或唯一副本数据。现场状态已记录`migrations_completed`，下一门禁为`core_started`；本工作包不重跑迁移。
 - 主线`13022cfa`产生的首个运行库修复Worker `sha256:4e1e7532…`被PR #115新增的严格全Critical门禁检出Debian `libxml2`的`CVE-2026-6653`，因此该digest及原候选清单SHA-256只保留为拒绝证据，不得提交用户接受或进入UAT。
