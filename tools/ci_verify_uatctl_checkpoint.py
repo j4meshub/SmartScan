@@ -21,7 +21,8 @@ GIB = 1024**3
 ROOT = Path(os.environ["GITHUB_WORKSPACE"])
 CANDIDATE_ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix"
 BASE_ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
-ARCHIVES = Path(os.environ["RUNNER_TEMP"]) / "smartscan-uat-incremental-upload"
+CI_VARIANT = "containerd29" if os.environ.get("SMARTSCAN_DOCKER29_CONTAINERD") == "1" else "legacy"
+ARCHIVES = Path(os.environ["RUNNER_TEMP"]) / f"smartscan-uat-incremental-upload-{CI_VARIANT}"
 CONFIG = Path("/etc/smartscan/uat")
 DATA = Path("/mnt/data/smartscan/uat")
 OCR_LAYER = ROOT / ".smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz"

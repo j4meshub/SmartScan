@@ -687,6 +687,9 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar" not in workflow
     assert "prepare_root_owned_candidate" in checkpoint
     assert "CONTROLLER_ASSETS.mkdir(mode=0o700, parents=True)" in checkpoint
+    assert '"containerd29"' in checkpoint
+    assert '"legacy"' in checkpoint
+    assert "smartscan-uat-incremental-upload-{CI_VARIANT}" in checkpoint
     assert "os.chown(candidate, 0, 0)" in checkpoint
     assert "_load_json(uploaded_map, root_owned=False)" in controller
 
