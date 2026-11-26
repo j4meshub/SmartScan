@@ -52,6 +52,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: false
           load: true
+          no-cache: true
           tags: local/${{ matrix.image }}:${{ github.sha }}
           build-args: ${{ matrix.build_args }}
           cache-from: type=gha,scope=${{ matrix.service }}
@@ -64,6 +65,17 @@ jobs:
       - name: 验证Worker视觉运行库
         if: matrix.service == 'worker'
         run: |
+          test "$(docker run --rm --entrypoint dpkg-query \
+            local/${{ matrix.image }}:${{ github.sha }} \
+            -W -f='${db:Status-Status}' libxml2 2>/dev/null || true)" != installed
+          docker run --rm --entrypoint sh \
+            local/${{ matrix.image }}:${{ github.sha }} \
+            -c 'test -s /usr/local/lib/libGL.so.1 \
+              && test -s /usr/local/lib/libGLX.so.0 \
+              && test -s /usr/local/lib/libGLdispatch.so.0 \
+              && test -s /usr/share/doc/smartscan-gl-runtime/libgl1.copyright \
+              && test -s /usr/share/doc/smartscan-gl-runtime/libglx0.copyright \
+              && test -s /usr/share/doc/smartscan-gl-runtime/libglvnd0.copyright'
           docker run --rm \
             --network none \
             --read-only \
@@ -73,6 +85,16 @@ jobs:
             --security-opt no-new-privileges \
             local/${{ matrix.image }}:${{ github.sha }} \
             python -c "import cv2; import paddleocr; print('worker_visual_runtime=passed')"
+      - name: 拦截Worker全部Critical漏洞
+        if: matrix.service == 'worker'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: local/${{ matrix.image }}:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: CRITICAL
       - name: 生成 SPDX JSON SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
@@ -149,6 +171,7 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
+          no-cache: true
           tags: |
             ghcr.io/j4meshub/${{ matrix.image }}:sha-${{ github.sha }}
             ghcr.io/j4meshub/${{ matrix.image }}:main

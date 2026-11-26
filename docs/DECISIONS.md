@@ -852,12 +852,20 @@
 - 证据：OPS-001M的Docker 29/containerd真实CI已使用接受的六镜像、真实OCR模型和空PostgreSQL完成迁移到`20261022_0024`。迁移后API与内部Web健康，两个CPU Worker均在导入`cv2`时以`ImportError: libGL.so.1`退出；没有接触共享Nginx。该失败与迁移临时storage root无关，也不是目标服务器现场故障。
 - 决策：不得挂载宿主机动态库、联网安装、放宽Worker健康门禁或把API健康冒充核心完成。Worker镜像显式安装Debian `libgl1`和`libglib2.0-0t64`运行库，并把PaddleX的`HOME`定向到Worker已有的有界`/tmp`；供应链在无网络、只读根、有界`/tmp`、零capability条件下导入`cv2`和`paddleocr`。既有Worker固定digest继续保留为拒绝核心启动的证据；主线产生的新digest不得自动写入UAT，只有用户明确接受更新发布映射且完整离线状态机通过后，才能继续服务器核心启动。
 
-## D-113：迁移后采用单Worker原子增量发布
+## D-113：Worker候选必须同时通过真实运行与零Critical门禁
+
+- 日期：2026-11-26
+- 状态：已确认；首个运行库修复候选被安全门禁拒绝
+- 证据：包含libGL/GLib修复的首个固定Worker候选通过既有视觉导入与可修复High/Critical扫描，但离线归档的`ignore-unfixed=false`全Critical扫描检出Debian `libxml2`的`CVE-2026-6653`。Debian官方跟踪表明稳定版当前无修复；该结果不得以严重度改写、忽略规则或自动VEX绕过。同期API、AI Gateway和Ops因BuildKit复用旧apt层而包含已有修复的`libzstd1` High漏洞。
+- 决策：首个候选及其失败日志作为拒绝证据保留，不提交用户接受。Worker从Debian图形栈中只复制OpenCV实际需要的最小GLVND共享库并保留相应版权文件，再清除Mesa/LLVM及其引入的`libxml2`；随后继续以无网络、只读根、有界`/tmp`、零capability方式验证`cv2`、libGL、GLib及PaddleOCR。安全验证与main发布构建均禁用旧BuildKit缓存。新候选必须重新生成SBOM、SLSA并达到全部Critical为0、可修复High/Critical为0后，才能进入增量映射。
+- 发布边界：该安全修正会产生新的main Worker digest，但不得自动替换当前UAT。只有新的完整内容链和exact mixed release通过且用户明确接受后，统一控制器才能记录并激活候选。
+
+## D-114：迁移后采用单Worker原子增量发布
 
 - 日期：2026-11-26
 - 状态：实施中；等待PR证据和用户接受候选
 - 现场前提：OPS-001M已在空UAT数据库完成`20261022_0024`并验证PostgreSQL健康，状态停在`core_started`前。旧Worker没有启动，API、Web、AI和共享Nginx也未启动，因此无需滚动替换运行中服务或重置数据库状态。
-- 候选绑定：修复版Worker固定为主线`13022cfaeb7a797c198e7e759080ac757c91d436`产生的源digest`sha256:4e1e7532f33a26b036f3a1edd3e6c65a67fbd94cf84cf043ca85e04258bba944`。候选发布清单只允许Worker变化，其余五个源digest、本地不可变Tag和离线归档证据必须与已接受发布逐项相同；新Worker使用新的不可变Tag，禁止覆盖旧Tag。
+- 候选绑定：首个运行库修复Worker已被D-113安全门禁拒绝。有效候选只能来自后续主线零Critical发布，并在本工作包中固定源digest、平台manifest、Config、全部Layer、SBOM、SLSA、离线归档和运行时身份。候选发布清单只允许Worker变化，其余五个源digest、本地不可变Tag和离线归档证据必须与已接受发布逐项相同；新Worker使用新的不可变Tag，禁止覆盖旧Tag。
 - 激活事务：`accept-release`只记录待处理候选，不改变活动发布。后续续接先验证新归档、源内容链、Docker 29/containerd运行时Descriptor、UID/GID `10001:10001`和现有data所有权；验证成功后保存root只读回滚证据，再切换发布清单、映射、本地镜像环境和身份文件，最后提交状态。任一步失败恢复旧活动文件并保留新镜像及诊断现场，不删除、`prune`或重置已完成状态。
 - 运行门禁：核心已经启动时拒绝接受增量候选；新Worker未成为活动发布时`start-core`失败关闭。exact mixed release必须在无Registry访问、只读根、零capability、`no-new-privileges`、有界CPU/内存/PID和`/tmp`、只读OCR模型下验证libGL/GLib、PaddleOCR/PaddleX、两个CPU Worker、真实OCR任务、18082健康及AI Profile关闭。
 - 回滚边界：旧发布、旧Worker、旧归档和旧身份文件继续保留。回滚只允许在核心停止后恢复已经联合验证的旧映射，不删除当前镜像或数据；由于旧Worker已知缺少运行库，回滚后仍保持核心停止，不能把旧发布重新启动为健康版本。用户接受新digest和发布映射前，不下载Artifact、不上传服务器、不导入或改写UAT。
