@@ -315,6 +315,49 @@ sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
 
 升级前若任一摘要、对象类型或权限不一致即停止。回滚只替换上述三项既有资产并删除尚未被活动控制器引用的候选清单需要新的人工授权；不得修改`uatctl-state.json`。候选清单一旦已被接受，不得只回滚控制器而保留不兼容状态。
 
+## OPS-001O 候选清单权限契约升级
+
+OPS-001N人工安装后的候选清单为正确的`root:root 0644`，但首次`accept-release`被Python加载器旧的全局`0600`假设拒绝。OPS-001O不改变候选清单、不修改sudoers、不重置状态，也不把该次失败记为接受成功；只升级包装器和Python控制器，使包装器与加载器共同执行[UAT固定文件权限契约](UAT_FILE_PERMISSION_CONTRACTS.md)。
+
+仓库LF规范字节摘要如下：
+
+| 资产 | SHA-256 |
+|---|---|
+| `deploy/ops/smartscan-uatctl` | `8064e2a59cd07721bd064e12a33a3217adad0678ff94f64a179b3436d64387fe` |
+| `deploy/ops/smartscan_uatctl.py` | `5f89d63559fcafd8af4d5421403195767b34042d397d62709023d1192659abe0` |
+| `deploy/ops/smartscan_uat_validators.py`（不变） | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
+| `deploy/sudoers/smartscan-uatctl`（不变） | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
+| `deploy/compose/docker-compose.uat.yml`（不变） | `5a5e28e0032f810202f129d3231b6b859cd1b734d4754f812c09192a034d480c` |
+| `deploy/nginx/shared-8077-smartscan-location.conf.template`（不变） | `8f640d848623f51518130b687520a255e26b79f8625ccd3fdc48995b1d14edec` |
+| `deploy/releases/uat-2026-11-24.json`（不变） | `2caa6eea6c0f6b11f941dc3301069653015fe41c9e5c515569dfb6cc5c099789` |
+| `deploy/releases/uat-2026-11-26-worker-fix.json`（不变） | `8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003` |
+
+人工升级目录固定为`/home/szhzx/smartscan-uatctl-upgrade-ops001o`。升级前现场旧摘要应为包装器`a611a07a…be3a`、控制器`9edb1f9a…9968`；仍须以人工实际核验为准。安装顺序固定为“控制器→包装器”，包装器最后切换其内置辅助程序摘要：
+
+```bash
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -d -o root -g root -m 0700 /usr/local/libexec/smartscan/.ops001o-backup
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/.ops001o-backup/smartscan-uatctl
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/.ops001o-backup/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 /home/szhzx/smartscan-uatctl-upgrade-ops001o/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 /home/szhzx/smartscan-uatctl-upgrade-ops001o/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo sha256sum /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo visudo -cf /etc/sudoers.d/smartscan-uatctl
+sudo -k
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+升级后的第一条控制器命令只能是`status`，并须继续显示状态截至`migrations_completed`、下一门禁为`core_started`。本节不授权重试`accept-release`。若新摘要、`visudo`或`status`失败，只回滚上述两个控制器文件：
+
+```bash
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001o-backup/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/.ops001o-backup/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo visudo -cf /etc/sudoers.d/smartscan-uatctl
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+用户另行明确授权后，才可执行一次`accept-release`；成功后先运行一次`status`，确认待处理增量候选已记录且既有迁移状态未重置，再另行授权一次`resume-basic-uat`。任何失败均保留现场，不自动重试或清理。
+
 ## 当前状态
 
 六镜像旧发布、身份文件、所有权、PostgreSQL健康及迁移`20261022_0024`均已完成；API、Worker、Web、AI和共享Nginx未启动。新Worker和单服务增量映射已通过两类Docker运行时的exact mixed release，但在用户明确接受前仍不下载、不上传、不导入，也不修改服务器活动发布。

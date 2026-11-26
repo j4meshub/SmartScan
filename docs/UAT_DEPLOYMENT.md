@@ -110,7 +110,7 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-26，loop、OCR模型、配置、三张网络、六镜像离线导入、身份文件、所有权、PostgreSQL健康及空库迁移`20261022_0024`均已完成。现场停在`next_required=core_started`，API、Worker、Web、AI和共享Nginx尚未启动。当前已接受Worker缺少`libGL.so.1`，因此禁止直接续接；OPS-001N须先完成修复版Worker的离线归档、exact mixed release和单服务原子激活验证，再取得用户对新digest、归档及发布映射的明确接受。
+截至2026-11-26，loop、OCR模型、配置、三张网络、六镜像离线导入、身份文件、所有权、PostgreSQL健康及空库迁移`20261022_0024`均已完成。现场停在`next_required=core_started`，API、Worker、Web、AI和共享Nginx尚未启动。OPS-001N修复版Worker已获接受并完成离线交付；首次增量`accept-release`因候选清单`0644`与Python加载器旧的全局`0600`假设冲突而失败关闭。OPS-001O合并和人工升级前不得重试、现场`chmod`、导入新Worker或启动核心。
 
 ### 迁移只读根边界
 
@@ -119,6 +119,8 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 当前接受的Worker离线归档只可用于保留历史和迁移前内容链验证，不可继续启动两个CPU Worker。仓库已为新构建显式加入`libgl1`和`libglib2.0-0t64`，并把PaddleX运行时`HOME`限制到Worker现有的有界`/tmp`；供应链增加无网络、只读根运行时导入测试。主线新digest未经用户接受前不得替换现有发布映射，也不得在服务器通过挂载宿主机库或联网安装绕过。
 
 OPS-001N候选只允许Worker变化，其他五个源digest、归档和本地不可变Tag保持不变。控制器只有在`migrations_completed`且核心未启动时才接受候选，先验证新归档、Docker运行时身份及`10001:10001`，再保存旧活动文件并原子激活；data目录只复核所有权，不重复修改。详见[OPS-001N修复版Worker与增量UAT发布](OPS001N_WORKER_INCREMENTAL_RELEASE.md)。
+
+固定文件的所有者、精确模式、链接和敏感性分类见[UAT固定文件权限契约](UAT_FILE_PERMISSION_CONTRACTS.md)。公开候选清单只接受`root:root 0644`；活动发布、身份、状态、部署证据、env和管理员密码继续使用既定`0600`，不得因候选修复而放宽。
 
 ### Docker 29 containerd离线身份
 

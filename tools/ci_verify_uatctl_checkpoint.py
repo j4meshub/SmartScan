@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import time
 import urllib.request
 from pathlib import Path
@@ -123,9 +124,14 @@ def prepare_root_owned_candidate() -> Path:
     shutil.copyfile(ROOT / "deploy/releases/uat-2026-11-26-worker-fix.json", candidate)
     os.chown(CONTROLLER_ASSETS, 0, 0)
     os.chown(candidate, 0, 0)
-    candidate.chmod(0o600)
+    candidate.chmod(0o644)
     info = candidate.stat()
-    assert info.st_uid == 0 and info.st_gid == 0 and info.st_nlink == 1
+    assert (
+        info.st_uid == 0
+        and info.st_gid == 0
+        and stat.S_IMODE(info.st_mode) == 0o644
+        and info.st_nlink == 1
+    )
     return candidate
 
 

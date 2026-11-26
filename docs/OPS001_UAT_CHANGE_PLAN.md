@@ -122,6 +122,7 @@ location ^~ /smartscan/ {
 12. OPS-001L升级后，六镜像、身份文件、所有权和PostgreSQL健康均已完成。首次迁移在连接数据库前因`get_settings()`导入阶段创建storage root命中只读根而失败，空库无表、无`alembic_version`且无部分revision。
 13. OPS-001M保持只读根，只给固定`migrate`服务现有32 MiB `/tmp`提供`/tmp/smartscan-data`；不挂载业务data。现场空库已完成迁移到`20261022_0024`并保持PostgreSQL健康，迁移无需重跑。
 14. OPS-001N固定主线修复版Worker，只改变六镜像映射中的Worker。用户接受新digest、归档和映射后，统一控制器从`core_started`断点验证并原子激活新Worker，保留旧发布为停止状态下的回滚证据；其他五镜像、数据库、迁移、网络、模型和data所有权不重置。
+15. OPS-001O修复候选清单权限契约：候选清单固定`root:root 0644`，内部状态、活动发布、身份和部署证据继续`root:root 0600`，env与管理员密码继续部署用户`0600`。首次`accept-release`失败不改变状态，修复人工升级后仍须重新取得一次性接受授权。
 15. 最后分别授权Nginx暂存与激活、测试和reload，经8077基础UAT并观察共租户。
 
 OPS-001A/OPS-001B只解决loop存储阶段。共同使用人人工升级执行器和sudoers后，AI仍只能运行以下五条命令：

@@ -134,7 +134,9 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
         "smartscan_uat_validators.py",
         "uat-2026-11-26-worker-fix.json",
     ):
-        (libexec / name).write_text("fixed", encoding="utf-8")
+        asset = libexec / name
+        asset.write_text("fixed", encoding="utf-8")
+        asset.chmod(0o644)
     return uatctl.Paths(
         config_root=config,
         data_root=data,
@@ -164,6 +166,85 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
 def _write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
     path.chmod(0o600)
+
+
+def _write_candidate_json(path: Path, value: dict) -> None:
+    path.write_text(json.dumps(value), encoding="utf-8")
+    path.chmod(0o644)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要POSIX真实权限语义")
+@pytest.mark.parametrize("mode", [0o600, 0o640, 0o664, 0o777])
+def test_candidate_release_rejects_every_mode_except_exact_0644(tmp_path: Path, mode: int) -> None:
+    candidate = tmp_path / "uat-2026-11-26-worker-fix.json"
+    _write_candidate_json(candidate, {"schema_version": "1.1"})
+    candidate.chmod(mode)
+
+    with pytest.raises(uatctl.ControllerError, match="fixed_json_mode_invalid"):
+        uatctl._load_json(
+            candidate,
+            policy=uatctl.FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
+            expected_root_uid=TEST_UID,
+        )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要POSIX真实权限语义")
+def test_candidate_release_exact_0644_and_internal_json_exact_0600(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.json"
+    internal = tmp_path / "internal.json"
+    _write_candidate_json(candidate, {"kind": "candidate"})
+    _write_json(internal, {"kind": "internal"})
+
+    assert (
+        uatctl._load_json(
+            candidate,
+            policy=uatctl.FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
+            expected_root_uid=TEST_UID,
+        )["kind"]
+        == "candidate"
+    )
+    assert (
+        uatctl._load_json(
+            internal,
+            policy=uatctl.FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=TEST_UID,
+        )["kind"]
+        == "internal"
+    )
+
+    internal.chmod(0o644)
+    with pytest.raises(uatctl.ControllerError, match="fixed_json_mode_invalid"):
+        uatctl._load_json(
+            internal,
+            policy=uatctl.FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=TEST_UID,
+        )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要POSIX真实权限语义")
+def test_candidate_release_rejects_wrong_owner_links_and_abnormal_type(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.json"
+    _write_candidate_json(candidate, {"kind": "candidate"})
+    policy = uatctl.FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644
+
+    with pytest.raises(uatctl.ControllerError, match="fixed_json_owner_invalid"):
+        uatctl._load_json(candidate, policy=policy, expected_root_uid=TEST_UID + 1)
+
+    hardlink = tmp_path / "candidate-hardlink.json"
+    os.link(candidate, hardlink)
+    with pytest.raises(uatctl.ControllerError, match="fixed_json_links_invalid"):
+        uatctl._load_json(candidate, policy=policy, expected_root_uid=TEST_UID)
+    hardlink.unlink()
+
+    symlink = tmp_path / "candidate-symlink.json"
+    symlink.symlink_to(candidate)
+    with pytest.raises(uatctl.ControllerError, match="fixed_json_invalid"):
+        uatctl._load_json(symlink, policy=policy, expected_root_uid=TEST_UID)
+
+    directory = tmp_path / "candidate-directory.json"
+    directory.mkdir()
+    with pytest.raises(uatctl.ControllerError, match="fixed_json_invalid"):
+        uatctl._load_json(directory, policy=policy, expected_root_uid=TEST_UID)
 
 
 def _repository_lf_sha256(path: Path) -> str:
@@ -693,7 +774,24 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert '"legacy"' in checkpoint
     assert "smartscan-uat-incremental-upload-{CI_VARIANT}" in checkpoint
     assert "os.chown(candidate, 0, 0)" in checkpoint
-    assert "_load_json(uploaded_map, root_owned=False)" in controller
+    assert "FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600" in controller
+    assert "FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644" in controller
+
+
+def test_wrapper_and_python_share_exact_candidate_permission_contract() -> None:
+    root = Path(__file__).parents[1]
+    wrapper = (root / "deploy/ops/smartscan-uatctl").read_text(encoding="utf-8")
+    controller = (root / "deploy/ops/smartscan_uatctl.py").read_text(encoding="utf-8")
+
+    contract = uatctl.FIXED_FILE_PERMISSION_CONTRACTS[
+        uatctl.FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644
+    ]
+    assert contract.owner_role == "root"
+    assert contract.mode == 0o644
+    assert 'readonly CANDIDATE_RELEASE_MODE="644"' in wrapper
+    assert '"root:root:${CANDIDATE_RELEASE_MODE}:1"' in wrapper
+    assert "CANDIDATE_RELEASE_PUBLIC_ROOT_0644" in controller
+    assert "root_owned" not in controller
 
 
 def test_controller_accepts_docker_archive_with_registry_evidence(tmp_path: Path) -> None:
@@ -825,7 +923,7 @@ def test_incremental_worker_activation_preserves_checkpoint_and_old_release(
     runner = FakeRunner()
     controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
     candidate, mapping = _incremental_fixture()
-    _write_json(paths.candidate_release, candidate)
+    _write_candidate_json(paths.candidate_release, candidate)
     candidate_root = paths.upload_root / candidate["release_id"]
     candidate_root.mkdir()
     _write_json(candidate_root / "release-map.json", mapping)
@@ -908,7 +1006,7 @@ def test_incremental_acceptance_records_pending_without_switching_active_release
     paths = _paths(tmp_path)
     controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
     candidate, mapping = _incremental_fixture()
-    _write_json(paths.candidate_release, candidate)
+    _write_candidate_json(paths.candidate_release, candidate)
     candidate_root = paths.upload_root / candidate["release_id"]
     candidate_root.mkdir()
     _write_json(candidate_root / "release-map.json", mapping)
@@ -961,7 +1059,7 @@ def test_start_core_rejects_unrepaired_worker(
     controller._record("migrations_completed")
     candidate = {"images": [{"service": "worker", "source": "new"}]}
     active = {"images": [{"service": "worker", "source": "old"}]}
-    _write_json(paths.candidate_release, candidate)
+    _write_candidate_json(paths.candidate_release, candidate)
     monkeypatch.setattr(controller, "_fixed_release", lambda: (active, {"images": []}))
     with pytest.raises(uatctl.ControllerError, match="repaired_worker_release_not_active"):
         controller.start_core()
