@@ -869,3 +869,11 @@
 - 激活事务：`accept-release`只记录待处理候选，不改变活动发布。后续续接先验证新归档、源内容链、Docker 29/containerd运行时Descriptor、UID/GID `10001:10001`和现有data所有权；验证成功后保存root只读回滚证据，再切换发布清单、映射、本地镜像环境和身份文件，最后提交状态。任一步失败恢复旧活动文件并保留新镜像及诊断现场，不删除、`prune`或重置已完成状态。
 - 运行门禁：核心已经启动时拒绝接受增量候选；新Worker未成为活动发布时`start-core`失败关闭。exact mixed release必须在无Registry访问、只读根、零capability、`no-new-privileges`、有界CPU/内存/PID和`/tmp`、只读OCR模型下验证libGL/GLib、PaddleOCR/PaddleX、两个CPU Worker、真实OCR任务、18082健康及AI Profile关闭。
 - 回滚边界：旧发布、旧Worker、旧归档和旧身份文件继续保留。回滚只允许在核心停止后恢复已经联合验证的旧映射，不删除当前镜像或数据；由于旧Worker已知缺少运行库，回滚后仍保持核心停止，不能把旧发布重新启动为健康版本。用户接受新digest和发布映射前，不下载Artifact、不上传服务器、不导入或改写UAT。
+
+## D-115：Worker运行库候选必须经过exact mixed release再定版
+
+- 日期：2026-11-26
+- 状态：实施中；等待新候选exact mixed release最终证据
+- 新证据：主线`ed832ccd`产生的零Critical候选虽通过`cv2`、libGL、GLib和PaddleOCR导入门禁，但在六镜像exact mixed release中，两个CPU Worker均因缺少`libgomp.so.1`退出。该失败发生在真实Worker启动路径，证明仅验证Python导入不足以代表Paddle运行时完整；API未被冒充为核心健康，候选没有提交用户接受。
+- 修复：主线`cb6599bf75da44f5f9b1a0e4e48f866b8db501b1`显式安装`libgomp1`，供应链在无网络、只读根、有界`/tmp`、零capability和`no-new-privileges`约束下显式加载libGL、GLib与libgomp后再导入`cv2`和`paddleocr`。其Worker源digest固定为`sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742`；SBOM、SLSA和两类漏洞门禁已通过。
+- 发布边界：候选仍须用旧PostgreSQL/API/AI Gateway/Web/Ops组成exact mixed release，完成双Worker、真实OCR、18082、离线和AI关闭门禁后才可提交用户接受。该新digest、离线归档和发布映射在接受前不得下载到本机、上传服务器、导入或激活；失败候选和旧Worker继续作为历史证据保留。

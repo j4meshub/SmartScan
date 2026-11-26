@@ -6,16 +6,16 @@
 
 | 证据 | 固定值 |
 |---|---|
-| 来源提交 | `ed832ccd927586f964b644250bfb13e290fa734d` |
-| GHCR 源引用 | `ghcr.io/j4meshub/smartscan-worker@sha256:c1415310a52c7c24da7bc37a93c5c7f2ace32f951906dcefbf51880326e97531` |
-| `linux/amd64` manifest | `sha256:6d52173f2f9fbc09479caf10655cab9ee98c4750e1ba1eaed83b723495e04703` |
-| Config | `sha256:31a62a840d2e286ebec14dc6db86aae1549354b050878aaa4d30da594ed8cfa6` |
-| OCI revision | `ed832ccd927586f964b644250bfb13e290fa734d` |
-| 本地不可变 Tag | `smartscan-uat-worker:sha256-c1415310a52c` |
+| 来源提交 | `cb6599bf75da44f5f9b1a0e4e48f866b8db501b1` |
+| GHCR 源引用 | `ghcr.io/j4meshub/smartscan-worker@sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742` |
+| `linux/amd64` manifest | `sha256:4ff5d0ffbfc3b4b0728b673043a511035ea682bd70e149ad023470620305b1d3` |
+| Config | `sha256:59616bcf09ea5d7b7538c521471ad393847a320781e1d18892bf92bf0ba8130f` |
+| OCI revision | `cb6599bf75da44f5f9b1a0e4e48f866b8db501b1` |
+| 本地不可变 Tag | `smartscan-uat-worker:sha256-9957b27924b0` |
 | 候选发布清单 | `deploy/releases/uat-2026-11-26-worker-fix.json` |
-| 候选清单 SHA-256 | `5ba70365cea255cadb5f5de9cf3c818125c64a30d14b3fc7e659f98924265d73` |
+| 候选清单 SHA-256 | `8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003` |
 
-Config 绑定十二个压缩 Layer 及十二个 RootFS diff ID；完整列表由中文离线发布映射保存并由归档、控制器和 Docker 29/containerd CI 逐项复算，不依赖 Tag。主线容器供应链已经生成 SPDX SBOM 和 GitHub SLSA 来源证明；本工作包再对最终离线归档执行“全部 Critical，包含不可修复项”和“可修复 High/Critical”两类门禁。
+Config 绑定十二个压缩 Layer 及十二个 RootFS diff ID；完整列表由中文离线发布映射保存并由归档、控制器和 Docker 29/containerd CI 逐项复算，不依赖 Tag。主线容器供应链运行 `45750089308` 已生成 SPDX SBOM 和 GitHub SLSA 来源证明（attestation `72482193`），并通过“全部 Critical，包含不可修复项”和“可修复 High/Critical”两类门禁；本工作包还会对最终离线归档重复执行同一门禁。
 
 ## 单服务增量范围
 
@@ -60,7 +60,7 @@ Docker 29/containerd 和传统独立 daemon 都使用 exact mixed release：旧 
 - 数据库已在 `20261022_0024` 时重复迁移只做验证；
 - Worker 只读根、`cap_drop: ALL`、`no-new-privileges`、1.25 CPU、2 GiB、256 PID；
 - 512 MiB `/tmp` 是 PaddleX 唯一缓存位置，OCR 模型只读挂载；
-- `libGL.so.1`、`libgthread-2.0.so.0` 和 `cv2` 动态加载；
+- `libGL.so.1`、`libgthread-2.0.so.0`、`libgomp.so.1` 和 `cv2` 动态加载；
 - PaddleOCR/PaddleX 使用固定模型初始化，不联网下载；
 - 两个 CPU Worker 同时心跳；
 - 通过内部 HTTP 上传固定真实图片，任务最终产生非空 OCR 文本；

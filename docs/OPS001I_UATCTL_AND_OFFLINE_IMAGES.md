@@ -288,10 +288,10 @@ CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containe
 
 | 资产 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uatctl` | `bc140742b378a3a574cc52b63c89b1d6905b8c831b224d76b940fa592ee03e95` |
-| `deploy/ops/smartscan_uatctl.py` | `6791c693f3495a826e8a4286bec231ae70ca4aec99f2c2c8ee6881604a5f1a76` |
+| `deploy/ops/smartscan-uatctl` | `0e06377cc467798a8ae75654eb33e258c55f58f35adfbbe42bc162792b050636` |
+| `deploy/ops/smartscan_uatctl.py` | `30ffb74e2f2baf209f8a0dbb69a8e6bc9aea6aa2b2ed67bb05efe81d66444638` |
 | `deploy/compose/docker-compose.uat.yml` | `b8bc7d1208bb58dd353f0934e1fb9e19b0b251aaaeac023fc19edd5aa7075d31` |
-| `deploy/releases/uat-2026-11-26-worker-fix.json` | `5ba70365cea255cadb5f5de9cf3c818125c64a30d14b3fc7e659f98924265d73` |
+| `deploy/releases/uat-2026-11-26-worker-fix.json` | `8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003` |
 | `deploy/ops/smartscan_uat_validators.py`（不变） | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
 | `deploy/sudoers/smartscan-uatctl`（不变） | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
 | `deploy/nginx/shared-8077-smartscan-location.conf.template`（不变） | `500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227` |

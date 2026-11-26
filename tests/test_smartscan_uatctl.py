@@ -775,7 +775,7 @@ def _incremental_fixture() -> tuple[dict, dict]:
     for index, service in enumerate(services, start=1):
         digest = f"{index:064x}"
         if service == "worker":
-            digest = "c1415310a52c7c24da7bc37a93c5c7f2ace32f951906dcefbf51880326e97531"
+            digest = "9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742"
         image = {
             "service": service,
             "deploy_key": f"SMARTSCAN_UAT_{service.upper().replace('-', '_')}_IMAGE",

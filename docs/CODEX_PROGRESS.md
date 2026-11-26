@@ -8,18 +8,20 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001N` 修复版Worker制品与增量UAT发布更新 |
-| 工作包状态 | 进行中；零Critical安全基线已合并，等待主线发布新Worker后更新单服务增量映射并完成真实CI |
+| 工作包状态 | 进行中；主线`cb6599bf`修复libgomp并发布固定Worker，候选内容链和单服务增量映射已更新，等待exact mixed release真实CI定版 |
 | 当前分支 | `codex/ops-001n-worker-incremental-release` |
 | 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；状态停在`next_required=core_started`，旧Worker禁止启动，API/Worker/Web/AI/Nginx均未启动 |
-| 工作包提交 | `ff8dbb8`（增量发布实现基线；候选内容待更新） |
+| 工作包提交 | `5093c6e`（已合并Worker OpenMP安全基线；候选定版提交待推送） |
 | PR | [#115](https://github.com/j4meshub/SmartScan/pull/115) |
-| 下一工作包 | 固定主线安全发布的新Worker内容链、归档和六镜像增量映射，完成exact mixed release后仅提交用户接受 |
+| 下一工作包 | 完成exact mixed release、固定新Worker归档摘要和发布映射证据，仅提交用户接受；接受前不下载或修改服务器 |
 
 ## 当前工作包进展
 
 - OPS-001M控制器与Compose人工升级后，用户单独授权的`run-migrations`已成功完成：空SmartScan UAT数据库完整达到`20261022_0024`，`alembic_version`、`public.ai_media_grants`和PostgreSQL健康均通过，没有生产数据或唯一副本数据。现场状态已记录`migrations_completed`，下一门禁为`core_started`；本工作包不重跑迁移。
 - 主线`13022cfa`产生的首个运行库修复Worker `sha256:4e1e7532…`被PR #115新增的严格全Critical门禁检出Debian `libxml2`的`CVE-2026-6653`，因此该digest及原候选清单SHA-256只保留为拒绝证据，不得提交用户接受或进入UAT。
-- PR #116已把Worker收敛为最小GLVND运行库并清除Mesa/LLVM/`libxml2`，同时禁用容器验证和main发布的旧BuildKit缓存；代码头`4146047`的完整CI、容器供应链和可审计PostgreSQL工作流全部通过，中文squash合并为主线`ed832ccd`。必须等待该主线发布的完整digest、SBOM、SLSA和归档证据后，才能替换PR #115中的拒绝候选。
+- PR #116把Worker收敛为最小GLVND运行库并清除Mesa/LLVM/`libxml2`，主线`ed832ccd`发布的零Critical候选随后在exact mixed release中暴露`libgomp.so.1`缺失，两个CPU Worker均失败退出，因此同样没有提交用户接受。该失败证明供应链导入检查必须覆盖OpenMP动态库和真实服务启动。
+- PR #117显式安装`libgomp1`，并在无网络、只读根、有界`/tmp`、零capability和`no-new-privileges`约束下加载libGL、GLib与libgomp后再导入`cv2`和`paddleocr`。中文squash合并主线`cb6599bf75da44f5f9b1a0e4e48f866b8db501b1`，容器供应链运行`45750089308`通过并发布Worker源digest`sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742`，SBOM、SLSA及两类漏洞门禁齐备。
+- 新Worker的`linux/amd64`manifest为`sha256:4ff5d0ffbfc3b4b0728b673043a511035ea682bd70e149ad023470620305b1d3`，Config为`sha256:59616bcf09ea5d7b7538c521471ad393847a320781e1d18892bf92bf0ba8130f`，Config.User为`smartscan`，完整内容链包含十二个压缩Layer及十二个RootFS diff ID。候选清单SHA-256已更新为`8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003`；离线归档精确大小和SHA-256仍须由成功工作流定版。
 - 增量发布清单只允许Worker变化；PostgreSQL、API、AI Gateway、Web和Ops的源digest、本地不可变Tag及既有归档大小/SHA-256逐项锁定不变。新清单必须在主线安全Worker发布后重新计算SHA-256，当前不存在可供用户接受的有效映射。
 - 通用离线工具只为变化的Worker下载、校验和上传Artifact；CI额外重建旧Worker以真实模拟“旧六镜像完成迁移→接受单Worker候选→只导入新Worker→原子激活→启动核心”的现场断点。新Worker归档和发布映射在用户接受前不会下载到本机、上传服务器或导入UAT。
 - 统一控制器保留旧发布、旧Worker Tag、旧映射、旧`local-images.env`和旧身份文件。只有新归档、内容链、Docker 29/containerd运行时身份及`10001:10001`全部通过，且data目录所有权仍兼容时才切换活动发布；失败恢复旧活动文件且不重置存储、模型、网络、数据库、迁移和已完成状态。核心已启动时拒绝增量接受。
