@@ -12,7 +12,7 @@
 | 当前分支 | `codex/ops-001n-record-acceptance` |
 | 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；状态停在`next_required=core_started`，旧Worker禁止启动，API/Worker/Web/AI/Nginx均未启动 |
 | 工作包提交 | `af2bf76`（PR #115中文squash合并；用户接受记录待提交） |
-| PR | [#115](https://github.com/j4meshub/SmartScan/pull/115)已合并；接受记录PR待创建 |
+| PR | [#115](https://github.com/j4meshub/SmartScan/pull/115)已合并；接受记录见[#118](https://github.com/j4meshub/SmartScan/pull/118) |
 | 下一工作包 | 继续`OPS-001`：取得独立执行授权后下载、校验和上传Worker归档，准备控制器资产人工升级，再由控制器受控导入并原子激活；当前接受本身不授权这些动作 |
 
 ## 当前工作包进展
