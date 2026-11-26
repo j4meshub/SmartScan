@@ -8,12 +8,12 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001N` 修复版Worker制品与增量UAT发布更新 |
-| 工作包状态 | 等待人工验收；修复版Worker、单服务增量映射和exact mixed release已通过，尚未由用户接受、下载、上传或激活 |
-| 当前分支 | `codex/ops-001n-worker-incremental-release` |
+| 工作包状态 | 完成；修复版Worker、归档和单服务增量映射已通过并于2026-11-26获用户明确接受，尚未下载、上传或激活 |
+| 当前分支 | `codex/ops-001n-record-acceptance` |
 | 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；状态停在`next_required=core_started`，旧Worker禁止启动，API/Worker/Web/AI/Nginx均未启动 |
-| 工作包提交 | `903a7d9`（PR #115技术验证头；文档定版提交待合并） |
-| PR | [#115](https://github.com/j4meshub/SmartScan/pull/115) |
-| 下一工作包 | 用户明确接受新Worker、归档和候选清单后，准备控制器资产升级并自动下载、校验、上传、导入和原子激活；接受前不下载或修改服务器 |
+| 工作包提交 | `af2bf76`（PR #115中文squash合并；用户接受记录待提交） |
+| PR | [#115](https://github.com/j4meshub/SmartScan/pull/115)已合并；接受记录PR待创建 |
+| 下一工作包 | 继续`OPS-001`：取得独立执行授权后下载、校验和上传Worker归档，准备控制器资产人工升级，再由控制器受控导入并原子激活；当前接受本身不授权这些动作 |
 
 ## 当前工作包进展
 
@@ -24,7 +24,7 @@
 - 新Worker的`linux/amd64`manifest为`sha256:4ff5d0ffbfc3b4b0728b673043a511035ea682bd70e149ad023470620305b1d3`，Config为`sha256:59616bcf09ea5d7b7538c521471ad393847a320781e1d18892bf92bf0ba8130f`，Config.User为`smartscan`，完整内容链包含十二个压缩Layer及十二个RootFS diff ID。候选清单LF原始字节SHA-256为`8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003`；新Worker独立归档大小为`573480960`字节、SHA-256为`33bc7ed9ba28811f8abe12ff4edad7f4634834df8a452a8b56bd9325c0d8b2e7`。
 - PR #115代码头`9758e47`的首轮Docker 29/containerd exact mixed release已证明两个新CPU Worker保持运行，`libgomp`缺失不再出现；但固定旧API镜像以四个Uvicorn进程启动空UAT时，子进程启动失败，状态机按预期未写入`core_started`。固定API lifespan仍包含“查询后创建唯一超级管理员”的启动副作用，尚无多进程原子契约；基础UAT因此先固定单API进程，镜像digest保持不变，两个CPU Worker数量不变。失败诊断扩展为固定服务、最多300行、Secret脱敏且不保存原始日志，下一轮exact mixed release必须复核该配置。
 - 技术验证头`903a7d9e20651a17becac4f632a24982b9b0306f`的工作流运行`45759198125`、作业`139704933686`已同时通过Docker 29/containerd与传统隔离daemon。两条路径都完成六镜像exact mixed release、`20261022_0024`幂等迁移验证、单API、两个CPU Worker、内部Web、真实OCR非空结果、AI关闭和无Registry访问；固定端口绑定仍为`127.0.0.1:18082`，隔离CI通过固定edge地址执行HTTP闭环，生产控制器的真实回环门禁没有放宽。
-- 增量发布清单只允许Worker变化；PostgreSQL、API、AI Gateway、Web和Ops的源digest、本地不可变Tag及既有归档大小/SHA-256逐项锁定不变。六归档exact mixed release总大小为`991539200`字节，当前候选映射已经具备提交用户接受的证据，但用户尚未接受，不能下载、上传或激活。
+- 增量发布清单只允许Worker变化；PostgreSQL、API、AI Gateway、Web和Ops的源digest、本地不可变Tag及既有归档大小/SHA-256逐项锁定不变。六归档exact mixed release总大小为`991539200`字节。用户于2026-11-26明确接受Worker源digest`sha256:9957b279…3a742`、`573480960`字节归档及其SHA-256`33bc7ed9…b2e7`、候选清单SHA-256`8debb3d8…f6003`和对应六镜像映射；该决定不授权本机下载、服务器上传、控制器升级、镜像导入、活动映射切换、核心服务或Nginx。
 - 通用离线工具只为变化的Worker下载、校验和上传Artifact；CI额外重建旧Worker以真实模拟“旧六镜像完成迁移→接受单Worker候选→只导入新Worker→原子激活→启动核心”的现场断点。新Worker归档和发布映射在用户接受前不会下载到本机、上传服务器或导入UAT。
 - 统一控制器保留旧发布、旧Worker Tag、旧映射、旧`local-images.env`和旧身份文件。只有新归档、内容链、Docker 29/containerd运行时身份及`10001:10001`全部通过，且data目录所有权仍兼容时才切换活动发布；失败恢复旧活动文件且不重置存储、模型、网络、数据库、迁移和已完成状态。核心已启动时拒绝增量接受。
 - exact mixed release CI固定使用旧PostgreSQL/API/AI Gateway/Web/Ops与新Worker，要求完全离线、`pull_policy: never`、已在0024的数据库不重复迁移、两CPU Worker、真实OCR上传任务、18082健康和AI Profile关闭；共享Nginx不参与。仓库开发期间没有连接或修改`smartscan-server`。
@@ -36,7 +36,7 @@
 - PR #114首次Docker 29真实运行已证明迁移容器保持只读根、仅使用32 MiB `/tmp`、没有业务文件挂载，空库完整达到`20261022_0024`且PostgreSQL健康；第二次续接中API和内部Web健康，但两个CPU Worker均以`ImportError: libGL.so.1`退出。该结果属于已接受Worker镜像的运行依赖缺失，不是迁移或服务器现场故障；旧候选保持未通过核心启动门禁，禁止通过宿主机库挂载或放宽健康检查绕过。
 - Worker镜像构建现显式安装`libgl1`和提供`libgthread-2.0.so.0`的`libglib2.0-0t64`运行库；PaddleX的`HOME`只定向到Worker现有有界`/tmp`。供应链CI在无网络、只读根、32 MiB `/tmp`、零capability条件下实际导入`cv2`和`paddleocr`。主线产生新digest前，CI只把旧候选验证到迁移完成并固定复现运行库阻塞；不得把仓库修复冒充为当前UAT候选已可启动。
 - 本地验证已通过：Ruff检查与格式检查、全量Python `666 passed, 37 skipped`（覆盖率87.74%）；本机迁移漂移命令因现有本地SQLite未升级到head而失败，没有冒充为通过。Windows本机没有Docker；迁移和Docker门禁由干净GitHub Linux CI完整通过。
-- PR #114最终技术验证头`43fb16e`的四组流水线全部通过：CI #813、UAT六镜像离线交付 #33、容器镜像供应链 #155、可审计PostgreSQL #110。Docker 29/containerd与传统daemon均真实完成空库迁移到`20261022_0024`并验证最新对象、PostgreSQL健康和既有Worker候选阻塞；新Worker构建在无网络、只读根、有界`/tmp`、零capability下导入`cv2`与`paddleocr`，SBOM和漏洞门禁同步通过。由于新Worker尚未形成并获用户接受固定digest，当前服务器仍不得启动核心服务。
+- PR #114最终技术验证头`43fb16e`的四组流水线全部通过：CI #813、UAT六镜像离线交付 #33、容器镜像供应链 #155、可审计PostgreSQL #110。Docker 29/containerd与传统daemon均真实完成空库迁移到`20261022_0024`并验证最新对象、PostgreSQL健康和既有Worker候选阻塞；新Worker构建在无网络、只读根、有界`/tmp`、零capability下导入`cv2`与`paddleocr`，SBOM和漏洞门禁同步通过。该历史时点尚无获接受的新Worker，后续已由OPS-001N完成候选定版与用户接受。
 
 - OPS-001K三项资产已由共同使用人人工升级并核验；原生模型、配置和发布接受随后全部通过。现场真实状态为`completed=[preflight,storage_verified,models_verified,config_verified,release_accepted]`、`next_required=images_imported`。
 - 第一次且唯一一次`resume-basic-uat`在导入首个PostgreSQL归档后返回`imported_image_id_mismatch:postgres`。后五镜像、UID/GID探测、`image-identities.json`、所有权、PostgreSQL启动、迁移、核心服务和Nginx均未执行；现场没有重试、清理、改Tag或编辑状态文件。
