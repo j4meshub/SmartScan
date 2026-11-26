@@ -576,7 +576,11 @@ def main() -> None:
         if os.environ.get("SMARTSCAN_DOCKER29_CONTAINERD") == "1"
         else "http://127.0.0.1:18082"
     )
-    verify_real_worker_task(paths.bootstrap_password, sample, origin=http_origin)
+    verify_real_worker_task(
+        paths.config_root / "bootstrap-admin-password",
+        sample,
+        origin=http_origin,
+    )
     print(
         json.dumps(
             {
