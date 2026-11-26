@@ -57,10 +57,10 @@
       "service": "worker",
       "deploy_key": "SMARTSCAN_UAT_WORKER_IMAGE",
       "runtime_key": "SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE",
-      "source": "ghcr.io/j4meshub/smartscan-worker@sha256:4e1e7532f33a26b036f3a1edd3e6c65a67fbd94cf84cf043ca85e04258bba944",
-      "local_tag": "smartscan-uat-worker:sha256-4e1e7532f33a",
-      "archive_name": "smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar",
-      "expected_revision": "13022cfaeb7a797c198e7e759080ac757c91d436"
+      "source": "ghcr.io/j4meshub/smartscan-worker@sha256:c1415310a52c7c24da7bc37a93c5c7f2ace32f951906dcefbf51880326e97531",
+      "local_tag": "smartscan-uat-worker:sha256-c1415310a52c",
+      "archive_name": "smartscan-worker-c1415310a52c-linux-amd64.docker.tar",
+      "expected_revision": "ed832ccd927586f964b644250bfb13e290fa734d"
     },
     {
       "service": "ai-gateway",

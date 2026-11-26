@@ -6,14 +6,14 @@
 
 | 证据 | 固定值 |
 |---|---|
-| 来源提交 | `13022cfaeb7a797c198e7e759080ac757c91d436` |
-| GHCR 源引用 | `ghcr.io/j4meshub/smartscan-worker@sha256:4e1e7532f33a26b036f3a1edd3e6c65a67fbd94cf84cf043ca85e04258bba944` |
-| `linux/amd64` manifest | `sha256:ccbd0546976cd213b7da039c15ae395a6b31578ab3339627cba78d22e59f6d3e` |
-| Config | `sha256:0e78d39b1b099dbadc35d4c0281d1f408b3c79b1771c9febf8ebf0837c1ceea7` |
-| OCI revision | `13022cfaeb7a797c198e7e759080ac757c91d436` |
-| 本地不可变 Tag | `smartscan-uat-worker:sha256-4e1e7532f33a` |
+| 来源提交 | `ed832ccd927586f964b644250bfb13e290fa734d` |
+| GHCR 源引用 | `ghcr.io/j4meshub/smartscan-worker@sha256:c1415310a52c7c24da7bc37a93c5c7f2ace32f951906dcefbf51880326e97531` |
+| `linux/amd64` manifest | `sha256:6d52173f2f9fbc09479caf10655cab9ee98c4750e1ba1eaed83b723495e04703` |
+| Config | `sha256:31a62a840d2e286ebec14dc6db86aae1549354b050878aaa4d30da594ed8cfa6` |
+| OCI revision | `ed832ccd927586f964b644250bfb13e290fa734d` |
+| 本地不可变 Tag | `smartscan-uat-worker:sha256-c1415310a52c` |
 | 候选发布清单 | `deploy/releases/uat-2026-11-26-worker-fix.json` |
-| 候选清单 SHA-256 | `29f6352a5dcddc12ce714b447b542d77346d1b0e88c3cdd91a201393ab4c504f` |
+| 候选清单 SHA-256 | `5ba70365cea255cadb5f5de9cf3c818125c64a30d14b3fc7e659f98924265d73` |
 
 Config 绑定十二个压缩 Layer 及十二个 RootFS diff ID；完整列表由中文离线发布映射保存并由归档、控制器和 Docker 29/containerd CI 逐项复算，不依赖 Tag。主线容器供应链已经生成 SPDX SBOM 和 GitHub SLSA 来源证明；本工作包再对最终离线归档执行“全部 Critical，包含不可修复项”和“可修复 High/Critical”两类门禁。
 

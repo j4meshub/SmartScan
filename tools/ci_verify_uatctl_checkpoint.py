@@ -464,7 +464,7 @@ def main() -> None:
     release, _ = controller._fixed_release()
     worker = next(item for item in release["images"] if item["service"] == "worker")
     assert worker["source"].endswith(
-        "@sha256:4e1e7532f33a26b036f3a1edd3e6c65a67fbd94cf84cf043ca85e04258bba944"
+        "@sha256:c1415310a52c7c24da7bc37a93c5c7f2ace32f951906dcefbf51880326e97531"
     )
     assert worker["local_tag"] != base_worker["local_tag"]
     assert controller.runner.run(

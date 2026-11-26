@@ -37,9 +37,9 @@ esac
 [[ -f "$CANDIDATE_RELEASE" && ! -L "$CANDIDATE_RELEASE" && "$($STAT -c '%U:%G:%a' "$CANDIDATE_RELEASE")" == 'root:root:644' ]] || { printf 'status=failed\nreason=candidate_release_invalid\n' >&2; exit 1; }
 
 # 本摘要固定到同一审查提交中的辅助工具；任何内容漂移都拒绝运行。
-readonly HELPER_SHA256="6c5a11e428d96755ccb80df4ffdd7b1f384620a7d8f08c6ee8f220f7c20f4b39"
+readonly HELPER_SHA256="905514848b2c367e9626fbcd4cb3574e84578d764df61e01034a0d5a0735d21f"
 readonly VALIDATORS_SHA256="27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b"
-readonly CANDIDATE_RELEASE_SHA256="29f6352a5dcddc12ce714b447b542d77346d1b0e88c3cdd91a201393ab4c504f"
+readonly CANDIDATE_RELEASE_SHA256="5ba70365cea255cadb5f5de9cf3c818125c64a30d14b3fc7e659f98924265d73"
 [[ "$HELPER_SHA256" != REPLACE_* ]] || { printf 'status=failed\nreason=helper_digest_not_pinned\n' >&2; exit 1; }
 [[ "$($SHA256 "$HELPER" | /usr/bin/awk '{print $1}')" == "$HELPER_SHA256" ]] || { printf 'status=failed\nreason=helper_digest_mismatch\n' >&2; exit 1; }
 [[ "$VALIDATORS_SHA256" != REPLACE_* ]] || { printf 'status=failed\nreason=validators_digest_not_pinned\n' >&2; exit 1; }

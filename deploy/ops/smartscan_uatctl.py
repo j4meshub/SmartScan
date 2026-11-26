@@ -72,7 +72,7 @@ INSTALLED_ASSET_SHA256 = {
     "docker-compose.uat.yml": "b8bc7d1208bb58dd353f0934e1fb9e19b0b251aaaeac023fc19edd5aa7075d31",
     "shared-8077-smartscan-location.conf": "500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227",
     "smartscan_uat_validators.py": "27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b",
-    "uat-2026-11-26-worker-fix.json": "29f6352a5dcddc12ce714b447b542d77346d1b0e88c3cdd91a201393ab4c504f",
+    "uat-2026-11-26-worker-fix.json": "5ba70365cea255cadb5f5de9cf3c818125c64a30d14b3fc7e659f98924265d73",
 }
 
 
