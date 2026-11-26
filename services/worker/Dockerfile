@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0t64 \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0t64 libgomp1 \
     && install -d /usr/local/lib /usr/share/doc/smartscan-gl-runtime \
     && install -m 0644 "$(readlink -f /usr/lib/x86_64-linux-gnu/libGL.so.1)" /usr/local/lib/libGL.so.1 \
     && install -m 0644 "$(readlink -f /usr/lib/x86_64-linux-gnu/libGLX.so.0)" /usr/local/lib/libGLX.so.0 \

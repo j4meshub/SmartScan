@@ -74,6 +74,17 @@ def test_images_install_available_security_updates() -> None:
     assert '"pillow>=13.0,<14"' in pyproject
 
 
+def test_worker_pins_openmp_and_visual_runtime_checks() -> None:
+    dockerfile = (ROOT / "services" / "worker" / "Dockerfile").read_text(encoding="utf-8")
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "libgomp1" in dockerfile
+    assert "libxml2" in dockerfile
+    assert 'libgomp1)" = installed' in workflow
+    for library in ("libGL.so.1", "libgthread-2.0.so.0", "libgomp.so.1"):
+        assert f"ctypes.CDLL('{library}')" in workflow
+
+
 def test_manifest_is_complete_sorted_and_secret_free(tmp_path: Path) -> None:
     for service in reversed(SERVICES):
         (tmp_path / f"{service}.json").write_text(json.dumps(_entry(service)), encoding="utf-8")
