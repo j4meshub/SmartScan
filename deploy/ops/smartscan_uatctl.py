@@ -520,7 +520,9 @@ class Controller:
             _sha256(uploaded_manifest) == _sha256(self.paths.candidate_release),
             "incremental_manifest_digest_mismatch",
         )
-        mapping = _load_json(uploaded_map)
+        # 候选映射属于部署用户上传证据；上方已经固定校验所有者、0600、
+        # 单硬链接和候选目录边界。活动映射仍必须由root安装并按默认门禁读取。
+        mapping = _load_json(uploaded_map, root_owned=False)
         _require(
             mapping.get("release_id") == candidate.get("release_id")
             and mapping.get("release_manifest_sha256") == _sha256(self.paths.candidate_release),
