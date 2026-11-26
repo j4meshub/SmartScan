@@ -112,7 +112,7 @@ def prepare_incremental_upload(deploy_uid: int) -> None:
 def prepare_root_owned_candidate() -> Path:
     """模拟服务器上由root安装的固定候选清单，不放宽控制器所有权门禁。"""
 
-    CONTROLLER_ASSETS.mkdir(mode=0o700)
+    CONTROLLER_ASSETS.mkdir(mode=0o700, parents=True)
     candidate = CONTROLLER_ASSETS / "uat-2026-11-26-worker-fix.json"
     shutil.copyfile(ROOT / "deploy/releases/uat-2026-11-26-worker-fix.json", candidate)
     os.chown(CONTROLLER_ASSETS, 0, 0)

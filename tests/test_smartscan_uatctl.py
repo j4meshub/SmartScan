@@ -686,6 +686,7 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert "steps.worker_archive.outputs.name" in workflow
     assert "smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar" not in workflow
     assert "prepare_root_owned_candidate" in checkpoint
+    assert "CONTROLLER_ASSETS.mkdir(mode=0o700, parents=True)" in checkpoint
     assert "os.chown(candidate, 0, 0)" in checkpoint
 
 
