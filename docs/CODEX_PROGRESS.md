@@ -1,21 +1,28 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-25
+更新时间：2026-11-26
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001M` 迁移容器只读根兼容修复 |
-| 工作包状态 | 等待人工验收；迁移与新Worker供应链CI均通过，等待主线新digest及用户重新接受发布映射 |
-| 当前分支 | `codex/ops-001m-migration-readonly-root` |
-| 最后验证基线 | 现场已完成六镜像、身份、所有权和PostgreSQL健康；首次迁移在连接数据库前因只读根目录创建失败，空库无表、无`alembic_version`、无部分revision |
-| 工作包提交 | `43fb16e`（最终技术验证头） |
-| PR | [#114](https://github.com/j4meshub/SmartScan/pull/114) |
-| 下一工作包 | 合并运行库修复并取得新Worker固定digest；用户接受更新后的离线发布映射后，重新执行迁移至核心健康的完整状态机CI |
+| 当前工作包 | `OPS-001N` 修复版Worker制品与增量UAT发布更新 |
+| 工作包状态 | 进行中；候选固定digest和单Worker增量机制已实现，等待PR真实Docker 29/containerd、漏洞及离线归档证据 |
+| 当前分支 | `codex/ops-001n-worker-incremental-release` |
+| 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；状态停在`next_required=core_started`，旧Worker禁止启动，API/Worker/Web/AI/Nginx均未启动 |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | PR通过后仅把新Worker固定digest、归档和六镜像增量映射提交用户接受；未经接受不下载、不上传、不导入或修改服务器发布状态 |
 
 ## 当前工作包进展
+
+- OPS-001M控制器与Compose人工升级后，用户单独授权的`run-migrations`已成功完成：空SmartScan UAT数据库完整达到`20261022_0024`，`alembic_version`、`public.ai_media_grants`和PostgreSQL健康均通过，没有生产数据或唯一副本数据。现场状态已记录`migrations_completed`，下一门禁为`core_started`；本工作包不重跑迁移。
+- 主线`13022cfaeb7a797c198e7e759080ac757c91d436`的成功供应链产生唯一修复版Worker候选`ghcr.io/j4meshub/smartscan-worker@sha256:4e1e7532f33a26b036f3a1edd3e6c65a67fbd94cf84cf043ca85e04258bba944`。其`linux/amd64`平台manifest为`sha256:ccbd0546976cd213b7da039c15ae395a6b31578ab3339627cba78d22e59f6d3e`，Config为`sha256:0e78d39b1b099dbadc35d4c0281d1f408b3c79b1771c9febf8ebf0837c1ceea7`；SBOM、SLSA来源证明和既有可修复High/Critical门禁已生成，严格全部Critical门禁由本PR离线归档作业复核。
+- 新候选发布清单`smartscan-uat-2026-11-26-worker-fix`只替换Worker；PostgreSQL、API、AI Gateway、Web和Ops的源digest、本地不可变Tag及既有归档大小/SHA-256逐项锁定不变。候选清单SHA-256为`29f6352a5dcddc12ce714b447b542d77346d1b0e88c3cdd91a201393ab4c504f`，仍处于等待用户接受状态。
+- 通用离线工具只为变化的Worker下载、校验和上传Artifact；CI额外重建旧Worker以真实模拟“旧六镜像完成迁移→接受单Worker候选→只导入新Worker→原子激活→启动核心”的现场断点。新Worker归档和发布映射在用户接受前不会下载到本机、上传服务器或导入UAT。
+- 统一控制器保留旧发布、旧Worker Tag、旧映射、旧`local-images.env`和旧身份文件。只有新归档、内容链、Docker 29/containerd运行时身份及`10001:10001`全部通过，且data目录所有权仍兼容时才切换活动发布；失败恢复旧活动文件且不重置存储、模型、网络、数据库、迁移和已完成状态。核心已启动时拒绝增量接受。
+- exact mixed release CI固定使用旧PostgreSQL/API/AI Gateway/Web/Ops与新Worker，要求完全离线、`pull_policy: never`、已在0024的数据库不重复迁移、两CPU Worker、真实OCR上传任务、18082健康和AI Profile关闭；共享Nginx不参与。仓库开发期间没有连接或修改`smartscan-server`。
 
 - OPS-001L已通过PR #113合并并完成服务器人工升级。统一控制器真实续接完成六镜像离线导入、Docker 29/containerd结构化身份、无网络UID/GID探测、`image-identities.json`、目录所有权、PostgreSQL启动和健康验证，随后在不可逆迁移门禁停止。
 - 用户明确接受新建空UAT无备份及迁移失败保留现场的风险后，首次且唯一一次`run-migrations`失败。诊断确认失败发生在Python模块导入阶段：`get_settings()`尝试创建storage root并命中只读根；迁移尚未连接数据库，`public`表为0、`alembic_version`不存在、没有任何revision提交，PostgreSQL保持健康，API、Worker、Web和Nginx均未启动。

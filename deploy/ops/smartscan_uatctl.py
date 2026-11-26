@@ -69,9 +69,10 @@ MANIFEST_MEDIA_TYPES = {
     "application/vnd.docker.distribution.manifest.v2+json",
 }
 INSTALLED_ASSET_SHA256 = {
-    "docker-compose.uat.yml": "4d1a236a3303bbd70bc3b138265ca4587240b109ca4f6a1cb7b0df3ac28d43bf",
+    "docker-compose.uat.yml": "b8bc7d1208bb58dd353f0934e1fb9e19b0b251aaaeac023fc19edd5aa7075d31",
     "shared-8077-smartscan-location.conf": "500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227",
     "smartscan_uat_validators.py": "27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b",
+    "uat-2026-11-26-worker-fix.json": "29f6352a5dcddc12ce714b447b542d77346d1b0e88c3cdd91a201393ab4c504f",
 }
 
 
@@ -131,6 +132,11 @@ class Paths:
     compose_file: Path = Path("/usr/local/libexec/smartscan/docker-compose.uat.yml")
     nginx_template: Path = Path("/usr/local/libexec/smartscan/shared-8077-smartscan-location.conf")
     validator_module: Path = Path("/usr/local/libexec/smartscan/smartscan_uat_validators.py")
+    candidate_release: Path = Path("/usr/local/libexec/smartscan/uat-2026-11-26-worker-fix.json")
+    previous_release: Path = Path("/etc/smartscan/uat/previous-release-manifest.json")
+    previous_map: Path = Path("/etc/smartscan/uat/previous-release-map.json")
+    previous_local_images: Path = Path("/etc/smartscan/uat/previous-local-images.env")
+    previous_identities: Path = Path("/etc/smartscan/uat/previous-image-identities.json")
 
 
 class Runner(Protocol):
@@ -409,7 +415,7 @@ class Controller:
                     (metadata_root / name).stat().st_uid == self.deploy_uid,
                     f"uploaded_metadata_owner_invalid:{name}",
                 )
-        _require(release.get("schema_version") == "1.0", "release_schema_invalid")
+        _require(release.get("schema_version") in {"1.0", "1.1"}, "release_schema_invalid")
         _require(release.get("platform") == PLATFORM, "release_platform_invalid")
         _require(release.get("registry_prefix") == ALLOWED_PREFIX, "release_registry_invalid")
         images = release.get("images")
@@ -449,7 +455,7 @@ class Controller:
                 SHA256.fullmatch(str(record.get("archive_sha256", ""))) is not None,
                 "archive_digest_invalid",
             )
-            archive = self.paths.upload_root / archive_name
+            archive = self._archive_path(release, image)
             _require(archive.is_file() and not archive.is_symlink(), "archive_missing")
             if os.name != "nt":
                 info = archive.stat()
@@ -466,6 +472,104 @@ class Controller:
             _require(_sha256(archive) == record.get("archive_sha256"), "archive_hash_invalid")
             self._verify_uploaded_archive(image, record, archive)
         return release, mapping
+
+    def _archive_path(self, release: dict[str, Any], image: dict[str, Any]) -> Path:
+        changed = release.get("changed_services", [])
+        if release.get("schema_version") == "1.1" and image.get("service") in changed:
+            candidate_root = self.paths.upload_root / str(release.get("release_id", ""))
+            if candidate_root.is_dir() and not candidate_root.is_symlink():
+                return candidate_root / str(image["archive_name"])
+        return self.paths.upload_root / str(image["archive_name"])
+
+    def _candidate_release(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        """验证固定单Worker候选，不改变当前已激活发布。"""
+
+        candidate = _load_json(self.paths.candidate_release, expected_root_uid=self.root_uid)
+        _require(candidate.get("schema_version") == "1.1", "incremental_release_schema_invalid")
+        _require(candidate.get("changed_services") == ["worker"], "incremental_scope_invalid")
+        active, active_map = self._fixed_release(uploaded=False)
+        _require(
+            candidate.get("base_release_id") == active.get("release_id")
+            and candidate.get("base_release_manifest_sha256")
+            == _sha256(self.paths.installed_release),
+            "incremental_base_release_mismatch",
+        )
+        candidate_root = self.paths.upload_root / str(candidate.get("release_id", ""))
+        uploaded_manifest = candidate_root / "release-manifest.json"
+        uploaded_map = candidate_root / "release-map.json"
+        _require(
+            candidate_root.is_dir()
+            and not candidate_root.is_symlink()
+            and uploaded_manifest.is_file()
+            and not uploaded_manifest.is_symlink()
+            and uploaded_map.is_file()
+            and not uploaded_map.is_symlink(),
+            "incremental_release_upload_missing",
+        )
+        if os.name != "nt":
+            for path in (candidate_root, uploaded_manifest, uploaded_map):
+                info = path.stat()
+                expected_mode = 0o700 if path == candidate_root else 0o600
+                _require(
+                    info.st_uid == self.deploy_uid
+                    and stat.S_IMODE(info.st_mode) == expected_mode
+                    and (path == candidate_root or info.st_nlink == 1),
+                    f"incremental_release_permissions_invalid:{path.name}",
+                )
+        _require(
+            _sha256(uploaded_manifest) == _sha256(self.paths.candidate_release),
+            "incremental_manifest_digest_mismatch",
+        )
+        mapping = _load_json(uploaded_map)
+        _require(
+            mapping.get("release_id") == candidate.get("release_id")
+            and mapping.get("release_manifest_sha256") == _sha256(self.paths.candidate_release),
+            "incremental_map_binding_invalid",
+        )
+        active_images = {item["service"]: item for item in active["images"]}
+        active_records = {item["service"]: item for item in active_map["images"]}
+        candidate_images = {item["service"]: item for item in candidate.get("images", [])}
+        candidate_records = {
+            item["service"]: item for item in mapping.get("images", []) if isinstance(item, dict)
+        }
+        _require(
+            set(candidate_images) == EXPECTED_SERVICES
+            and set(candidate_records) == EXPECTED_SERVICES,
+            "incremental_release_services_invalid",
+        )
+        for service in EXPECTED_SERVICES - {"worker"}:
+            _require(
+                candidate_images[service] == active_images[service]
+                and candidate_records[service] == active_records[service],
+                f"incremental_unchanged_service_drift:{service}",
+            )
+        worker = candidate_images["worker"]
+        worker_record = candidate_records["worker"]
+        _require(
+            worker != active_images["worker"]
+            and worker["source"] != active_images["worker"]["source"]
+            and worker["local_tag"] != active_images["worker"]["local_tag"],
+            "incremental_worker_not_changed",
+        )
+        archive = candidate_root / worker["archive_name"]
+        _require(
+            archive.is_file() and not archive.is_symlink(), "incremental_worker_archive_missing"
+        )
+        if os.name != "nt":
+            info = archive.stat()
+            _require(
+                info.st_uid == self.deploy_uid
+                and stat.S_IMODE(info.st_mode) == 0o600
+                and info.st_nlink == 1,
+                "incremental_worker_archive_permissions_invalid",
+            )
+        _require(
+            archive.stat().st_size == int(worker_record.get("archive_size", -1))
+            and _sha256(archive) == worker_record.get("archive_sha256"),
+            "incremental_worker_archive_digest_invalid",
+        )
+        self._verify_uploaded_archive(worker, worker_record, archive)
+        return candidate, mapping
 
     @staticmethod
     def _verify_uploaded_archive(
@@ -651,6 +755,7 @@ class Controller:
             self.paths.compose_file,
             self.paths.nginx_template,
             self.paths.validator_module,
+            self.paths.candidate_release,
         ):
             _require(
                 path.is_file() and not path.is_symlink(), f"installed_asset_invalid:{path.name}"
@@ -680,14 +785,44 @@ class Controller:
 
     def accept_release(self) -> dict[str, Any]:
         self._require_steps("preflight", "storage_verified", "models_verified", "config_verified")
-        release, mapping = self._fixed_release(uploaded=True)
         if self._completed("release_accepted"):
-            installed_release, installed_map = self._fixed_release(uploaded=False)
-            _require(
-                installed_release == release and installed_map == mapping,
-                "accepted_release_changed",
-            )
-            return self.status()
+            state = self._state()
+            pending = state.get("pending_release_update")
+            if pending:
+                _require(
+                    isinstance(pending, dict)
+                    and pending.get("status") in {"accepted", "verified", "activated"},
+                    "incremental_release_state_invalid",
+                )
+                return self.status()
+            self._require_steps("migrations_completed")
+            _require(not self._completed("core_started"), "incremental_core_already_started")
+            release, _mapping = self._candidate_release()
+            state["pending_release_update"] = {
+                "status": "accepted",
+                "release_id": release["release_id"],
+                "manifest_sha256": _sha256(self.paths.candidate_release),
+                "map_sha256": _sha256(
+                    self.paths.upload_root / release["release_id"] / "release-map.json"
+                ),
+                "changed_services": ["worker"],
+                "secrets_included": False,
+            }
+            state["history"] = [
+                *state.get("history", []),
+                {
+                    "step": "incremental_release_accepted",
+                    "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                },
+            ][-100:]
+            _atomic_json(self.paths.state_file, state)
+            return {
+                "status": "passed",
+                "step": "incremental_release_accepted",
+                "release_id": release["release_id"],
+                "secrets_included": False,
+            }
+        release, _mapping = self._fixed_release(uploaded=True)
         for name in ("release-manifest.json", "release-map.json"):
             source = self.paths.upload_root / name
             destination = self.paths.config_root / name
@@ -832,6 +967,7 @@ class Controller:
         self,
         image: dict[str, Any],
         record: dict[str, Any],
+        archive: Path | None = None,
     ) -> RuntimeImageIdentity:
         service, tag = str(image["service"]), str(image["local_tag"])
 
@@ -931,7 +1067,7 @@ class Controller:
         else:
             _require(isinstance(descriptor_value, dict), f"runtime_descriptor_required:{service}")
             expected_digest, expected_size = self._expected_runtime_descriptor(
-                record, self.paths.upload_root / str(image["archive_name"])
+                record, archive or self.paths.upload_root / str(image["archive_name"])
             )
             descriptor_digest = _normalize_sha256(
                 descriptor_value.get("digest"), f"runtime_descriptor_digest_invalid:{service}"
@@ -979,7 +1115,9 @@ class Controller:
                         str(self.paths.upload_root / image["archive_name"]),
                     ]
                 )
-            identity = self._inspect_runtime_image(image, by_service[service])
+            identity = self._inspect_runtime_image(
+                image, by_service[service], self._archive_path(release, image)
+            )
             identities[service] = identity.evidence()
         return self._record("images_imported", {"runtime_identities": identities})
 
@@ -991,7 +1129,9 @@ class Controller:
         identities: dict[str, Any] = {}
         for image in release["images"]:
             service, tag, runtime_key = image["service"], image["local_tag"], image["runtime_key"]
-            identity = self._inspect_runtime_image(image, by_service[service])
+            identity = self._inspect_runtime_image(
+                image, by_service[service], self._archive_path(release, image)
+            )
             identities[service] = identity.evidence()
             lines.append(f"{runtime_key}={tag}")
         _atomic_text(self.paths.local_images_env, "\n".join(lines) + "\n")
@@ -1048,7 +1188,9 @@ class Controller:
         images: dict[str, Any] = {}
         for image in release["images"]:
             service, record = image["service"], by_service[image["service"]]
-            runtime_identity = self._inspect_runtime_image(image, record)
+            runtime_identity = self._inspect_runtime_image(
+                image, record, self._archive_path(release, image)
+            )
             user = str(record.get("config_user", ""))
             match = re.fullmatch(r"([0-9]+):([0-9]+)", user)
             if match:
@@ -1099,7 +1241,9 @@ class Controller:
             key, service = image["deploy_key"], image["service"]
             record = images.get(key)
             expected = by_service[service]
-            runtime_identity = self._inspect_runtime_image(image, expected)
+            runtime_identity = self._inspect_runtime_image(
+                image, expected, self._archive_path(release, image)
+            )
             valid_mapping = (
                 isinstance(record, dict)
                 and record.get("reference") == image["source"]
@@ -1167,6 +1311,153 @@ class Controller:
                 f"ownership_verification_failed:{path.name}",
             )
         return self._record("ownership_applied")
+
+    def _verify_incremental_data_ownership(self) -> None:
+        info = (self.paths.data_root / "data").stat()
+        _require(
+            (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (10001, 10001, 0o750),
+            "incremental_data_ownership_changed",
+        )
+
+    def _activate_pending_worker_release(self) -> dict[str, Any]:
+        """验证并原子切换单Worker候选；失败时保留旧发布为活动发布。"""
+
+        state = self._state()
+        pending = state.get("pending_release_update")
+        _require(
+            isinstance(pending, dict) and pending.get("status") in {"accepted", "verified"},
+            "incremental_release_not_accepted",
+        )
+        _require(not self._completed("core_started"), "incremental_core_already_started")
+        candidate, mapping = self._candidate_release()
+        _require(
+            pending.get("release_id") == candidate.get("release_id")
+            and pending.get("manifest_sha256") == _sha256(self.paths.candidate_release),
+            "incremental_release_state_mismatch",
+        )
+        worker = next(item for item in candidate["images"] if item["service"] == "worker")
+        worker_record = next(item for item in mapping["images"] if item["service"] == "worker")
+        archive = self._archive_path(candidate, worker)
+        current = self.runner.run(
+            [
+                "/usr/bin/docker",
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                worker["local_tag"],
+            ],
+            check=False,
+        )
+        if not current:
+            self.runner.run(["/usr/bin/docker", "load", "--input", str(archive)])
+        runtime_identity = self._inspect_runtime_image(worker, worker_record, archive)
+        user = str(worker_record.get("config_user", ""))
+        match = re.fullmatch(r"([0-9]+):([0-9]+)", user)
+        if match:
+            uid, gid, method = int(match.group(1)), int(match.group(2)), "static_config_user"
+        else:
+            uid = self._probe("worker-update", worker["local_tag"], "u")
+            gid = self._probe("worker-update", worker["local_tag"], "g")
+            method = "networkless_controlled_probe"
+        _require((uid, gid) == (10001, 10001), "incremental_worker_identity_changed")
+        identities = _load_json(self.paths.image_identities, expected_root_uid=self.root_uid)
+        images = identities.get("images")
+        _require(isinstance(images, dict), "identity_images_invalid")
+        old_worker = images.get("SMARTSCAN_UAT_WORKER_IMAGE")
+        _require(
+            isinstance(old_worker, dict)
+            and (old_worker.get("runtime_uid"), old_worker.get("runtime_gid")) == (10001, 10001),
+            "previous_worker_identity_invalid",
+        )
+        self._verify_incremental_data_ownership()
+        images["SMARTSCAN_UAT_WORKER_IMAGE"] = {
+            "reference": worker["source"],
+            "repo_digest_verified": False,
+            "source_digest_verified": True,
+            "offline_mapping_verified": True,
+            "source_digest": worker["source"],
+            "platform_manifest": worker_record["platform_manifest"],
+            "config_digest": worker_record["config_digest"],
+            "layer_digests": [item["digest"] for item in worker_record["layers"]],
+            "rootfs_diff_ids": [item["diff_id"] for item in worker_record["layers"]],
+            "local_tag": worker["local_tag"],
+            "archive_sha256": worker_record["archive_sha256"],
+            **runtime_identity.evidence(),
+            "config_user": user,
+            "runtime_uid": uid,
+            "runtime_gid": gid,
+            "identity_method": method,
+        }
+        lines = [f"{item['runtime_key']}={item['local_tag']}" for item in candidate["images"]]
+
+        backup_pairs = (
+            (self.paths.installed_release, self.paths.previous_release),
+            (self.paths.installed_map, self.paths.previous_map),
+            (self.paths.local_images_env, self.paths.previous_local_images),
+            (self.paths.image_identities, self.paths.previous_identities),
+        )
+        for source, backup in backup_pairs:
+            _require(
+                source.is_file()
+                and not source.is_symlink()
+                and not backup.exists()
+                and not backup.is_symlink(),
+                f"incremental_backup_precondition_failed:{backup.name}",
+            )
+            shutil.copyfile(source, backup)
+            if hasattr(os, "chown"):
+                os.chown(backup, self.root_uid, self.root_uid)
+            os.chmod(backup, 0o600)
+        pending["status"] = "verified"
+        pending["worker_runtime_id"] = runtime_identity.runtime_image_id
+        pending["worker_uid"] = uid
+        pending["worker_gid"] = gid
+        _atomic_json(self.paths.state_file, state)
+
+        candidate_map = self.paths.upload_root / candidate["release_id"] / "release-map.json"
+        try:
+            _atomic_text(
+                self.paths.installed_release,
+                self.paths.candidate_release.read_text(encoding="utf-8"),
+            )
+            _atomic_text(
+                self.paths.installed_map,
+                candidate_map.read_text(encoding="utf-8"),
+            )
+            _atomic_text(self.paths.local_images_env, "\n".join(lines) + "\n")
+            _atomic_json(self.paths.image_identities, identities)
+            active_release, active_map = self._fixed_release()
+            _require(
+                active_release == candidate and active_map == mapping,
+                "incremental_activation_verification_failed",
+            )
+            self._inspect_runtime_image(worker, worker_record, archive)
+            state = self._state()
+            state["pending_release_update"]["status"] = "activated"
+            state["pending_release_update"]["activated_at"] = time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
+            )
+            state["history"] = [
+                *state.get("history", []),
+                {
+                    "step": "incremental_worker_release_activated",
+                    "recorded_at": state["pending_release_update"]["activated_at"],
+                },
+            ][-100:]
+            _atomic_json(self.paths.state_file, state)
+        except (ControllerError, OSError, UnicodeError):
+            for active, backup in backup_pairs:
+                shutil.copyfile(backup, active)
+                if hasattr(os, "chown"):
+                    os.chown(active, self.root_uid, self.root_uid)
+                os.chmod(active, 0o600)
+            raise ControllerError("incremental_activation_rolled_back") from None
+        return {
+            "status": "passed",
+            "step": "incremental_worker_release_activated",
+            "secrets_included": False,
+        }
 
     def start_database(self) -> dict[str, Any]:
         self._require_steps("ownership_applied")
@@ -1250,6 +1541,11 @@ class Controller:
 
     def start_core(self) -> dict[str, Any]:
         self._require_steps("migrations_completed")
+        candidate = _load_json(self.paths.candidate_release, expected_root_uid=self.root_uid)
+        active, _ = self._fixed_release()
+        expected_worker = next(item for item in candidate["images"] if item["service"] == "worker")
+        active_worker = next(item for item in active["images"] if item["service"] == "worker")
+        _require(active_worker == expected_worker, "repaired_worker_release_not_active")
         if self._completed("core_started"):
             return self.verify_core()
         self._compose("up", "-d", "--no-deps", "api", "worker-cpu-1", "worker-cpu-2", "nginx")
@@ -1419,26 +1715,73 @@ class Controller:
 
     def rollback_images(self) -> dict[str, Any]:
         self._require_steps("core_stopped")
-        previous = self.paths.config_root / "previous-release-map.json"
-        document = _load_json(previous, expected_root_uid=self.root_uid)
-        _require(document.get("platform") == PLATFORM, "previous_release_platform_invalid")
-        for item in document.get("images", []):
+        previous_release = _load_json(self.paths.previous_release, expected_root_uid=self.root_uid)
+        previous_map = _load_json(self.paths.previous_map, expected_root_uid=self.root_uid)
+        previous_identities = _load_json(
+            self.paths.previous_identities, expected_root_uid=self.root_uid
+        )
+        _require(previous_release.get("platform") == PLATFORM, "previous_release_platform_invalid")
+        _require(previous_map.get("platform") == PLATFORM, "previous_release_map_platform_invalid")
+        by_service = {
+            item.get("service"): item
+            for item in previous_map.get("images", [])
+            if isinstance(item, dict)
+        }
+        identities = previous_identities.get("images")
+        _require(
+            set(by_service) == EXPECTED_SERVICES and isinstance(identities, dict),
+            "previous_release_evidence_invalid",
+        )
+        expected_env: list[str] = []
+        for image in previous_release.get("images", []):
+            _require(isinstance(image, dict), "previous_release_invalid")
+            service = image.get("service")
+            record = by_service.get(service)
+            identity_record = identities.get(image.get("deploy_key"))
             _require(
-                isinstance(item, dict) and LOCAL_TAG.fullmatch(str(item.get("local_tag", ""))),
+                service in EXPECTED_SERVICES
+                and isinstance(record, dict)
+                and isinstance(identity_record, dict),
                 "previous_release_invalid",
             )
-            current = self.runner.run(
-                [
-                    "/usr/bin/docker",
-                    "image",
-                    "inspect",
-                    "--format",
-                    "{{.Id}}",
-                    str(item["local_tag"]),
-                ]
+            runtime = self._inspect_runtime_image(
+                image,
+                record,
+                self.paths.upload_root / str(image["archive_name"]),
             )
-            _require(current == item.get("image_id"), "previous_release_image_missing")
-        return self._record("images_rolled_back")
+            _require(
+                identity_record.get("runtime_image_id") == runtime.runtime_image_id
+                and identity_record.get("runtime_descriptor_digest")
+                == runtime.runtime_descriptor_digest
+                and identity_record.get("local_tag") == image.get("local_tag"),
+                f"previous_release_image_missing:{service}",
+            )
+            expected_env.append(f"{image['runtime_key']}={image['local_tag']}")
+        _require(
+            self.paths.previous_local_images.read_text(encoding="utf-8")
+            == "\n".join(expected_env) + "\n",
+            "previous_release_env_invalid",
+        )
+        for source, destination in (
+            (self.paths.previous_release, self.paths.installed_release),
+            (self.paths.previous_map, self.paths.installed_map),
+            (self.paths.previous_local_images, self.paths.local_images_env),
+            (self.paths.previous_identities, self.paths.image_identities),
+        ):
+            temporary = destination.with_name(f".{destination.name}.rollback.tmp")
+            _require(not temporary.exists() and not temporary.is_symlink(), "rollback_temp_exists")
+            shutil.copyfile(source, temporary)
+            if hasattr(os, "chown"):
+                os.chown(temporary, self.root_uid, self.root_uid)
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, destination)
+        state = self._state()
+        pending = state.get("pending_release_update")
+        if isinstance(pending, dict):
+            pending["status"] = "rolled_back"
+            pending["rolled_back_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            _atomic_json(self.paths.state_file, state)
+        return self._record("images_rolled_back", {"core_restart_allowed": False})
 
     def resume_basic_uat(self) -> dict[str, Any]:
         steps = (
@@ -1463,6 +1806,9 @@ class Controller:
                 "next_required": "run-migrations",
                 "secrets_included": False,
             }
+        pending = self._state().get("pending_release_update")
+        if isinstance(pending, dict) and pending.get("status") in {"accepted", "verified"}:
+            self._activate_pending_worker_release()
         for name, action in (
             ("core_started", self.start_core),
             ("core_verified", self.verify_core),

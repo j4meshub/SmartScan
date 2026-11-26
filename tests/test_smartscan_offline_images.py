@@ -70,6 +70,24 @@ def test_release_manifest_fixes_six_digests_platform_and_local_tags() -> None:
         assert item.source_digest[7:][:12] in item.archive_name
 
 
+def test_incremental_manifest_changes_only_worker_and_pins_base_archives() -> None:
+    release = offline.load_release()
+    candidate = json.loads(offline.RELEASE_MANIFEST.read_text(encoding="utf-8"))
+    base = json.loads(offline.BASE_RELEASE_MANIFEST.read_text(encoding="utf-8"))
+    assert release.changed_services == ("worker",)
+    assert release.base_release_id == base["release_id"]
+    assert (
+        release.base_release_manifest_sha256
+        == hashlib.sha256(offline.BASE_RELEASE_MANIFEST.read_bytes()).hexdigest()
+    )
+    candidate_images = {item["service"]: item for item in candidate["images"]}
+    base_images = {item["service"]: item for item in base["images"]}
+    assert candidate_images["worker"] != base_images["worker"]
+    for service in set(base_images) - {"worker"}:
+        assert candidate_images[service] == base_images[service]
+        assert service in release.unchanged_archives
+
+
 def test_release_rejects_tag_wrong_platform_and_path_injection(tmp_path: Path) -> None:
     document = _release_document()
     document["platform"] = "linux/arm64"
@@ -395,6 +413,8 @@ def test_ci_build_refuses_non_actions_environment(monkeypatch: pytest.MonkeyPatc
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     with pytest.raises(offline.OfflineImageError, match="ci_build_only"):
         offline.build_archives()
+    with pytest.raises(offline.OfflineImageError, match="ci_build_only"):
+        offline.build_base_worker_archive()
 
 
 def test_cli_rejects_extra_arguments_and_does_not_echo_credentials(capsys) -> None:

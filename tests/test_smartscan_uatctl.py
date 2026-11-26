@@ -132,6 +132,7 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
         "docker-compose.uat.yml",
         "shared-8077-smartscan-location.conf",
         "smartscan_uat_validators.py",
+        "uat-2026-11-26-worker-fix.json",
     ):
         (libexec / name).write_text("fixed", encoding="utf-8")
     return uatctl.Paths(
@@ -152,6 +153,11 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
         compose_file=libexec / "docker-compose.uat.yml",
         nginx_template=libexec / "shared-8077-smartscan-location.conf",
         validator_module=libexec / "smartscan_uat_validators.py",
+        candidate_release=libexec / "uat-2026-11-26-worker-fix.json",
+        previous_release=config / "previous-release-manifest.json",
+        previous_map=config / "previous-release-map.json",
+        previous_local_images=config / "previous-local-images.env",
+        previous_identities=config / "previous-image-identities.json",
     )
 
 
@@ -187,6 +193,7 @@ def test_preflight_is_idempotent_and_rejects_missing_network(
             "docker-compose.uat.yml": fixed_hash,
             "shared-8077-smartscan-location.conf": fixed_hash,
             "smartscan_uat_validators.py": fixed_hash,
+            "uat-2026-11-26-worker-fix.json": fixed_hash,
         },
     )
     runner = FakeRunner()
@@ -628,6 +635,7 @@ def test_installation_guide_pins_all_controller_assets() -> None:
         "deploy/compose/docker-compose.uat.yml",
         "deploy/nginx/shared-8077-smartscan-location.conf.template",
         "deploy/releases/uat-2026-11-24.json",
+        "deploy/releases/uat-2026-11-26-worker-fix.json",
     ):
         assert _repository_lf_sha256(root / relative) in guide
 
@@ -750,6 +758,199 @@ def test_state_file_never_contains_secret_values(tmp_path: Path) -> None:
     text = paths.state_file.read_text(encoding="utf-8")
     assert "password" not in text.casefold()
     assert json.loads(text)["secrets_included"] is False
+
+
+def _incremental_fixture() -> tuple[dict, dict]:
+    services = ("postgres", "api", "worker", "ai-gateway", "web", "ops")
+    images, records = [], []
+    for index, service in enumerate(services, start=1):
+        digest = f"{index:064x}"
+        if service == "worker":
+            digest = "4e1e7532f33a26b036f3a1edd3e6c65a67fbd94cf84cf043ca85e04258bba944"
+        image = {
+            "service": service,
+            "deploy_key": f"SMARTSCAN_UAT_{service.upper().replace('-', '_')}_IMAGE",
+            "runtime_key": f"SMARTSCAN_UAT_{service.upper().replace('-', '_')}_RUNTIME_IMAGE",
+            "source": f"ghcr.io/j4meshub/smartscan-{service}@sha256:{digest}",
+            "local_tag": f"smartscan-uat-{service}:sha256-{digest[:12]}",
+            "archive_name": f"smartscan-{service}-{digest[:12]}-linux-amd64.docker.tar",
+        }
+        images.append(image)
+        records.append(
+            {
+                "service": service,
+                "source": image["source"],
+                "local_tag": image["local_tag"],
+                "archive_sha256": "a" * 64,
+                "platform_manifest": f"sha256:{index + 10:064x}",
+                "config_digest": f"sha256:{index + 20:064x}",
+                "config_user": "smartscan" if service == "worker" else "10001:10001",
+                "revision": "fixed",
+                "version": "fixed",
+                "layers": [
+                    {
+                        "digest": f"sha256:{index + 30:064x}",
+                        "diff_id": f"sha256:{index + 40:064x}",
+                        "size": 1,
+                    }
+                ],
+            }
+        )
+    return {
+        "schema_version": "1.1",
+        "release_id": "smartscan-uat-worker-fix",
+        "changed_services": ["worker"],
+        "images": images,
+    }, {"images": records}
+
+
+def test_incremental_worker_activation_preserves_checkpoint_and_old_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    candidate, mapping = _incremental_fixture()
+    _write_json(paths.candidate_release, candidate)
+    candidate_root = paths.upload_root / candidate["release_id"]
+    candidate_root.mkdir()
+    _write_json(candidate_root / "release-map.json", mapping)
+    worker = next(item for item in candidate["images"] if item["service"] == "worker")
+    worker_record = next(item for item in mapping["images"] if item["service"] == "worker")
+    worker_archive = candidate_root / worker["archive_name"]
+    with tarfile.open(worker_archive, "w") as bundle:
+        member = tarfile.TarInfo(f"{worker_record['config_digest'][7:]}.json")
+        member.size = 1
+        bundle.addfile(member, io.BytesIO(b"x"))
+    old_release = {"schema_version": "1.0", "release_id": "old", "images": []}
+    old_map = {"images": []}
+    _write_json(paths.installed_release, old_release)
+    _write_json(paths.installed_map, old_map)
+    paths.local_images_env.write_text("OLD=1\n", encoding="utf-8")
+    _write_json(
+        paths.image_identities,
+        {
+            "schema_version": "1.1",
+            "platform": "linux/amd64",
+            "images": {
+                "SMARTSCAN_UAT_WORKER_IMAGE": {
+                    "runtime_uid": 10001,
+                    "runtime_gid": 10001,
+                }
+            },
+        },
+    )
+    for step in (
+        "preflight",
+        "storage_verified",
+        "models_verified",
+        "config_verified",
+        "release_accepted",
+        "images_imported",
+        "images_verified",
+        "identities_verified",
+        "ownership_applied",
+        "database_started",
+        "database_verified",
+        "migrations_completed",
+    ):
+        controller._record(step)
+    state = controller._state()
+    state["pending_release_update"] = {
+        "status": "accepted",
+        "release_id": candidate["release_id"],
+        "manifest_sha256": uatctl._sha256(paths.candidate_release),
+    }
+    uatctl._atomic_json(paths.state_file, state)
+    identity = uatctl.RuntimeImageIdentity(
+        runtime_image_id=f"sha256:{'b' * 64}",
+        runtime_descriptor_digest=f"sha256:{'b' * 64}",
+        runtime_descriptor_size=1,
+        runtime_identity_kind="containerd_schema2_descriptor",
+        repo_digests=(),
+        rootfs_diff_ids=(worker_record["layers"][0]["diff_id"],),
+    )
+    monkeypatch.setattr(controller, "_candidate_release", lambda: (candidate, mapping))
+    monkeypatch.setattr(controller, "_fixed_release", lambda *args, **kwargs: (candidate, mapping))
+    monkeypatch.setattr(controller, "_inspect_runtime_image", lambda *args, **kwargs: identity)
+    monkeypatch.setattr(controller, "_probe", lambda *args, **kwargs: 10001)
+    monkeypatch.setattr(controller, "_verify_incremental_data_ownership", lambda: None)
+
+    result = controller._activate_pending_worker_release()
+
+    assert result["status"] == "passed"
+    assert json.loads(paths.previous_release.read_text(encoding="utf-8")) == old_release
+    assert json.loads(paths.previous_map.read_text(encoding="utf-8")) == old_map
+    assert json.loads(paths.installed_release.read_text(encoding="utf-8")) == candidate
+    assert worker["local_tag"] in paths.local_images_env.read_text(encoding="utf-8")
+    state = controller._state()
+    assert state["pending_release_update"]["status"] == "activated"
+    assert state["completed"][-1] == "migrations_completed"
+
+
+def test_incremental_acceptance_records_pending_without_switching_active_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    candidate, mapping = _incremental_fixture()
+    _write_json(paths.candidate_release, candidate)
+    candidate_root = paths.upload_root / candidate["release_id"]
+    candidate_root.mkdir()
+    _write_json(candidate_root / "release-map.json", mapping)
+    active = {"release_id": "accepted-old", "images": []}
+    _write_json(paths.installed_release, active)
+    for step in (
+        "preflight",
+        "storage_verified",
+        "models_verified",
+        "config_verified",
+        "release_accepted",
+        "migrations_completed",
+    ):
+        controller._record(step)
+    monkeypatch.setattr(controller, "_candidate_release", lambda: (candidate, mapping))
+
+    result = controller.accept_release()
+
+    assert result["step"] == "incremental_release_accepted"
+    assert json.loads(paths.installed_release.read_text(encoding="utf-8")) == active
+    state = controller._state()
+    assert state["completed"][-1] == "migrations_completed"
+    assert state["pending_release_update"]["status"] == "accepted"
+    assert state["pending_release_update"]["changed_services"] == ["worker"]
+
+
+def test_incremental_acceptance_rejects_when_core_already_started(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    for step in (
+        "preflight",
+        "storage_verified",
+        "models_verified",
+        "config_verified",
+        "release_accepted",
+        "migrations_completed",
+        "core_started",
+    ):
+        controller._record(step)
+
+    with pytest.raises(uatctl.ControllerError, match="incremental_core_already_started"):
+        controller.accept_release()
+
+
+def test_start_core_rejects_unrepaired_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    controller._record("migrations_completed")
+    candidate = {"images": [{"service": "worker", "source": "new"}]}
+    active = {"images": [{"service": "worker", "source": "old"}]}
+    _write_json(paths.candidate_release, candidate)
+    monkeypatch.setattr(controller, "_fixed_release", lambda: (active, {"images": []}))
+    with pytest.raises(uatctl.ControllerError, match="repaired_worker_release_not_active"):
+        controller.start_core()
 
 
 def test_completed_migration_is_verified_but_not_run_again(tmp_path: Path) -> None:

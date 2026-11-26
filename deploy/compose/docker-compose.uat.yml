@@ -119,6 +119,7 @@ services:
   worker-cpu-1: &worker
     <<: *common
     image: ${SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE:?必须设置已核验的Worker本地不可变Tag}
+    cap_drop: ["ALL"]
     environment:
       SMARTSCAN_ENV: production
       SMARTSCAN_AUTO_MIGRATE: "false"

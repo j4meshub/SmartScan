@@ -276,6 +276,45 @@ CI保留传统daemon完全断网路径，并使用固定Docker 29.0.2和containe
 - Nginx失败：只处理本次固定增量对象并重新验证，不影响其他location。
 - 所有删除、替换、数据清理和现有网络移除仍需新的精确授权。
 
+## OPS-001N 单Worker增量发布
+
+现场迁移已达到`20261022_0024`，状态停在`core_started`前。旧Worker缺少视觉运行库而禁止启动；候选发布`smartscan-uat-2026-11-26-worker-fix`只替换Worker，并将其余五项源digest、归档证据和本地不可变Tag锁定为旧发布值。
+
+统一控制器新增的增量路径不重置既有`completed`：`accept-release`只登记等待候选，后续`resume-basic-uat`才验证并导入新Worker、确认`10001:10001`和data所有权、保存旧活动文件并切换发布。新Tag不覆盖旧Tag；任何失败恢复旧活动文件并保持核心停止。旧Worker已知不可启动，因此`rollback-images`恢复旧证据后不会自动重启核心。
+
+本次需人工安装的资产为包装器、控制器、UAT Compose和候选清单；`smartscan_uat_validators.py`、Nginx模板及sudoers未改变。精确摘要在OPS-001N合并提交确定后更新到本节，安装顺序必须为控制器、Compose、候选清单、包装器，确保包装器最后切换摘要门禁。详见[OPS-001N修复版Worker与增量UAT发布](OPS001N_WORKER_INCREMENTAL_RELEASE.md)。
+
+仓库LF规范字节摘要如下；合并后必须从合并提交Git对象导出，不能直接使用可能被Windows换行转换的工作树文件：
+
+| 资产 | SHA-256 |
+|---|---|
+| `deploy/ops/smartscan-uatctl` | `d1530e09a344fd7e94ed2b199e61a55b083827e6e4e7aa6f77fa0ac3bab3a2a8` |
+| `deploy/ops/smartscan_uatctl.py` | `6c5a11e428d96755ccb80df4ffdd7b1f384620a7d8f08c6ee8f220f7c20f4b39` |
+| `deploy/compose/docker-compose.uat.yml` | `b8bc7d1208bb58dd353f0934e1fb9e19b0b251aaaeac023fc19edd5aa7075d31` |
+| `deploy/releases/uat-2026-11-26-worker-fix.json` | `29f6352a5dcddc12ce714b447b542d77346d1b0e88c3cdd91a201393ab4c504f` |
+| `deploy/ops/smartscan_uat_validators.py`（不变） | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
+| `deploy/sudoers/smartscan-uatctl`（不变） | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |
+| `deploy/nginx/shared-8077-smartscan-location.conf.template`（不变） | `500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227` |
+| `deploy/releases/uat-2026-11-24.json`（不变） | `2caa6eea6c0f6b11f941dc3301069653015fe41c9e5c515569dfb6cc5c099789` |
+
+本工作包不修改sudoers。用户接受候选并完成普通用户资产暂存后，人工升级仍须先备份现有包装器、控制器和Compose，再按“控制器→Compose→候选清单→包装器”安装，运行`visudo -cf /etc/sudoers.d/smartscan-uatctl`，最后只执行`status`。新摘要获最终合并提交确认前不得用于服务器安装。
+
+```bash
+sudo install -d -o root -g root -m 0700 /usr/local/libexec/smartscan/.ops001n-backup
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan-uatctl /usr/local/libexec/smartscan/.ops001n-backup/smartscan-uatctl
+sudo install -o root -g root -m 0755 /usr/local/libexec/smartscan/smartscan_uatctl.py /usr/local/libexec/smartscan/.ops001n-backup/smartscan_uatctl.py
+sudo install -o root -g root -m 0644 /usr/local/libexec/smartscan/docker-compose.uat.yml /usr/local/libexec/smartscan/.ops001n-backup/docker-compose.uat.yml
+sudo install -o root -g root -m 0755 /home/szhzx/smartscan-uatctl-upgrade-ops001n/smartscan_uatctl.py /usr/local/libexec/smartscan/smartscan_uatctl.py
+sudo install -o root -g root -m 0644 /home/szhzx/smartscan-uatctl-upgrade-ops001n/docker-compose.uat.yml /usr/local/libexec/smartscan/docker-compose.uat.yml
+sudo install -o root -g root -m 0644 /home/szhzx/smartscan-uatctl-upgrade-ops001n/uat-2026-11-26-worker-fix.json /usr/local/libexec/smartscan/uat-2026-11-26-worker-fix.json
+sudo install -o root -g root -m 0755 /home/szhzx/smartscan-uatctl-upgrade-ops001n/smartscan-uatctl /usr/local/libexec/smartscan/smartscan-uatctl
+sudo visudo -cf /etc/sudoers.d/smartscan-uatctl
+sudo -k
+sudo -n /usr/local/libexec/smartscan/smartscan-uatctl status
+```
+
+升级前若任一摘要、对象类型或权限不一致即停止。回滚只替换上述三项既有资产并删除尚未被活动控制器引用的候选清单需要新的人工授权；不得修改`uatctl-state.json`。候选清单一旦已被接受，不得只回滚控制器而保留不兼容状态。
+
 ## 当前状态
 
-截至OPS-001M开始，六镜像、身份文件、所有权和PostgreSQL健康均已完成。首次迁移在Python模块导入阶段命中只读根目录创建错误，数据库仍为空且没有部分revision；核心服务和Nginx未启动。OPS-001M合并后只暂存变化资产，实际替换仍由共同使用人人工完成，随后从`migrations_completed`门禁重新取得单次迁移授权。
+截至OPS-001N开始，六镜像旧发布、身份文件、所有权、PostgreSQL健康及迁移`20261022_0024`均已完成；API、Worker、Web、AI和共享Nginx未启动。新Worker和新发布映射经用户明确接受前，不下载、不上传、不导入，也不修改服务器活动发布。

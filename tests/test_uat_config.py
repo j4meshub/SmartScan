@@ -79,6 +79,8 @@ def test_worker_runtime_cache_is_bounded_by_existing_tmpfs() -> None:
     assert "HOME: /tmp/smartscan-home" in compose
     assert "--env HOME=/tmp/smartscan-home" in workflow
     assert "/tmp:rw,noexec,nosuid,nodev,size=512m" in compose
+    worker = compose.split("\n  worker-cpu-1:", 1)[1].split("\n  worker-cpu-2:", 1)[0]
+    assert 'cap_drop: ["ALL"]' in worker
 
 
 @pytest.mark.parametrize(

@@ -59,6 +59,8 @@ GHCR 首次创建的个人 Package 默认可能是私有。首次主线发布后
 
 共享服务器到GHCR Blob/CDN的直接拉取链路随后发生连接重置，OPS-001H路线停止。UAT不改变上述五个应用源digest及可审计PostgreSQL源digest，而由[OPS-001I统一控制器与离线镜像交付](OPS001I_UATCTL_AND_OFFLINE_IMAGES.md)保存源index/manifest、平台manifest、config、全部layer、归档摘要、导入image ID和本地不可变Tag的可审计映射。UAT Compose固定`pull_policy: never`；该离线路线不伪造Registry RepoDigest，也不改变常规GHCR发布供应链。
 
+OPS-001M现场迁移完成后，旧Worker在核心启动门禁暴露视觉运行库缺失。OPS-001N不重建或替换其余五个服务，而以[单Worker增量发布](OPS001N_WORKER_INCREMENTAL_RELEASE.md)固定主线修复候选、独立Worker归档和新的不可变Tag。新映射必须逐项证明旧五项内容未变，并在Docker 29/containerd和传统daemon完成exact mixed release；用户接受前不下载Artifact、不上传服务器或改变UAT活动发布。
+
 当前已接受但不可部署的历史基线：
 
 | 服务 | 已确认不可变引用 |
