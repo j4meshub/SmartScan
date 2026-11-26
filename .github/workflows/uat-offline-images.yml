@@ -71,10 +71,32 @@ jobs:
           python tools/smartscan_offline_images.py ci-build-base-worker
       - name: 离线复核全部归档
         run: python tools/smartscan_offline_images.py verify
+      - name: 从发布清单解析Worker归档名
+        id: worker_archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive_name="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("deploy/releases/uat-2026-11-26-worker-fix.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          worker = next(item for item in manifest["images"] if item["service"] == "worker")
+          archive_name = worker["archive_name"]
+          if Path(archive_name).name != archive_name or not archive_name.endswith(".docker.tar"):
+              raise SystemExit("worker_archive_name_invalid")
+          print(archive_name)
+          PY
+          )"
+          echo "name=$archive_name" >> "$GITHUB_OUTPUT"
       - name: 严格扫描修复版Worker全部Critical漏洞
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar
+          input: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
           format: table
           exit-code: "1"
           ignore-unfixed: false
@@ -82,7 +104,7 @@ jobs:
       - name: 扫描修复版Worker可修复High和Critical漏洞
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar
+          input: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
           format: table
           exit-code: "1"
           ignore-unfixed: true
@@ -169,7 +191,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: smartscan-uat-offline-worker
-          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar
+          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
           retention-days: 14
           compression-level: 0
       - name: 上传中文发布映射和审核清单

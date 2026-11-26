@@ -680,6 +680,10 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert '"none",' in controller
     assert "config --format json" in workflow
     assert 'item.get("pull_policy") == "never"' in workflow
+    assert "id: worker_archive" in workflow
+    assert 'worker["archive_name"]' in workflow
+    assert "steps.worker_archive.outputs.name" in workflow
+    assert "smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar" not in workflow
 
 
 def test_controller_accepts_docker_archive_with_registry_evidence(tmp_path: Path) -> None:
