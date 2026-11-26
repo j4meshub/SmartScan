@@ -877,3 +877,11 @@
 - 新证据：主线`ed832ccd`产生的零Critical候选虽通过`cv2`、libGL、GLib和PaddleOCR导入门禁，但在六镜像exact mixed release中，两个CPU Worker均因缺少`libgomp.so.1`退出。该失败发生在真实Worker启动路径，证明仅验证Python导入不足以代表Paddle运行时完整；API未被冒充为核心健康，候选没有提交用户接受。
 - 修复：主线`cb6599bf75da44f5f9b1a0e4e48f866b8db501b1`显式安装`libgomp1`，供应链在无网络、只读根、有界`/tmp`、零capability和`no-new-privileges`约束下显式加载libGL、GLib与libgomp后再导入`cv2`和`paddleocr`。其Worker源digest固定为`sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742`；SBOM、SLSA和两类漏洞门禁已通过。
 - 发布边界：候选仍须用旧PostgreSQL/API/AI Gateway/Web/Ops组成exact mixed release，完成双Worker、真实OCR、18082、离线和AI关闭门禁后才可提交用户接受。该新digest、离线归档和发布映射在接受前不得下载到本机、上传服务器、导入或激活；失败候选和旧Worker继续作为历史证据保留。
+
+## D-116：基础UAT的API先使用单进程启动
+
+- 日期：2026-11-26
+- 状态：实施中；等待exact mixed release复核
+- 证据：新Worker已能在Docker 29/containerd路径保持两个CPU进程运行，但固定旧API镜像以四个Uvicorn子进程启动空UAT时，父进程报告子进程启动失败并退出，控制器没有记录`core_started`。该API镜像的lifespan会执行`ensure_superadmin()`，当前实现是“先查询、再插入”的启动副作用，尚未形成跨进程原子初始化契约；继续以四进程启动会让基础UAT依赖未证明安全的竞态。
+- 决策：不更换已接受API digest，也不把API故障归咎于新Worker。基础HTTP UAT的Compose暂固定一个API进程，仍保留1.5 CPU、2 GiB、512 PID及全部只读根、tmpfs和健康门禁；两个CPU Worker数量不变。后续独立业务工作包须把超级管理员初始化改为显式、幂等且并发安全的数据库操作，再由OPS-005容量测试决定API进程数。
+- 诊断：exact mixed release失败时只读取固定SmartScan服务最近300行日志，筛选错误类行、屏蔽Secret/令牌/数据库URL并最多输出八条去重摘要；不保存原始容器日志。该增强不读取服务器Secret，也不改变生产日志策略。

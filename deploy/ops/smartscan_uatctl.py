@@ -69,7 +69,7 @@ MANIFEST_MEDIA_TYPES = {
     "application/vnd.docker.distribution.manifest.v2+json",
 }
 INSTALLED_ASSET_SHA256 = {
-    "docker-compose.uat.yml": "b8bc7d1208bb58dd353f0934e1fb9e19b0b251aaaeac023fc19edd5aa7075d31",
+    "docker-compose.uat.yml": "5a5e28e0032f810202f129d3231b6b859cd1b734d4754f812c09192a034d480c",
     "shared-8077-smartscan-location.conf": "500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227",
     "smartscan_uat_validators.py": "27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b",
     "uat-2026-11-26-worker-fix.json": "8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003",

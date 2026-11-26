@@ -85,7 +85,9 @@ services:
       - --port
       - "8000"
       - --workers
-      - "4"
+      # 空UAT首次启动会创建唯一超级管理员；当前固定API镜像尚未把该启动副作用
+      # 改造成多进程并发安全操作，因此基础UAT先固定单进程，避免四个子进程竞态。
+      - "1"
     environment:
       SMARTSCAN_ENV: production
       SMARTSCAN_AUTO_MIGRATE: "false"

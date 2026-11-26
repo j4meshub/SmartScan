@@ -61,13 +61,18 @@ def report_core_failure(controller: uatctl.Controller) -> None:
             "health": (state.get("Health") or {}).get("Status"),
         }
         logs = controller.runner.run_result(
-            ["/usr/bin/docker", "logs", "--tail", "60", container_id],
+            ["/usr/bin/docker", "logs", "--tail", "300", container_id],
             timeout_seconds=10,
         )
         combined = f"{logs.stdout}\n{logs.stderr}"
         candidates = [line.strip() for line in combined.splitlines() if error_pattern.search(line)]
         if candidates:
-            evidence["error_summary"] = secret_pattern.sub(r"\1=<redacted>", candidates[-1])[:500]
+            sanitized: list[str] = []
+            for line in candidates:
+                value = secret_pattern.sub(r"\1=<redacted>", line)[:500]
+                if value not in sanitized:
+                    sanitized.append(value)
+            evidence["error_summaries"] = sanitized[-8:]
         print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
 
 

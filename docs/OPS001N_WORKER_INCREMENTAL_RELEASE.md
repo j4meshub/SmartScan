@@ -58,6 +58,7 @@ Docker 29/containerd 和传统独立 daemon 都使用 exact mixed release：旧 
 
 - 完全离线导入与 `pull_policy: never`，不存在 Registry 访问；
 - 数据库已在 `20261022_0024` 时重复迁移只做验证；
+- API在基础UAT固定为单进程，避免当前固定API镜像首次创建唯一超级管理员时发生多进程竞态；该限制由后续业务初始化重构和OPS-005容量验收解除；
 - Worker 只读根、`cap_drop: ALL`、`no-new-privileges`、1.25 CPU、2 GiB、256 PID；
 - 512 MiB `/tmp` 是 PaddleX 唯一缓存位置，OCR 模型只读挂载；
 - `libGL.so.1`、`libgthread-2.0.so.0`、`libgomp.so.1` 和 `cv2` 动态加载；

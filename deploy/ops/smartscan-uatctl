@@ -37,7 +37,7 @@ esac
 [[ -f "$CANDIDATE_RELEASE" && ! -L "$CANDIDATE_RELEASE" && "$($STAT -c '%U:%G:%a' "$CANDIDATE_RELEASE")" == 'root:root:644' ]] || { printf 'status=failed\nreason=candidate_release_invalid\n' >&2; exit 1; }
 
 # 本摘要固定到同一审查提交中的辅助工具；任何内容漂移都拒绝运行。
-readonly HELPER_SHA256="30ffb74e2f2baf209f8a0dbb69a8e6bc9aea6aa2b2ed67bb05efe81d66444638"
+readonly HELPER_SHA256="9edb1f9af6bbcb4a441c3cf570ade20dae8f0079ca98b1b3c4d1454fb7589968"
 readonly VALIDATORS_SHA256="27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b"
 readonly CANDIDATE_RELEASE_SHA256="8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003"
 [[ "$HELPER_SHA256" != REPLACE_* ]] || { printf 'status=failed\nreason=helper_digest_not_pinned\n' >&2; exit 1; }

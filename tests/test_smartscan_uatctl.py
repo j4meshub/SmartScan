@@ -1126,6 +1126,14 @@ def test_uat_compose_scopes_bounded_storage_override_to_migrate_only() -> None:
     assert "SMARTSCAN_STORAGE_ROOT: /tmp/smartscan-data" not in text.split("\n  api:\n", 1)[1]
 
 
+def test_uat_api_uses_single_bootstrap_process_until_startup_is_concurrency_safe() -> None:
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "deploy/compose/docker-compose.uat.yml").read_text(encoding="utf-8")
+    api = text.split("\n  api:\n", 1)[1].split("\n  worker-cpu-1:\n", 1)[0]
+    assert "--workers" in api
+    assert '\n      - "1"\n' in api
+
+
 def test_core_verification_requires_two_workers_and_keeps_ai_disabled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
