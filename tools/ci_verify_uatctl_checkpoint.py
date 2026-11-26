@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""在隔离 Linux Docker daemon 中验证OPS-001M迁移与核心启动状态机。"""
+"""在隔离Linux Docker daemon中验证OPS-001N单Worker增量发布状态机。"""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import shutil
+import time
+import urllib.request
 from pathlib import Path
 
 from deploy.ops import smartscan_uat_config as config
@@ -15,10 +19,14 @@ from deploy.ops import smartscan_uatctl as uatctl
 
 GIB = 1024**3
 ROOT = Path(os.environ["GITHUB_WORKSPACE"])
-ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
+CANDIDATE_ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix"
+BASE_ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
+CI_VARIANT = "containerd29" if os.environ.get("SMARTSCAN_DOCKER29_CONTAINERD") == "1" else "legacy"
+ARCHIVES = Path(os.environ["RUNNER_TEMP"]) / f"smartscan-uat-incremental-upload-{CI_VARIANT}"
 CONFIG = Path("/etc/smartscan/uat")
 DATA = Path("/mnt/data/smartscan/uat")
 OCR_LAYER = ROOT / ".smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz"
+CONTROLLER_ASSETS = Path(os.environ["RUNNER_TEMP"]) / "smartscan-offline-docker/controller-assets"
 
 
 def report_core_failure(controller: uatctl.Controller) -> None:
@@ -54,19 +62,157 @@ def report_core_failure(controller: uatctl.Controller) -> None:
             "health": (state.get("Health") or {}).get("Status"),
         }
         logs = controller.runner.run_result(
-            ["/usr/bin/docker", "logs", "--tail", "60", container_id],
+            ["/usr/bin/docker", "logs", "--tail", "300", container_id],
             timeout_seconds=10,
         )
         combined = f"{logs.stdout}\n{logs.stderr}"
         candidates = [line.strip() for line in combined.splitlines() if error_pattern.search(line)]
         if candidates:
-            evidence["error_summary"] = secret_pattern.sub(r"\1=<redacted>", candidates[-1])[:500]
+            sanitized: list[str] = []
+            for line in candidates:
+                value = secret_pattern.sub(r"\1=<redacted>", line)[:500]
+                if value not in sanitized:
+                    sanitized.append(value)
+            evidence["error_summaries"] = sanitized[-8:]
         print(json.dumps(evidence, ensure_ascii=False, sort_keys=True))
 
 
 def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
     path.chmod(0o600)
+
+
+def prepare_incremental_upload(deploy_uid: int) -> None:
+    """构造与服务器一致的旧发布平铺目录和新候选子目录。"""
+
+    assert not ARCHIVES.exists()
+    ARCHIVES.mkdir(mode=0o700)
+    os.chown(ARCHIVES, deploy_uid, deploy_uid)
+    base = json.loads((BASE_ARCHIVES / "release-manifest.json").read_text(encoding="utf-8"))
+    candidate = json.loads(
+        (CANDIDATE_ARCHIVES / "release-manifest.json").read_text(encoding="utf-8")
+    )
+    for name in ("release-manifest.json", "release-map.json"):
+        shutil.copyfile(BASE_ARCHIVES / name, ARCHIVES / name)
+    candidate_root = ARCHIVES / candidate["release_id"]
+    candidate_root.mkdir(mode=0o700)
+    os.chown(candidate_root, deploy_uid, deploy_uid)
+    for name in ("release-manifest.json", "release-map.json"):
+        shutil.copyfile(CANDIDATE_ARCHIVES / name, candidate_root / name)
+    base_images = {item["service"]: item for item in base["images"]}
+    candidate_images = {item["service"]: item for item in candidate["images"]}
+    for service, item in base_images.items():
+        source_root = BASE_ARCHIVES if service == "worker" else CANDIDATE_ARCHIVES
+        shutil.copyfile(source_root / item["archive_name"], ARCHIVES / item["archive_name"])
+    worker = candidate_images["worker"]
+    shutil.copyfile(
+        CANDIDATE_ARCHIVES / worker["archive_name"],
+        candidate_root / worker["archive_name"],
+    )
+    for path in ARCHIVES.rglob("*"):
+        if path.is_file():
+            os.chown(path, deploy_uid, deploy_uid)
+            path.chmod(0o600)
+
+
+def prepare_root_owned_candidate() -> Path:
+    """模拟服务器上由root安装的固定候选清单，不放宽控制器所有权门禁。"""
+
+    CONTROLLER_ASSETS.mkdir(mode=0o700, parents=True)
+    candidate = CONTROLLER_ASSETS / "uat-2026-11-26-worker-fix.json"
+    shutil.copyfile(ROOT / "deploy/releases/uat-2026-11-26-worker-fix.json", candidate)
+    os.chown(CONTROLLER_ASSETS, 0, 0)
+    os.chown(candidate, 0, 0)
+    candidate.chmod(0o600)
+    info = candidate.stat()
+    assert info.st_uid == 0 and info.st_gid == 0 and info.st_nlink == 1
+    return candidate
+
+
+def verify_real_worker_task(password_path: Path, sample: Path, *, origin: str) -> None:
+    """通过内部HTTP闭环提交真实图片，并确认由CPU Worker生成非空OCR。"""
+
+    base = f"{origin}/api"
+    device_headers = {
+        "X-Device-ID": "ci:ops-001n",
+        "X-Device-Name": "OPS-001N-CI",
+        "X-Device-Platform": "ci",
+    }
+
+    def request_json(
+        method: str,
+        path: str,
+        *,
+        payload: object | None = None,
+        raw: bytes | None = None,
+        token: str | None = None,
+        extra: dict[str, str] | None = None,
+    ) -> tuple[int, object]:
+        headers = dict(device_headers)
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if payload is not None:
+            raw = json.dumps(payload, separators=(",", ":")).encode()
+            headers["Content-Type"] = "application/json"
+        if extra:
+            headers.update(extra)
+        req = urllib.request.Request(base + path, data=raw, method=method, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as response:
+            body = response.read()
+            return response.status, json.loads(body) if body else {}
+
+    password = password_path.read_text(encoding="utf-8").strip()
+    status, login = request_json(
+        "POST", "/v1/auth/login", payload={"username": "admin", "password": password}
+    )
+    assert status == 200 and isinstance(login, dict)
+    token = str(login["access_token"])
+    status, project = request_json(
+        "POST",
+        "/v1/projects",
+        payload={"title": "OPS-001N真实OCR", "mode": "document", "reading_order": "ltr"},
+        token=token,
+    )
+    assert status == 201 and isinstance(project, dict)
+    image = sample.read_bytes()
+    digest = hashlib.sha256(image).hexdigest()
+    status, upload = request_json(
+        "POST",
+        "/v1/uploads",
+        payload={
+            "project_id": project["id"],
+            "file_name": sample.name,
+            "mime_type": "image/png",
+            "size_bytes": len(image),
+            "sha256": digest,
+            "idempotency_key": "ops001n-real-ocr-task",
+        },
+        token=token,
+    )
+    assert status == 201 and isinstance(upload, dict)
+    chunk_size = int(upload["chunk_size"])
+    for index, offset in enumerate(range(0, len(image), chunk_size)):
+        chunk = image[offset : offset + chunk_size]
+        status, _ = request_json(
+            "PUT",
+            f"/v1/uploads/{upload['id']}/chunks/{index}",
+            raw=chunk,
+            token=token,
+            extra={"X-Chunk-SHA256": hashlib.sha256(chunk).hexdigest()},
+        )
+        assert status == 200
+    status, page = request_json("POST", f"/v1/uploads/{upload['id']}/complete", token=token)
+    assert status == 202 and isinstance(page, dict)
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        status, current = request_json("GET", f"/v1/pages/{page['id']}", token=token)
+        assert status == 200 and isinstance(current, dict)
+        if current.get("ocr_status") == "ready":
+            assert str(current.get("ocr_text", "")).strip()
+            return
+        assert current.get("ocr_status") not in {"failed", "disabled"}
+        time.sleep(2)
+    raise AssertionError("真实OCR任务未在300秒内完成")
 
 
 def prepare_model(root: Path) -> None:
@@ -184,14 +330,18 @@ def prepare_config(deploy_uid: int) -> tuple[config.Paths, validators.NativeVali
 
 
 def main() -> None:
+    source_root = CANDIDATE_ARCHIVES.stat()
+    assert source_root.st_uid != 0, "CI发布归档应由普通Runner用户生成"
+    deploy_uid = source_root.st_uid
+    prepare_incremental_upload(deploy_uid)
     archive_root = ARCHIVES.stat()
     assert archive_root.st_uid != 0, "CI发布归档应模拟普通部署用户上传"
-    deploy_uid = archive_root.st_uid
     ARCHIVES.chmod(0o700)
-    for path in ARCHIVES.iterdir():
+    for path in ARCHIVES.rglob("*"):
         if path.is_file():
             assert path.stat().st_uid == deploy_uid, f"归档所有者不一致：{path.name}"
             path.chmod(0o600)
+    candidate_release = prepare_root_owned_candidate()
     _, native = prepare_config(deploy_uid)
     paths = uatctl.Paths(
         config_root=CONFIG,
@@ -210,6 +360,11 @@ def main() -> None:
         compose_file=ROOT / "deploy/compose/docker-compose.uat.yml",
         nginx_template=ROOT / "deploy/nginx/shared-8077-smartscan-location.conf.template",
         validator_module=ROOT / "deploy/ops/smartscan_uat_validators.py",
+        candidate_release=candidate_release,
+        previous_release=CONFIG / "previous-release-manifest.json",
+        previous_map=CONFIG / "previous-release-map.json",
+        previous_local_images=CONFIG / "previous-local-images.env",
+        previous_identities=CONFIG / "previous-image-identities.json",
     )
     controller = uatctl.Controller(
         paths,
@@ -307,59 +462,35 @@ def main() -> None:
     repeated = controller.run_migrations()
     assert repeated["already_complete"] is True
     assert controller._compose("ps", "-a", "-q", "migrate") == migrate_id
+    base_release = json.loads(paths.installed_release.read_text(encoding="utf-8"))
+    base_worker = next(item for item in base_release["images"] if item["service"] == "worker")
+    accepted = controller.accept_release()
+    assert accepted["step"] == "incremental_release_accepted"
+    assert json.loads(paths.installed_release.read_text(encoding="utf-8")) == base_release
+    assert base_worker["local_tag"] in paths.local_images_env.read_text(encoding="utf-8")
 
-    if os.environ.get("SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER") == "1":
-        release, _ = controller._fixed_release()
-        worker = next(item for item in release["images"] if item["service"] == "worker")
-        probe = controller.runner.run_result(
-            [
-                "/usr/bin/docker",
-                "run",
-                "--rm",
-                "--network",
-                "none",
-                "--read-only",
-                "--tmpfs",
-                "/tmp:rw,noexec,nosuid,nodev,size=32m",
-                "--cap-drop",
-                "ALL",
-                "--security-opt",
-                "no-new-privileges",
-                worker["local_tag"],
-                "python",
-                "-c",
-                "import cv2",
-            ],
-            timeout_seconds=60,
-        )
-        assert probe.returncode != 0
-        assert "libGL.so.1" in f"{probe.stdout}\n{probe.stderr}"
-        blocked = controller.status()
-        assert blocked["next_required"] == "core_started"
-        assert "core_started" not in blocked["completed"]
-        print(
-            json.dumps(
-                {
-                    "accepted_worker_runtime": "blocked_missing_libGL.so.1",
-                    "checkpoint": "migration-complete",
-                    "database": "healthy",
-                    "images": 6,
-                    "migration_target": "20261022_0024",
-                    "next_required": "new-worker-release-acceptance",
-                    "registry_access": False,
-                    "status": "passed_with_external_gate",
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-        )
-        return
+    original_urlopen = uatctl.urllib.request.urlopen
 
+    def isolated_daemon_internal_urlopen(url, *args, **kwargs):
+        """隔离daemon禁用iptables时，通过固定nginx容器地址验证同一HTTP入口。"""
+
+        if url != "http://127.0.0.1:18082/":
+            return original_urlopen(url, *args, **kwargs)
+        nginx_id = controller._compose("ps", "-q", "nginx").strip()
+        assert nginx_id
+        runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", nginx_id]))[0]
+        address = runtime["NetworkSettings"]["Networks"]["smartscan-uat-edge"]["IPAddress"]
+        assert address.startswith("172.30.11.")
+        return original_urlopen(f"http://{address}/", *args, **kwargs)
+
+    uatctl.urllib.request.urlopen = isolated_daemon_internal_urlopen
     try:
         resumed = controller.resume_basic_uat()
     except uatctl.ControllerError:
         report_core_failure(controller)
         raise
+    finally:
+        uatctl.urllib.request.urlopen = original_urlopen
     assert resumed == {
         "status": "passed",
         "next_required": "stage-nginx",
@@ -369,8 +500,57 @@ def main() -> None:
     assert final["next_required"] == "nginx_staged"
     assert {"core_started", "core_verified"}.issubset(final["completed"])
     assert not paths.active_nginx.exists()
+    release, _ = controller._fixed_release()
+    worker = next(item for item in release["images"] if item["service"] == "worker")
+    assert worker["source"].endswith(
+        "@sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742"
+    )
+    assert worker["local_tag"] != base_worker["local_tag"]
+    assert controller.runner.run(
+        ["/usr/bin/docker", "image", "inspect", "--format", "{{.Id}}", base_worker["local_tag"]]
+    )
     running = set(controller._compose("ps", "--status", "running", "--services").splitlines())
     assert running == {"postgres", "api", "worker-cpu-1", "worker-cpu-2", "nginx"}
+    nginx_id = controller._compose("ps", "-q", "nginx").strip()
+    nginx_runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", nginx_id]))[0]
+    assert nginx_runtime["HostConfig"]["PortBindings"]["80/tcp"] == [
+        {"HostIp": "127.0.0.1", "HostPort": "18082"}
+    ]
+    nginx_address = nginx_runtime["NetworkSettings"]["Networks"]["smartscan-uat-edge"]["IPAddress"]
+    assert nginx_address.startswith("172.30.11.")
+    worker_id = controller._compose("ps", "-q", "worker-cpu-1").strip()
+    worker_runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", worker_id]))[0]
+    assert worker_runtime["HostConfig"]["ReadonlyRootfs"] is True
+    assert worker_runtime["HostConfig"]["CapDrop"] == ["ALL"]
+    assert any(
+        item.startswith("no-new-privileges") for item in worker_runtime["HostConfig"]["SecurityOpt"]
+    )
+    assert worker_runtime["HostConfig"]["NanoCpus"] == 1_250_000_000
+    assert worker_runtime["HostConfig"]["Memory"] == 2 * GIB
+    assert worker_runtime["HostConfig"]["PidsLimit"] == 256
+    assert set(worker_runtime["HostConfig"]["Tmpfs"]) == {"/tmp"}
+    assert set(worker_runtime["NetworkSettings"]["Networks"]) == {"smartscan-uat-data"}
+    assert any(item == "HOME=/tmp/smartscan-home" for item in worker_runtime["Config"]["Env"])
+    model_mount = next(
+        item
+        for item in worker_runtime["Mounts"]
+        if item["Destination"] == "/opt/smartscan/models/ocr"
+    )
+    assert model_mount["RW"] is False
+    library_check = controller._compose(
+        "exec",
+        "-T",
+        "worker-cpu-1",
+        "python",
+        "-c",
+        (
+            "import ctypes,cv2; "
+            "ctypes.CDLL('libGL.so.1'); ctypes.CDLL('libgthread-2.0.so.0'); "
+            "ctypes.CDLL('libgomp.so.1'); "
+            "print('worker_libraries=passed')"
+        ),
+    )
+    assert library_check == "worker_libraries=passed"
     worker_heartbeats = "0"
     for _ in range(30):
         worker_heartbeats = controller._compose(
@@ -389,6 +569,14 @@ def main() -> None:
             break
         __import__("time").sleep(2)
     assert int(worker_heartbeats) >= 2
+    samples = Path(os.environ["SMARTSCAN_REAL_OCR_SAMPLES"])
+    sample = next(path for path in sorted(samples.iterdir()) if path.name.startswith("zh-cn"))
+    http_origin = f"http://{nginx_address}"
+    verify_real_worker_task(
+        paths.config_root / "bootstrap-admin-password",
+        sample,
+        origin=http_origin,
+    )
     print(
         json.dumps(
             {

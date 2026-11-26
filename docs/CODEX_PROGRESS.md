@@ -8,19 +8,26 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001N` 修复版Worker制品与增量UAT发布更新 |
-| 工作包状态 | 进行中；首个运行库修复候选因严格Critical门禁被拒绝，正在修复Worker基础制品供应链 |
-| 当前分支 | `codex/ops-001n-worker-security-base` |
+| 工作包状态 | 等待人工验收；修复版Worker、单服务增量映射和exact mixed release已通过，尚未由用户接受、下载、上传或激活 |
+| 当前分支 | `codex/ops-001n-worker-incremental-release` |
 | 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；状态停在`next_required=core_started`，旧Worker禁止启动，API/Worker/Web/AI/Nginx均未启动 |
-| 工作包提交 | 待提交 |
-| PR | 待创建；增量控制器PR [#115](https://github.com/j4meshub/SmartScan/pull/115)等待安全候选 |
-| 下一工作包 | 安全基础PR合并并由main发布新Worker后，回到#115固定新digest、归档和六镜像增量映射 |
+| 工作包提交 | `903a7d9`（PR #115技术验证头；文档定版提交待合并） |
+| PR | [#115](https://github.com/j4meshub/SmartScan/pull/115) |
+| 下一工作包 | 用户明确接受新Worker、归档和候选清单后，准备控制器资产升级并自动下载、校验、上传、导入和原子激活；接受前不下载或修改服务器 |
 
 ## 当前工作包进展
 
-- OPS-001M服务器迁移已成功达到`20261022_0024`，`public.ai_media_grants`和PostgreSQL健康均通过；现场下一门禁为`core_started`，本工作包不重跑迁移。
-- 主线`13022cfa`曾产生包含libGL/GLib修复的Worker候选`sha256:4e1e7532…`。PR #115新增的严格全Critical扫描发现该制品仍含Debian `libxml2`的`CVE-2026-6653`且无可用修复版本，因此候选保持拒绝，不提交用户接受，也不下载、上传或导入UAT。
-- 同轮容器供应链发现API、AI Gateway和Ops的BuildKit缓存复用了含可修复`libzstd1` High漏洞的旧apt层。供应链修正为安全验证和main发布均禁用旧构建缓存；Worker只保留OpenCV实际需要的最小GLVND共享库及许可证证据，再清除把`libxml2`带入运行镜像的Mesa/LLVM包链，并在无网络视觉运行测试后执行全Critical扫描。该修正必须先在独立最小PR通过并由main产生新固定digest。
-- 增量控制器与离线工具PR #115保留但不合并无效候选；安全基础合并后再把新Worker的源digest、平台manifest、Config、Layer、SBOM、SLSA、漏洞结果、归档和运行时身份固定到同一PR。该拆分是安全门禁的正常失败关闭，不是自动替换候选或降低门禁。
+- OPS-001M控制器与Compose人工升级后，用户单独授权的`run-migrations`已成功完成：空SmartScan UAT数据库完整达到`20261022_0024`，`alembic_version`、`public.ai_media_grants`和PostgreSQL健康均通过，没有生产数据或唯一副本数据。现场状态已记录`migrations_completed`，下一门禁为`core_started`；本工作包不重跑迁移。
+- 主线`13022cfa`产生的首个运行库修复Worker `sha256:4e1e7532…`被PR #115新增的严格全Critical门禁检出Debian `libxml2`的`CVE-2026-6653`，因此该digest及原候选清单SHA-256只保留为拒绝证据，不得提交用户接受或进入UAT。
+- PR #116把Worker收敛为最小GLVND运行库并清除Mesa/LLVM/`libxml2`，主线`ed832ccd`发布的零Critical候选随后在exact mixed release中暴露`libgomp.so.1`缺失，两个CPU Worker均失败退出，因此同样没有提交用户接受。该失败证明供应链导入检查必须覆盖OpenMP动态库和真实服务启动。
+- PR #117显式安装`libgomp1`，并在无网络、只读根、有界`/tmp`、零capability和`no-new-privileges`约束下加载libGL、GLib与libgomp后再导入`cv2`和`paddleocr`。中文squash合并主线`cb6599bf75da44f5f9b1a0e4e48f866b8db501b1`，容器供应链运行`45750089308`通过并发布Worker源digest`sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742`，SBOM、SLSA及两类漏洞门禁齐备。
+- 新Worker的`linux/amd64`manifest为`sha256:4ff5d0ffbfc3b4b0728b673043a511035ea682bd70e149ad023470620305b1d3`，Config为`sha256:59616bcf09ea5d7b7538c521471ad393847a320781e1d18892bf92bf0ba8130f`，Config.User为`smartscan`，完整内容链包含十二个压缩Layer及十二个RootFS diff ID。候选清单LF原始字节SHA-256为`8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003`；新Worker独立归档大小为`573480960`字节、SHA-256为`33bc7ed9ba28811f8abe12ff4edad7f4634834df8a452a8b56bd9325c0d8b2e7`。
+- PR #115代码头`9758e47`的首轮Docker 29/containerd exact mixed release已证明两个新CPU Worker保持运行，`libgomp`缺失不再出现；但固定旧API镜像以四个Uvicorn进程启动空UAT时，子进程启动失败，状态机按预期未写入`core_started`。固定API lifespan仍包含“查询后创建唯一超级管理员”的启动副作用，尚无多进程原子契约；基础UAT因此先固定单API进程，镜像digest保持不变，两个CPU Worker数量不变。失败诊断扩展为固定服务、最多300行、Secret脱敏且不保存原始日志，下一轮exact mixed release必须复核该配置。
+- 技术验证头`903a7d9e20651a17becac4f632a24982b9b0306f`的工作流运行`45759198125`、作业`139704933686`已同时通过Docker 29/containerd与传统隔离daemon。两条路径都完成六镜像exact mixed release、`20261022_0024`幂等迁移验证、单API、两个CPU Worker、内部Web、真实OCR非空结果、AI关闭和无Registry访问；固定端口绑定仍为`127.0.0.1:18082`，隔离CI通过固定edge地址执行HTTP闭环，生产控制器的真实回环门禁没有放宽。
+- 增量发布清单只允许Worker变化；PostgreSQL、API、AI Gateway、Web和Ops的源digest、本地不可变Tag及既有归档大小/SHA-256逐项锁定不变。六归档exact mixed release总大小为`991539200`字节，当前候选映射已经具备提交用户接受的证据，但用户尚未接受，不能下载、上传或激活。
+- 通用离线工具只为变化的Worker下载、校验和上传Artifact；CI额外重建旧Worker以真实模拟“旧六镜像完成迁移→接受单Worker候选→只导入新Worker→原子激活→启动核心”的现场断点。新Worker归档和发布映射在用户接受前不会下载到本机、上传服务器或导入UAT。
+- 统一控制器保留旧发布、旧Worker Tag、旧映射、旧`local-images.env`和旧身份文件。只有新归档、内容链、Docker 29/containerd运行时身份及`10001:10001`全部通过，且data目录所有权仍兼容时才切换活动发布；失败恢复旧活动文件且不重置存储、模型、网络、数据库、迁移和已完成状态。核心已启动时拒绝增量接受。
+- exact mixed release CI固定使用旧PostgreSQL/API/AI Gateway/Web/Ops与新Worker，要求完全离线、`pull_policy: never`、已在0024的数据库不重复迁移、两CPU Worker、真实OCR上传任务、18082健康和AI Profile关闭；共享Nginx不参与。仓库开发期间没有连接或修改`smartscan-server`。
 
 - OPS-001L已通过PR #113合并并完成服务器人工升级。统一控制器真实续接完成六镜像离线导入、Docker 29/containerd结构化身份、无网络UID/GID探测、`image-identities.json`、目录所有权、PostgreSQL启动和健康验证，随后在不可逆迁移门禁停止。
 - 用户明确接受新建空UAT无备份及迁移失败保留现场的风险后，首次且唯一一次`run-migrations`失败。诊断确认失败发生在Python模块导入阶段：`get_settings()`尝试创建storage root并命中只读根；迁移尚未连接数据库，`public`表为0、`alembic_version`不存在、没有任何revision提交，PostgreSQL保持健康，API、Worker、Web和Nginx均未启动。
@@ -28,7 +35,7 @@
 - Docker 29/containerd专项CI扩展为：真实OCR模型、迁移前等待门禁、空库完整升级至`20261022_0024`、schema/0024对象验证、重复调用幂等、第二次续接启动API/两个CPU Worker/Web、18082健康，并在共享Nginx激活前停止。仓库开发期间不连接或修改`smartscan-server`。
 - PR #114首次Docker 29真实运行已证明迁移容器保持只读根、仅使用32 MiB `/tmp`、没有业务文件挂载，空库完整达到`20261022_0024`且PostgreSQL健康；第二次续接中API和内部Web健康，但两个CPU Worker均以`ImportError: libGL.so.1`退出。该结果属于已接受Worker镜像的运行依赖缺失，不是迁移或服务器现场故障；旧候选保持未通过核心启动门禁，禁止通过宿主机库挂载或放宽健康检查绕过。
 - Worker镜像构建现显式安装`libgl1`和提供`libgthread-2.0.so.0`的`libglib2.0-0t64`运行库；PaddleX的`HOME`只定向到Worker现有有界`/tmp`。供应链CI在无网络、只读根、32 MiB `/tmp`、零capability条件下实际导入`cv2`和`paddleocr`。主线产生新digest前，CI只把旧候选验证到迁移完成并固定复现运行库阻塞；不得把仓库修复冒充为当前UAT候选已可启动。
-- 本地验证已通过：Ruff检查与格式检查、全量Python `659 passed, 37 skipped`（覆盖率87.74%）、独立空SQLite完整升级和迁移漂移检查；Windows本机没有Docker，未把本机条件缺失记录为通过。
+- 本地验证已通过：Ruff检查与格式检查、全量Python `666 passed, 37 skipped`（覆盖率87.74%）；本机迁移漂移命令因现有本地SQLite未升级到head而失败，没有冒充为通过。Windows本机没有Docker；迁移和Docker门禁由干净GitHub Linux CI完整通过。
 - PR #114最终技术验证头`43fb16e`的四组流水线全部通过：CI #813、UAT六镜像离线交付 #33、容器镜像供应链 #155、可审计PostgreSQL #110。Docker 29/containerd与传统daemon均真实完成空库迁移到`20261022_0024`并验证最新对象、PostgreSQL健康和既有Worker候选阻塞；新Worker构建在无网络、只读根、有界`/tmp`、零capability下导入`cv2`与`paddleocr`，SBOM和漏洞门禁同步通过。由于新Worker尚未形成并获用户接受固定digest，当前服务器仍不得启动核心服务。
 
 - OPS-001K三项资产已由共同使用人人工升级并核验；原生模型、配置和发布接受随后全部通过。现场真实状态为`completed=[preflight,storage_verified,models_verified,config_verified,release_accepted]`、`next_required=images_imported`。

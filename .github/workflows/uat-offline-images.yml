@@ -6,6 +6,7 @@ on:
       - ".github/workflows/uat-offline-images.yml"
       - ".gitignore"
       - "deploy/releases/**"
+      - "deploy/ocr-models/real-cpu-samples.json"
       - "deploy/compose/docker-compose.uat.yml"
       - "deploy/ops/smartscan-uatctl"
       - "deploy/ops/smartscan_uatctl.py"
@@ -65,13 +66,67 @@ jobs:
         with:
           python-version: "3.11"
       - name: 生成六个独立Docker归档
-        run: python tools/smartscan_offline_images.py ci-build
+        run: |
+          python tools/smartscan_offline_images.py ci-build
+          python tools/smartscan_offline_images.py ci-build-base-worker
       - name: 离线复核全部归档
         run: python tools/smartscan_offline_images.py verify
+      - name: 从发布清单解析Worker归档名
+        id: worker_archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive_name="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("deploy/releases/uat-2026-11-26-worker-fix.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          worker = next(item for item in manifest["images"] if item["service"] == "worker")
+          archive_name = worker["archive_name"]
+          if Path(archive_name).name != archive_name or not archive_name.endswith(".docker.tar"):
+              raise SystemExit("worker_archive_name_invalid")
+          print(archive_name)
+          PY
+          )"
+          echo "name=$archive_name" >> "$GITHUB_OUTPUT"
+      - name: 严格扫描修复版Worker全部Critical漏洞
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          input: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: false
+          severity: CRITICAL
+      - name: 扫描修复版Worker可修复High和Critical漏洞
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          input: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
       - name: 下载并验证固定真实OCR模型Layer
         run: |
           python tools/ocr_offline_layer.py download
           python tools/ocr_offline_layer.py verify
+      - name: 下载固定真实OCR样本
+        run: |
+          mkdir -p /tmp/smartscan-ocr/samples
+          python - <<'PY'
+          import hashlib,json,pathlib,urllib.request
+          manifest=json.loads(pathlib.Path('deploy/ocr-models/real-cpu-samples.json').read_text())
+          root=pathlib.Path('/tmp/smartscan-ocr/samples')
+          for sample in manifest['samples']:
+              path=root/f"{sample['id']}{pathlib.Path(sample['url']).suffix}"
+              with urllib.request.urlopen(sample['url'], timeout=60) as response:
+                  data=response.read()
+              assert len(data)==sample['size'] and hashlib.sha256(data).hexdigest()==sample['sha256']
+              path.write_bytes(data)
+          PY
       - name: 安装固定Docker 29.0.2
         uses: docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5 # v5.6.0
         with:
@@ -91,11 +146,11 @@ jobs:
       - name: 使用Docker 29 containerd image store完成相同离线门禁
         env:
           SMARTSCAN_DOCKER29_CONTAINERD: "1"
-          SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER: "1"
+          SMARTSCAN_REAL_OCR_SAMPLES: /tmp/smartscan-ocr/samples
         run: bash tools/ci_verify_uat_offline_docker.sh
-      - name: 使用独立无网络传统Docker daemon验证迁移与既知Worker候选阻塞
+      - name: 使用独立无网络传统Docker daemon验证完整混合发布
         env:
-          SMARTSCAN_EXPECT_ACCEPTED_WORKER_BLOCKER: "1"
+          SMARTSCAN_REAL_OCR_SAMPLES: /tmp/smartscan-ocr/samples
         run: bash tools/ci_verify_uat_offline_docker.sh
       - name: 验证Compose完全禁止拉取
         run: |
@@ -126,57 +181,17 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          value=json.loads(Path('.smartscan-offline-transfer/images/smartscan-uat-2026-11-24/release-map.json').read_text())
+          value=json.loads(Path('.smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/release-map.json').read_text())
           for image in value['images']:
               print(f"{image['service']}：{image['archive_size']} 字节，sha256:{image['archive_sha256']}")
           print(f"合计：{sum(item['archive_size'] for item in value['images'])} 字节")
           PY
-      - name: 上传PostgreSQL独立归档
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: smartscan-uat-offline-postgres
-          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-24/smartscan-postgres-94758173bbe1-linux-amd64.docker.tar
-          retention-days: 14
-          compression-level: 0
-      - name: 上传API独立归档
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: smartscan-uat-offline-api
-          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-24/smartscan-api-80aea0a27279-linux-amd64.docker.tar
-          retention-days: 14
-          compression-level: 0
       - name: 上传Worker独立归档
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: smartscan-uat-offline-worker
-          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-24/smartscan-worker-f1cb15e434e9-linux-amd64.docker.tar
-          retention-days: 14
-          compression-level: 0
-      - name: 上传AI Gateway独立归档
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: smartscan-uat-offline-ai-gateway
-          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-24/smartscan-ai-gateway-1813ada8bda2-linux-amd64.docker.tar
-          retention-days: 14
-          compression-level: 0
-      - name: 上传Web独立归档
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: smartscan-uat-offline-web
-          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-24/smartscan-web-3d701a4bcaf2-linux-amd64.docker.tar
-          retention-days: 14
-          compression-level: 0
-      - name: 上传Ops独立归档
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: smartscan-uat-offline-ops
-          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-24/smartscan-ops-be6c50fbdbc9-linux-amd64.docker.tar
+          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
           retention-days: 14
           compression-level: 0
       - name: 上传中文发布映射和审核清单
@@ -185,8 +200,8 @@ jobs:
         with:
           name: smartscan-uat-offline-release-map
           path: |
-            .smartscan-offline-transfer/images/smartscan-uat-2026-11-24/release-map.json
-            .smartscan-offline-transfer/images/smartscan-uat-2026-11-24/release-manifest.json
+            .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/release-map.json
+            .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/release-manifest.json
           retention-days: 14
       - name: 清理Runner临时归档
         if: always()

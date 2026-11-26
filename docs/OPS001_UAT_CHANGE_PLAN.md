@@ -120,8 +120,9 @@ location ^~ /smartscan/ {
 10. OPS-001I按审核清单生成六个独立Docker image archive，保存源digest到平台manifest/config/原始layer/归档SHA/image ID/本地不可变Tag的完整映射，并由传统Docker daemon完全断网验证导入。用户接受映射、一次性安装统一控制器并上传固定归档后，`resume-basic-uat`完成导入、受控UID/GID探测、身份记录、所有权和PostgreSQL健康；失败即停且不清理。
 11. 统一控制器已人工安装并经OPS-001J升级，现场`preflight`和`storage_verified`成功；旧OCR执行器验证成功后，控制器因stdout字符串解析误判而停止，未导入任何镜像。OPS-001K保持旧loop/OCR/部署准备执行器及sudoers不变，正常状态机改用内聚结构化只读验证。升级不得重置状态文件或重复创建既有对象。
 12. OPS-001L升级后，六镜像、身份文件、所有权和PostgreSQL健康均已完成。首次迁移在连接数据库前因`get_settings()`导入阶段创建storage root命中只读根而失败，空库无表、无`alembic_version`且无部分revision。
-13. OPS-001M保持只读根，只给固定`migrate`服务现有32 MiB `/tmp`提供`/tmp/smartscan-data`；不挂载业务data。Docker 29真实CI已完成空库迁移到`20261022_0024`，但当前接受的Worker候选缺少`libGL.so.1`。必须先取得并接受修复后的Worker固定digest和更新发布映射，完整离线状态机通过后，才可人工升级控制器并重新授权服务器迁移与核心启动。
-14. 最后分别授权Nginx暂存与激活、测试和reload，经8077基础UAT并观察共租户。
+13. OPS-001M保持只读根，只给固定`migrate`服务现有32 MiB `/tmp`提供`/tmp/smartscan-data`；不挂载业务data。现场空库已完成迁移到`20261022_0024`并保持PostgreSQL健康，迁移无需重跑。
+14. OPS-001N固定主线修复版Worker，只改变六镜像映射中的Worker。用户接受新digest、归档和映射后，统一控制器从`core_started`断点验证并原子激活新Worker，保留旧发布为停止状态下的回滚证据；其他五镜像、数据库、迁移、网络、模型和data所有权不重置。
+15. 最后分别授权Nginx暂存与激活、测试和reload，经8077基础UAT并观察共租户。
 
 OPS-001A/OPS-001B只解决loop存储阶段。共同使用人人工升级执行器和sudoers后，AI仍只能运行以下五条命令：
 

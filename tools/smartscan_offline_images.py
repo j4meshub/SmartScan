@@ -28,7 +28,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-24.json"
+RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-26-worker-fix.json"
+BASE_RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-24.json"
 DOWNLOAD_ROOT = ROOT / ".smartscan-offline-transfer" / "images"
 WORKFLOW_FILE = "uat-offline-images.yml"
 GITHUB_REPOSITORY = "j4meshub/SmartScan"
@@ -57,6 +58,8 @@ REDIRECT_SUFFIXES = (
     ".blob.core.windows.net",
     ".actions.githubusercontent.com",
 )
+BASE_WORKER_ARCHIVE_SIZE = 499_025_920
+BASE_WORKER_ARCHIVE_SHA256 = "4f71e50cd25b0d40cc201b87cef6859c746fe9c7f490832859c553c7dd7b99db"
 
 
 class OfflineImageError(RuntimeError):
@@ -84,6 +87,10 @@ class ReleaseSpec:
     accepted_by: str
     images: tuple[ImageSpec, ...]
     raw_sha256: str
+    base_release_id: str | None
+    base_release_manifest_sha256: str | None
+    changed_services: tuple[str, ...]
+    unchanged_archives: dict[str, tuple[int, str]]
 
 
 def _require(condition: bool, reason: str) -> None:
@@ -120,7 +127,7 @@ def _safe_json_list(raw: bytes, reason: str) -> list[dict[str, Any]]:
 def load_release(path: Path = RELEASE_MANIFEST) -> ReleaseSpec:
     raw = path.read_bytes()
     document = _safe_json(raw, "release_manifest_invalid")
-    _require(document.get("schema_version") == "1.0", "release_schema_invalid")
+    _require(document.get("schema_version") in {"1.0", "1.1"}, "release_schema_invalid")
     _require(document.get("platform") == ALLOWED_PLATFORM, "release_platform_invalid")
     _require(
         document.get("registry_prefix") == ALLOWED_REGISTRY_PREFIX,
@@ -167,6 +174,52 @@ def load_release(path: Path = RELEASE_MANIFEST) -> ReleaseSpec:
                 expected_revision=str(revision) if revision else None,
             )
         )
+    changed = document.get("changed_services", [item.service for item in result])
+    _require(
+        isinstance(changed, list)
+        and changed
+        and all(isinstance(item, str) for item in changed)
+        and set(changed).issubset(seen),
+        "release_changed_services_invalid",
+    )
+    if document.get("schema_version") == "1.1":
+        _require(changed == ["worker"], "incremental_release_scope_invalid")
+        base_raw = BASE_RELEASE_MANIFEST.read_bytes()
+        _require(
+            document.get("base_release_manifest_sha256") == hashlib.sha256(base_raw).hexdigest(),
+            "base_release_manifest_digest_invalid",
+        )
+        base_document = _safe_json(base_raw, "base_release_manifest_invalid")
+        _require(
+            document.get("base_release_id") == base_document.get("release_id"),
+            "base_release_id_invalid",
+        )
+        base_by_service = {item["service"]: item for item in base_document.get("images", [])}
+        for item in document["images"]:
+            if item["service"] != "worker":
+                _require(
+                    item == base_by_service.get(item["service"]),
+                    f"unchanged_service_drift:{item['service']}",
+                )
+        _require(
+            next(item for item in document["images"] if item["service"] == "worker")
+            != base_by_service["worker"],
+            "worker_candidate_unchanged",
+        )
+        unchanged_raw = document.get("unchanged_archives")
+        _require(isinstance(unchanged_raw, dict), "unchanged_archives_invalid")
+        expected_unchanged = seen - set(changed)
+        _require(set(unchanged_raw) == expected_unchanged, "unchanged_archive_services_invalid")
+        for service, evidence in unchanged_raw.items():
+            _require(
+                isinstance(evidence, dict)
+                and isinstance(evidence.get("size"), int)
+                and evidence["size"] > 0
+                and SHA256.fullmatch(str(evidence.get("sha256", ""))) is not None,
+                f"unchanged_archive_evidence_invalid:{service}",
+            )
+    else:
+        unchanged_raw = {}
     return ReleaseSpec(
         release_id=str(document.get("release_id", "")),
         platform=ALLOWED_PLATFORM,
@@ -174,6 +227,19 @@ def load_release(path: Path = RELEASE_MANIFEST) -> ReleaseSpec:
         accepted_by=str(document.get("accepted_by", "")),
         images=tuple(result),
         raw_sha256=hashlib.sha256(raw).hexdigest(),
+        base_release_id=(
+            str(document.get("base_release_id")) if document.get("base_release_id") else None
+        ),
+        base_release_manifest_sha256=(
+            str(document.get("base_release_manifest_sha256"))
+            if document.get("base_release_manifest_sha256")
+            else None
+        ),
+        changed_services=tuple(changed),
+        unchanged_archives={
+            service: (int(value["size"]), str(value["sha256"]))
+            for service, value in unchanged_raw.items()
+        },
     )
 
 
@@ -466,6 +532,61 @@ def build_archives() -> dict[str, Any]:
     return {"status": "passed", "release_id": release.release_id, "images": images}
 
 
+def build_base_worker_archive() -> dict[str, Any]:
+    """只为增量状态机CI重建旧Worker，并复用候选映射中的五项未变记录。"""
+
+    _require(os.environ.get("GITHUB_ACTIONS") == "true", "ci_build_only")
+    candidate = load_release()
+    base = load_release(BASE_RELEASE_MANIFEST)
+    candidate_map_path = DOWNLOAD_ROOT / candidate.release_id / "release-map.json"
+    _require(candidate_map_path.is_file(), "candidate_release_map_missing")
+    candidate_map = _safe_json(candidate_map_path.read_bytes(), "candidate_release_map_invalid")
+    candidate_records = {
+        str(item.get("service")): item
+        for item in candidate_map.get("images", [])
+        if isinstance(item, dict)
+    }
+    _require(
+        set(candidate_records) == {item.service for item in candidate.images},
+        "candidate_release_map_services_invalid",
+    )
+    base_worker = next(item for item in base.images if item.service == "worker")
+    worker_record = _build_one(RegistryClient(), base, base_worker)
+    _require(
+        worker_record["archive_size"] == BASE_WORKER_ARCHIVE_SIZE
+        and worker_record["archive_sha256"] == BASE_WORKER_ARCHIVE_SHA256,
+        "base_worker_archive_drift",
+    )
+    records = [
+        worker_record if item.service == "worker" else candidate_records[item.service]
+        for item in base.images
+    ]
+    mapping = {
+        "schema_version": "1.0",
+        "release_id": base.release_id,
+        "release_manifest_sha256": base.raw_sha256,
+        "platform": base.platform,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "github_run_id": os.environ.get("GITHUB_RUN_ID", ""),
+        "github_sha": os.environ.get("GITHUB_SHA", ""),
+        "images": records,
+        "secrets_included": False,
+    }
+    output = DOWNLOAD_ROOT / base.release_id / "release-map.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(mapping, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    shutil.copyfile(BASE_RELEASE_MANIFEST, output.parent / "release-manifest.json")
+    return {
+        "status": "passed",
+        "release_id": base.release_id,
+        "worker_archive_size": worker_record["archive_size"],
+        "worker_archive_sha256": worker_record["archive_sha256"],
+    }
+
+
 def _safe_tar_members(bundle: tarfile.TarFile) -> dict[str, tarfile.TarInfo]:
     members: dict[str, tarfile.TarInfo] = {}
     for item in bundle.getmembers():
@@ -621,7 +742,16 @@ def verify_archives() -> dict[str, Any]:
         _require(
             record.get("image_id") == record.get("config_digest"), "release_map_image_id_invalid"
         )
-        _verify_archive(root / spec.archive_name, spec, record)
+        archive = root / spec.archive_name
+        if spec.service in release.changed_services or archive.exists():
+            _verify_archive(archive, spec, record)
+        if spec.service in release.unchanged_archives:
+            expected_size, expected_sha256 = release.unchanged_archives[spec.service]
+            _require(
+                int(record.get("archive_size", -1)) == expected_size
+                and record.get("archive_sha256") == expected_sha256,
+                f"unchanged_archive_drift:{spec.service}",
+            )
         total += int(record["archive_size"])
     return {
         "status": "passed",
@@ -721,7 +851,11 @@ def download_artifacts() -> dict[str, Any]:
         f"/repos/{GITHUB_REPOSITORY}/actions/runs/{run_id}/artifacts?per_page=100", token
     ).get("artifacts", [])
     by_name = {item.get("name"): item for item in artifacts if isinstance(item, dict)}
-    expected = [f"smartscan-uat-offline-{item.service}" for item in release.images]
+    expected = [
+        f"smartscan-uat-offline-{item.service}"
+        for item in release.images
+        if item.service in release.changed_services
+    ]
     expected.append("smartscan-uat-offline-release-map")
     _require(all(name in by_name for name in expected), "offline_artifacts_incomplete")
     root = DOWNLOAD_ROOT / release.release_id
@@ -791,15 +925,22 @@ def upload_archives() -> dict[str, Any]:
         f'test "$(stat -c %U:%a {upload_root})" = szhzx:700'
     )
     root = DOWNLOAD_ROOT / release.release_id
-    names = [item.archive_name for item in release.images] + [
+    remote_root = SERVER_UPLOAD_ROOT / release.release_id
+    _run_remote(
+        f"umask 077; test ! -L {shlex.quote(str(remote_root))}; "
+        f"mkdir -p {shlex.quote(str(remote_root))}; chmod 700 {shlex.quote(str(remote_root))}"
+    )
+    names = [
+        item.archive_name for item in release.images if item.service in release.changed_services
+    ] + [
         "release-map.json",
         "release-manifest.json",
     ]
     for name in names:
         path = root / name
         size, digest = path.stat().st_size, _sha256_file(path)
-        remote_part = SERVER_UPLOAD_ROOT / f"{name}.part"
-        remote_final = SERVER_UPLOAD_ROOT / name
+        remote_part = remote_root / f"{name}.part"
+        remote_final = remote_root / name
         quoted_part = shlex.quote(str(remote_part))
         quoted_final = shlex.quote(str(remote_final))
         state = _run_remote(
@@ -859,6 +1000,8 @@ def status() -> dict[str, Any]:
     root = DOWNLOAD_ROOT / release.release_id
     files = {}
     for item in release.images:
+        if item.service not in release.changed_services:
+            continue
         archive = root / item.archive_name
         files[item.service] = (
             "complete"
@@ -884,7 +1027,15 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     arguments = list(sys.argv[1:] if argv is None else argv)
-    allowed = {"plan", "download", "verify", "upload", "status", "ci-build"}
+    allowed = {
+        "plan",
+        "download",
+        "verify",
+        "upload",
+        "status",
+        "ci-build",
+        "ci-build-base-worker",
+    }
     if len(arguments) != 1 or arguments[0] not in allowed:
         print(
             "用法：smartscan_offline_images.py {plan|download|verify|upload|status}",
@@ -903,6 +1054,8 @@ def main(argv: list[str] | None = None) -> int:
             result = upload_archives()
         elif command == "ci-build":
             result = build_archives()
+        elif command == "ci-build-base-worker":
+            result = build_base_worker_archive()
         else:
             result = status()
     except (OfflineImageError, OSError, urllib.error.URLError, subprocess.SubprocessError) as exc:
