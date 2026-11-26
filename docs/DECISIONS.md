@@ -851,3 +851,11 @@
 - 状态：已确认运行时根因；等待新Worker候选及用户接受
 - 证据：OPS-001M的Docker 29/containerd真实CI已使用接受的六镜像、真实OCR模型和空PostgreSQL完成迁移到`20261022_0024`。迁移后API与内部Web健康，两个CPU Worker均在导入`cv2`时以`ImportError: libGL.so.1`退出；没有接触共享Nginx。该失败与迁移临时storage root无关，也不是目标服务器现场故障。
 - 决策：不得挂载宿主机动态库、联网安装、放宽Worker健康门禁或把API健康冒充核心完成。Worker镜像显式安装Debian `libgl1`和`libglib2.0-0t64`运行库，并把PaddleX的`HOME`定向到Worker已有的有界`/tmp`；供应链在无网络、只读根、有界`/tmp`、零capability条件下导入`cv2`和`paddleocr`。既有Worker固定digest继续保留为拒绝核心启动的证据；主线产生的新digest不得自动写入UAT，只有用户明确接受更新发布映射且完整离线状态机通过后，才能继续服务器核心启动。
+
+## D-113：Worker候选必须同时通过真实运行与零Critical门禁
+
+- 日期：2026-11-26
+- 状态：已确认；首个运行库修复候选被安全门禁拒绝
+- 证据：包含libGL/GLib修复的首个固定Worker候选通过既有视觉导入与可修复High/Critical扫描，但离线归档的`ignore-unfixed=false`全Critical扫描检出Debian `libxml2`的`CVE-2026-6653`。Debian官方跟踪表明稳定版当前无修复；该结果不得以严重度改写、忽略规则或自动VEX绕过。同期API、AI Gateway和Ops因BuildKit复用旧apt层而包含已有修复的`libzstd1` High漏洞。
+- 决策：首个候选及其失败日志作为拒绝证据保留，不提交用户接受。Worker从Debian图形栈中只复制OpenCV实际需要的最小GLVND共享库并保留相应版权文件，再清除Mesa/LLVM及其引入的`libxml2`；随后继续以无网络、只读根、有界`/tmp`、零capability方式验证`cv2`、libGL、GLib及PaddleOCR。安全验证与main发布构建均禁用旧BuildKit缓存。新候选必须重新生成SBOM、SLSA并达到全部Critical为0、可修复High/Critical为0后，才能进入增量映射。
+- 发布边界：该安全修正会产生新的main Worker digest，但不得自动替换当前UAT。只有新的完整内容链和exact mixed release通过且用户明确接受后，统一控制器才能记录并激活候选。
