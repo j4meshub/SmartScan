@@ -1,21 +1,26 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-25
+更新时间：2026-11-26
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001M` 迁移容器只读根兼容修复 |
-| 工作包状态 | 等待人工验收；迁移与新Worker供应链CI均通过，等待主线新digest及用户重新接受发布映射 |
-| 当前分支 | `codex/ops-001m-migration-readonly-root` |
-| 最后验证基线 | 现场已完成六镜像、身份、所有权和PostgreSQL健康；首次迁移在连接数据库前因只读根目录创建失败，空库无表、无`alembic_version`、无部分revision |
-| 工作包提交 | `43fb16e`（最终技术验证头） |
-| PR | [#114](https://github.com/j4meshub/SmartScan/pull/114) |
-| 下一工作包 | 合并运行库修复并取得新Worker固定digest；用户接受更新后的离线发布映射后，重新执行迁移至核心健康的完整状态机CI |
+| 当前工作包 | `OPS-001N` 修复版Worker制品与增量UAT发布更新 |
+| 工作包状态 | 进行中；首个运行库修复候选因严格Critical门禁被拒绝，正在修复Worker基础制品供应链 |
+| 当前分支 | `codex/ops-001n-worker-security-base` |
+| 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；状态停在`next_required=core_started`，旧Worker禁止启动，API/Worker/Web/AI/Nginx均未启动 |
+| 工作包提交 | 待提交 |
+| PR | 待创建；增量控制器PR [#115](https://github.com/j4meshub/SmartScan/pull/115)等待安全候选 |
+| 下一工作包 | 安全基础PR合并并由main发布新Worker后，回到#115固定新digest、归档和六镜像增量映射 |
 
 ## 当前工作包进展
+
+- OPS-001M服务器迁移已成功达到`20261022_0024`，`public.ai_media_grants`和PostgreSQL健康均通过；现场下一门禁为`core_started`，本工作包不重跑迁移。
+- 主线`13022cfa`曾产生包含libGL/GLib修复的Worker候选`sha256:4e1e7532…`。PR #115新增的严格全Critical扫描发现该制品仍含Debian `libxml2`的`CVE-2026-6653`且无可用修复版本，因此候选保持拒绝，不提交用户接受，也不下载、上传或导入UAT。
+- 同轮容器供应链发现API、AI Gateway和Ops的BuildKit缓存复用了含可修复`libzstd1` High漏洞的旧apt层。供应链修正为安全验证和main发布均禁用旧构建缓存；Worker显式移除真实运行不需要的系统`libxml2`，并在无网络视觉运行测试后执行全Critical扫描。该修正必须先在独立最小PR通过并由main产生新固定digest。
+- 增量控制器与离线工具PR #115保留但不合并无效候选；安全基础合并后再把新Worker的源digest、平台manifest、Config、Layer、SBOM、SLSA、漏洞结果、归档和运行时身份固定到同一PR。该拆分是安全门禁的正常失败关闭，不是自动替换候选或降低门禁。
 
 - OPS-001L已通过PR #113合并并完成服务器人工升级。统一控制器真实续接完成六镜像离线导入、Docker 29/containerd结构化身份、无网络UID/GID探测、`image-identities.json`、目录所有权、PostgreSQL启动和健康验证，随后在不可逆迁移门禁停止。
 - 用户明确接受新建空UAT无备份及迁移失败保留现场的风险后，首次且唯一一次`run-migrations`失败。诊断确认失败发生在Python模块导入阶段：`get_settings()`尝试创建storage root并命中只读根；迁移尚未连接数据库，`public`表为0、`alembic_version`不存在、没有任何revision提交，PostgreSQL保持健康，API、Worker、Web和Nginx均未启动。

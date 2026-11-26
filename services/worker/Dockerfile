@@ -9,7 +9,9 @@ COPY pyproject.toml ./
 COPY services ./services
 COPY alembic.ini ./
 COPY migrations ./migrations
-RUN pip install --no-cache-dir ".[vision,ocr]"
+RUN pip install --no-cache-dir ".[vision,ocr]" \
+    && apt-get remove -y libxml2 \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 10001 smartscan && chown -R smartscan:smartscan /app
 USER smartscan
 CMD ["python", "-m", "services.worker.app.main"]
