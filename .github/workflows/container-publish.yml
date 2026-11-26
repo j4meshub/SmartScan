@@ -68,6 +68,9 @@ jobs:
           test "$(docker run --rm --entrypoint dpkg-query \
             local/${{ matrix.image }}:${{ github.sha }} \
             -W -f='${db:Status-Status}' libxml2 2>/dev/null || true)" != installed
+          test "$(docker run --rm --entrypoint dpkg-query \
+            local/${{ matrix.image }}:${{ github.sha }} \
+            -W -f='${db:Status-Status}' libgomp1)" = installed
           docker run --rm --entrypoint sh \
             local/${{ matrix.image }}:${{ github.sha }} \
             -c 'test -s /usr/local/lib/libGL.so.1 \
@@ -84,7 +87,7 @@ jobs:
             --cap-drop ALL \
             --security-opt no-new-privileges \
             local/${{ matrix.image }}:${{ github.sha }} \
-            python -c "import cv2; import paddleocr; print('worker_visual_runtime=passed')"
+            python -c "import ctypes; ctypes.CDLL('libGL.so.1'); ctypes.CDLL('libgthread-2.0.so.0'); ctypes.CDLL('libgomp.so.1'); import cv2; import paddleocr; print('worker_visual_runtime=passed')"
       - name: 拦截Worker全部Critical漏洞
         if: matrix.service == 'worker'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
