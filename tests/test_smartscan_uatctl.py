@@ -941,6 +941,7 @@ def test_incremental_worker_activation_preserves_checkpoint_and_old_release(
     _write_json(paths.installed_release, old_release)
     _write_json(paths.installed_map, old_map)
     paths.local_images_env.write_text("OLD=1\n", encoding="utf-8")
+    paths.local_images_env.chmod(0o600)
     _write_json(
         paths.image_identities,
         {
@@ -1033,6 +1034,7 @@ def test_one_step_web_rollback_slot_rejects_symbolic_link(
     paths = _paths(tmp_path)
     controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
     paths.installed_release.write_text("current\n", encoding="utf-8")
+    paths.installed_release.chmod(0o600)
     target = tmp_path / "outside"
     target.write_text("outside\n", encoding="utf-8")
     try:
