@@ -28,8 +28,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-26-worker-fix.json"
-BASE_RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-24.json"
+RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-27-web-loopback.json"
+BASE_RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-26-worker-fix.json"
 DOWNLOAD_ROOT = ROOT / ".smartscan-offline-transfer" / "images"
 WORKFLOW_FILE = "uat-offline-images.yml"
 GITHUB_REPOSITORY = "j4meshub/SmartScan"

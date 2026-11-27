@@ -39,7 +39,7 @@ if [[ "${SMARTSCAN_OFFLINE_NETNS:-}" != "1" ]]; then
         SMARTSCAN_REAL_OCR_SAMPLES="$OCR_SAMPLES" bash "$0"
 fi
 
-readonly ARCHIVE_ROOT="$GITHUB_WORKSPACE/.smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix"
+readonly ARCHIVE_ROOT="$GITHUB_WORKSPACE/.smartscan-offline-transfer/images/smartscan-uat-2026-11-27-web-loopback"
 readonly RUNTIME_ROOT="$RUNNER_TEMP/smartscan-offline-docker"
 readonly DOCKER_SOCKET="$RUNTIME_ROOT/docker.sock"
 readonly DOCKER_HOST_VALUE="unix://$DOCKER_SOCKET"

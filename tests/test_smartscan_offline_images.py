@@ -70,11 +70,11 @@ def test_release_manifest_fixes_six_digests_platform_and_local_tags() -> None:
         assert item.source_digest[7:][:12] in item.archive_name
 
 
-def test_incremental_manifest_changes_only_worker_and_pins_base_archives() -> None:
+def test_incremental_manifest_changes_only_web_and_pins_base_archives() -> None:
     release = offline.load_release()
     candidate = json.loads(offline.RELEASE_MANIFEST.read_text(encoding="utf-8"))
     base = json.loads(offline.BASE_RELEASE_MANIFEST.read_text(encoding="utf-8"))
-    assert release.changed_services == ("worker",)
+    assert release.changed_services == ("web",)
     assert release.base_release_id == base["release_id"]
     assert (
         release.base_release_manifest_sha256
@@ -82,8 +82,8 @@ def test_incremental_manifest_changes_only_worker_and_pins_base_archives() -> No
     )
     candidate_images = {item["service"]: item for item in candidate["images"]}
     base_images = {item["service"]: item for item in base["images"]}
-    assert candidate_images["worker"] != base_images["worker"]
-    for service in set(base_images) - {"worker"}:
+    assert candidate_images["web"] != base_images["web"]
+    for service in set(base_images) - {"web"}:
         assert candidate_images[service] == base_images[service]
         assert service in release.unchanged_archives
 
