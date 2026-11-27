@@ -122,7 +122,7 @@ jobs:
             [ "$(docker inspect --format '{{.State.Status}}' "$cid")" = running ] && break
             sleep 1
           done
-          process_count="$(docker top "$cid" -eo comm | tail -n +2 | wc -l)"
+          process_count="$(docker top "$cid" -eo pid,comm | tail -n +2 | wc -l)"
           test "$process_count" -le 4
           test "$(docker inspect --format '{{.State.OOMKilled}}' "$cid")" = false
           ! docker logs "$cid" 2>&1 | grep -F 'sendmsg() failed'
