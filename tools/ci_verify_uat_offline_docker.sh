@@ -73,8 +73,8 @@ cleanup() {
         --env-file /etc/smartscan/uat/deploy.env \
         --env-file /etc/smartscan/uat/local-images.env \
         -f "$GITHUB_WORKSPACE/deploy/compose/docker-compose.uat.yml" \
-        stop nginx worker-cpu-2 worker-cpu-1 api migrate postgres >/dev/null 2>&1 || true
-    for network in smartscan-uat-data smartscan-uat-edge smartscan-uat-egress smartscan-ci-sentinel; do
+        stop loopback-proxy nginx worker-cpu-2 worker-cpu-1 api migrate postgres >/dev/null 2>&1 || true
+    for network in smartscan-uat-publish smartscan-uat-data smartscan-uat-edge smartscan-uat-egress smartscan-ci-sentinel; do
         /usr/bin/docker network rm "$network" >/dev/null 2>&1 || true
     done
     if [[ -n "$DOCKERD_PID" ]]; then
@@ -160,7 +160,7 @@ mapfile -t core_services < <(
         --filter label=com.docker.compose.project=smartscan-uat
 )
 [[ "$(printf '%s\n' "${core_services[@]}" | /usr/bin/sort | /usr/bin/tr '\n' ' ')" == \
-    "api nginx postgres worker-cpu-1 worker-cpu-2 " ]] \
+    "api loopback-proxy nginx postgres worker-cpu-1 worker-cpu-2 " ]] \
     || { printf '核心服务集合异常\n' >&2; exit 1; }
-printf '{"containerd_image_store":%s,"daemon_network":"isolated","images":6,"migration":"20261022_0024","state_machine":"nginx_activation_confirmation","status":"passed"}\n' \
+printf '{"containerd_image_store":%s,"daemon_network":"isolated","images":6,"loopback_proxy":true,"migration":"20261022_0024","state_machine":"nginx_activation_confirmation","status":"passed"}\n' \
     "$([[ "$CONTAINERD29_MODE" == "1" ]] && printf true || printf false)"

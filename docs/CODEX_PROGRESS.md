@@ -1,21 +1,27 @@
 # SmartScan 长任务进度
 
-更新时间：2026-11-26
+更新时间：2026-11-27
 
 ## 当前断点
 
 | 项目 | 当前值 |
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
-| 当前工作包 | `OPS-001O` 候选发布清单权限契约修复 |
-| 工作包状态 | 仓库实现完成；首次增量`accept-release`失败证据保留，PR #120代码与真实Linux权限、双Docker状态机门禁已通过；等待人工升级控制器，升级前不得服务器重试 |
-| 当前分支 | `codex/ops-001o-release-permission-contract` |
-| 最后验证基线 | 现场迁移已完整达到`20261022_0024`且PostgreSQL健康；`completed`仍截至`migrations_completed`、`next_required=core_started`。候选清单为正确的`root:root 0644`且摘要正确，新Worker未导入、活动映射未切换，API/Worker/Web/AI/Nginx均未启动 |
-| 工作包提交 | `dd0e019`（权限策略、真实Linux权限测试、完整状态机回归和中文文档） |
-| PR | #120；首个代码头CI #863、UAT离线交付 #50、容器供应链 #183、PostgreSQL #138全部通过，最终文档头等待同等门禁复核后合并 |
-| 下一工作包 | OPS-001O合并后由用户人工仅升级包装器和Python控制器，首条命令只运行`status`；随后再单独授权一次`accept-release`，成功后才允许一次增量`resume-basic-uat`，不得自动扩大到Nginx |
+| 当前工作包 | `OPS-001P` Web资源与Docker 29回环入口兼容修复 |
+| 工作包状态 | 仓库实现、Docker 29门禁和新Web候选准备中；本工作包不修改服务器、不自动接受候选 |
+| 当前分支 | `codex/ops-001p-web-loopback-entry` |
+| 最后验证基线 | 数据库迁移和修复Worker发布已激活，`completed`已含`core_started`但不含`core_verified`。PostgreSQL、API、两个CPU Worker和旧Web运行，AI关闭；旧Web容器内部200，但宿主机18082未监听，128个Nginx Worker使PID达到128/128、内存约252.5/256 MiB。共享Nginx未修改 |
+| 工作包提交 | 待提交 |
+| PR | 待创建 |
+| 下一工作包 | OPS-001P候选获用户接受后，部署窗口复核并创建固定publish网络，离线导入新Web、原子激活Web与loopback-proxy、完成`core_verified`；随后单独进入共享Nginx门禁 |
 
 ## 当前工作包进展
+
+- 用户决定采用“专用publish网络 + 最小非root loopback-proxy”。主Web继续只连接internal edge且不发布端口；代理复用Web镜像，不挂载业务数据、不读取Secret，只连接edge和publish并发布`127.0.0.1:18082`。publish网络理论上具有出站路径，这是基础UAT明确接受的有限风险，不能描述为绝对无出站。
+- 旧Web在128核宿主机使用`worker_processes auto`，产生128个Worker进程并达到PID/内存硬上限；Docker 29的仅internal网络未形成HostConfig所声明的回环监听。根因属于Web运行资源与入口拓扑兼容，不是API、Worker、数据库或OCR故障。
+- OPS-001P将Nginx固定为单Worker，增加同镜像非root代理、第四张仓库外固定CIDR网络、Docker 29真实回环/非回环门禁，以及只替换Web的增量发布。`stop-core`已审计为保留PostgreSQL、迁移、活动发布、离线归档和回滚证据，只停止API、两个Worker、Web和代理；等待修复期间建议停止核心，但本工作包不执行。
+- OPS-001P完成后冻结UAT网络拓扑和`smartscan-uatctl`普通发布接口。候选清单改由固定部署用户0600上传入口交付；普通发布只更新已接受清单、固定digest和离线归档，不升级控制器、不新增执行器。只有协议或安全缺陷才允许再次人工升级控制器。
+- 本地实现验证通过：Ruff检查及200个Python文件格式检查、全量Python `675 passed, 44 skipped`（覆盖率87.74%）、H5 `48 passed`与JavaScript语法检查；独立空SQLite完成全迁移链后漂移检查返回`No new upgrade operations detected`。本机没有Docker CLI，Compose解析、真实root/sudo和Docker 29/containerd exact mixed release由GitHub Linux CI完成，不把本机缺少Docker记为门禁通过。
 
 - OPS-001N控制器、Compose与候选清单已由共同使用人人工安装，候选清单真实状态为`root:root 0644`且SHA-256正确。用户授权的首次且唯一一次增量`accept-release`返回`fixed_json_mode_invalid:uat-2026-11-26-worker-fix.json`；状态机未前进，新Worker未导入、活动发布未切换、核心服务未启动，PostgreSQL继续健康。
 - 根因是包装器固定要求候选清单`0644`，而Python `_load_json()`把所有JSON无条件当作内部`0600`文件。OPS-001O将权限改为有限命名策略：公开root资产`0644`、候选清单专用root`0644`、内部root状态`0600`和部署用户上传证据`0600`；调用方不能传入任意模式或所有者。

@@ -85,6 +85,13 @@ def test_worker_pins_openmp_and_visual_runtime_checks() -> None:
         assert f"ctypes.CDLL('{library}')" in workflow
 
 
+def test_web_runtime_check_keeps_pid_column_and_bounded_process_count() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'docker top "$cid" -eo pid,comm' in workflow
+    assert 'test "$process_count" -le 4' in workflow
+
+
 def test_manifest_is_complete_sorted_and_secret_free(tmp_path: Path) -> None:
     for service in reversed(SERVICES):
         (tmp_path / f"{service}.json").write_text(json.dumps(_entry(service)), encoding="utf-8")

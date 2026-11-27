@@ -155,11 +155,16 @@ def _paths(tmp_path: Path) -> uatctl.Paths:
         compose_file=libexec / "docker-compose.uat.yml",
         nginx_template=libexec / "shared-8077-smartscan-location.conf",
         validator_module=libexec / "smartscan_uat_validators.py",
-        candidate_release=libexec / "uat-2026-11-26-worker-fix.json",
+        candidate_release=upload / "candidate-release.json",
         previous_release=config / "previous-release-manifest.json",
         previous_map=config / "previous-release-map.json",
         previous_local_images=config / "previous-local-images.env",
         previous_identities=config / "previous-image-identities.json",
+        previous_web_release=config / "previous-web-release-manifest.json",
+        previous_web_map=config / "previous-web-release-map.json",
+        previous_web_local_images=config / "previous-web-local-images.env",
+        previous_web_identities=config / "previous-web-image-identities.json",
+        publish_network_evidence=config / "publish-network-evidence.json",
     )
 
 
@@ -170,26 +175,26 @@ def _write_json(path: Path, value: dict) -> None:
 
 def _write_candidate_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
-    path.chmod(0o644)
+    path.chmod(0o600)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="需要POSIX真实权限语义")
-@pytest.mark.parametrize("mode", [0o600, 0o640, 0o664, 0o777])
-def test_candidate_release_rejects_every_mode_except_exact_0644(tmp_path: Path, mode: int) -> None:
-    candidate = tmp_path / "uat-2026-11-26-worker-fix.json"
+@pytest.mark.parametrize("mode", [0o640, 0o644, 0o664, 0o777])
+def test_candidate_release_rejects_every_mode_except_exact_0600(tmp_path: Path, mode: int) -> None:
+    candidate = tmp_path / "candidate-release.json"
     _write_candidate_json(candidate, {"schema_version": "1.1"})
     candidate.chmod(mode)
 
     with pytest.raises(uatctl.ControllerError, match="fixed_json_mode_invalid"):
         uatctl._load_json(
             candidate,
-            policy=uatctl.FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
-            expected_root_uid=TEST_UID,
+            policy=uatctl.FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600,
+            expected_deploy_uid=TEST_UID,
         )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="需要POSIX真实权限语义")
-def test_candidate_release_exact_0644_and_internal_json_exact_0600(tmp_path: Path) -> None:
+def test_candidate_release_and_internal_json_both_use_exact_0600(tmp_path: Path) -> None:
     candidate = tmp_path / "candidate.json"
     internal = tmp_path / "internal.json"
     _write_candidate_json(candidate, {"kind": "candidate"})
@@ -198,8 +203,8 @@ def test_candidate_release_exact_0644_and_internal_json_exact_0600(tmp_path: Pat
     assert (
         uatctl._load_json(
             candidate,
-            policy=uatctl.FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
-            expected_root_uid=TEST_UID,
+            policy=uatctl.FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600,
+            expected_deploy_uid=TEST_UID,
         )["kind"]
         == "candidate"
     )
@@ -225,26 +230,26 @@ def test_candidate_release_exact_0644_and_internal_json_exact_0600(tmp_path: Pat
 def test_candidate_release_rejects_wrong_owner_links_and_abnormal_type(tmp_path: Path) -> None:
     candidate = tmp_path / "candidate.json"
     _write_candidate_json(candidate, {"kind": "candidate"})
-    policy = uatctl.FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644
+    policy = uatctl.FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600
 
     with pytest.raises(uatctl.ControllerError, match="fixed_json_owner_invalid"):
-        uatctl._load_json(candidate, policy=policy, expected_root_uid=TEST_UID + 1)
+        uatctl._load_json(candidate, policy=policy, expected_deploy_uid=TEST_UID + 1)
 
     hardlink = tmp_path / "candidate-hardlink.json"
     os.link(candidate, hardlink)
     with pytest.raises(uatctl.ControllerError, match="fixed_json_links_invalid"):
-        uatctl._load_json(candidate, policy=policy, expected_root_uid=TEST_UID)
+        uatctl._load_json(candidate, policy=policy, expected_deploy_uid=TEST_UID)
     hardlink.unlink()
 
     symlink = tmp_path / "candidate-symlink.json"
     symlink.symlink_to(candidate)
     with pytest.raises(uatctl.ControllerError, match="fixed_json_invalid"):
-        uatctl._load_json(symlink, policy=policy, expected_root_uid=TEST_UID)
+        uatctl._load_json(symlink, policy=policy, expected_deploy_uid=TEST_UID)
 
     directory = tmp_path / "candidate-directory.json"
     directory.mkdir()
     with pytest.raises(uatctl.ControllerError, match="fixed_json_invalid"):
-        uatctl._load_json(directory, policy=policy, expected_root_uid=TEST_UID)
+        uatctl._load_json(directory, policy=policy, expected_deploy_uid=TEST_UID)
 
 
 def _repository_lf_sha256(path: Path) -> str:
@@ -274,7 +279,6 @@ def test_preflight_is_idempotent_and_rejects_missing_network(
             "docker-compose.uat.yml": fixed_hash,
             "shared-8077-smartscan-location.conf": fixed_hash,
             "smartscan_uat_validators.py": fixed_hash,
-            "uat-2026-11-26-worker-fix.json": fixed_hash,
         },
     )
     runner = FakeRunner()
@@ -707,7 +711,7 @@ def test_legacy_executors_and_sudoers_remain_byte_for_byte_unchanged() -> None:
 
 def test_installation_guide_pins_all_controller_assets() -> None:
     root = Path(__file__).parents[1]
-    guide = (root / "docs/OPS001I_UATCTL_AND_OFFLINE_IMAGES.md").read_text(encoding="utf-8")
+    guide = (root / "docs/OPS001P_WEB_LOOPBACK_ENTRY.md").read_text(encoding="utf-8")
     for relative in (
         "deploy/ops/smartscan-uatctl",
         "deploy/ops/smartscan_uatctl.py",
@@ -715,8 +719,6 @@ def test_installation_guide_pins_all_controller_assets() -> None:
         "deploy/sudoers/smartscan-uatctl",
         "deploy/compose/docker-compose.uat.yml",
         "deploy/nginx/shared-8077-smartscan-location.conf.template",
-        "deploy/releases/uat-2026-11-24.json",
-        "deploy/releases/uat-2026-11-26-worker-fix.json",
     ):
         assert _repository_lf_sha256(root / relative) in guide
 
@@ -763,34 +765,34 @@ def test_ci_uses_one_network_isolated_daemon_for_import_and_probe() -> None:
     assert '"none",' in controller
     assert "config --format json" in workflow
     assert 'item.get("pull_policy") == "never"' in workflow
-    assert "id: worker_archive" in workflow
-    assert 'worker["archive_name"]' in workflow
-    assert "steps.worker_archive.outputs.name" in workflow
+    assert "id: changed_archive" in workflow
+    assert 'image["archive_name"]' in workflow
+    assert "steps.changed_archive.outputs.name" in workflow
     assert "smartscan-worker-4e1e7532f33a-linux-amd64.docker.tar" not in workflow
-    assert "prepare_root_owned_candidate" in checkpoint
+    assert "prepare_uploaded_candidate" in checkpoint
     assert "isolated_daemon_internal_urlopen" in checkpoint
-    assert "CONTROLLER_ASSETS.mkdir(mode=0o700, parents=True)" in checkpoint
     assert '"containerd29"' in checkpoint
     assert '"legacy"' in checkpoint
     assert "smartscan-uat-incremental-upload-{CI_VARIANT}" in checkpoint
-    assert "os.chown(candidate, 0, 0)" in checkpoint
+    assert "candidate.chmod(0o600)" in checkpoint
     assert "FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600" in controller
-    assert "FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644" in controller
+    assert "CANDIDATE_RELEASE_PUBLIC_ROOT_0644" not in controller
 
 
-def test_wrapper_and_python_share_exact_candidate_permission_contract() -> None:
+def test_wrapper_and_python_share_stable_uploaded_candidate_contract() -> None:
     root = Path(__file__).parents[1]
     wrapper = (root / "deploy/ops/smartscan-uatctl").read_text(encoding="utf-8")
     controller = (root / "deploy/ops/smartscan_uatctl.py").read_text(encoding="utf-8")
 
     contract = uatctl.FIXED_FILE_PERMISSION_CONTRACTS[
-        uatctl.FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644
+        uatctl.FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600
     ]
-    assert contract.owner_role == "root"
-    assert contract.mode == 0o644
-    assert 'readonly CANDIDATE_RELEASE_MODE="644"' in wrapper
-    assert '"root:root:${CANDIDATE_RELEASE_MODE}:1"' in wrapper
-    assert "CANDIDATE_RELEASE_PUBLIC_ROOT_0644" in controller
+    assert contract.owner_role == "deploy"
+    assert contract.mode == 0o600
+    assert "CANDIDATE_RELEASE_MODE" not in wrapper
+    assert "candidate_release_digest_mismatch" not in wrapper
+    assert "/home/szhzx/smartscan-uat-offline-images/candidate-release.json" in controller
+    assert "UPLOADED_RELEASE_DEPLOY_0600" in controller
     assert "root_owned" not in controller
 
 
@@ -939,6 +941,7 @@ def test_incremental_worker_activation_preserves_checkpoint_and_old_release(
     _write_json(paths.installed_release, old_release)
     _write_json(paths.installed_map, old_map)
     paths.local_images_env.write_text("OLD=1\n", encoding="utf-8")
+    paths.local_images_env.chmod(0o600)
     _write_json(
         paths.image_identities,
         {
@@ -1000,6 +1003,49 @@ def test_incremental_worker_activation_preserves_checkpoint_and_old_release(
     assert state["completed"][-1] == "migrations_completed"
 
 
+def test_one_step_web_rollback_slot_is_safely_replaced_for_later_release(
+    tmp_path: Path,
+) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    pairs = (
+        (paths.installed_release, paths.previous_web_release),
+        (paths.installed_map, paths.previous_web_map),
+        (paths.local_images_env, paths.previous_web_local_images),
+        (paths.image_identities, paths.previous_web_identities),
+    )
+    for index, (source, backup) in enumerate(pairs):
+        source.write_text(f"current-{index}\n", encoding="utf-8")
+        backup.write_text(f"older-{index}\n", encoding="utf-8")
+        source.chmod(0o600)
+        backup.chmod(0o600)
+
+    controller._save_one_step_rollback(pairs)
+
+    for index, (source, backup) in enumerate(pairs):
+        assert backup.read_text(encoding="utf-8") == f"current-{index}\n"
+        assert source.read_text(encoding="utf-8") == f"current-{index}\n"
+        assert not backup.with_name(f".{backup.name}.next.tmp").exists()
+
+
+def test_one_step_web_rollback_slot_rejects_symbolic_link(
+    tmp_path: Path,
+) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    paths.installed_release.write_text("current\n", encoding="utf-8")
+    paths.installed_release.chmod(0o600)
+    target = tmp_path / "outside"
+    target.write_text("outside\n", encoding="utf-8")
+    try:
+        paths.previous_web_release.symlink_to(target)
+    except OSError:
+        pytest.skip("当前环境不允许创建符号链接")
+
+    with pytest.raises(uatctl.ControllerError, match="fixed_json_invalid"):
+        controller._save_one_step_rollback(((paths.installed_release, paths.previous_web_release),))
+
+
 def test_incremental_acceptance_records_pending_without_switching_active_release(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1033,7 +1079,119 @@ def test_incremental_acceptance_records_pending_without_switching_active_release
     assert state["pending_release_update"]["changed_services"] == ["worker"]
 
 
-def test_incremental_acceptance_rejects_when_core_already_started(tmp_path: Path) -> None:
+def test_web_candidate_accepts_only_at_started_not_verified_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    candidate, mapping = _incremental_fixture()
+    candidate["release_id"] = "smartscan-uat-web-fix"
+    candidate["changed_services"] = ["web"]
+    active = {"release_id": "active-worker-fix", "images": []}
+    _write_json(paths.installed_release, active)
+    for step in (
+        "preflight",
+        "storage_verified",
+        "models_verified",
+        "config_verified",
+        "release_accepted",
+        "migrations_completed",
+        "core_started",
+    ):
+        controller._record(step)
+    monkeypatch.setattr(controller, "_candidate_release", lambda: (candidate, mapping))
+    candidate_root = paths.upload_root / candidate["release_id"]
+    candidate_root.mkdir(parents=True)
+    _write_json(candidate_root / "release-map.json", mapping)
+    _write_candidate_json(paths.candidate_release, candidate)
+
+    result = controller.accept_release()
+
+    assert result["step"] == "incremental_release_accepted"
+    state = controller._state()
+    assert state["pending_release_update"]["changed_services"] == ["web"]
+    assert "core_started" in state["completed"]
+    assert "core_verified" not in state["completed"]
+
+
+def test_publish_network_contract_requires_private_slash28_and_explicit_risk(
+    tmp_path: Path,
+) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    candidate = {"release_id": "smartscan-uat-web-fix"}
+    root = paths.upload_root / candidate["release_id"]
+    root.mkdir()
+    evidence = {
+        "schema_version": "1.0",
+        "network_name": "smartscan-uat-publish",
+        "subnet": "172.31.250.0/28",
+        "gateway": "172.31.250.1",
+        "risk_acknowledgement": "loopback-proxy-has-theoretical-egress",
+        "confirmation": {
+            "confirmed_by": "shared-server-user",
+            "confirmed_at": "2026-11-27T00:00:00+08:00",
+            "change_record": "change",
+            "validation_record": "validation",
+            "rollback_record": "rollback",
+        },
+    }
+    path = root / "publish-network.json"
+    _write_json(path, evidence)
+
+    assert controller._publish_network_spec(candidate) == evidence
+
+    evidence["subnet"] = "8.8.8.0/28"
+    evidence["gateway"] = "8.8.8.1"
+    _write_json(path, evidence)
+    with pytest.raises(uatctl.ControllerError, match="publish_network_subnet_invalid"):
+        controller._publish_network_spec(candidate)
+
+
+def test_publish_network_creation_rejects_policy_route_overlap(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    candidate = {"release_id": "smartscan-uat-web-fix"}
+    root = paths.upload_root / candidate["release_id"]
+    root.mkdir()
+    _write_candidate_json(
+        root / "publish-network.json",
+        {
+            "schema_version": "1.0",
+            "network_name": "smartscan-uat-publish",
+            "subnet": "172.31.250.0/28",
+            "gateway": "172.31.250.1",
+            "risk_acknowledgement": "loopback-proxy-has-theoretical-egress",
+            "confirmation": {
+                "confirmed_by": "shared-server-user",
+                "confirmed_at": "2026-11-27T00:00:00+08:00",
+                "change_record": "change",
+                "validation_record": "validation",
+                "rollback_record": "rollback",
+            },
+        },
+    )
+    runner.results[("/usr/bin/docker", "network", "inspect", "smartscan-uat-publish")] = (
+        uatctl.CommandResult(1, "", "not found")
+    )
+    runner.outputs[("/usr/bin/docker", "network", "ls", "--quiet")] = ""
+    runner.outputs[("/usr/sbin/ip", "-j", "-4", "route", "show", "table", "all")] = "[]"
+    runner.outputs[("/usr/sbin/ip", "-j", "-4", "address", "show")] = "[]"
+    runner.outputs[("/usr/sbin/ip", "-j", "-4", "rule", "show")] = json.dumps(
+        [{"from": "172.31.250.4/32", "to": "all", "table": "100"}]
+    )
+
+    with pytest.raises(uatctl.ControllerError, match="publish_network_policy_overlap"):
+        controller._ensure_publish_network(candidate)
+
+    flattened = [item for command in runner.calls for item in command]
+    assert "create" not in flattened
+
+
+def test_incremental_acceptance_rejects_worker_when_core_already_started(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     paths = _paths(tmp_path)
     controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
     for step in (
@@ -1046,6 +1204,8 @@ def test_incremental_acceptance_rejects_when_core_already_started(tmp_path: Path
         "core_started",
     ):
         controller._record(step)
+    candidate, mapping = _incremental_fixture()
+    monkeypatch.setattr(controller, "_candidate_release", lambda: (candidate, mapping))
 
     with pytest.raises(uatctl.ControllerError, match="incremental_core_already_started"):
         controller.accept_release()
@@ -1057,7 +1217,10 @@ def test_start_core_rejects_unrepaired_worker(
     paths = _paths(tmp_path)
     controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
     controller._record("migrations_completed")
-    candidate = {"images": [{"service": "worker", "source": "new"}]}
+    candidate = {
+        "changed_services": ["worker"],
+        "images": [{"service": "worker", "source": "new"}],
+    }
     active = {"images": [{"service": "worker", "source": "old"}]}
     _write_candidate_json(paths.candidate_release, candidate)
     monkeypatch.setattr(controller, "_fixed_release", lambda: (active, {"images": []}))
@@ -1246,8 +1409,10 @@ def test_core_verification_requires_two_workers_and_keeps_ai_disabled(
     controller._record("core_started")
     prefix = controller._compose_command()
     runner.outputs[tuple(prefix + ["ps", "--status", "running", "--services"])] = (
-        "postgres\napi\nworker-cpu-1\nworker-cpu-2\nnginx"
+        "postgres\napi\nworker-cpu-1\nworker-cpu-2\nnginx\nloopback-proxy"
     )
+    runner.outputs[tuple(prefix + ["ps", "-q", "loopback-proxy"])] = "proxy-id"
+    runner.outputs[tuple(prefix + ["ps", "-q", "nginx"])] = "web-id"
     runner.outputs[
         tuple(
             prefix
@@ -1268,6 +1433,63 @@ def test_core_verification_requires_two_workers_and_keeps_ai_disabled(
             ]
         )
     ] = "2"
+    runner.outputs[("/usr/bin/docker", "inspect", "proxy-id")] = json.dumps(
+        [
+            {
+                "NetworkSettings": {
+                    "Ports": {"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "18082"}]},
+                    "Networks": {
+                        "smartscan-uat-edge": {},
+                        "smartscan-uat-publish": {},
+                    },
+                },
+                "HostConfig": {
+                    "ReadonlyRootfs": True,
+                    "CapDrop": ["ALL"],
+                    "NanoCpus": 100_000_000,
+                    "Memory": 64 * 1024**2,
+                    "PidsLimit": 32,
+                    "Tmpfs": {"/tmp": "rw,size=32m"},
+                    "LogConfig": {
+                        "Type": "json-file",
+                        "Config": {"max-file": "3", "max-size": "10m"},
+                    },
+                },
+                "Config": {"User": "101:101", "Env": ["PATH=/usr/bin"]},
+                "Mounts": [],
+                "State": {"Health": {"Status": "healthy"}},
+            }
+        ]
+    )
+    runner.outputs[("/usr/bin/docker", "inspect", "web-id")] = json.dumps(
+        [
+            {
+                "NetworkSettings": {"Networks": {"smartscan-uat-edge": {}}},
+                "HostConfig": {
+                    "ReadonlyRootfs": True,
+                    "PortBindings": {},
+                    "NanoCpus": 250_000_000,
+                    "Memory": 128 * 1024**2,
+                    "PidsLimit": 64,
+                },
+                "State": {"Health": {"Status": "healthy"}},
+            }
+        ]
+    )
+    for service in ("api", "worker-cpu-1", "worker-cpu-2"):
+        container_id = f"{service}-id"
+        runner.outputs[tuple(prefix + ["ps", "-q", service])] = container_id
+        runner.outputs[("/usr/bin/docker", "inspect", container_id)] = json.dumps(
+            [{"State": {"Health": {"Status": "healthy"}}}]
+        )
+    runner.outputs[("/usr/bin/docker", "top", "web-id", "-eo", "comm")] = "COMMAND\nnginx\nnginx"
+    runner.outputs[
+        ("/usr/bin/docker", "stats", "--no-stream", "--format", "{{.MemPerc}}", "web-id")
+    ] = "12.50%"
+    runner.results[("/usr/bin/docker", "logs", "--since", "5m", "web-id")] = uatctl.CommandResult(
+        0, "", ""
+    )
+    runner.outputs[("/usr/bin/docker", "port", "proxy-id", "8080/tcp")] = "127.0.0.1:18082"
 
     class Response:
         status = 200
@@ -1284,3 +1506,104 @@ def test_core_verification_requires_two_workers_and_keeps_ai_disabled(
 
     assert result["status"] == "passed"
     assert "core_verified" in controller.status()["completed"]
+
+
+def test_stop_core_preserves_database_migrations_release_and_resume_checkpoint(
+    tmp_path: Path,
+) -> None:
+    paths = _paths(tmp_path)
+    runner = FakeRunner()
+    controller = uatctl.Controller(paths, runner, root_uid=TEST_UID, deploy_uid=TEST_UID)
+    for step in (
+        "preflight",
+        "storage_verified",
+        "models_verified",
+        "config_verified",
+        "release_accepted",
+        "images_imported",
+        "images_verified",
+        "identities_verified",
+        "ownership_applied",
+        "database_started",
+        "database_verified",
+        "migrations_completed",
+        "core_started",
+    ):
+        controller._record(step)
+
+    result = controller.stop_core()
+
+    assert result["next_required"] == "core_started"
+    status = controller.status()
+    assert "database_started" in status["completed"]
+    assert "database_verified" in status["completed"]
+    assert "migrations_completed" in status["completed"]
+    assert "core_started" not in status["completed"]
+    assert status["next_required"] == "core_started"
+    assert controller._state()["core_stop_checkpoint"]["status"] == "passed"
+    flattened = [item for command in runner.calls for item in command]
+    for service in ("loopback-proxy", "nginx", "worker-cpu-2", "worker-cpu-1", "api"):
+        assert service in flattened
+
+
+def test_web_rollback_uses_web_evidence_after_safe_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = _paths(tmp_path)
+    controller = uatctl.Controller(paths, FakeRunner(), root_uid=TEST_UID, deploy_uid=TEST_UID)
+    release, mapping = _incremental_fixture()
+    release["changed_services"] = ["web"]
+    release["release_id"] = "previous-web-release"
+    release["platform"] = "linux/amd64"
+    mapping["platform"] = "linux/amd64"
+    _write_json(paths.previous_web_release, release)
+    _write_json(paths.previous_web_map, mapping)
+    env = (
+        "\n".join(f"{item['runtime_key']}={item['local_tag']}" for item in release["images"]) + "\n"
+    )
+    paths.previous_web_local_images.write_text(env, encoding="utf-8")
+    identities: dict[str, dict[str, object]] = {}
+    runtime_by_service: dict[str, uatctl.RuntimeImageIdentity] = {}
+    for image, record in zip(release["images"], mapping["images"], strict=True):
+        runtime = uatctl.RuntimeImageIdentity(
+            runtime_image_id=f"sha256:{record['service'][0] * 64}",
+            runtime_descriptor_digest=f"sha256:{record['service'][0] * 64}",
+            runtime_descriptor_size=1,
+            runtime_identity_kind="containerd_schema2_descriptor",
+            repo_digests=(),
+            rootfs_diff_ids=(record["layers"][0]["diff_id"],),
+        )
+        runtime_by_service[record["service"]] = runtime
+        identities[image["deploy_key"]] = {
+            "runtime_image_id": runtime.runtime_image_id,
+            "runtime_descriptor_digest": runtime.runtime_descriptor_digest,
+            "local_tag": image["local_tag"],
+        }
+    _write_json(paths.previous_web_identities, {"images": identities})
+    for active in (
+        paths.installed_release,
+        paths.installed_map,
+        paths.local_images_env,
+        paths.image_identities,
+    ):
+        active.write_text("active\n", encoding="utf-8")
+    state = controller._state()
+    state["core_stop_checkpoint"] = {"status": "passed"}
+    state["pending_release_update"] = {
+        "status": "activated",
+        "changed_services": ["web"],
+    }
+    uatctl._atomic_json(paths.state_file, state)
+
+    monkeypatch.setattr(
+        controller,
+        "_inspect_runtime_image",
+        lambda image, *_args: runtime_by_service[image["service"]],
+    )
+    result = controller.rollback_images()
+
+    assert result["status"] == "passed"
+    assert json.loads(paths.installed_release.read_text(encoding="utf-8")) == release
+    assert json.loads(paths.installed_map.read_text(encoding="utf-8")) == mapping
+    assert paths.local_images_env.read_text(encoding="utf-8") == env
+    assert controller._state()["pending_release_update"]["status"] == "rolled_back"

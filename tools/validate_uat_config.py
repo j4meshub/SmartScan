@@ -373,6 +373,7 @@ def validate_compose_contract(
         "worker-ai",
         "ai-gateway",
         "nginx",
+        "loopback-proxy",
     }
     _require(set(services) == required_services, "UAT Compose 服务集合不完整")
     expected_images = {
@@ -384,6 +385,7 @@ def validate_compose_contract(
         "worker-ai": "${SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE:",
         "ai-gateway": "${SMARTSCAN_UAT_AI_GATEWAY_RUNTIME_IMAGE:",
         "nginx": "${SMARTSCAN_UAT_WEB_RUNTIME_IMAGE:",
+        "loopback-proxy": "${SMARTSCAN_UAT_WEB_RUNTIME_IMAGE:",
     }
     cpu_total = 0.0
     memory_total = 0
@@ -409,6 +411,7 @@ def validate_compose_contract(
             "/var/cache/nginx:rw,noexec,nosuid,nodev,size=32m,mode=0755",
             "/var/run:rw,noexec,nosuid,nodev,size=4m,mode=0755",
         },
+        "loopback-proxy": {"/tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=101,gid=101"},
     }
     for name, service in services.items():
         _require(isinstance(service, dict), f"服务配置无效：{name}")
@@ -469,15 +472,39 @@ def validate_compose_contract(
     resources = allocation["resources"]
     _require(cpu_total <= float(resources["cpu_limit"]), "容器 CPU 限制总和超过资源确认")
     _require(memory_total <= int(resources["memory_limit_bytes"]), "容器内存限制总和超过资源确认")
-    _require(base_cpu_total == 5.5, "UAT 基础栈 CPU 限制合计必须为 5.5 vCPU")
-    _require(base_memory_total == int(8.75 * GIB), "UAT 基础栈内存限制合计必须为 8.75 GiB")
-    _require(cpu_total == 7.5, "UAT 含 AI 栈 CPU 限制合计必须为 7.5 vCPU")
-    _require(memory_total == int(11.75 * GIB), "UAT 含 AI 栈内存限制合计必须为 11.75 GiB")
+    _require(base_cpu_total == 5.6, "UAT 基础栈 CPU 限制合计必须为 5.6 vCPU")
+    _require(
+        base_memory_total == int(8.6875 * GIB),
+        "UAT 基础栈内存限制合计必须为 8.6875 GiB",
+    )
+    _require(cpu_total == 7.6, "UAT 含 AI 栈 CPU 限制合计必须为 7.6 vCPU")
+    _require(
+        memory_total == int(11.6875 * GIB),
+        "UAT 含 AI 栈内存限制合计必须为 11.6875 GiB",
+    )
     _require(
         "ports" not in services["postgres"] and "ports" not in services["api"],
         "数据库和 API 禁止暴露主机端口",
     )
     _require(services["nginx"].get("networks") == ["edge"], "Nginx 只能连接入口网络")
+    proxy = services["loopback-proxy"]
+    _require(proxy.get("user") == "101:101", "回环代理必须使用固定非root身份")
+    _require(proxy.get("cap_drop") == ["ALL"], "回环代理必须移除全部Linux capability")
+    _require(not proxy.get("volumes"), "回环代理禁止挂载业务数据")
+    _require(
+        set(proxy.get("networks", {})) == {"edge", "publish"},
+        "回环代理只能连接edge和publish网络",
+    )
+    _require(
+        proxy.get("ports")
+        == [
+            (
+                "${SMARTSCAN_UAT_BIND_ADDRESS:?必须设置批准的监听地址}:"
+                "${SMARTSCAN_UAT_HTTP_PORT:?必须设置批准的 UAT 端口}:8080"
+            )
+        ],
+        "回环代理只能发布批准的18082回环入口",
+    )
     _require(services["postgres"].get("networks") == ["data"], "PostgreSQL 只能连接数据网络")
     _require(
         services["postgres"].get("user") == "70:70", "PostgreSQL 必须固定以 UID/GID 70:70 运行"
@@ -502,10 +529,11 @@ def validate_compose_contract(
 
     networks = document.get("networks")
     _require(
-        isinstance(networks, dict) and set(networks) == {"data", "edge", "egress"},
+        isinstance(networks, dict) and set(networks) == {"data", "edge", "egress", "publish"},
         "UAT 网络集合无效",
     )
-    for name, network in networks.items():
+    for name in ("data", "edge", "egress"):
+        network = networks[name]
         _require(network.get("driver") == "bridge", f"{name} 网络必须显式使用 bridge")
         configs = network.get("ipam", {}).get("config", [])
         _require(
@@ -514,6 +542,10 @@ def validate_compose_contract(
         )
     _require(networks["data"].get("internal") is True, "数据网络必须 internal")
     _require(networks["edge"].get("internal") is True, "入口网络必须 internal")
+    _require(
+        networks["publish"] == {"name": "${COMPOSE_PROJECT_NAME}-publish", "external": True},
+        "publish网络必须由现场冲突检查后外部创建",
+    )
 
 
 def validate_uat_config(

@@ -196,8 +196,6 @@ services:
     pull_policy: never
     restart: "no"
     read_only: true
-    ports:
-      - ${SMARTSCAN_UAT_BIND_ADDRESS:?必须设置批准的监听地址}:${SMARTSCAN_UAT_HTTP_PORT:?必须设置批准的 UAT 端口}:80
     volumes:
       - type: bind
         source: ${SMARTSCAN_UAT_DATA_ROOT:?必须设置 UAT 数据目录}
@@ -215,8 +213,8 @@ services:
     depends_on:
       api: {condition: service_healthy}
     cpus: "0.25"
-    mem_limit: 256m
-    pids_limit: 128
+    mem_limit: 128m
+    pids_limit: 64
     logging:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
@@ -225,6 +223,41 @@ services:
       com.smartscan.managed-by: docker-compose
     security_opt: ["no-new-privileges:true"]
     networks: [edge]
+
+  loopback-proxy:
+    image: ${SMARTSCAN_UAT_WEB_RUNTIME_IMAGE:?必须设置已核验的Web本地不可变Tag}
+    pull_policy: never
+    restart: "no"
+    user: "101:101"
+    command: ["nginx", "-c", "/etc/nginx/loopback-proxy.conf", "-g", "daemon off;"]
+    read_only: true
+    cap_drop: ["ALL"]
+    ports:
+      - ${SMARTSCAN_UAT_BIND_ADDRESS:?必须设置批准的监听地址}:${SMARTSCAN_UAT_HTTP_PORT:?必须设置批准的 UAT 端口}:8080
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777,uid=101,gid=101
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      nginx: {condition: service_healthy}
+    cpus: "0.10"
+    mem_limit: 64m
+    pids_limit: 32
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    labels:
+      com.smartscan.environment: uat
+      com.smartscan.managed-by: docker-compose
+      com.smartscan.role: loopback-proxy
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      edge: {}
+      publish:
+        gw_priority: 1
 
 networks:
   data:
@@ -250,3 +283,6 @@ networks:
       config:
         - subnet: ${SMARTSCAN_UAT_EGRESS_SUBNET:?必须设置批准的 egress CIDR}
           gateway: ${SMARTSCAN_UAT_EGRESS_GATEWAY:?必须设置批准的 egress 网关}
+  publish:
+    name: ${COMPOSE_PROJECT_NAME}-publish
+    external: true
