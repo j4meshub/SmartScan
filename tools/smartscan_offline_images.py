@@ -28,8 +28,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-26-worker-fix.json"
-BASE_RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-24.json"
+RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-27-web-loopback.json"
+BASE_RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-26-worker-fix.json"
+ROOT_RELEASE_MANIFEST = ROOT / "deploy" / "releases" / "uat-2026-11-24.json"
 DOWNLOAD_ROOT = ROOT / ".smartscan-offline-transfer" / "images"
 WORKFLOW_FILE = "uat-offline-images.yml"
 GITHUB_REPOSITORY = "j4meshub/SmartScan"
@@ -124,6 +125,17 @@ def _safe_json_list(raw: bytes, reason: str) -> list[dict[str, Any]]:
     return value
 
 
+def _resolve_base_manifest(document: dict[str, Any]) -> Path:
+    """按仓库审核过的固定发布链解析增量基线，禁止跳过或自引用。"""
+
+    base_release_id = document.get("base_release_id")
+    for path in (BASE_RELEASE_MANIFEST, ROOT_RELEASE_MANIFEST):
+        candidate = _safe_json(path.read_bytes(), "base_release_manifest_invalid")
+        if candidate.get("release_id") == base_release_id:
+            return path
+    raise OfflineImageError("base_release_id_invalid")
+
+
 def load_release(path: Path = RELEASE_MANIFEST) -> ReleaseSpec:
     raw = path.read_bytes()
     document = _safe_json(raw, "release_manifest_invalid")
@@ -188,7 +200,8 @@ def load_release(path: Path = RELEASE_MANIFEST) -> ReleaseSpec:
             "incremental_release_scope_invalid",
         )
         changed_service = changed[0]
-        base_raw = BASE_RELEASE_MANIFEST.read_bytes()
+        base_path = _resolve_base_manifest(document)
+        base_raw = base_path.read_bytes()
         _require(
             document.get("base_release_manifest_sha256") == hashlib.sha256(base_raw).hexdigest(),
             "base_release_manifest_digest_invalid",

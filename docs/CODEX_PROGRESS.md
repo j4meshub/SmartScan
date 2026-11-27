@@ -8,11 +8,11 @@
 |---|---|
 | 当前里程碑 | M9 共享服务器 UAT 适配 |
 | 当前工作包 | `OPS-001P` Web资源与Docker 29回环入口兼容修复 |
-| 工作包状态 | 仓库实现、Docker 29门禁和新Web候选准备中；本工作包不修改服务器、不自动接受候选 |
-| 当前分支 | `codex/ops-001p-web-loopback-entry` |
-| 最后验证基线 | 数据库迁移和修复Worker发布已激活，`completed`已含`core_started`但不含`core_verified`。PostgreSQL、API、两个CPU Worker和旧Web运行，AI关闭；旧Web容器内部200，但宿主机18082未监听，128个Nginx Worker使PID达到128/128、内存约252.5/256 MiB。共享Nginx未修改 |
-| 工作包提交 | 待提交 |
-| PR | 待创建 |
+| 工作包状态 | 仓库实现、新Web候选及Docker 29/传统daemon完整门禁均通过；等待用户接受候选，未修改服务器 |
+| 当前分支 | `codex/ops-001p-web-release-candidate` |
+| 最后验证基线 | PR #121合并提交`58c9b997`产出固定新Web；PR #122头`b499b629`的四组流水线全部通过。Docker 29/containerd和传统隔离daemon均从现场等价`core_started`断点只切换Web，验证回环入口、双Worker心跳、真实OCR、AI关闭、无Registry访问，并在共享Nginx门禁前停止 |
+| 工作包提交 | `58c9b997`、`e129788`、`141b95d`、`73d0cdd`、`b499b62` |
+| PR | #121已合并；#122全部CI通过，待最终文档提交与合并 |
 | 下一工作包 | OPS-001P候选获用户接受后，部署窗口复核并创建固定publish网络，离线导入新Web、原子激活Web与loopback-proxy、完成`core_verified`；随后单独进入共享Nginx门禁 |
 
 ## 当前工作包进展
@@ -21,7 +21,12 @@
 - 旧Web在128核宿主机使用`worker_processes auto`，产生128个Worker进程并达到PID/内存硬上限；Docker 29的仅internal网络未形成HostConfig所声明的回环监听。根因属于Web运行资源与入口拓扑兼容，不是API、Worker、数据库或OCR故障。
 - OPS-001P将Nginx固定为单Worker，增加同镜像非root代理、第四张仓库外固定CIDR网络、Docker 29真实回环/非回环门禁，以及只替换Web的增量发布。`stop-core`已审计为保留PostgreSQL、迁移、活动发布、离线归档和回滚证据，只停止API、两个Worker、Web和代理；等待修复期间建议停止核心，但本工作包不执行。
 - OPS-001P完成后冻结UAT网络拓扑和`smartscan-uatctl`普通发布接口。候选清单改由固定部署用户0600上传入口交付；普通发布只更新已接受清单、固定digest和离线归档，不升级控制器、不新增执行器。只有协议或安全缺陷才允许再次人工升级控制器。
-- 本地实现验证通过：Ruff检查及200个Python文件格式检查、全量Python `675 passed, 44 skipped`（覆盖率87.74%）、H5 `48 passed`与JavaScript语法检查；独立空SQLite完成全迁移链后漂移检查返回`No new upgrade operations detected`。本机没有Docker CLI，Compose解析、真实root/sudo和Docker 29/containerd exact mixed release由GitHub Linux CI完成，不把本机缺少Docker记为门禁通过。
+- 本地最终验证通过：Ruff检查、194个Python文件格式检查、全量Python `677 passed, 44 skipped`（覆盖率87.74%）、H5 `48 passed`与JavaScript语法检查；独立空SQLite完成全迁移链后漂移检查返回`No new upgrade operations detected`。本机没有Docker CLI，Compose解析、真实root/sudo和Docker 29/containerd exact mixed release由GitHub Linux CI完成，不把本机缺少Docker记为门禁通过。
+- PR #121已合并为`58c9b9976c7eb14d32de1ef3efba4e0727a95c35`。容器供应链运行`45938076811`发布新Web固定digest `sha256:0dbcea47325a8c87362a3a180004e7d4ff384efddf6de08d710d7e14c6226db0`；SBOM、SLSA来源证明、严格全Critical=0及可修复High/Critical=0均通过。该digest不会被后续文档构建自动替换。
+- 新Web的`linux/amd64`manifest为`sha256:736a773974a866d13d33dd8d1336d5f657641ac013d3d5034361da2c3bf4120e`，Config为`sha256:5ac426b2ca563678de923900d4e8a623466f11966afbb42f2f9802a5ac2a831e`，包含13个压缩Layer和13个RootFS diff ID。独立离线归档`smartscan-web-0dbcea47325a-linux-amd64.docker.tar`为`27,863,040`字节、SHA-256 `d8a81f1b6bdb34a461417997fe58b9b55109f4ae691f421f218768a52e32dda3`。
+- 只替换Web的候选清单`uat-2026-11-27-web-loopback.json`按LF字节计算SHA-256为`d8b364800e899c884a6eabe2a540cc7e251b31a53b9fe9acf8219dad5fa5c797`；其余PostgreSQL、API、Worker、AI Gateway和Ops的源digest、本地不可变Tag及归档摘要逐项保持不变。六归档总大小为`991,897,600`字节。
+- PR #122最终技术头`b499b629786214c9b1cca461a141ebb9e55b4e1d`的CI运行`45941385967`、离线发布运行`45941385982`、容器供应链运行`45941386034`和PostgreSQL审计运行`45941386020`全部成功。Docker 29/containerd与传统隔离daemon都完成旧核心断点、候选接受、单Web离线导入、publish网络、loopback-proxy、`127.0.0.1:18082`、非回环不可达、主Web无默认路由、代理无Secret/数据挂载、双Worker新鲜心跳、真实OCR、AI关闭及无Registry访问，并停在`stage-nginx`人工门禁。
+- CPU Worker没有Docker `HEALTHCHECK`；其就绪契约已纠正为容器处于running且数据库存在两条120秒内的新鲜心跳。API、主Web和loopback-proxy继续要求Docker Health为healthy，没有放宽应用健康门禁。OPS-001P仓库阶段未连接或修改`smartscan-server`，未自动接受候选，也没有停止当前旧核心。
 
 - OPS-001N控制器、Compose与候选清单已由共同使用人人工安装，候选清单真实状态为`root:root 0644`且SHA-256正确。用户授权的首次且唯一一次增量`accept-release`返回`fixed_json_mode_invalid:uat-2026-11-26-worker-fix.json`；状态机未前进，新Worker未导入、活动发布未切换、核心服务未启动，PostgreSQL继续健康。
 - 根因是包装器固定要求候选清单`0644`，而Python `_load_json()`把所有JSON无条件当作内部`0600`文件。OPS-001O将权限改为有限命名策略：公开root资产`0644`、候选清单专用root`0644`、内部root状态`0600`和部署用户上传证据`0600`；调用方不能传入任意模式或所有者。

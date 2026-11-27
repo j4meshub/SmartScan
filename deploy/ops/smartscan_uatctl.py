@@ -2118,7 +2118,10 @@ class Controller:
                     == {"Type": "json-file", "Config": {"max-file": "3", "max-size": "10m"}},
                     "loopback_proxy_resource_contract_invalid",
                 )
-                for service in ("api", "worker-cpu-1", "worker-cpu-2", "nginx", "loopback-proxy"):
+                # API/Web/代理有显式Docker HEALTHCHECK；CPU Worker的运行契约是
+                # 容器处于running且在数据库中持续写入两个独立心跳，不能要求
+                # 镜像并未声明的Docker Health字段。
+                for service in ("api", "nginx", "loopback-proxy"):
                     container_id = self._compose("ps", "-q", service).strip()
                     runtime = json.loads(
                         self.runner.run(["/usr/bin/docker", "inspect", container_id])
@@ -2136,7 +2139,7 @@ class Controller:
                     "loopback_proxy_secret_exposure",
                 )
                 processes = self.runner.run(
-                    ["/usr/bin/docker", "top", web_id, "-eo", "comm"]
+                    ["/usr/bin/docker", "top", web_id, "-eo", "pid,comm"]
                 ).splitlines()
                 _require(1 < len(processes) <= 5, "web_process_count_invalid")
                 memory_text = self.runner.run(

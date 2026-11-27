@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""在隔离Linux Docker daemon中验证OPS-001N单Worker增量发布状态机。"""
+"""在隔离Linux Docker daemon中验证OPS-001P单Web增量发布状态机。"""
 
 from __future__ import annotations
 
@@ -20,8 +20,10 @@ from deploy.ops import smartscan_uatctl as uatctl
 
 GIB = 1024**3
 ROOT = Path(os.environ["GITHUB_WORKSPACE"])
-CANDIDATE_ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix"
-BASE_ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-24"
+CANDIDATE_ARCHIVES = (
+    ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-27-web-loopback"
+)
+BASE_ARCHIVES = ROOT / ".smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix"
 CI_VARIANT = "containerd29" if os.environ.get("SMARTSCAN_DOCKER29_CONTAINERD") == "1" else "legacy"
 ARCHIVES = Path(os.environ["RUNNER_TEMP"]) / f"smartscan-uat-incremental-upload-{CI_VARIANT}"
 CONFIG = Path("/etc/smartscan/uat")
@@ -38,7 +40,7 @@ def report_core_failure(controller: uatctl.Controller) -> None:
     error_pattern = re.compile(
         r"(?i)(error|exception|traceback|permission denied|read-only|no such file|failed)"
     )
-    for service in ("api", "worker-cpu-1", "worker-cpu-2", "nginx"):
+    for service in ("api", "worker-cpu-1", "worker-cpu-2", "nginx", "loopback-proxy"):
         container_id = controller._compose("ps", "-a", "-q", service).strip()
         if not container_id:
             print(json.dumps({"service": service, "status": "missing"}, sort_keys=True))
@@ -481,12 +483,76 @@ def main() -> None:
     repeated = controller.run_migrations()
     assert repeated["already_complete"] is True
     assert controller._compose("ps", "-a", "-q", "migrate") == migrate_id
+
+    # 真实服务器在OPS-001P修复前已经到达core_started，但旧Web因缺少
+    # 回环发布入口而未通过core_verified。CI先用旧发布启动同等核心断点，
+    # 再验证候选只重建Web和新增loopback-proxy，不重建数据库/API/Worker。
+    controller._compose(
+        "up",
+        "-d",
+        "--no-deps",
+        "api",
+        "worker-cpu-1",
+        "worker-cpu-2",
+        "nginx",
+    )
+    base_core_services = ("api", "worker-cpu-1", "worker-cpu-2", "nginx")
+    docker_health_services = {"api", "nginx"}
+    base_core_ready = False
+    for _ in range(90):
+        healthy = True
+        for service in base_core_services:
+            container_id = controller._compose("ps", "-q", service).strip()
+            if not container_id:
+                healthy = False
+                break
+            runtime = json.loads(
+                controller.runner.run(["/usr/bin/docker", "inspect", container_id])
+            )[0]
+            state = runtime.get("State", {})
+            if state.get("Status") != "running":
+                healthy = False
+                break
+            if (
+                service in docker_health_services
+                and state.get("Health", {}).get("Status") != "healthy"
+            ):
+                healthy = False
+                break
+        worker_count = controller._compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "smartscan",
+            "-d",
+            "smartscan",
+            "-Atqc",
+            "SELECT count(*) FROM worker_heartbeats "
+            "WHERE heartbeat_at >= CURRENT_TIMESTAMP - INTERVAL '120 seconds'",
+        ).strip()
+        if healthy and worker_count.isdigit() and int(worker_count) >= 2:
+            base_core_ready = True
+            break
+        time.sleep(2)
+    assert base_core_ready
+    assert "loopback-proxy" not in set(
+        controller._compose("ps", "--status", "running", "--services").splitlines()
+    )
+    controller._record("core_started", {"ci_existing_web_core": True})
+    checkpoint = controller.status()
+    assert checkpoint["next_required"] == "core_verified"
+    assert "core_verified" not in checkpoint["completed"]
+
     base_release = json.loads(paths.installed_release.read_text(encoding="utf-8"))
-    base_worker = next(item for item in base_release["images"] if item["service"] == "worker")
+    base_images = {item["service"]: item for item in base_release["images"]}
+    base_web = base_images["web"]
     accepted = controller.accept_release()
     assert accepted["step"] == "incremental_release_accepted"
     assert json.loads(paths.installed_release.read_text(encoding="utf-8")) == base_release
-    assert base_worker["local_tag"] in paths.local_images_env.read_text(encoding="utf-8")
+    active_images = paths.local_images_env.read_text(encoding="utf-8")
+    assert all(item["local_tag"] in active_images for item in base_images.values())
 
     original_urlopen = uatctl.urllib.request.urlopen
 
@@ -521,13 +587,16 @@ def main() -> None:
     assert {"core_started", "core_verified"}.issubset(final["completed"])
     assert not paths.active_nginx.exists()
     release, _ = controller._fixed_release()
-    worker = next(item for item in release["images"] if item["service"] == "worker")
-    assert worker["source"].endswith(
-        "@sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742"
+    active_images = {item["service"]: item for item in release["images"]}
+    web = active_images["web"]
+    assert web["source"].endswith(
+        "@sha256:0dbcea47325a8c87362a3a180004e7d4ff384efddf6de08d710d7e14c6226db0"
     )
-    assert worker["local_tag"] != base_worker["local_tag"]
+    assert web["local_tag"] != base_web["local_tag"]
+    for service in set(base_images) - {"web"}:
+        assert active_images[service] == base_images[service]
     assert controller.runner.run(
-        ["/usr/bin/docker", "image", "inspect", "--format", "{{.Id}}", base_worker["local_tag"]]
+        ["/usr/bin/docker", "image", "inspect", "--format", "{{.Id}}", base_web["local_tag"]]
     )
     running = set(controller._compose("ps", "--status", "running", "--services").splitlines())
     assert running == {

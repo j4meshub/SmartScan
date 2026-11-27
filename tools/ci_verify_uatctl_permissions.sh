@@ -28,7 +28,7 @@ install -o root -g root -m 0644 "$ROOT/deploy/ops/smartscan_uat_validators.py" "
 install -o root -g root -m 0644 "$ROOT/deploy/compose/docker-compose.uat.yml" "$INSTALL_ROOT/docker-compose.uat.yml"
 install -o root -g root -m 0644 "$ROOT/deploy/nginx/shared-8077-smartscan-location.conf.template" "$INSTALL_ROOT/shared-8077-smartscan-location.conf"
 install -d -o szhzx -g szhzx -m 0700 "$UPLOAD_ROOT"
-install -o szhzx -g szhzx -m 0600 "$ROOT/deploy/releases/uat-2026-11-26-worker-fix.json" "$CANDIDATE"
+install -o szhzx -g szhzx -m 0600 "$ROOT/deploy/releases/uat-2026-11-27-web-loopback.json" "$CANDIDATE"
 install -o root -g root -m 0440 "$ROOT/deploy/sudoers/smartscan-uatctl" "$SUDOERS_FILE"
 visudo -cf "$SUDOERS_FILE" >/dev/null
 

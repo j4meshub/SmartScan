@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.1",
+  "release_id": "smartscan-uat-2026-11-27-web-loopback",
+  "candidate_created_at": "2026-11-27T00:00:00+08:00",
+  "approval_status": "等待服务器共同使用人接受",
+  "base_release_id": "smartscan-uat-2026-11-26-worker-fix",
+  "base_release_manifest_sha256": "8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003",
+  "changed_services": [
+    "web"
+  ],
+  "unchanged_archives": {
+    "postgres": {
+      "size": 119900160,
+      "sha256": "9c70db621d3f56ac7ec509f903447e1455d2b92e4a93ab1d20c511d18da70242"
+    },
+    "api": {
+      "size": 90163200,
+      "sha256": "8ae4194b3f28ddd7a9655ac39cf1eb01e0c6b740c953fc440ece309b7dda1fb4"
+    },
+    "worker": {
+      "size": 573480960,
+      "sha256": "33bc7ed9ba28811f8abe12ff4edad7f4634834df8a452a8b56bd9325c0d8b2e7"
+    },
+    "ai-gateway": {
+      "size": 90132480,
+      "sha256": "cd1a5870af42ee936f6987a6c0b91c4527c0d0308be566e8cca59472fbf6394b"
+    },
+    "ops": {
+      "size": 90357760,
+      "sha256": "035c17b916f6a7be3eccaf3787dd0b6b4ba950df7ea4f677555e37bdd0cf7ad4"
+    }
+  },
+  "platform": "linux/amd64",
+  "registry_prefix": "ghcr.io/j4meshub/smartscan-",
+  "server_alias": "smartscan-server",
+  "server_upload_root": "/home/szhzx/smartscan-uat-offline-images",
+  "source_repository": "https://github.com/j4meshub/SmartScan",
+  "images": [
+    {
+      "service": "postgres",
+      "deploy_key": "SMARTSCAN_UAT_POSTGRES_IMAGE",
+      "runtime_key": "SMARTSCAN_UAT_POSTGRES_RUNTIME_IMAGE",
+      "source": "ghcr.io/j4meshub/smartscan-postgres@sha256:94758173bbe1975014751a2e2855a22e0e554e8df996e4d6303bcf386cdae6d0",
+      "local_tag": "smartscan-uat-postgres:sha256-94758173bbe1",
+      "archive_name": "smartscan-postgres-94758173bbe1-linux-amd64.docker.tar"
+    },
+    {
+      "service": "api",
+      "deploy_key": "SMARTSCAN_UAT_API_IMAGE",
+      "runtime_key": "SMARTSCAN_UAT_API_RUNTIME_IMAGE",
+      "source": "ghcr.io/j4meshub/smartscan-api@sha256:80aea0a272791ea44d76895dbd825d091620e0f43ad76c32f32fb6ba97c646d0",
+      "local_tag": "smartscan-uat-api:sha256-80aea0a27279",
+      "archive_name": "smartscan-api-80aea0a27279-linux-amd64.docker.tar",
+      "expected_revision": "2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697"
+    },
+    {
+      "service": "worker",
+      "deploy_key": "SMARTSCAN_UAT_WORKER_IMAGE",
+      "runtime_key": "SMARTSCAN_UAT_WORKER_RUNTIME_IMAGE",
+      "source": "ghcr.io/j4meshub/smartscan-worker@sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742",
+      "local_tag": "smartscan-uat-worker:sha256-9957b27924b0",
+      "archive_name": "smartscan-worker-9957b27924b0-linux-amd64.docker.tar",
+      "expected_revision": "cb6599bf75da44f5f9b1a0e4e48f866b8db501b1"
+    },
+    {
+      "service": "ai-gateway",
+      "deploy_key": "SMARTSCAN_UAT_AI_GATEWAY_IMAGE",
+      "runtime_key": "SMARTSCAN_UAT_AI_GATEWAY_RUNTIME_IMAGE",
+      "source": "ghcr.io/j4meshub/smartscan-ai-gateway@sha256:1813ada8bda225530d71e5afa9e1c3fd640d5e23d05000d370fdccad0e5e8b00",
+      "local_tag": "smartscan-uat-ai-gateway:sha256-1813ada8bda2",
+      "archive_name": "smartscan-ai-gateway-1813ada8bda2-linux-amd64.docker.tar",
+      "expected_revision": "2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697"
+    },
+    {
+      "service": "web",
+      "deploy_key": "SMARTSCAN_UAT_WEB_IMAGE",
+      "runtime_key": "SMARTSCAN_UAT_WEB_RUNTIME_IMAGE",
+      "source": "ghcr.io/j4meshub/smartscan-web@sha256:0dbcea47325a8c87362a3a180004e7d4ff384efddf6de08d710d7e14c6226db0",
+      "local_tag": "smartscan-uat-web:sha256-0dbcea47325a",
+      "archive_name": "smartscan-web-0dbcea47325a-linux-amd64.docker.tar",
+      "expected_revision": "58c9b9976c7eb14d32de1ef3efba4e0727a95c35"
+    },
+    {
+      "service": "ops",
+      "deploy_key": "SMARTSCAN_UAT_OPS_IMAGE",
+      "runtime_key": "SMARTSCAN_UAT_OPS_RUNTIME_IMAGE",
+      "source": "ghcr.io/j4meshub/smartscan-ops@sha256:be6c50fbdbc9404a9d9589a53799dbc6084470a63f2306ec6bee5736adf94cae",
+      "local_tag": "smartscan-uat-ops:sha256-be6c50fbdbc9",
+      "archive_name": "smartscan-ops-be6c50fbdbc9-linux-amd64.docker.tar",
+      "expected_revision": "2adbf4f3a000a0fc57aa76b1bff0faa5b99b2697"
+    }
+  ]
+}
