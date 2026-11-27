@@ -37,7 +37,7 @@ esac
 [[ -f "$VALIDATORS" && ! -L "$VALIDATORS" && "$($STAT -c '%U:%G:%a:%h' "$VALIDATORS")" == "root:root:${PUBLIC_ROOT_ASSET_MODE}:1" ]] || { printf 'status=failed\nreason=validators_invalid\n' >&2; exit 1; }
 
 # 本摘要固定到同一审查提交中的辅助工具；任何内容漂移都拒绝运行。
-readonly HELPER_SHA256="d19fc76f0b2b4a206ec9049f485d357d647f91fa0ddba7b12002bc78b07d6120"
+readonly HELPER_SHA256="463502d828851f7dbf967555e893537653dca2d9ad15dd13617fc4af01b95c4e"
 readonly VALIDATORS_SHA256="27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b"
 [[ "$HELPER_SHA256" != REPLACE_* ]] || { printf 'status=failed\nreason=helper_digest_not_pinned\n' >&2; exit 1; }
 [[ "$($SHA256 "$HELPER" | /usr/bin/awk '{print $1}')" == "$HELPER_SHA256" ]] || { printf 'status=failed\nreason=helper_digest_mismatch\n' >&2; exit 1; }

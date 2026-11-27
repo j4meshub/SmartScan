@@ -1479,8 +1479,11 @@ def test_core_verification_requires_two_workers_and_keeps_ai_disabled(
     for service in ("api", "worker-cpu-1", "worker-cpu-2"):
         container_id = f"{service}-id"
         runner.outputs[tuple(prefix + ["ps", "-q", service])] = container_id
+        state = {"Status": "running"}
+        if service == "api":
+            state["Health"] = {"Status": "healthy"}
         runner.outputs[("/usr/bin/docker", "inspect", container_id)] = json.dumps(
-            [{"State": {"Health": {"Status": "healthy"}}}]
+            [{"State": state}]
         )
     runner.outputs[("/usr/bin/docker", "top", "web-id", "-eo", "pid,comm")] = (
         "PID COMMAND\n1 nginx\n17 nginx"

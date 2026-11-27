@@ -497,6 +497,7 @@ def main() -> None:
         "nginx",
     )
     base_core_services = ("api", "worker-cpu-1", "worker-cpu-2", "nginx")
+    docker_health_services = {"api", "nginx"}
     base_core_ready = False
     for _ in range(90):
         healthy = True
@@ -508,7 +509,14 @@ def main() -> None:
             runtime = json.loads(
                 controller.runner.run(["/usr/bin/docker", "inspect", container_id])
             )[0]
-            if runtime.get("State", {}).get("Health", {}).get("Status") != "healthy":
+            state = runtime.get("State", {})
+            if state.get("Status") != "running":
+                healthy = False
+                break
+            if (
+                service in docker_health_services
+                and state.get("Health", {}).get("Status") != "healthy"
+            ):
                 healthy = False
                 break
         worker_count = controller._compose(
