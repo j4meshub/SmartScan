@@ -483,6 +483,60 @@ def main() -> None:
     repeated = controller.run_migrations()
     assert repeated["already_complete"] is True
     assert controller._compose("ps", "-a", "-q", "migrate") == migrate_id
+
+    # 真实服务器在OPS-001P修复前已经到达core_started，但旧Web因缺少
+    # 回环发布入口而未通过core_verified。CI先用旧发布启动同等核心断点，
+    # 再验证候选只重建Web和新增loopback-proxy，不重建数据库/API/Worker。
+    controller._compose(
+        "up",
+        "-d",
+        "--no-deps",
+        "api",
+        "worker-cpu-1",
+        "worker-cpu-2",
+        "nginx",
+    )
+    base_core_services = ("api", "worker-cpu-1", "worker-cpu-2", "nginx")
+    base_core_ready = False
+    for _ in range(90):
+        healthy = True
+        for service in base_core_services:
+            container_id = controller._compose("ps", "-q", service).strip()
+            if not container_id:
+                healthy = False
+                break
+            runtime = json.loads(
+                controller.runner.run(["/usr/bin/docker", "inspect", container_id])
+            )[0]
+            if runtime.get("State", {}).get("Health", {}).get("Status") != "healthy":
+                healthy = False
+                break
+        worker_count = controller._compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "smartscan",
+            "-d",
+            "smartscan",
+            "-Atqc",
+            "SELECT count(*) FROM worker_heartbeats "
+            "WHERE heartbeat_at >= CURRENT_TIMESTAMP - INTERVAL '120 seconds'",
+        ).strip()
+        if healthy and worker_count.isdigit() and int(worker_count) >= 2:
+            base_core_ready = True
+            break
+        time.sleep(2)
+    assert base_core_ready
+    assert "loopback-proxy" not in set(
+        controller._compose("ps", "--status", "running", "--services").splitlines()
+    )
+    controller._record("core_started", {"ci_existing_web_core": True})
+    checkpoint = controller.status()
+    assert checkpoint["next_required"] == "core_verified"
+    assert "core_verified" not in checkpoint["completed"]
+
     base_release = json.loads(paths.installed_release.read_text(encoding="utf-8"))
     base_images = {item["service"]: item for item in base_release["images"]}
     base_web = base_images["web"]

@@ -57,8 +57,8 @@ OPS-001P需要最后一次人工升级控制器、Compose和包装器，以安�
 
 | 资产 | SHA-256 |
 |---|---|
-| `deploy/ops/smartscan-uatctl` | `ea4a5c5f292e0dffa15417e80b732b0113f7e13e6ad0eaf234d51ec39b61a58d` |
-| `deploy/ops/smartscan_uatctl.py` | `ce08d31b06b8affb13b2301d134fe4be4891ccd412cebdf9626dae31d26ec3ab` |
+| `deploy/ops/smartscan-uatctl` | `d77a675d3a927f911dd378a60e557d59f8dac41fb30ef136bfd011677de75ae5` |
+| `deploy/ops/smartscan_uatctl.py` | `d19fc76f0b2b4a206ec9049f485d357d647f91fa0ddba7b12002bc78b07d6120` |
 | `deploy/compose/docker-compose.uat.yml` | `01b5970c309074a19e5722c8ce2ae2a1a646b69cea6777b29140121cb1d76b37` |
 | `deploy/ops/smartscan_uat_validators.py`（不变） | `27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b` |
 | `deploy/sudoers/smartscan-uatctl`（不变） | `081caf34e05798cc556e495728b6b88ce3b2318a3990ca4351d347a2ffcefef3` |

@@ -2136,7 +2136,7 @@ class Controller:
                     "loopback_proxy_secret_exposure",
                 )
                 processes = self.runner.run(
-                    ["/usr/bin/docker", "top", web_id, "-eo", "comm"]
+                    ["/usr/bin/docker", "top", web_id, "-eo", "pid,comm"]
                 ).splitlines()
                 _require(1 < len(processes) <= 5, "web_process_count_invalid")
                 memory_text = self.runner.run(
