@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -70,10 +71,9 @@ MANIFEST_MEDIA_TYPES = {
     "application/vnd.docker.distribution.manifest.v2+json",
 }
 INSTALLED_ASSET_SHA256 = {
-    "docker-compose.uat.yml": "5a5e28e0032f810202f129d3231b6b859cd1b734d4754f812c09192a034d480c",
+    "docker-compose.uat.yml": "01b5970c309074a19e5722c8ce2ae2a1a646b69cea6777b29140121cb1d76b37",
     "shared-8077-smartscan-location.conf": "500aee2ae34f6a14e658823588899647ece628b97fb65554132eef95e741d227",
     "smartscan_uat_validators.py": "27916a63ea05c9fb149255b5ee63edc1bd43b1f4e26ec347266eef6026e0467b",
-    "uat-2026-11-26-worker-fix.json": "8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003",
 }
 
 
@@ -85,7 +85,6 @@ class FixedFilePolicy(Enum):
     """控制器固定文件的有限权限策略；调用方不能传入任意模式或所有者。"""
 
     PUBLIC_ROOT_ASSET_0644 = "public_root_asset_0644"
-    CANDIDATE_RELEASE_PUBLIC_ROOT_0644 = "candidate_release_public_root_0644"
     INTERNAL_STATE_ROOT_0600 = "internal_state_root_0600"
     UPLOADED_RELEASE_DEPLOY_0600 = "uploaded_release_deploy_0600"
 
@@ -99,9 +98,6 @@ class FixedFilePermissionContract:
 
 FIXED_FILE_PERMISSION_CONTRACTS = {
     FixedFilePolicy.PUBLIC_ROOT_ASSET_0644: FixedFilePermissionContract(
-        owner_role="root", mode=0o644, sensitive=False
-    ),
-    FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644: FixedFilePermissionContract(
         owner_role="root", mode=0o644, sensitive=False
     ),
     FixedFilePolicy.INTERNAL_STATE_ROOT_0600: FixedFilePermissionContract(
@@ -165,11 +161,20 @@ class Paths:
     compose_file: Path = Path("/usr/local/libexec/smartscan/docker-compose.uat.yml")
     nginx_template: Path = Path("/usr/local/libexec/smartscan/shared-8077-smartscan-location.conf")
     validator_module: Path = Path("/usr/local/libexec/smartscan/smartscan_uat_validators.py")
-    candidate_release: Path = Path("/usr/local/libexec/smartscan/uat-2026-11-26-worker-fix.json")
+    # 普通增量发布使用固定上传入口。用户对清单摘要显式授权后，控制器再以
+    # accept-release 固定命令登记；不再把每个候选文件名或摘要编译进包装器。
+    candidate_release: Path = Path(
+        "/home/szhzx/smartscan-uat-offline-images/candidate-release.json"
+    )
     previous_release: Path = Path("/etc/smartscan/uat/previous-release-manifest.json")
     previous_map: Path = Path("/etc/smartscan/uat/previous-release-map.json")
     previous_local_images: Path = Path("/etc/smartscan/uat/previous-local-images.env")
     previous_identities: Path = Path("/etc/smartscan/uat/previous-image-identities.json")
+    previous_web_release: Path = Path("/etc/smartscan/uat/previous-web-release-manifest.json")
+    previous_web_map: Path = Path("/etc/smartscan/uat/previous-web-release-map.json")
+    previous_web_local_images: Path = Path("/etc/smartscan/uat/previous-web-local-images.env")
+    previous_web_identities: Path = Path("/etc/smartscan/uat/previous-web-image-identities.json")
+    publish_network_evidence: Path = Path("/etc/smartscan/uat/publish-network-evidence.json")
 
 
 class Runner(Protocol):
@@ -545,15 +550,17 @@ class Controller:
         return self.paths.upload_root / str(image["archive_name"])
 
     def _candidate_release(self) -> tuple[dict[str, Any], dict[str, Any]]:
-        """验证固定单Worker候选，不改变当前已激活发布。"""
+        """验证固定单服务候选，不改变当前已激活发布。"""
 
         candidate = _load_json(
             self.paths.candidate_release,
-            policy=FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
-            expected_root_uid=self.root_uid,
+            policy=FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600,
+            expected_deploy_uid=self.deploy_uid,
         )
         _require(candidate.get("schema_version") == "1.1", "incremental_release_schema_invalid")
-        _require(candidate.get("changed_services") == ["worker"], "incremental_scope_invalid")
+        changed = candidate.get("changed_services")
+        _require(changed in (["worker"], ["web"]), "incremental_scope_invalid")
+        changed_service = changed[0]
         active, active_map = self._fixed_release(uploaded=False)
         _require(
             candidate.get("base_release_id") == active.get("release_id")
@@ -610,23 +617,24 @@ class Controller:
             and set(candidate_records) == EXPECTED_SERVICES,
             "incremental_release_services_invalid",
         )
-        for service in EXPECTED_SERVICES - {"worker"}:
+        for service in EXPECTED_SERVICES - {changed_service}:
             _require(
                 candidate_images[service] == active_images[service]
                 and candidate_records[service] == active_records[service],
                 f"incremental_unchanged_service_drift:{service}",
             )
-        worker = candidate_images["worker"]
-        worker_record = candidate_records["worker"]
+        changed_image = candidate_images[changed_service]
+        changed_record = candidate_records[changed_service]
         _require(
-            worker != active_images["worker"]
-            and worker["source"] != active_images["worker"]["source"]
-            and worker["local_tag"] != active_images["worker"]["local_tag"],
-            "incremental_worker_not_changed",
+            changed_image != active_images[changed_service]
+            and changed_image["source"] != active_images[changed_service]["source"]
+            and changed_image["local_tag"] != active_images[changed_service]["local_tag"],
+            f"incremental_{changed_service}_not_changed",
         )
-        archive = candidate_root / worker["archive_name"]
+        archive = candidate_root / changed_image["archive_name"]
         _require(
-            archive.is_file() and not archive.is_symlink(), "incremental_worker_archive_missing"
+            archive.is_file() and not archive.is_symlink(),
+            f"incremental_{changed_service}_archive_missing",
         )
         if os.name != "nt":
             info = archive.stat()
@@ -634,15 +642,202 @@ class Controller:
                 info.st_uid == self.deploy_uid
                 and stat.S_IMODE(info.st_mode) == 0o600
                 and info.st_nlink == 1,
-                "incremental_worker_archive_permissions_invalid",
+                f"incremental_{changed_service}_archive_permissions_invalid",
             )
         _require(
-            archive.stat().st_size == int(worker_record.get("archive_size", -1))
-            and _sha256(archive) == worker_record.get("archive_sha256"),
-            "incremental_worker_archive_digest_invalid",
+            archive.stat().st_size == int(changed_record.get("archive_size", -1))
+            and _sha256(archive) == changed_record.get("archive_sha256"),
+            f"incremental_{changed_service}_archive_digest_invalid",
         )
-        self._verify_uploaded_archive(worker, worker_record, archive)
+        self._verify_uploaded_archive(changed_image, changed_record, archive)
+        if changed_service == "web":
+            self._publish_network_spec(candidate)
         return candidate, mapping
+
+    def _publish_network_spec(self, candidate: dict[str, Any]) -> dict[str, Any]:
+        path = (
+            self.paths.upload_root / str(candidate.get("release_id", "")) / "publish-network.json"
+        )
+        value = _load_json(
+            path,
+            policy=FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600,
+            expected_deploy_uid=self.deploy_uid,
+        )
+        _require(value.get("schema_version") == "1.0", "publish_network_schema_invalid")
+        _require(
+            value.get("network_name") == "smartscan-uat-publish", "publish_network_name_invalid"
+        )
+        _require(
+            value.get("risk_acknowledgement") == "loopback-proxy-has-theoretical-egress",
+            "publish_network_risk_ack_missing",
+        )
+        try:
+            subnet = ipaddress.ip_network(str(value.get("subnet", "")), strict=True)
+            gateway = ipaddress.ip_address(str(value.get("gateway", "")))
+        except ValueError as exc:
+            raise ControllerError("publish_network_ipam_invalid") from exc
+        _require(
+            isinstance(subnet, ipaddress.IPv4Network)
+            and subnet.is_private
+            and subnet.prefixlen == 28,
+            "publish_network_subnet_invalid",
+        )
+        _require(gateway == subnet.network_address + 1, "publish_network_gateway_invalid")
+        confirmation = value.get("confirmation")
+        _require(isinstance(confirmation, dict), "publish_network_confirmation_invalid")
+        for field in (
+            "confirmed_by",
+            "confirmed_at",
+            "change_record",
+            "validation_record",
+            "rollback_record",
+        ):
+            _require(
+                isinstance(confirmation.get(field), str) and confirmation[field].strip(),
+                f"publish_network_confirmation_missing:{field}",
+            )
+        return value
+
+    @staticmethod
+    def _network_from_ipam(value: Any) -> list[ipaddress.IPv4Network]:
+        result: list[ipaddress.IPv4Network] = []
+        if not isinstance(value, list):
+            return result
+        for item in value:
+            if not isinstance(item, dict) or not item.get("Subnet"):
+                continue
+            try:
+                network = ipaddress.ip_network(str(item["Subnet"]), strict=False)
+            except ValueError:
+                continue
+            if isinstance(network, ipaddress.IPv4Network):
+                result.append(network)
+        return result
+
+    def _inspect_publish_network(self, expected: dict[str, Any]) -> bool:
+        result = self.runner.run_result(
+            [
+                "/usr/bin/docker",
+                "network",
+                "inspect",
+                "smartscan-uat-publish",
+            ]
+        )
+        if result.returncode != 0:
+            return False
+        try:
+            values = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise ControllerError("publish_network_inspect_invalid") from exc
+        _require(isinstance(values, list) and len(values) == 1, "publish_network_inspect_invalid")
+        network = values[0]
+        _require(
+            network.get("Name") == "smartscan-uat-publish"
+            and network.get("Driver") == "bridge"
+            and network.get("Scope") == "local"
+            and network.get("Internal") is False,
+            "publish_network_contract_invalid",
+        )
+        configs = network.get("IPAM", {}).get("Config", [])
+        _require(
+            isinstance(configs, list)
+            and len(configs) == 1
+            and configs[0].get("Subnet") == expected["subnet"]
+            and configs[0].get("Gateway") == expected["gateway"]
+            and not configs[0].get("IPRange")
+            and not configs[0].get("AuxiliaryAddresses"),
+            "publish_network_ipam_drift",
+        )
+        labels = network.get("Labels") or {}
+        _require(
+            labels.get("com.smartscan.environment") == "uat"
+            and labels.get("com.smartscan.managed-by") == "smartscan-uatctl"
+            and labels.get("com.smartscan.role") == "loopback-publish",
+            "publish_network_labels_invalid",
+        )
+        return True
+
+    def _ensure_publish_network(self, candidate: dict[str, Any]) -> None:
+        expected = self._publish_network_spec(candidate)
+        if self._inspect_publish_network(expected):
+            return
+        proposed = ipaddress.ip_network(expected["subnet"], strict=True)
+        network_ids = self.runner.run(["/usr/bin/docker", "network", "ls", "--quiet"]).splitlines()
+        for network_id in network_ids:
+            raw = self.runner.run(
+                [
+                    "/usr/bin/docker",
+                    "network",
+                    "inspect",
+                    "--format",
+                    "{{json .IPAM.Config}}",
+                    network_id,
+                ]
+            )
+            try:
+                configs = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise ControllerError("docker_ipam_snapshot_invalid") from exc
+            _require(
+                not any(proposed.overlaps(item) for item in self._network_from_ipam(configs)),
+                "publish_network_docker_overlap",
+            )
+        for command, reason in (
+            (["/usr/sbin/ip", "-j", "-4", "route", "show", "table", "all"], "route"),
+            (["/usr/sbin/ip", "-j", "-4", "rule", "show"], "policy"),
+            (["/usr/sbin/ip", "-j", "-4", "address", "show"], "interface"),
+        ):
+            try:
+                rows = json.loads(self.runner.run(command))
+            except json.JSONDecodeError as exc:
+                raise ControllerError(f"publish_network_{reason}_snapshot_invalid") from exc
+            _require(isinstance(rows, list), f"publish_network_{reason}_snapshot_invalid")
+            for row in rows:
+                values = []
+                if reason == "route":
+                    values.append(row.get("dst"))
+                elif reason == "policy":
+                    values.extend((row.get("from"), row.get("to")))
+                else:
+                    values.extend(item.get("local") for item in row.get("addr_info", []))
+                for text in values:
+                    if not text or text == "default":
+                        continue
+                    try:
+                        current = ipaddress.ip_network(
+                            text if "/" in str(text) else f"{text}/32", strict=False
+                        )
+                    except ValueError:
+                        continue
+                    if isinstance(current, ipaddress.IPv4Network):
+                        _require(
+                            not proposed.overlaps(current),
+                            f"publish_network_{reason}_overlap",
+                        )
+        self.runner.run(
+            [
+                "/usr/bin/docker",
+                "network",
+                "create",
+                "--driver",
+                "bridge",
+                "--subnet",
+                expected["subnet"],
+                "--gateway",
+                expected["gateway"],
+                "--label",
+                "com.smartscan.environment=uat",
+                "--label",
+                "com.smartscan.managed-by=smartscan-uatctl",
+                "--label",
+                "com.smartscan.role=loopback-publish",
+                "smartscan-uat-publish",
+            ]
+        )
+        _require(
+            self._inspect_publish_network(expected), "publish_network_create_verification_failed"
+        )
+        _atomic_json(self.paths.publish_network_evidence, expected)
 
     @staticmethod
     def _verify_uploaded_archive(
@@ -828,7 +1023,6 @@ class Controller:
             self.paths.compose_file: FixedFilePolicy.PUBLIC_ROOT_ASSET_0644,
             self.paths.nginx_template: FixedFilePolicy.PUBLIC_ROOT_ASSET_0644,
             self.paths.validator_module: FixedFilePolicy.PUBLIC_ROOT_ASSET_0644,
-            self.paths.candidate_release: FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
         }
         for path, policy in installed_assets.items():
             try:
@@ -880,8 +1074,15 @@ class Controller:
                 )
                 return self.status()
             self._require_steps("migrations_completed")
-            _require(not self._completed("core_started"), "incremental_core_already_started")
             release, _mapping = self._candidate_release()
+            changed_services = release["changed_services"]
+            if changed_services == ["worker"]:
+                _require(not self._completed("core_started"), "incremental_core_already_started")
+            else:
+                _require(
+                    self._completed("core_started") and not self._completed("core_verified"),
+                    "web_update_checkpoint_invalid",
+                )
             state["pending_release_update"] = {
                 "status": "accepted",
                 "release_id": release["release_id"],
@@ -889,7 +1090,7 @@ class Controller:
                 "map_sha256": _sha256(
                     self.paths.upload_root / release["release_id"] / "release-map.json"
                 ),
-                "changed_services": ["worker"],
+                "changed_services": changed_services,
                 "secrets_included": False,
             }
             state["history"] = [
@@ -1411,6 +1612,32 @@ class Controller:
             "incremental_data_ownership_changed",
         )
 
+    def _save_one_step_rollback(self, backup_pairs: tuple[tuple[Path, Path], ...]) -> None:
+        """原子保存当前活动发布，固定只保留最近一次可验证回滚证据。"""
+
+        for source, backup in backup_pairs:
+            _verify_fixed_file(
+                source,
+                FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+                expected_root_uid=self.root_uid,
+            )
+            if backup.exists() or backup.is_symlink():
+                _verify_fixed_file(
+                    backup,
+                    FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+                    expected_root_uid=self.root_uid,
+                )
+            temporary = backup.with_name(f".{backup.name}.next.tmp")
+            _require(
+                not temporary.exists() and not temporary.is_symlink(),
+                f"incremental_backup_temp_exists:{backup.name}",
+            )
+            shutil.copyfile(source, temporary)
+            if hasattr(os, "chown"):
+                os.chown(temporary, self.root_uid, self.root_uid)
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, backup)
+
     def _activate_pending_worker_release(self) -> dict[str, Any]:
         """验证并原子切换单Worker候选；失败时保留旧发布为活动发布。"""
 
@@ -1493,18 +1720,7 @@ class Controller:
             (self.paths.local_images_env, self.paths.previous_local_images),
             (self.paths.image_identities, self.paths.previous_identities),
         )
-        for source, backup in backup_pairs:
-            _require(
-                source.is_file()
-                and not source.is_symlink()
-                and not backup.exists()
-                and not backup.is_symlink(),
-                f"incremental_backup_precondition_failed:{backup.name}",
-            )
-            shutil.copyfile(source, backup)
-            if hasattr(os, "chown"):
-                os.chown(backup, self.root_uid, self.root_uid)
-            os.chmod(backup, 0o600)
+        self._save_one_step_rollback(backup_pairs)
         pending["status"] = "verified"
         pending["worker_runtime_id"] = runtime_identity.runtime_image_id
         pending["worker_uid"] = uid
@@ -1554,6 +1770,162 @@ class Controller:
             "step": "incremental_worker_release_activated",
             "secrets_included": False,
         }
+
+    def _activate_pending_web_release(self) -> dict[str, Any]:
+        """从core_started断点只替换Web镜像，并增加受限回环代理。"""
+
+        state = self._state()
+        pending = state.get("pending_release_update")
+        _require(
+            isinstance(pending, dict)
+            and pending.get("status") in {"accepted", "verified"}
+            and pending.get("changed_services") == ["web"],
+            "incremental_web_release_not_accepted",
+        )
+        _require(
+            self._completed("core_started") and not self._completed("core_verified"),
+            "web_update_checkpoint_invalid",
+        )
+        candidate, mapping = self._candidate_release()
+        _require(
+            pending.get("release_id") == candidate.get("release_id")
+            and pending.get("manifest_sha256") == _sha256(self.paths.candidate_release),
+            "incremental_release_state_mismatch",
+        )
+        web = next(item for item in candidate["images"] if item["service"] == "web")
+        web_record = next(item for item in mapping["images"] if item["service"] == "web")
+        archive = self._archive_path(candidate, web)
+        current = self.runner.run(
+            ["/usr/bin/docker", "image", "inspect", "--format", "{{.Id}}", web["local_tag"]],
+            check=False,
+        )
+        if not current:
+            self.runner.run(["/usr/bin/docker", "load", "--input", str(archive)])
+        runtime_identity = self._inspect_runtime_image(web, web_record, archive)
+        user = str(web_record.get("config_user", ""))
+        match = re.fullmatch(r"([0-9]+):([0-9]+)", user)
+        if match:
+            uid, gid, method = int(match.group(1)), int(match.group(2)), "static_config_user"
+        else:
+            uid = self._probe("web-update", web["local_tag"], "u")
+            gid = self._probe("web-update", web["local_tag"], "g")
+            method = "networkless_controlled_probe"
+        identities = _load_json(
+            self.paths.image_identities,
+            policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
+            expected_root_uid=self.root_uid,
+        )
+        images = identities.get("images")
+        _require(isinstance(images, dict), "identity_images_invalid")
+        _require(
+            isinstance(images.get("SMARTSCAN_UAT_WEB_IMAGE"), dict),
+            "previous_web_identity_invalid",
+        )
+        images["SMARTSCAN_UAT_WEB_IMAGE"] = {
+            "reference": web["source"],
+            "repo_digest_verified": False,
+            "source_digest_verified": True,
+            "offline_mapping_verified": True,
+            "source_digest": web["source"],
+            "platform_manifest": web_record["platform_manifest"],
+            "config_digest": web_record["config_digest"],
+            "layer_digests": [item["digest"] for item in web_record["layers"]],
+            "rootfs_diff_ids": [item["diff_id"] for item in web_record["layers"]],
+            "local_tag": web["local_tag"],
+            "archive_sha256": web_record["archive_sha256"],
+            **runtime_identity.evidence(),
+            "config_user": user,
+            "runtime_uid": uid,
+            "runtime_gid": gid,
+            "identity_method": method,
+        }
+        self._ensure_publish_network(candidate)
+        lines = [f"{item['runtime_key']}={item['local_tag']}" for item in candidate["images"]]
+        backup_pairs = (
+            (self.paths.installed_release, self.paths.previous_web_release),
+            (self.paths.installed_map, self.paths.previous_web_map),
+            (self.paths.local_images_env, self.paths.previous_web_local_images),
+            (self.paths.image_identities, self.paths.previous_web_identities),
+        )
+        self._save_one_step_rollback(backup_pairs)
+        unchanged_ids = {
+            service: self._compose("ps", "-q", service).strip()
+            for service in ("postgres", "api", "worker-cpu-1", "worker-cpu-2")
+        }
+        pending["status"] = "verified"
+        pending["web_runtime_id"] = runtime_identity.runtime_image_id
+        pending["web_uid"] = uid
+        pending["web_gid"] = gid
+        _atomic_json(self.paths.state_file, state)
+        candidate_map = self.paths.upload_root / candidate["release_id"] / "release-map.json"
+        try:
+            # 先只切换Compose运行引用并验证新Web/代理；活动发布映射仍保持
+            # 旧值。全部运行门禁通过后才原子写入活动清单和身份。
+            _atomic_text(self.paths.local_images_env, "\n".join(lines) + "\n")
+            self._compose(
+                "up",
+                "-d",
+                "--no-deps",
+                "--force-recreate",
+                "nginx",
+                "loopback-proxy",
+            )
+            for service, expected_id in unchanged_ids.items():
+                _require(
+                    expected_id and self._compose("ps", "-q", service).strip() == expected_id,
+                    f"unchanged_core_recreated:{service}",
+                )
+            self._wait_core_health()
+            _atomic_text(
+                self.paths.installed_release,
+                self.paths.candidate_release.read_text(encoding="utf-8"),
+            )
+            _atomic_text(self.paths.installed_map, candidate_map.read_text(encoding="utf-8"))
+            _atomic_json(self.paths.image_identities, identities)
+            active_release, active_map = self._fixed_release()
+            _require(
+                active_release == candidate and active_map == mapping,
+                "incremental_activation_verification_failed",
+            )
+            state = self._state()
+            state["pending_release_update"]["status"] = "activated"
+            state["pending_release_update"]["activated_at"] = time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
+            )
+            state["history"] = [
+                *state.get("history", []),
+                {
+                    "step": "incremental_web_release_activated",
+                    "recorded_at": state["pending_release_update"]["activated_at"],
+                },
+            ][-100:]
+            _atomic_json(self.paths.state_file, state)
+        except (ControllerError, OSError, UnicodeError):
+            for active, backup in backup_pairs:
+                shutil.copyfile(backup, active)
+                if hasattr(os, "chown"):
+                    os.chown(active, self.root_uid, self.root_uid)
+                os.chmod(active, 0o600)
+            # 失败时只恢复旧Web；数据库、API和Worker保持原容器不动。
+            self.runner.run_result(self._compose_command("stop", "loopback-proxy"))
+            self.runner.run_result(
+                self._compose_command("up", "-d", "--no-deps", "--force-recreate", "nginx")
+            )
+            raise ControllerError("incremental_web_activation_rolled_back") from None
+        return {
+            "status": "passed",
+            "step": "incremental_web_release_activated",
+            "secrets_included": False,
+        }
+
+    def _activate_pending_release(self) -> dict[str, Any]:
+        pending = self._state().get("pending_release_update")
+        _require(isinstance(pending, dict), "incremental_release_not_accepted")
+        if pending.get("changed_services") == ["worker"]:
+            return self._activate_pending_worker_release()
+        if pending.get("changed_services") == ["web"]:
+            return self._activate_pending_web_release()
+        raise ControllerError("incremental_scope_invalid")
 
     def start_database(self) -> dict[str, Any]:
         self._require_steps("ownership_applied")
@@ -1639,21 +2011,45 @@ class Controller:
         self._require_steps("migrations_completed")
         candidate = _load_json(
             self.paths.candidate_release,
-            policy=FixedFilePolicy.CANDIDATE_RELEASE_PUBLIC_ROOT_0644,
-            expected_root_uid=self.root_uid,
+            policy=FixedFilePolicy.UPLOADED_RELEASE_DEPLOY_0600,
+            expected_deploy_uid=self.deploy_uid,
         )
         active, _ = self._fixed_release()
-        expected_worker = next(item for item in candidate["images"] if item["service"] == "worker")
-        active_worker = next(item for item in active["images"] if item["service"] == "worker")
-        _require(active_worker == expected_worker, "repaired_worker_release_not_active")
+        changed_service = candidate["changed_services"][0]
+        expected_image = next(
+            item for item in candidate["images"] if item["service"] == changed_service
+        )
+        active_image = next(item for item in active["images"] if item["service"] == changed_service)
+        _require(active_image == expected_image, f"repaired_{changed_service}_release_not_active")
         if self._completed("core_started"):
             return self.verify_core()
-        self._compose("up", "-d", "--no-deps", "api", "worker-cpu-1", "worker-cpu-2", "nginx")
-        return self._record("core_started")
+        self._compose(
+            "up",
+            "-d",
+            "--no-deps",
+            "api",
+            "worker-cpu-1",
+            "worker-cpu-2",
+            "nginx",
+            "loopback-proxy",
+        )
+        result = self._record("core_started")
+        state = self._state()
+        state.pop("core_stop_checkpoint", None)
+        _atomic_json(self.paths.state_file, state)
+        return result
 
-    def verify_core(self) -> dict[str, Any]:
-        self._require_steps("core_started")
-        required = {"postgres", "api", "worker-cpu-1", "worker-cpu-2", "nginx"}
+    def _wait_core_health(self) -> None:
+        """验证核心运行时，不推进状态；供增量激活和显式门禁复用。"""
+
+        required = {
+            "postgres",
+            "api",
+            "worker-cpu-1",
+            "worker-cpu-2",
+            "nginx",
+            "loopback-proxy",
+        }
         last_reason = "core_services_not_running"
         for _ in range(90):
             try:
@@ -1677,6 +2073,93 @@ class Controller:
                     "WHERE heartbeat_at >= CURRENT_TIMESTAMP - INTERVAL '120 seconds'",
                 ).strip()
                 _require(worker_count.isdigit() and int(worker_count) >= 2, "worker_health_pending")
+                proxy_id = self._compose("ps", "-q", "loopback-proxy").strip()
+                web_id = self._compose("ps", "-q", "nginx").strip()
+                _require(proxy_id and web_id, "web_runtime_missing")
+                proxy_runtime = json.loads(
+                    self.runner.run(["/usr/bin/docker", "inspect", proxy_id])
+                )[0]
+                web_runtime = json.loads(self.runner.run(["/usr/bin/docker", "inspect", web_id]))[0]
+                _require(
+                    proxy_runtime["NetworkSettings"]["Ports"].get("8080/tcp")
+                    == [{"HostIp": "127.0.0.1", "HostPort": "18082"}],
+                    "loopback_port_not_published",
+                )
+                _require(
+                    set(web_runtime["NetworkSettings"]["Networks"]) == {"smartscan-uat-edge"},
+                    "web_network_boundary_invalid",
+                )
+                _require(
+                    set(proxy_runtime["NetworkSettings"]["Networks"])
+                    == {"smartscan-uat-edge", "smartscan-uat-publish"},
+                    "loopback_proxy_network_boundary_invalid",
+                )
+                _require(
+                    proxy_runtime["HostConfig"]["ReadonlyRootfs"] is True
+                    and proxy_runtime["HostConfig"]["CapDrop"] == ["ALL"]
+                    and proxy_runtime["Config"]["User"] == "101:101"
+                    and proxy_runtime.get("Mounts") == [],
+                    "loopback_proxy_hardening_invalid",
+                )
+                _require(
+                    web_runtime["HostConfig"]["ReadonlyRootfs"] is True
+                    and not web_runtime["HostConfig"].get("PortBindings")
+                    and web_runtime["HostConfig"]["NanoCpus"] == 250_000_000
+                    and web_runtime["HostConfig"]["Memory"] == 128 * 1024**2
+                    and web_runtime["HostConfig"]["PidsLimit"] == 64,
+                    "web_resource_contract_invalid",
+                )
+                _require(
+                    proxy_runtime["HostConfig"]["NanoCpus"] == 100_000_000
+                    and proxy_runtime["HostConfig"]["Memory"] == 64 * 1024**2
+                    and proxy_runtime["HostConfig"]["PidsLimit"] == 32
+                    and set(proxy_runtime["HostConfig"].get("Tmpfs", {})) == {"/tmp"}
+                    and proxy_runtime["HostConfig"]["LogConfig"]
+                    == {"Type": "json-file", "Config": {"max-file": "3", "max-size": "10m"}},
+                    "loopback_proxy_resource_contract_invalid",
+                )
+                for service in ("api", "worker-cpu-1", "worker-cpu-2", "nginx", "loopback-proxy"):
+                    container_id = self._compose("ps", "-q", service).strip()
+                    runtime = json.loads(
+                        self.runner.run(["/usr/bin/docker", "inspect", container_id])
+                    )[0]
+                    _require(
+                        runtime.get("State", {}).get("Health", {}).get("Status") == "healthy",
+                        f"core_service_health_pending:{service}",
+                    )
+                sensitive_names = ("PASSWORD", "SECRET", "TOKEN", "DATABASE_URL")
+                _require(
+                    not any(
+                        any(name in item.split("=", 1)[0].upper() for name in sensitive_names)
+                        for item in proxy_runtime["Config"].get("Env", [])
+                    ),
+                    "loopback_proxy_secret_exposure",
+                )
+                processes = self.runner.run(
+                    ["/usr/bin/docker", "top", web_id, "-eo", "comm"]
+                ).splitlines()
+                _require(1 < len(processes) <= 5, "web_process_count_invalid")
+                memory_text = self.runner.run(
+                    [
+                        "/usr/bin/docker",
+                        "stats",
+                        "--no-stream",
+                        "--format",
+                        "{{.MemPerc}}",
+                        web_id,
+                    ]
+                ).strip()
+                _require(memory_text.endswith("%"), "web_memory_metric_invalid")
+                _require(float(memory_text[:-1]) < 80.0, "web_memory_headroom_insufficient")
+                log_result = self.runner.run_result(
+                    ["/usr/bin/docker", "logs", "--since", "5m", web_id]
+                )
+                recent_logs = f"{log_result.stdout}\n{log_result.stderr}"
+                _require("sendmsg() failed" not in recent_logs, "web_sendmsg_failure_detected")
+                published = self.runner.run(
+                    ["/usr/bin/docker", "port", proxy_id, "8080/tcp"]
+                ).strip()
+                _require(published == "127.0.0.1:18082", "loopback_port_binding_invalid")
                 with urllib.request.urlopen("http://127.0.0.1:18082/", timeout=5) as response:
                     _require(response.status < 500, "core_http_failed")
                 last_reason = ""
@@ -1685,6 +2168,10 @@ class Controller:
                 last_reason = str(exc) if isinstance(exc, ControllerError) else "core_http_pending"
                 time.sleep(2)
         _require(not last_reason, f"core_health_timeout:{last_reason}")
+
+    def verify_core(self) -> dict[str, Any]:
+        self._require_steps("core_started")
+        self._wait_core_health()
         return self._record("core_verified")
 
     def stage_nginx(self) -> dict[str, Any]:
@@ -1814,23 +2301,91 @@ class Controller:
         return self._record("basic_uat_verified")
 
     def stop_core(self) -> dict[str, Any]:
-        self._compose("stop", "nginx", "worker-cpu-2", "worker-cpu-1", "api")
-        return self._record("core_stopped")
+        _require(not self._completed("nginx_activated"), "shared_nginx_already_activated")
+        self._compose(
+            "stop",
+            "loopback-proxy",
+            "nginx",
+            "worker-cpu-2",
+            "worker-cpu-1",
+            "api",
+        )
+        state = self._state()
+        completed = state.get("completed", [])
+        _require(isinstance(completed, list), "state_completed_invalid")
+        state["completed"] = [
+            item for item in completed if item not in {"core_started", "core_verified"}
+        ]
+        recorded_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        state["core_stop_checkpoint"] = {
+            "status": "passed",
+            "recorded_at": recorded_at,
+            "database_preserved": True,
+            "migrations_preserved": True,
+            "active_release_preserved": True,
+        }
+        state["history"] = [
+            *state.get("history", []),
+            {
+                "step": "core_stopped",
+                "recorded_at": recorded_at,
+                "database_preserved": True,
+                "migrations_preserved": True,
+                "active_release_preserved": True,
+            },
+        ][-100:]
+        _atomic_json(self.paths.state_file, state)
+        return {
+            "status": "passed",
+            "step": "core_stopped",
+            "next_required": "core_started",
+            "secrets_included": False,
+        }
 
     def rollback_images(self) -> dict[str, Any]:
-        self._require_steps("core_stopped")
+        state = self._state()
+        checkpoint = state.get("core_stop_checkpoint")
+        _require(
+            isinstance(checkpoint, dict)
+            and checkpoint.get("status") == "passed"
+            and not self._completed("core_started"),
+            "core_stop_checkpoint_missing",
+        )
+        pending = state.get("pending_release_update")
+        web_update = (
+            isinstance(pending, dict)
+            and pending.get("changed_services") == ["web"]
+            and pending.get("status") == "activated"
+        )
+        if web_update:
+            rollback_paths = (
+                self.paths.previous_web_release,
+                self.paths.previous_web_map,
+                self.paths.previous_web_local_images,
+                self.paths.previous_web_identities,
+            )
+        else:
+            rollback_paths = (
+                self.paths.previous_release,
+                self.paths.previous_map,
+                self.paths.previous_local_images,
+                self.paths.previous_identities,
+            )
+        previous_release_path, previous_map_path, previous_env_path, previous_identities_path = (
+            rollback_paths
+        )
         previous_release = _load_json(
-            self.paths.previous_release,
+            previous_release_path,
             policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
             expected_root_uid=self.root_uid,
         )
         previous_map = _load_json(
-            self.paths.previous_map,
+            previous_map_path,
             policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
             expected_root_uid=self.root_uid,
         )
         previous_identities = _load_json(
-            self.paths.previous_identities,
+            previous_identities_path,
             policy=FixedFilePolicy.INTERNAL_STATE_ROOT_0600,
             expected_root_uid=self.root_uid,
         )
@@ -1872,15 +2427,14 @@ class Controller:
             )
             expected_env.append(f"{image['runtime_key']}={image['local_tag']}")
         _require(
-            self.paths.previous_local_images.read_text(encoding="utf-8")
-            == "\n".join(expected_env) + "\n",
+            previous_env_path.read_text(encoding="utf-8") == "\n".join(expected_env) + "\n",
             "previous_release_env_invalid",
         )
         for source, destination in (
-            (self.paths.previous_release, self.paths.installed_release),
-            (self.paths.previous_map, self.paths.installed_map),
-            (self.paths.previous_local_images, self.paths.local_images_env),
-            (self.paths.previous_identities, self.paths.image_identities),
+            (previous_release_path, self.paths.installed_release),
+            (previous_map_path, self.paths.installed_map),
+            (previous_env_path, self.paths.local_images_env),
+            (previous_identities_path, self.paths.image_identities),
         ):
             temporary = destination.with_name(f".{destination.name}.rollback.tmp")
             _require(not temporary.exists() and not temporary.is_symlink(), "rollback_temp_exists")
@@ -1889,8 +2443,6 @@ class Controller:
                 os.chown(temporary, self.root_uid, self.root_uid)
             os.chmod(temporary, 0o600)
             os.replace(temporary, destination)
-        state = self._state()
-        pending = state.get("pending_release_update")
         if isinstance(pending, dict):
             pending["status"] = "rolled_back"
             pending["rolled_back_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -1922,7 +2474,7 @@ class Controller:
             }
         pending = self._state().get("pending_release_update")
         if isinstance(pending, dict) and pending.get("status") in {"accepted", "verified"}:
-            self._activate_pending_worker_release()
+            self._activate_pending_release()
         for name, action in (
             ("core_started", self.start_core),
             ("core_verified", self.verify_core),

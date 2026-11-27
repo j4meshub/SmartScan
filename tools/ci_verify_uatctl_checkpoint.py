@@ -27,7 +27,6 @@ ARCHIVES = Path(os.environ["RUNNER_TEMP"]) / f"smartscan-uat-incremental-upload-
 CONFIG = Path("/etc/smartscan/uat")
 DATA = Path("/mnt/data/smartscan/uat")
 OCR_LAYER = ROOT / ".smartscan-offline-transfer/ocr/smartscan-ocr-layer-fdae8d61585e.tar.gz"
-CONTROLLER_ASSETS = Path(os.environ["RUNNER_TEMP"]) / "smartscan-offline-docker/controller-assets"
 
 
 def report_core_failure(controller: uatctl.Controller) -> None:
@@ -102,36 +101,50 @@ def prepare_incremental_upload(deploy_uid: int) -> None:
         shutil.copyfile(CANDIDATE_ARCHIVES / name, candidate_root / name)
     base_images = {item["service"]: item for item in base["images"]}
     candidate_images = {item["service"]: item for item in candidate["images"]}
+    changed_service = candidate["changed_services"][0]
     for service, item in base_images.items():
-        source_root = BASE_ARCHIVES if service == "worker" else CANDIDATE_ARCHIVES
+        source_root = BASE_ARCHIVES if service == changed_service else CANDIDATE_ARCHIVES
         shutil.copyfile(source_root / item["archive_name"], ARCHIVES / item["archive_name"])
-    worker = candidate_images["worker"]
+    changed_image = candidate_images[changed_service]
     shutil.copyfile(
-        CANDIDATE_ARCHIVES / worker["archive_name"],
-        candidate_root / worker["archive_name"],
+        CANDIDATE_ARCHIVES / changed_image["archive_name"],
+        candidate_root / changed_image["archive_name"],
     )
+    shutil.copyfile(
+        CANDIDATE_ARCHIVES / "release-manifest.json", ARCHIVES / "candidate-release.json"
+    )
+    if changed_service == "web":
+        write_json(
+            candidate_root / "publish-network.json",
+            {
+                "schema_version": "1.0",
+                "network_name": "smartscan-uat-publish",
+                "subnet": "172.30.13.0/28",
+                "gateway": "172.30.13.1",
+                "risk_acknowledgement": "loopback-proxy-has-theoretical-egress",
+                "confirmation": {
+                    "confirmed_by": "ci",
+                    "confirmed_at": "2026-11-27T00:00:00+08:00",
+                    "change_record": "ci-fixed-network",
+                    "validation_record": "ci-no-overlap",
+                    "rollback_record": "remove-empty-network",
+                },
+            },
+        )
     for path in ARCHIVES.rglob("*"):
         if path.is_file():
             os.chown(path, deploy_uid, deploy_uid)
             path.chmod(0o600)
 
 
-def prepare_root_owned_candidate() -> Path:
-    """模拟服务器上由root安装的固定候选清单，不放宽控制器所有权门禁。"""
+def prepare_uploaded_candidate(deploy_uid: int) -> Path:
+    """模拟固定普通用户上传入口；包装器不再绑定单次候选摘要。"""
 
-    CONTROLLER_ASSETS.mkdir(mode=0o700, parents=True)
-    candidate = CONTROLLER_ASSETS / "uat-2026-11-26-worker-fix.json"
-    shutil.copyfile(ROOT / "deploy/releases/uat-2026-11-26-worker-fix.json", candidate)
-    os.chown(CONTROLLER_ASSETS, 0, 0)
-    os.chown(candidate, 0, 0)
-    candidate.chmod(0o644)
+    candidate = ARCHIVES / "candidate-release.json"
+    os.chown(candidate, deploy_uid, deploy_uid)
+    candidate.chmod(0o600)
     info = candidate.stat()
-    assert (
-        info.st_uid == 0
-        and info.st_gid == 0
-        and stat.S_IMODE(info.st_mode) == 0o644
-        and info.st_nlink == 1
-    )
+    assert info.st_uid == deploy_uid and stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1
     return candidate
 
 
@@ -347,7 +360,7 @@ def main() -> None:
         if path.is_file():
             assert path.stat().st_uid == deploy_uid, f"归档所有者不一致：{path.name}"
             path.chmod(0o600)
-    candidate_release = prepare_root_owned_candidate()
+    candidate_release = prepare_uploaded_candidate(deploy_uid)
     _, native = prepare_config(deploy_uid)
     paths = uatctl.Paths(
         config_root=CONFIG,
@@ -489,7 +502,8 @@ def main() -> None:
         assert address.startswith("172.30.11.")
         return original_urlopen(f"http://{address}/", *args, **kwargs)
 
-    uatctl.urllib.request.urlopen = isolated_daemon_internal_urlopen
+    if CI_VARIANT == "legacy":
+        uatctl.urllib.request.urlopen = isolated_daemon_internal_urlopen
     try:
         resumed = controller.resume_basic_uat()
     except uatctl.ControllerError:
@@ -516,12 +530,58 @@ def main() -> None:
         ["/usr/bin/docker", "image", "inspect", "--format", "{{.Id}}", base_worker["local_tag"]]
     )
     running = set(controller._compose("ps", "--status", "running", "--services").splitlines())
-    assert running == {"postgres", "api", "worker-cpu-1", "worker-cpu-2", "nginx"}
+    assert running == {
+        "postgres",
+        "api",
+        "worker-cpu-1",
+        "worker-cpu-2",
+        "nginx",
+        "loopback-proxy",
+    }
     nginx_id = controller._compose("ps", "-q", "nginx").strip()
     nginx_runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", nginx_id]))[0]
-    assert nginx_runtime["HostConfig"]["PortBindings"]["80/tcp"] == [
+    assert nginx_runtime["HostConfig"]["PortBindings"] == {}
+    assert set(nginx_runtime["NetworkSettings"]["Networks"]) == {"smartscan-uat-edge"}
+    proxy_id = controller._compose("ps", "-q", "loopback-proxy").strip()
+    proxy_runtime = json.loads(controller.runner.run(["/usr/bin/docker", "inspect", proxy_id]))[0]
+    assert proxy_runtime["HostConfig"]["PortBindings"]["8080/tcp"] == [
         {"HostIp": "127.0.0.1", "HostPort": "18082"}
     ]
+    assert proxy_runtime["Mounts"] == []
+    assert set(proxy_runtime["NetworkSettings"]["Networks"]) == {
+        "smartscan-uat-edge",
+        "smartscan-uat-publish",
+    }
+    assert not any(
+        marker in item.split("=", 1)[0].upper()
+        for item in proxy_runtime["Config"]["Env"]
+        for marker in ("PASSWORD", "SECRET", "TOKEN", "DATABASE_URL")
+    )
+    web_routes = controller.runner.run(
+        ["/usr/bin/docker", "exec", nginx_id, "cat", "/proc/net/route"]
+    )
+    assert not any(
+        line.split()[1] == "00000000" for line in web_routes.splitlines()[1:] if line.split()
+    )
+    proxy_routes = controller.runner.run(
+        ["/usr/bin/docker", "exec", proxy_id, "cat", "/proc/net/route"]
+    )
+    assert any(
+        line.split()[1] == "00000000" for line in proxy_routes.splitlines()[1:] if line.split()
+    )
+    if CI_VARIANT == "containerd29":
+        published = controller.runner.run(["/usr/bin/docker", "port", proxy_id, "8080/tcp"])
+        assert published == "127.0.0.1:18082"
+        with original_urlopen("http://127.0.0.1:18082/", timeout=5) as response:
+            assert response.status == 200
+        host_addresses = controller.runner.run(["/usr/bin/hostname", "-I"]).split()
+        non_loopback = next(address for address in host_addresses if not address.startswith("127."))
+        try:
+            original_urlopen(f"http://{non_loopback}:18082/", timeout=2)
+        except OSError:
+            pass
+        else:
+            raise AssertionError("loopback_port_reachable_via_non_loopback_address")
     nginx_address = nginx_runtime["NetworkSettings"]["Networks"]["smartscan-uat-edge"]["IPAddress"]
     assert nginx_address.startswith("172.30.11.")
     worker_id = controller._compose("ps", "-q", "worker-cpu-1").strip()

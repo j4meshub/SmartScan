@@ -35,6 +35,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  scope:
+    name: 识别当前增量候选
+    runs-on: ubuntu-latest
+    outputs:
+      changed_service: ${{ steps.release.outputs.changed_service }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 读取单服务变化范围
+        id: release
+        run: |
+          value="$(python - <<'PY'
+          import json
+          from tools import smartscan_offline_images as offline
+          value=json.loads(offline.RELEASE_MANIFEST.read_text(encoding='utf-8'))
+          changed=value.get('changed_services', [])
+          if len(changed) != 1 or changed[0] not in {'worker','web'}:
+              raise SystemExit('incremental_scope_invalid')
+          print(changed[0])
+          PY
+          )"
+          echo "changed_service=$value" >> "$GITHUB_OUTPUT"
+
   unit:
     name: ${{ matrix.os }}离线工具与控制器单元测试
     runs-on: ${{ matrix.os }}
@@ -60,6 +83,8 @@ jobs:
 
   archive:
     name: 六镜像独立归档与完全离线导入
+    needs: scope
+    if: needs.scope.outputs.changed_service == 'web'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -72,43 +97,49 @@ jobs:
       - name: 生成六个独立Docker归档
         run: |
           python tools/smartscan_offline_images.py ci-build
-          python tools/smartscan_offline_images.py ci-build-base-worker
+          python tools/smartscan_offline_images.py ci-build-base-changed
       - name: 离线复核全部归档
         run: python tools/smartscan_offline_images.py verify
-      - name: 从发布清单解析Worker归档名
-        id: worker_archive
+      - name: 从发布清单解析变化服务归档名
+        id: changed_archive
         shell: bash
         run: |
           set -euo pipefail
-          archive_name="$(python - <<'PY'
+          mapfile -t values < <(python - <<'PY'
           import json
           from pathlib import Path
+          from tools import smartscan_offline_images as offline
 
           manifest = json.loads(
-              Path("deploy/releases/uat-2026-11-26-worker-fix.json").read_text(
+              offline.RELEASE_MANIFEST.read_text(
                   encoding="utf-8"
               )
           )
-          worker = next(item for item in manifest["images"] if item["service"] == "worker")
-          archive_name = worker["archive_name"]
+          changed = manifest["changed_services"]
+          if len(changed) != 1:
+              raise SystemExit("changed_service_invalid")
+          image = next(item for item in manifest["images"] if item["service"] == changed[0])
+          archive_name = image["archive_name"]
           if Path(archive_name).name != archive_name or not archive_name.endswith(".docker.tar"):
-              raise SystemExit("worker_archive_name_invalid")
+              raise SystemExit("changed_archive_name_invalid")
           print(archive_name)
+          print(manifest["release_id"])
           PY
-          )"
-          echo "name=$archive_name" >> "$GITHUB_OUTPUT"
-      - name: 严格扫描修复版Worker全部Critical漏洞
+          )
+          echo "name=${values[0]}" >> "$GITHUB_OUTPUT"
+          echo "release_id=${values[1]}" >> "$GITHUB_OUTPUT"
+      - name: 严格扫描变化镜像全部Critical漏洞
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
+          input: .smartscan-offline-transfer/images/${{ steps.changed_archive.outputs.release_id }}/${{ steps.changed_archive.outputs.name }}
           format: table
           exit-code: "1"
           ignore-unfixed: false
           severity: CRITICAL
-      - name: 扫描修复版Worker可修复High和Critical漏洞
+      - name: 扫描变化镜像可修复High和Critical漏洞
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          input: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
+          input: .smartscan-offline-transfer/images/${{ steps.changed_archive.outputs.release_id }}/${{ steps.changed_archive.outputs.name }}
           format: table
           exit-code: "1"
           ignore-unfixed: true
@@ -174,7 +205,7 @@ jobs:
           services = value["services"]
           expected = {
               "postgres", "migrate", "api", "worker-cpu-1", "worker-cpu-2",
-              "worker-ai", "ai-gateway", "nginx",
+              "worker-ai", "ai-gateway", "nginx", "loopback-proxy",
           }
           assert set(services) == expected
           assert all(item.get("pull_policy") == "never" for item in services.values())
@@ -185,17 +216,19 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          value=json.loads(Path('.smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/release-map.json').read_text())
+          from tools import smartscan_offline_images as offline
+          release=offline.load_release()
+          value=json.loads((offline.DOWNLOAD_ROOT/release.release_id/'release-map.json').read_text())
           for image in value['images']:
               print(f"{image['service']}：{image['archive_size']} 字节，sha256:{image['archive_sha256']}")
           print(f"合计：{sum(item['archive_size'] for item in value['images'])} 字节")
           PY
-      - name: 上传Worker独立归档
+      - name: 上传变化服务独立归档
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: smartscan-uat-offline-worker
-          path: .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/${{ steps.worker_archive.outputs.name }}
+          name: smartscan-uat-offline-changed-image
+          path: .smartscan-offline-transfer/images/${{ steps.changed_archive.outputs.release_id }}/${{ steps.changed_archive.outputs.name }}
           retention-days: 14
           compression-level: 0
       - name: 上传中文发布映射和审核清单
@@ -204,8 +237,8 @@ jobs:
         with:
           name: smartscan-uat-offline-release-map
           path: |
-            .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/release-map.json
-            .smartscan-offline-transfer/images/smartscan-uat-2026-11-26-worker-fix/release-manifest.json
+            .smartscan-offline-transfer/images/${{ steps.changed_archive.outputs.release_id }}/release-map.json
+            .smartscan-offline-transfer/images/${{ steps.changed_archive.outputs.release_id }}/release-manifest.json
           retention-days: 14
       - name: 清理Runner临时归档
         if: always()

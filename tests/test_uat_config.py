@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from tools.validate_uat_config import (
     ACCEPTED_UAT_IMAGES,
@@ -417,6 +418,49 @@ def test_uat_compose_has_expected_base_and_ai_resource_totals(tmp_path: Path) ->
 
     assert "SMARTSCAN_UAT_WAL_ROOT" not in document
     assert "archive_command" not in document
+
+
+def test_web_and_loopback_proxy_keep_separate_network_and_security_boundaries() -> None:
+    root = Path(__file__).parents[1]
+    compose = yaml.safe_load(
+        (root / "deploy/compose/docker-compose.uat.yml").read_text(encoding="utf-8")
+    )
+    services = compose["services"]
+    web = services["nginx"]
+    proxy = services["loopback-proxy"]
+
+    assert web["networks"] == ["edge"]
+    assert "ports" not in web
+    assert len(web["volumes"]) == 1 and web["volumes"][0]["read_only"] is True
+    assert proxy["user"] == "101:101"
+    assert proxy["cap_drop"] == ["ALL"]
+    assert proxy["read_only"] is True
+    assert "volumes" not in proxy and "env_file" not in proxy and "environment" not in proxy
+    assert set(proxy["networks"]) == {"edge", "publish"}
+    assert proxy["ports"] == [
+        (
+            "${SMARTSCAN_UAT_BIND_ADDRESS:?必须设置批准的监听地址}:"
+            "${SMARTSCAN_UAT_HTTP_PORT:?必须设置批准的 UAT 端口}:8080"
+        )
+    ]
+    assert compose["networks"]["edge"]["internal"] is True
+    assert compose["networks"]["publish"] == {
+        "name": "${COMPOSE_PROJECT_NAME}-publish",
+        "external": True,
+    }
+
+
+def test_web_nginx_uses_one_worker_and_proxy_has_fixed_internal_upstream() -> None:
+    root = Path(__file__).parents[1]
+    web = (root / "deploy/nginx/nginx.conf").read_text(encoding="utf-8")
+    proxy = (root / "deploy/nginx/loopback-proxy.conf").read_text(encoding="utf-8")
+
+    assert web.startswith("worker_processes 1;\n")
+    assert "worker_processes auto" not in web
+    assert "worker_processes 1;" in proxy
+    assert "listen 8080 default_server;" in proxy
+    assert "server nginx:80;" in proxy
+    assert "proxy_pass http://smartscan_internal_web;" in proxy
 
 
 def test_shared_nginx_template_is_limited_to_smartscan_path_and_loopback_upstream() -> None:

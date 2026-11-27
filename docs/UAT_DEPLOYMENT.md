@@ -12,7 +12,7 @@
 - UAT使用完整预分配、非稀疏的50 GiB loop后备文件，以`nodiscard,lazy_itable_init=0,lazy_journal_init=0`格式化为reserved block为0的ext4，并由依赖`/mnt/data`的systemd mount单元挂载到`/mnt/data/smartscan/uat`；不使用project quota、`/etc/fstab`或共享数据盘重挂载。
 - 50 GiB分配为数据库/WAL 12 GiB、业务文件32 GiB、OCR模型4 GiB、ext4元数据与运行余量2 GiB。前3项数据预算为48 GiB；创建后实际可用不足48 GiB时必须降低业务预算，不能扩大后备文件。70%提示、85%告警并执行受控清理、95%停止新增写入。
 - 宿主机“预分配后仍保留15%或200 GiB中的较高者”由loop执行器和现场预检保证；应用容器看到的是50 GiB loop，因此运行配置使用2 GiB绝对余量和15%比例余量。不得把宿主机200 GiB门禁写入容器配置，否则会永久阻止上传。
-- PostgreSQL是SmartScan专用容器；只有Web发布`127.0.0.1:18082`，PostgreSQL、API、Worker和AI Gateway均不发布宿主机端口。
+- PostgreSQL是SmartScan专用容器；主Web只连接internal edge且不发布端口。复用同一Web镜像的非root `loopback-proxy`通过专用publish网络只发布`127.0.0.1:18082:8080`；PostgreSQL、API、Worker和AI Gateway均不发布宿主机端口。
 - `data`、`edge`、`egress`三张网络使用部署当天现场无冲突结果确定的固定CIDR和网关；Compose不允许自动分配。
 - 现有共享Nginx 8077使用独立include，将`/smartscan/`去前缀转发到18082；不占用80/443，不覆盖其他location。
 - HTTP只验收登录、项目、上传、处理、预览、导出和Range。实时相机、企业微信及正式移动验收继续等待HTTPS。
@@ -110,7 +110,9 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 ## 当前外部门禁
 
-截至2026-11-26，loop、OCR模型、配置、三张网络、六镜像离线导入、身份文件、所有权、PostgreSQL健康及空库迁移`20261022_0024`均已完成。现场停在`next_required=core_started`，API、Worker、Web、AI和共享Nginx尚未启动。OPS-001N修复版Worker已获接受并完成离线交付；首次增量`accept-release`因候选清单`0644`与Python加载器旧的全局`0600`假设冲突而失败关闭。OPS-001O合并和人工升级前不得重试、现场`chmod`、导入新Worker或启动核心。
+截至2026-11-27，loop、OCR模型、配置、三张网络、六镜像、身份、所有权、PostgreSQL健康、空库迁移`20261022_0024`和修复Worker激活均已完成。API、两个CPU Worker和旧Web已启动，AI关闭；`core_started`已记录但`core_verified`未通过。原因是旧Web在128核宿主机以自动Worker达到PID/内存上限，且仅internal edge下Docker 29未形成`127.0.0.1:18082`监听。共享Nginx尚未修改。
+
+OPS-001P采用第四张专用publish网络和同Web镜像的最小非root代理。精确publish CIDR只在仓库外确认；代理无业务挂载和Secret，但非internal网络带来的理论出站路径属于当前UAT接受的有限风险。详见[OPS-001P Web资源与回环入口兼容修复](OPS001P_WEB_LOOPBACK_ENTRY.md)。
 
 ### 迁移只读根边界
 
@@ -120,7 +122,7 @@ CI使用合成确认夹具，只证明规则可运行；夹具网段、摘要和
 
 OPS-001N候选只允许Worker变化，其他五个源digest、归档和本地不可变Tag保持不变。控制器只有在`migrations_completed`且核心未启动时才接受候选，先验证新归档、Docker运行时身份及`10001:10001`，再保存旧活动文件并原子激活；data目录只复核所有权，不重复修改。详见[OPS-001N修复版Worker与增量UAT发布](OPS001N_WORKER_INCREMENTAL_RELEASE.md)。
 
-固定文件的所有者、精确模式、链接和敏感性分类见[UAT固定文件权限契约](UAT_FILE_PERMISSION_CONTRACTS.md)。公开候选清单只接受`root:root 0644`；活动发布、身份、状态、部署证据、env和管理员密码继续使用既定`0600`，不得因候选修复而放宽。
+固定文件的所有者、精确模式、链接和敏感性分类见[UAT固定文件权限契约](UAT_FILE_PERMISSION_CONTRACTS.md)。OPS-001O历史root安装候选仍按`root:root 0644`保留证据；OPS-001P冻结后的普通发布入口`candidate-release.json`只接受部署用户`0600`。活动发布、身份、状态、部署证据、env和管理员密码继续使用各自既定`0600`，不得因候选接口变化而放宽。
 
 ### Docker 29 containerd离线身份
 

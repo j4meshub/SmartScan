@@ -183,7 +183,11 @@ def load_release(path: Path = RELEASE_MANIFEST) -> ReleaseSpec:
         "release_changed_services_invalid",
     )
     if document.get("schema_version") == "1.1":
-        _require(changed == ["worker"], "incremental_release_scope_invalid")
+        _require(
+            len(changed) == 1 and changed[0] in {"worker", "web"},
+            "incremental_release_scope_invalid",
+        )
+        changed_service = changed[0]
         base_raw = BASE_RELEASE_MANIFEST.read_bytes()
         _require(
             document.get("base_release_manifest_sha256") == hashlib.sha256(base_raw).hexdigest(),
@@ -196,15 +200,15 @@ def load_release(path: Path = RELEASE_MANIFEST) -> ReleaseSpec:
         )
         base_by_service = {item["service"]: item for item in base_document.get("images", [])}
         for item in document["images"]:
-            if item["service"] != "worker":
+            if item["service"] != changed_service:
                 _require(
                     item == base_by_service.get(item["service"]),
                     f"unchanged_service_drift:{item['service']}",
                 )
         _require(
-            next(item for item in document["images"] if item["service"] == "worker")
-            != base_by_service["worker"],
-            "worker_candidate_unchanged",
+            next(item for item in document["images"] if item["service"] == changed_service)
+            != base_by_service[changed_service],
+            f"{changed_service}_candidate_unchanged",
         )
         unchanged_raw = document.get("unchanged_archives")
         _require(isinstance(unchanged_raw, dict), "unchanged_archives_invalid")
@@ -532,8 +536,8 @@ def build_archives() -> dict[str, Any]:
     return {"status": "passed", "release_id": release.release_id, "images": images}
 
 
-def build_base_worker_archive() -> dict[str, Any]:
-    """只为增量状态机CI重建旧Worker，并复用候选映射中的五项未变记录。"""
+def build_base_changed_archive() -> dict[str, Any]:
+    """只为增量状态机CI重建被替换服务，并复用候选映射中的五项未变记录。"""
 
     _require(os.environ.get("GITHUB_ACTIONS") == "true", "ci_build_only")
     candidate = load_release()
@@ -550,15 +554,24 @@ def build_base_worker_archive() -> dict[str, Any]:
         set(candidate_records) == {item.service for item in candidate.images},
         "candidate_release_map_services_invalid",
     )
-    base_worker = next(item for item in base.images if item.service == "worker")
-    worker_record = _build_one(RegistryClient(), base, base_worker)
+    _require(len(candidate.changed_services) == 1, "incremental_release_scope_invalid")
+    changed_service = candidate.changed_services[0]
+    base_image = next(item for item in base.images if item.service == changed_service)
+    changed_record = _build_one(RegistryClient(), base, base_image)
+    if changed_service == "worker":
+        expected_size = BASE_WORKER_ARCHIVE_SIZE
+        expected_sha256 = BASE_WORKER_ARCHIVE_SHA256
+    else:
+        expected = base.unchanged_archives.get(changed_service)
+        _require(expected is not None, "base_changed_archive_evidence_missing")
+        expected_size, expected_sha256 = expected
     _require(
-        worker_record["archive_size"] == BASE_WORKER_ARCHIVE_SIZE
-        and worker_record["archive_sha256"] == BASE_WORKER_ARCHIVE_SHA256,
-        "base_worker_archive_drift",
+        changed_record["archive_size"] == expected_size
+        and changed_record["archive_sha256"] == expected_sha256,
+        f"base_{changed_service}_archive_drift",
     )
     records = [
-        worker_record if item.service == "worker" else candidate_records[item.service]
+        changed_record if item.service == changed_service else candidate_records[item.service]
         for item in base.images
     ]
     mapping = {
@@ -582,9 +595,16 @@ def build_base_worker_archive() -> dict[str, Any]:
     return {
         "status": "passed",
         "release_id": base.release_id,
-        "worker_archive_size": worker_record["archive_size"],
-        "worker_archive_sha256": worker_record["archive_sha256"],
+        "changed_service": changed_service,
+        "changed_archive_size": changed_record["archive_size"],
+        "changed_archive_sha256": changed_record["archive_sha256"],
     }
+
+
+def build_base_worker_archive() -> dict[str, Any]:
+    """兼容旧测试入口；实际逻辑已按候选中的单一变化服务泛化。"""
+
+    return build_base_changed_archive()
 
 
 def _safe_tar_members(bundle: tarfile.TarFile) -> dict[str, tarfile.TarInfo]:
@@ -972,7 +992,58 @@ def upload_archives() -> dict[str, Any]:
         _run_remote(
             f"test ! -e {quoted_final}; mv {quoted_part} {quoted_final}; chmod 600 {quoted_final}"
         )
-    return {"status": "passed", "uploaded_files": len(names), "secrets_included": False}
+    # 固定候选入口只保存同一份已验证清单。每次普通发布由用户先明确接受
+    # 清单摘要，再授权上传；控制器接口本身不再随版本变化。
+    candidate_source = root / "release-manifest.json"
+    candidate_digest = _sha256_file(candidate_source)
+    candidate_part = SERVER_UPLOAD_ROOT / "candidate-release.json.part"
+    candidate_final = SERVER_UPLOAD_ROOT / "candidate-release.json"
+    quoted_part = shlex.quote(str(candidate_part))
+    quoted_final = shlex.quote(str(candidate_final))
+    state = _run_remote(
+        f"test ! -L {quoted_part} && test ! -L {quoted_final}; "
+        f"if test -f {quoted_final}; then stat -c 'final:%s' {quoted_final}; "
+        f"elif test -f {quoted_part}; then stat -c 'part:%s' {quoted_part}; "
+        "else echo missing:0; fi"
+    )
+    kind, current_text = state.split(":", 1)
+    current = int(current_text)
+    if kind == "final":
+        remote_hash = _run_remote(f"sha256sum {quoted_final}").split()[0]
+        if remote_hash != candidate_digest:
+            # 只允许从候选声明的活动基线更新固定入口。异常同名文件拒绝
+            # 覆盖；新字节先写入.part，摘要通过后才原子替换。
+            _require(
+                release.base_release_manifest_sha256 is not None
+                and remote_hash == release.base_release_manifest_sha256,
+                "remote_candidate_existing_invalid",
+            )
+            current = 0
+            kind = "replace"
+        else:
+            current = candidate_source.stat().st_size
+    _require(current <= candidate_source.stat().st_size, "candidate_part_too_large")
+    if current < candidate_source.stat().st_size:
+        with candidate_source.open("rb") as stream:
+            stream.seek(current)
+            uploader = (
+                "import os,sys; p=sys.argv[1]; n=int(sys.argv[2]); "
+                "f=open(p,'ab' if n else 'xb'); f.write(sys.stdin.buffer.read()); "
+                "f.flush(); os.fsync(f.fileno()); f.close(); os.chmod(p,0o600)"
+            )
+            _run_remote(
+                f"python3 -c {shlex.quote(uploader)} {quoted_part} {current}",
+                input_stream=stream,
+            )
+        remote_hash = _run_remote(f"sha256sum {quoted_part}").split()[0]
+        _require(remote_hash == candidate_digest, "candidate_part_digest_mismatch")
+        if kind == "replace":
+            _run_remote(f"mv -f {quoted_part} {quoted_final}; chmod 600 {quoted_final}")
+        else:
+            _run_remote(
+                f"test ! -e {quoted_final}; mv {quoted_part} {quoted_final}; chmod 600 {quoted_final}"
+            )
+    return {"status": "passed", "uploaded_files": len(names) + 1, "secrets_included": False}
 
 
 def plan() -> dict[str, Any]:
@@ -1034,6 +1105,7 @@ def main(argv: list[str] | None = None) -> int:
         "upload",
         "status",
         "ci-build",
+        "ci-build-base-changed",
         "ci-build-base-worker",
     }
     if len(arguments) != 1 or arguments[0] not in allowed:
@@ -1054,8 +1126,8 @@ def main(argv: list[str] | None = None) -> int:
             result = upload_archives()
         elif command == "ci-build":
             result = build_archives()
-        elif command == "ci-build-base-worker":
-            result = build_base_worker_archive()
+        elif command in {"ci-build-base-changed", "ci-build-base-worker"}:
+            result = build_base_changed_archive()
         else:
             result = status()
     except (OfflineImageError, OSError, urllib.error.URLError, subprocess.SubprocessError) as exc:

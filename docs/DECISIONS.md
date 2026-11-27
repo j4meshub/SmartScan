@@ -890,7 +890,7 @@
 ## D-117：接受修复版Worker单服务增量发布候选
 
 - 日期：2026-11-26
-- 状态：已接受并完成离线交付；尚未激活，首次接受动作按D-118失败关闭
+- 状态：已接受、完成离线交付并在OPS-001O修复后激活；首次接受失败继续保留为D-118现场证据
 - 接受对象：用户明确接受Worker源引用`ghcr.io/j4meshub/smartscan-worker@sha256:9957b27924b0eb7ba6819c917a7b32ee2869a8b0bd560f2199f03e3232f3a742`、`linux/amd64` manifest `sha256:4ff5d0ffbfc3b4b0728b673043a511035ea682bd70e149ad023470620305b1d3`、大小`573480960`字节且SHA-256为`33bc7ed9ba28811f8abe12ff4edad7f4634834df8a452a8b56bd9325c0d8b2e7`的离线归档，以及Git原始字节SHA-256为`8debb3d83867d05e6eb6d885a9153a5b5dd20a244411e3ec2fbe6f77038f6003`的六镜像候选清单。
 - 范围：该决定允许把上述固定对象作为下一次UAT增量发布的唯一候选，后续构建、Tag或其他digest不得自动替换。它不授权Actions Artifact下载、本机落盘、服务器上传、控制器资产升级、Docker导入、身份探测、活动映射切换、核心服务启动、Nginx或任何清理；这些状态改变继续需要独立明确授权。
 - 断点：服务器仍保持`migrations_completed`且`next_required=core_started`，旧Worker禁止启动。交付必须先保留旧发布证据，按受控状态机验证新Worker内容链和`10001:10001`后原子切换，失败恢复旧活动文件并保持核心停止。
@@ -898,8 +898,19 @@
 ## D-118：UAT固定文件使用按用途命名的精确权限策略
 
 - 日期：2026-11-26
-- 状态：已决定，等待OPS-001O合并与人工升级
+- 状态：已完成；修复已人工升级，固定Worker增量发布随后成功接受并激活
 - 现场证据：OPS-001N候选清单按安装契约正确设置为`root:root 0644`且摘要正确，包装器自检通过；Python `_load_json()`却无条件要求所有JSON为`0600`，首次`accept-release`因此返回`fixed_json_mode_invalid`。状态机未前进，新Worker、活动发布、核心服务和Nginx均未改变。
 - 决策：固定文件不再依靠“JSON都为0600”的隐式假设。控制器只允许有限命名策略：公开root资产`0644`、候选发布清单专用root`0644`、内部root状态`0600`和部署用户上传证据`0600`。候选清单还必须是固定路径、普通文件、非符号链接、单硬链接、固定摘要并禁止组/其他用户写入；`0600`、`0640`、`0664`、`0777`均不符合候选契约。
 - 不变边界：部署输入、预检、loop证据、共享分配、活动/历史发布、镜像身份、控制器状态、迁移失败证据、env和管理员密码继续执行既定`0600`或更严格契约。修复不允许调用方传入任意模式，不改变sudoers，不修改候选清单现场权限，也不把首次失败伪造成接受成功。
 - 验证：包装器和Python策略须由源码一致性测试、真实Linux root/sudo权限测试及Docker 29/containerd与传统daemon完整增量状态机共同证明；完整测试从`migrations_completed`接受候选、只更新Worker、原子激活并启动核心，在Nginx门禁前停止且AI关闭。
+
+## D-119：UAT使用专用publish网络和最小非root回环代理
+
+- 日期：2026-11-27
+- 状态：已确认；OPS-001P实施中
+- 现场证据：修复Worker发布已激活，PostgreSQL、API、双CPU Worker和旧Web已启动，但`core_verified`以`core_health_timeout:core_http_pending`停止。Web容器内部健康为200，宿主机`127.0.0.1:18082`没有监听；主Web只连接internal edge。旧Web在128核宿主机以`worker_processes auto`创建128个Worker，PID为128/128、内存约252.5/256 MiB并出现`sendmsg() failed`，因此不能进入共享Nginx门禁。
+- 拓扑：主Web固定`worker_processes 1`，继续只连接internal edge、不发布端口且保留业务数据只读挂载。同一个Web镜像以非root `loopback-proxy`角色运行，不挂载业务数据、不读取Secret、不连接data或AI；它只连接edge和新的非internal publish网络，固定代理主Web，并只发布`127.0.0.1:18082:8080`。
+- 风险：非internal publish网络为代理提供默认网关，因此存在理论出站路径。该能力只授予不含Secret和数据挂载的最小代理，是共同使用人为基础UAT接受的有限风险；不得宣称网络层绝对无出站，也不得因此修改宿主机防火墙或Docker daemon。主Web、API、Worker和PostgreSQL不连接publish网络。
+- 发布：新六镜像映射只替换Web。新Web完全通过内容链、漏洞、Docker 29、单Worker资源、回环/非回环、真实OCR和AI关闭门禁后，控制器才切换活动映射；失败恢复旧活动文件和旧Web。精确publish CIDR只保存于仓库外确认文件，创建前重新比较全部Docker IPAM、主机/策略/VPN路由。
+- 冻结：OPS-001P完成后冻结UAT四网拓扑和`smartscan-uatctl`普通发布协议。候选清单使用固定部署用户0600上传入口，用户明确接受摘要后由既有`accept-release/resume-basic-uat`完成可逆步骤；普通代码更新不再修改控制器或安装新执行器。仅控制器协议或安全缺陷允许再次人工升级；不建设可执行任意root代码的自更新器。
+- 停止语义：`stop-core`只停止API、双CPU Worker、主Web和代理，保留PostgreSQL、迁移版本、活动发布、网络、数据、模型、离线归档和回滚证据，并把断点恢复为`core_started`。等待新Web期间建议停止已达到资源上限且无法提供18082的旧核心，但必须取得单独授权，本工作包不执行。
