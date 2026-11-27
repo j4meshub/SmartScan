@@ -461,6 +461,14 @@ def test_web_nginx_uses_one_worker_and_proxy_has_fixed_internal_upstream() -> No
     assert "listen 8080 default_server;" in proxy
     assert "server nginx:80;" in proxy
     assert "proxy_pass http://smartscan_internal_web;" in proxy
+    for temporary_path in (
+        "client_body_temp_path /tmp/client_temp;",
+        "proxy_temp_path /tmp/proxy_temp;",
+        "fastcgi_temp_path /tmp/fastcgi_temp;",
+        "uwsgi_temp_path /tmp/uwsgi_temp;",
+        "scgi_temp_path /tmp/scgi_temp;",
+    ):
+        assert temporary_path in proxy
 
 
 def test_shared_nginx_template_is_limited_to_smartscan_path_and_loopback_upstream() -> None:
