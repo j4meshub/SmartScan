@@ -907,10 +907,11 @@
 ## D-119：UAT使用专用publish网络和最小非root回环代理
 
 - 日期：2026-11-27
-- 状态：已确认；OPS-001P实施中
+- 状态：已确认；仓库门禁完成，固定候选等待用户接受
 - 现场证据：修复Worker发布已激活，PostgreSQL、API、双CPU Worker和旧Web已启动，但`core_verified`以`core_health_timeout:core_http_pending`停止。Web容器内部健康为200，宿主机`127.0.0.1:18082`没有监听；主Web只连接internal edge。旧Web在128核宿主机以`worker_processes auto`创建128个Worker，PID为128/128、内存约252.5/256 MiB并出现`sendmsg() failed`，因此不能进入共享Nginx门禁。
 - 拓扑：主Web固定`worker_processes 1`，继续只连接internal edge、不发布端口且保留业务数据只读挂载。同一个Web镜像以非root `loopback-proxy`角色运行，不挂载业务数据、不读取Secret、不连接data或AI；它只连接edge和新的非internal publish网络，固定代理主Web，并只发布`127.0.0.1:18082:8080`。
 - 风险：非internal publish网络为代理提供默认网关，因此存在理论出站路径。该能力只授予不含Secret和数据挂载的最小代理，是共同使用人为基础UAT接受的有限风险；不得宣称网络层绝对无出站，也不得因此修改宿主机防火墙或Docker daemon。主Web、API、Worker和PostgreSQL不连接publish网络。
 - 发布：新六镜像映射只替换Web。新Web完全通过内容链、漏洞、Docker 29、单Worker资源、回环/非回环、真实OCR和AI关闭门禁后，控制器才切换活动映射；失败恢复旧活动文件和旧Web。精确publish CIDR只保存于仓库外确认文件，创建前重新比较全部Docker IPAM、主机/策略/VPN路由。
 - 冻结：OPS-001P完成后冻结UAT四网拓扑和`smartscan-uatctl`普通发布协议。候选清单使用固定部署用户0600上传入口，用户明确接受摘要后由既有`accept-release/resume-basic-uat`完成可逆步骤；普通代码更新不再修改控制器或安装新执行器。仅控制器协议或安全缺陷允许再次人工升级；不建设可执行任意root代码的自更新器。
 - 停止语义：`stop-core`只停止API、双CPU Worker、主Web和代理，保留PostgreSQL、迁移版本、活动发布、网络、数据、模型、离线归档和回滚证据，并把断点恢复为`core_started`。等待新Web期间建议停止已达到资源上限且无法提供18082的旧核心，但必须取得单独授权，本工作包不执行。
+- 候选证据：来源提交`58c9b9976c7eb14d32de1ef3efba4e0727a95c35`的新Web固定digest为`sha256:0dbcea47325a8c87362a3a180004e7d4ff384efddf6de08d710d7e14c6226db0`；独立归档为`27,863,040`字节、SHA-256 `d8a81f1b6bdb34a461417997fe58b9b55109f4ae691f421f218768a52e32dda3`，六镜像候选清单SHA-256为`d8b364800e899c884a6eabe2a540cc7e251b31a53b9fe9acf8219dad5fa5c797`。PR #122的Docker 29/containerd和传统隔离daemon均完成全链验证；该证据不等于用户已接受或服务器已部署。

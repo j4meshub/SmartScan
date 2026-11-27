@@ -39,6 +39,29 @@ API（internal edge + data）
 5. PostgreSQL、API、两个CPU Worker、主Web和代理健康，真实OCR结果非空，AI Profile关闭；
 6. Compose全部`pull_policy: never`，离线导入后不访问Registry；共享Nginx不参与。
 
+## 固定候选与验证证据
+
+| 项目 | 固定值 |
+|---|---|
+| Web来源提交 | `58c9b9976c7eb14d32de1ef3efba4e0727a95c35` |
+| Web源digest | `sha256:0dbcea47325a8c87362a3a180004e7d4ff384efddf6de08d710d7e14c6226db0` |
+| `linux/amd64` manifest | `sha256:736a773974a866d13d33dd8d1336d5f657641ac013d3d5034361da2c3bf4120e` |
+| Config | `sha256:5ac426b2ca563678de923900d4e8a623466f11966afbb42f2f9802a5ac2a831e` |
+| Web离线归档 | `smartscan-web-0dbcea47325a-linux-amd64.docker.tar`，`27,863,040`字节 |
+| Web归档SHA-256 | `d8a81f1b6bdb34a461417997fe58b9b55109f4ae691f421f218768a52e32dda3` |
+| 六镜像候选清单SHA-256 | `d8b364800e899c884a6eabe2a540cc7e251b31a53b9fe9acf8219dad5fa5c797` |
+| 六归档总大小 | `991,897,600`字节；只有Web归档变化 |
+
+容器供应链为新Web生成SBOM和SLSA来源证明；严格全Critical与可修复High/Critical均为0。PR #122技术头`b499b629786214c9b1cca461a141ebb9e55b4e1d`的CI、离线发布、容器供应链和PostgreSQL审计全部通过。Docker 29/containerd与传统隔离daemon均验证：
+
+- 主Web为一个Nginx master加一个Worker，进程数明显低于64 PID上限，运行内存低于128 MiB上限的80%，最近日志无`sendmsg() failed`；
+- `docker port`仅为`127.0.0.1:18082`，回环HTTP为200，非回环地址不可达；
+- 主Web没有默认路由；loopback-proxy具有已披露的理论出站路径，但无Secret、数据挂载、data/egress/AI网络；
+- PostgreSQL、API、主Web和代理Docker Health通过；两个CPU Worker运行且各有120秒内的新鲜心跳，真实OCR结果非空；
+- AI Profile关闭、共享Nginx未修改、离线运行没有Registry访问，状态机停在`stage-nginx`确认前。
+
+这些结果只构成候选验收材料；用户未明确接受前，不得下载、上传、导入或部署该Web候选。
+
 ## 发布接口冻结
 
 OPS-001P后，普通代码发布只交付用户明确接受的候选清单、固定digest、单服务离线归档和仓库外publish网络确认。固定候选入口为`/home/szhzx/smartscan-uat-offline-images/candidate-release.json`，部署用户所有、0600、普通文件、单硬链接；控制器不再把单次文件名或摘要编译进包装器。
