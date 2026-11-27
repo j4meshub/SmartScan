@@ -88,6 +88,18 @@ def test_incremental_manifest_changes_only_web_and_pins_base_archives() -> None:
         assert service in release.unchanged_archives
 
 
+def test_incremental_release_chain_validates_worker_base_against_root_release() -> None:
+    base = offline.load_release(offline.BASE_RELEASE_MANIFEST)
+    root = json.loads(offline.ROOT_RELEASE_MANIFEST.read_text(encoding="utf-8"))
+
+    assert base.changed_services == ("worker",)
+    assert base.base_release_id == root["release_id"]
+    assert (
+        base.base_release_manifest_sha256
+        == hashlib.sha256(offline.ROOT_RELEASE_MANIFEST.read_bytes()).hexdigest()
+    )
+
+
 def test_release_rejects_tag_wrong_platform_and_path_injection(tmp_path: Path) -> None:
     document = _release_document()
     document["platform"] = "linux/arm64"
